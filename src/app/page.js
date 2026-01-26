@@ -12,9 +12,8 @@ export default function LandingPage() {
       {/* Navigation Header */}
       <nav className="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
         <div className="flex items-center space-x-2">
-          <Image src="/logo.svg" alt="Logo" width={40} height={40} className="rounded-full bg-white/10 p-1" />
-          <span className="text-2xl font-black tracking-tighter italic">FLYOVHELP</span>
-        </div>
+          <Image src="/logo.svg" alt="Logo" width={120} height={40} className="rounded-full bg-white/10 p-1" />
+          </div>
         
         <div className="hidden md:flex items-center space-x-8 text-sm font-bold uppercase tracking-wider">
           <a href="#" className="text-[#fc7952]">Home</a>
@@ -28,7 +27,7 @@ export default function LandingPage() {
           onClick={() => router.push('/login')}
           className="bg-cyan-400 hover:bg-cyan-300 text-black px-6 py-2 rounded-full font-black text-sm transition-all flex items-center shadow-[0_0_20px_rgba(34,211,238,0.4)]"
         >
-          Play Lotto <ArrowRight size={16} className="ml-2" />
+          Play Game <ArrowRight size={16} className="ml-2" />
         </button>
       </nav>
 
@@ -43,9 +42,8 @@ export default function LandingPage() {
           <div className="space-y-4">
             <h1 className="text-6xl md:text-8xl font-black italic leading-[0.9] tracking-tighter">
               Feeling Lucky? <br />
-              <span className="text-white">Play Flyovhelp </span> <br />
-              <span className="text-white">Arena and </span> <br />
-              <span className="text-white">Win Big</span>
+              <span className="text-white">Play Flyovhelp </span> <br /> 
+              <span className="text-white">and Win Big</span>
             </h1>
             <p className="text-lg md:text-xl text-white/80 max-w-lg font-medium">
               Stake your bet, challenge your friends, and get a chance to win huge prizes. 
