@@ -27,7 +27,7 @@ export default function Dashboard() {
     return () => unsubscribe();
   }, [router]);
 
-  // Updated to only 3 games as requested
+  // Updated paths to match your folder structure
   const topGames = [
     { 
       id: 1, 
@@ -41,7 +41,7 @@ export default function Dashboard() {
       name: "Flyova To Dollars", 
       img: "/flytodols.svg", 
       tag: "Cash",
-      path: "/game" 
+      path: "/game/flyova-to-dollars" // LINK UPDATED HERE
     },
     { 
       id: 3, 
