@@ -48,7 +48,7 @@ export default function Dashboard() {
       name: "Predict and Win", 
       img: "/predictwin.svg", 
       tag: "New",
-      path: "/game" 
+      path: "/game/predict-and-win" 
     }
   ];
 

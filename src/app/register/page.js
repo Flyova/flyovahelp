@@ -1,17 +1,21 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { X, ChevronRight } from "lucide-react";
+import { X, ChevronRight, Gift, CheckCircle2 } from "lucide-react";
 // FIREBASE IMPORTS
 import { auth, db } from "@/lib/firebase";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp, addDoc, collection } from "firebase/firestore";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const referralCode = searchParams.get("ref"); // Capture ref from URL
+
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [claimBonus, setClaimBonus] = useState(true); // Default to checked
   
   const [formData, setFormData] = useState({
     fullName: "",
@@ -40,6 +44,8 @@ export default function RegisterPage() {
       // 2. Update Auth Profile with Username
       await updateProfile(user, { displayName: formData.username });
 
+      const initialWallet = claimBonus ? 3.00 : 0.00;
+
       // 3. Create Real-Time User Document in Firestore
       await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
@@ -49,11 +55,25 @@ export default function RegisterPage() {
         country: formData.country,
         phone: `+234${formData.phone}`,
         status: "online",
-        wallet: 0.00,
+        wallet: initialWallet,
         winRate: 0,
+        referredBy: referralCode || null, // Record the referrer
         createdAt: serverTimestamp(),
-        lastSeen: serverTimestamp()
+        lastSeen: serverTimestamp(),
+        bonusClaimed: claimBonus
       });
+
+      // 4. Create Transaction record for the bonus if claimed
+      if (claimBonus) {
+        await addDoc(collection(db, "users", user.uid, "transactions"), {
+          title: "Sign-up Bonus",
+          amount: 3.00,
+          type: "bonus",
+          status: "win",
+          timestamp: serverTimestamp(),
+          note: "Non-withdrawable until play-through"
+        });
+      }
 
       router.push("/dashboard");
     } catch (err) {
@@ -63,9 +83,9 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white flex flex-col p-6">
+    <div className="min-h-screen bg-[#0f172a] text-white flex flex-col p-6 pb-12">
       <div className="flex justify-end items-center mb-6">
-        <button onClick={() => router.push('/')} className="text-gray-500 hover:text-white">
+        <button onClick={() => router.push('/')} className="text-gray-500 hover:text-white transition-colors">
           <X size={28} />
         </button>
       </div>
@@ -76,6 +96,13 @@ export default function RegisterPage() {
             Create <span className="text-[#fc7952]">Account</span>
           </h2>
           <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.2em] mt-1">Join the global arena</p>
+          
+          {referralCode && (
+            <div className="mt-4 inline-flex items-center space-x-2 bg-green-500/10 border border-green-500/30 px-3 py-1.5 rounded-full">
+              <CheckCircle2 size={12} className="text-green-500" />
+              <span className="text-[9px] font-black text-green-500 uppercase tracking-tighter">Referral Link Active</span>
+            </div>
+          )}
         </div>
 
         {error && <p className="bg-red-500/10 border border-red-500/50 text-red-500 p-3 rounded-xl text-xs font-bold mb-4">{error}</p>}
@@ -129,18 +156,41 @@ export default function RegisterPage() {
             onChange={(e) => setFormData({...formData, password: e.target.value})}
           />
 
+          {/* BONUS CHECKBOX SECTION */}
+          <div 
+            onClick={() => setClaimBonus(!claimBonus)}
+            className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between ${
+              claimBonus ? 'bg-[#613de6]/10 border-[#613de6]' : 'bg-[#1e293b] border-transparent'
+            }`}
+          >
+            <div className="flex items-center space-x-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${claimBonus ? 'bg-[#613de6] text-white' : 'bg-gray-800 text-gray-500'}`}>
+                <Gift size={20} />
+              </div>
+              <div>
+                <p className="text-[11px] font-black uppercase italic leading-none">Claim $3.00 Bonus</p>
+                <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase">Start betting for free!</p>
+              </div>
+            </div>
+            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+              claimBonus ? 'bg-[#fc7952] border-[#fc7952]' : 'border-gray-700'
+            }`}>
+              {claimBonus && <CheckCircle2 size={14} className="text-white" />}
+            </div>
+          </div>
+
           <button 
             type="submit"
             disabled={loading}
-            className="w-full py-4 bg-[#613de6] text-white rounded-xl font-black transition-all active:scale-[0.98] shadow-lg shadow-[#613de6]/20 mt-4 uppercase tracking-widest disabled:opacity-50"
+            className="w-full py-5 bg-[#613de6] text-white rounded-2xl font-black transition-all active:scale-[0.98] shadow-lg shadow-[#613de6]/20 mt-4 uppercase tracking-widest disabled:opacity-50"
           >
             {loading ? "Creating Profile..." : "Create Account"}
           </button>
         </form>
 
         <div className="mt-8 text-center">
-          <p className="text-gray-500 text-xs font-bold uppercase">
-            Already a player? <Link href="/login" className="text-[#fc7952] hover:underline ml-1 italic">Log In</Link>
+          <p className="text-gray-500 text-xs font-bold uppercase tracking-tight">
+            Already a player? <Link href="/login" className="text-[#fc7952] hover:underline ml-1 italic font-black">Log In</Link>
           </p>
         </div>
       </div>
