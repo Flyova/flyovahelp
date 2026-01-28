@@ -224,21 +224,21 @@ export default function FlyovaToDollars() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="bg-[#613de6] p-4 flex justify-between items-center shadow-lg relative z-20">
-        <button onClick={() => router.push('/dashboard')} className="flex items-center space-x-2">
-            <ArrowLeft size={16} /><span className="font-black italic text-[10px] uppercase">Lobby</span>
-        </button>
-        <div className="flex items-center space-x-2 bg-black/20 px-3 py-1 rounded-full border border-white/5">
-            <Wallet size={12} className="text-[#fc7952]"/>
-            <span className="font-black italic text-sm">${myWallet.toFixed(2)}</span>
-        </div>
-      </div>
+   
 
       {/* Real-time Timer */}
       <div className="p-8 text-center bg-[#1e293b] border-b border-white/5 relative">
         <div className="absolute top-0 left-0 h-1 bg-[#fc7952] transition-all duration-1000" style={{ width: `${(timeLeft/120)*100}%` }} />
-        <h1 className="text-xl font-black italic uppercase text-[#fc7952] mb-1">Flyova to Dollars</h1>
+        
+        
+       <div className="w-full flex justify-center mb-6">
+  <div className="bg-[#1e293b] border-2 border-[#613de6]/30 px-6 py-2 rounded-2xl shadow-[0_0_20px_rgba(97,61,230,0.1)] flex items-center justify-center">
+    <h1 className="text-sm md:text-base font-black italic uppercase text-[#fc7952]">
+      Flyova to Dollars
+    </h1>
+  </div>
+</div>
+
         <div className="inline-flex items-center space-x-3 bg-black/20 px-8 py-4 rounded-[2rem] border border-white/5 mt-4">
             <Timer size={24} className="text-[#613de6]" />
             <span className="text-4xl font-black italic font-mono">
