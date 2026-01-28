@@ -21,9 +21,9 @@ function RegisterForm() {
   // Country API States
   const [countries, setCountries] = useState([]);
   const [selectedCountry, setSelectedCountry] = useState({
-    name: "Nigeria",
-    flag: "🇳🇬",
-    code: "+234"
+    name: "United Kingdom",
+    flag: "🇬🇧",
+    code: "+44"
   });
 
   const [formData, setFormData] = useState({
@@ -105,7 +105,7 @@ function RegisterForm() {
         <h2 className="text-3xl font-black italic tracking-tighter uppercase leading-tight">
           Create <span className="text-[#fc7952]">Account</span>
         </h2>
-        <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.2em] mt-1">Join the global arena</p>
+        <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.2em] mt-1">Join the Flyova Help</p>
         
         {referralCode && (
           <div className="mt-4 inline-flex items-center space-x-2 bg-green-500/10 border border-green-500/30 px-3 py-1.5 rounded-full">
