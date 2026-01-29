@@ -8,8 +8,13 @@ import "./globals.css";
 export default function RootLayout({ children }) {
   const pathname = usePathname();
   
-  // Define pages where we DON'T want the header/nav (like landing, login, register)
-  const isAuthPage = pathname === "/" || pathname === "/login" || pathname === "/register";
+  // Define pages where we DON'T want the header/nav
+  // Added a check for any path starting with /admin
+  const isAuthPage = 
+    pathname === "/" || 
+    pathname === "/login" || 
+    pathname === "/register" || 
+    pathname.startsWith("/admin");
 
   return (
     <html lang="en">

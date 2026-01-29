@@ -256,9 +256,7 @@ export default function GamePage() {
       <div className="min-h-screen bg-[#0f172a] text-white p-6">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-xl font-black italic uppercase">PLAY WITH FRIENDS</h1>
-          <div className="bg-white/5 px-4 py-2 rounded-full flex items-center space-x-2 border border-white/5">
-            <Wallet size={14} className="text-[#fc7952]"/><span className="font-mono text-xs font-bold">${myWallet.toFixed(2)}</span>
-          </div>
+        
         </div>
 
         {showStakeModal && (

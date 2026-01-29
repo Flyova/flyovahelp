@@ -9,17 +9,15 @@ import {
   collection, 
   query, 
   where, 
-  setDoc, 
   addDoc,
   serverTimestamp,
   orderBy,
   limit,
-  getDoc,
   getDocs,
   runTransaction
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { Wallet, Timer, Info, CheckCircle2, Trophy, ArrowLeft, History, XCircle, Plus } from "lucide-react";
+import { Timer, CheckCircle2, Trophy, History, XCircle, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function FlyovaToDollars() {
@@ -34,16 +32,17 @@ export default function FlyovaToDollars() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [selectedNumbers, setSelectedNumbers] = useState([]);
   const [stake, setStake] = useState(1);
-  const [activeBets, setActiveBets] = useState([]); // Array to store multiple bets
+  const [activeBets, setActiveBets] = useState([]); 
   const [gameStatus, setGameStatus] = useState("betting"); 
   const [lastWinners, setLastWinners] = useState([]);
   
   // Alert States
   const [showResultAlert, setShowResultAlert] = useState(false);
-  const [resultType, setResultType] = useState(null); // 'win' or 'lose'
+  const [resultType, setResultType] = useState(null); 
   const [winAmount, setWinAmount] = useState(0);
 
   const WIN_MULTIPLIER = 1.3;
+  const GAME_DURATION = 120; // 2 minutes
 
   // 1. Auth & Wallet Listener
   useEffect(() => {
@@ -65,8 +64,14 @@ export default function FlyovaToDollars() {
     const unsubActive = onSnapshot(qActive, (snap) => {
       if (!snap.empty) {
         const gameData = { id: snap.docs[0].id, ...snap.docs[0].data() };
+        
+        if (gameData.status === "completed") {
+            generateNewGame();
+            return;
+        }
+
         setCurrentGame(gameData);
-        fetchUserBets(gameData.id); // Fetch all bets for this round
+        fetchUserBetsFromTransactions(gameData.id); 
         
         if (gameStatus === "results" && Date.now() < gameData.endTime) {
             setGameStatus("betting");
@@ -88,27 +93,36 @@ export default function FlyovaToDollars() {
     return () => { unsubActive(); unsubHistory(); };
   }, [user, gameStatus]);
 
-  // 3. Sync Countdown
+  // 3. Countdown Timer Sync
   useEffect(() => {
-    if (!currentGame) return;
+    if (!currentGame || gameStatus === "results") return;
     const interval = setInterval(() => {
       const diff = Math.max(0, Math.floor((currentGame.endTime - Date.now()) / 1000));
       setTimeLeft(diff);
-      if (diff === 0 && gameStatus === "betting") revealResults();
+      if (diff === 0) revealResults();
     }, 1000);
     return () => clearInterval(interval);
   }, [currentGame, gameStatus]);
 
-  // Fetch all bets made by the user in the current round
-  const fetchUserBets = async (gameId) => {
+  const fetchUserBetsFromTransactions = async (gameId) => {
     if (!user) return;
-    const q = query(collection(db, "timed_games", gameId, "bets"), where("userId", "==", user.uid));
+    const q = query(
+      collection(db, "users", user.uid, "transactions"), 
+      where("gameId", "==", gameId),
+      where("status", "==", "pending"),
+      where("type", "==", "stake")
+    );
     const snap = await getDocs(q);
-    const bets = snap.docs.map(d => d.data());
+    const bets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    console.log(`Fetched ${bets.length} bets for game ${gameId}:`, bets);
     setActiveBets(bets);
   };
 
   const generateNewGame = async () => {
+    const q = query(collection(db, "timed_games"), where("status", "==", "active"), limit(1));
+    const existing = await getDocs(q);
+    if (!existing.empty) return;
+
     const numbers = [];
     while (numbers.length < 5) {
       const r = Math.floor(Math.random() * 50) + 1;
@@ -120,75 +134,213 @@ export default function FlyovaToDollars() {
     await addDoc(collection(db, "timed_games"), {
       numbers: shuffled,
       winners: winners,
-      endTime: Date.now() + 120000, 
+      endTime: Date.now() + (GAME_DURATION * 1000), 
       status: "active",
+      processed: false,
       createdAt: serverTimestamp()
     });
   };
 
+  // FIXED REVEAL RESULTS - Using gameId matching like other games
   const revealResults = async () => {
+    if (gameStatus === "results" || !currentGame || !user) return;
+    
+    console.log("=== REVEALING RESULTS ===");
+    console.log("Game ID:", currentGame.id);
+    console.log("Winning numbers:", currentGame.winners);
+    
     setGameStatus("results");
-    setLastWinners(currentGame.winners);
+    const winners = currentGame.winners || [];
+    setLastWinners(winners);
 
-    if (activeBets.length > 0 && user) {
+    // Fetch bets AGAIN to ensure we have the latest for this game
+    const q = query(
+      collection(db, "users", user.uid, "transactions"), 
+      where("gameId", "==", currentGame.id),
+      where("status", "==", "pending"),
+      where("type", "==", "stake")
+    );
+    
+    const snap = await getDocs(q);
+    const currentGameBets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    
+    console.log(`Found ${currentGameBets.length} bets for game ${currentGame.id}:`, currentGameBets);
+
+    if (currentGameBets.length > 0) {
       try {
-        let totalWin = 0;
-        let wonAny = false;
-
-        // Process all bets placed by user
-        for (const bet of activeBets) {
-            const isWinner = currentGame.winners.every(w => bet.picks.includes(w));
-            if (isWinner) {
-                totalWin += (bet.stake * WIN_MULTIPLIER);
-                wonAny = true;
-            }
+        let totalWinToCredit = 0;
+        let hasAnyWin = false;
+        
+        // First, check each bet to see if it wins
+        for (const bet of currentGameBets) {
+          console.log("Checking bet:", {
+            betId: bet.id,
+            userPicks: bet.picks,
+            winners: winners,
+            betAmount: bet.amount,
+            gameId: bet.gameId
+          });
+          
+          // Ensure we're comparing with the correct game
+          if (bet.gameId !== currentGame.id) {
+            console.log("Skipping bet - wrong game ID");
+            continue;
+          }
+          
+          // Sort arrays for comparison (order doesn't matter)
+          const sortedUserPicks = [...(bet.picks || [])].sort((a, b) => a - b);
+          const sortedWinners = [...winners].sort((a, b) => a - b);
+          
+          const isWinner = sortedUserPicks.length === 2 && 
+                          sortedWinners.length === 2 &&
+                          sortedUserPicks[0] === sortedWinners[0] && 
+                          sortedUserPicks[1] === sortedWinners[1];
+          
+          console.log("Sorted picks:", sortedUserPicks, "Sorted winners:", sortedWinners);
+          console.log("Is winner?", isWinner);
+          
+          if (isWinner) {
+            const payout = parseFloat((bet.amount * WIN_MULTIPLIER).toFixed(2));
+            totalWinToCredit += payout;
+            hasAnyWin = true;
+            console.log(`WINNER! Payout: $${payout}, Total: $${totalWinToCredit}`);
+          }
         }
         
-        if (wonAny) {
-          setWinAmount(totalWin);
-          setResultType('win');
-          await updateDoc(doc(db, "users", user.uid), { wallet: increment(totalWin) });
-          await addDoc(collection(db, "users", user.uid, "transactions"), {
-            title: "Flyova Win (Multi)", amount: totalWin, type: "win", status: "win", timestamp: serverTimestamp()
-          });
-        } else {
-          setResultType('lose');
-        }
+        console.log("Final calculation - Total win:", totalWinToCredit, "Has win:", hasAnyWin);
+        
+        // Update UI immediately
+        setWinAmount(totalWinToCredit);
+        setResultType(hasAnyWin ? 'win' : 'lose');
         setShowResultAlert(true);
-      } catch (err) { console.error(err); }
+        
+        // Process database updates in transaction
+        await runTransaction(db, async (transaction) => {
+          const userRef = doc(db, "users", user.uid);
+          
+          for (const bet of currentGameBets) {
+            const transRef = doc(db, "users", user.uid, "transactions", bet.id);
+            
+            // Sort arrays for comparison
+            const sortedUserPicks = [...(bet.picks || [])].sort((a, b) => a - b);
+            const sortedWinners = [...winners].sort((a, b) => a - b);
+            
+            const isWinner = sortedUserPicks.length === 2 && 
+                            sortedWinners.length === 2 &&
+                            sortedUserPicks[0] === sortedWinners[0] && 
+                            sortedUserPicks[1] === sortedWinners[1];
+            
+            if (isWinner) {
+              const payout = parseFloat((bet.amount * WIN_MULTIPLIER).toFixed(2));
+              
+              // Update transaction as WIN
+              transaction.update(transRef, {
+                status: "win",
+                amount: payout,
+                title: "Flyova Win",
+                type: "win",
+                timestamp: serverTimestamp()
+              });
+            } else {
+              // Update transaction as LOSS
+              transaction.update(transRef, {
+                status: "loss",
+                type: "loss",
+                timestamp: serverTimestamp()
+              });
+            }
+          }
+          
+          // Credit wallet if there are wins
+          if (totalWinToCredit > 0) {
+            transaction.update(userRef, { wallet: increment(totalWinToCredit) });
+            console.log("Wallet credited with: $", totalWinToCredit);
+            
+            // Add a win transaction
+            await addDoc(collection(db, "users", user.uid, "transactions"), {
+              title: "Flyova Win Payout",
+              amount: totalWinToCredit,
+              type: "win",
+              status: "win",
+              timestamp: serverTimestamp()
+            });
+          }
+        });
+        
+        console.log("Transaction completed successfully");
+        
+      } catch (err) { 
+        console.error("Transaction error:", err);
+        console.error("Error details:", err.code, err.message);
+        
+        // Still show result to user
+        if (err.code === 'failed-precondition') {
+          console.log("Transaction conflict - retrying...");
+          setTimeout(() => revealResults(), 1000);
+        }
+      }
+    } else {
+      console.log("No bets found for this game");
+      setResultType('lose');
+      setShowResultAlert(true);
     }
 
-    await updateDoc(doc(db, "timed_games", currentGame.id), { status: "completed" });
+    // Mark game as completed
+    try {
+      await updateDoc(doc(db, "timed_games", currentGame.id), { 
+        status: "completed", 
+        processed: true,
+        processedAt: serverTimestamp()
+      });
+      console.log("Game marked as completed:", currentGame.id);
+    } catch (err) {
+      console.error("Error updating game status:", err);
+    }
     
     setTimeout(() => { setShowResultAlert(false); }, 7000);
-    setTimeout(() => { generateNewGame(); }, 10000);
   };
 
   const placeBet = async () => {
-    if (selectedNumbers.length !== 2 || myWallet < stake) return;
+    const finalStake = stake === "" ? 1 : stake;
+    if (selectedNumbers.length !== 2 || myWallet < finalStake || !currentGame) {
+      console.log("Cannot place bet - invalid conditions");
+      return;
+    }
+    
     try {
       await runTransaction(db, async (transaction) => {
         const userRef = doc(db, "users", user.uid);
-        // Create a unique bet document ID so user can bet multiple times
-        const betRef = doc(collection(db, "timed_games", currentGame.id, "bets"));
+        const transRef = doc(collection(db, "users", user.uid, "transactions"));
         
-        transaction.update(userRef, { wallet: increment(-stake) });
-        transaction.set(betRef, { 
-            userId: user.uid,
-            picks: selectedNumbers, 
-            stake: stake, 
-            timestamp: serverTimestamp() 
+        // Sort picks for consistent storage
+        const sortedPicks = [...selectedNumbers].sort((a, b) => a - b);
+        
+        transaction.update(userRef, { wallet: increment(-finalStake) });
+        transaction.set(transRef, {
+            title: "Flyova Stake", 
+            amount: finalStake, 
+            picks: sortedPicks,
+            gameId: currentGame.id, // CRITICAL: Store gameId
+            type: "stake", 
+            status: "pending", 
+            timestamp: serverTimestamp()
         });
       });
-
-      // Update local state to show current bets
-      setActiveBets(prev => [...prev, { picks: selectedNumbers, stake: stake }]);
-      setSelectedNumbers([]); // Reset selection for next bet
       
-      await addDoc(collection(db, "users", user.uid, "transactions"), {
-        title: "Flyova Stake", amount: stake, type: "stake", status: "loss", timestamp: serverTimestamp()
-      });
-    } catch (e) { alert("Transaction failed"); }
+      console.log("Bet placed successfully for game:", currentGame.id);
+      fetchUserBetsFromTransactions(currentGame.id);
+      setSelectedNumbers([]); 
+    } catch (e) { 
+      console.error("Bet placement error:", e);
+      alert("Insufficient Balance"); 
+    }
+  };
+
+  const handleStakeChange = (e) => {
+    const val = e.target.value;
+    if (val === "") { setStake(""); return; }
+    const num = parseInt(val);
+    if (!isNaN(num)) setStake(num);
   };
 
   const toggleNumber = (num) => {
@@ -200,71 +352,53 @@ export default function FlyovaToDollars() {
     }
   };
 
-  if (loading) return <div className="min-h-screen bg-[#0f172a] flex items-center justify-center text-white italic font-black">SYNCING...</div>;
+  if (loading) return <div className="min-h-screen bg-[#0f172a] flex items-center justify-center text-white italic font-black uppercase">Syncing...</div>;
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-white flex flex-col pb-24 relative overflow-hidden">
-      
       {showResultAlert && (
         <div className="absolute inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in zoom-in duration-300">
           <div className={`w-full max-w-xs p-8 rounded-[2.5rem] border-2 text-center shadow-[0_0_50px_rgba(0,0,0,0.5)] ${resultType === 'win' ? 'bg-[#1e293b] border-green-500' : 'bg-[#1e293b] border-red-500'}`}>
             {resultType === 'win' ? (
               <>
                 <Trophy size={60} className="mx-auto text-green-500 mb-4 animate-bounce" />
-                <h2 className="text-3xl font-black italic uppercase text-white mb-2">You WON!</h2>
+                <h2 className="text-3xl font-black italic uppercase mb-2">You WON!</h2>
                 <p className="text-[#fc7952] text-2xl font-black italic tracking-tighter">${winAmount.toFixed(2)}</p>
               </>
             ) : (
               <>
                 <XCircle size={60} className="mx-auto text-red-500 mb-4 animate-pulse" />
-                <h2 className="text-xl font-black italic uppercase text-white mb-2 leading-tight">YOUR BETS LOST,<br/>BETTER LUCK NEXT TIME!</h2>
+                <h2 className="text-xl font-black italic uppercase mb-2">Better luck next time!</h2>
               </>
             )}
           </div>
         </div>
       )}
 
-   
+      
 
-      {/* Real-time Timer */}
+      {/* Header & Timer Bar */}
       <div className="p-8 text-center bg-[#1e293b] border-b border-white/5 relative">
-        <div className="absolute top-0 left-0 h-1 bg-[#fc7952] transition-all duration-1000" style={{ width: `${(timeLeft/120)*100}%` }} />
-        
-        
-       <div className="w-full flex justify-center mb-6">
-  <div className="bg-[#1e293b] border-2 border-[#613de6]/30 px-6 py-2 rounded-2xl shadow-[0_0_20px_rgba(97,61,230,0.1)] flex items-center justify-center">
-    <h1 className="text-sm md:text-base font-black italic uppercase text-[#fc7952]">
-      Flyova to Dollars
-    </h1>
-  </div>
-</div>
-
+        <div className="absolute top-0 left-0 h-1 bg-[#fc7952] transition-all duration-1000" style={{ width: `${(timeLeft/GAME_DURATION)*100}%` }} />
+        <h1 className="text-sm font-black italic uppercase text-[#fc7952] mb-4">Flyova to Dollars</h1>
         <div className="inline-flex items-center space-x-3 bg-black/20 px-8 py-4 rounded-[2rem] border border-white/5 mt-4">
             <Timer size={24} className="text-[#613de6]" />
-            <span className="text-4xl font-black italic font-mono">
-                {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
-            </span>
+            <span className="text-4xl font-black italic font-mono">{Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}</span>
         </div>
       </div>
 
-      {/* 5 Number Grid */}
       <div className="flex-1 p-6 flex flex-col items-center justify-center">
-        {/* Betting List (Small indicators of active bets) */}
         <div className="flex flex-wrap gap-2 mb-4 justify-center">
-            {activeBets.map((b, i) => (
-                <div key={i} className="bg-green-500/20 border border-green-500/50 px-2 py-1 rounded-lg flex items-center space-x-2">
+            {activeBets.map((b) => (
+                <div key={b.id} className="bg-green-500/20 border border-green-500/50 px-2 py-1 rounded-lg flex items-center space-x-2">
                     <CheckCircle2 size={10} className="text-green-500" />
-                    <span className="text-[10px] font-black italic">{b.picks.join(", ")} (${b.stake})</span>
+                    <span className="text-[10px] font-black italic">{b.picks?.join(", ")} (${b.amount})</span>
                 </div>
             ))}
         </div>
 
-        <p className="text-[#fc7952] font-black italic uppercase text-xs mb-4 tracking-tighter">
-            {gameStatus === "results" ? "Wait for next round" : "Pick 2 Numbers & Place Multiple Bets"}
-        </p>
-
         <div className="grid grid-cols-5 gap-4 w-full max-w-sm mb-12">
-            {currentGame?.numbers.map((num) => {
+            {currentGame?.numbers?.map((num) => {
                 const isSelected = selectedNumbers.includes(num);
                 const isWinner = lastWinners.includes(num) && gameStatus === "results";
                 return (
@@ -277,43 +411,42 @@ export default function FlyovaToDollars() {
             })}
         </div>
 
-        {/* Betting Panel */}
         <div className="w-full max-w-xs bg-[#1e293b] p-6 rounded-[2.5rem] border border-white/5">
             {gameStatus === "betting" ? (
                 <>
                     <div className="flex items-center justify-between mb-6 bg-black/20 p-4 rounded-2xl">
-                        <button onClick={() => setStake(Math.max(1, stake - 1))} className="w-10 h-10 bg-[#613de6] rounded-xl font-bold">-</button>
-                        <div className="text-center"><span className="text-2xl font-black italic text-[#fc7952]">${stake}</span></div>
-                        <button onClick={() => setStake(stake + 1)} className="w-10 h-10 bg-[#613de6] rounded-xl font-bold">+</button>
+                        <button onClick={() => setStake(Math.max(1, (stake || 1) - 1))} className="w-10 h-10 bg-[#613de6] rounded-xl font-bold">-</button>
+                        <div className="flex items-center">
+                            <span className="text-2xl font-black italic text-[#fc7952] mr-0.5">$</span>
+                            <input type="text" value={stake} onChange={handleStakeChange} className="bg-transparent text-2xl font-black italic text-[#fc7952] w-12 text-center outline-none" />
+                        </div>
+                        <button onClick={() => setStake((stake || 0) + 1)} className="w-10 h-10 bg-[#613de6] rounded-xl font-bold">+</button>
                     </div>
-                    <button onClick={placeBet} disabled={selectedNumbers.length !== 2}
-                        className="w-full bg-[#fc7952] pt-4 pb-3 rounded-2xl font-black uppercase italic shadow-lg disabled:opacity-20 flex flex-col items-center active:scale-95 transition-transform">
-                        <span className="text-lg flex items-center"><Plus size={18} className="mr-2"/> PLACE BET</span>
-                        <span className="text-[10px] opacity-80 mt-1 italic tracking-tight">Win: ${(stake * WIN_MULTIPLIER).toFixed(2)}</span>
+                    <button onClick={placeBet} disabled={selectedNumbers.length !== 2 || !stake}
+                        className="w-full bg-[#fc7952] pt-4 pb-3 rounded-2xl font-black uppercase italic shadow-lg active:scale-95">
+                        <span className="text-lg flex items-center justify-center"><Plus size={18} className="mr-2"/> PLACE BET</span>
                     </button>
                 </>
             ) : (
                 <div className="text-center py-2">
                     <CheckCircle2 size={32} className="mx-auto mb-2 text-green-500" />
                     <p className="font-black italic uppercase text-sm">Betting Closed</p>
-                    <p className="text-[10px] font-bold opacity-30 mt-1 uppercase">Calculating Multi-Bets...</p>
                 </div>
             )}
         </div>
       </div>
 
-      {/* History */}
       <div className="bg-black/20 p-6 border-t border-white/5">
         <div className="flex items-center space-x-2 mb-4 opacity-40">
-            <History size={14} /><span className="text-[10px] font-black uppercase">Recent Winning Pairs</span>
+            <History size={14} /><span className="text-[10px] font-black uppercase">Recent Draws</span>
         </div>
         <div className="flex space-x-4 overflow-x-auto pb-2 no-scrollbar">
             {pastGames.map((pg) => (
                 <div key={pg.id} className="bg-[#1e293b] px-4 py-3 rounded-2xl border border-white/5 flex-shrink-0">
                     <div className="flex space-x-2">
-                        {pg.winners.map(w => <span key={w} className="text-[#fc7952] font-black italic">{w}</span>)}
+                        {pg.winners?.map(w => <span key={w} className="text-[#fc7952] font-black italic">{w}</span>)}
                     </div>
-                    <p className="text-[8px] font-bold opacity-20 uppercase mt-1">Round #{pg.id.slice(-4)}</p>
+                    <p className="text-[8px] font-bold opacity-20 uppercase mt-1">Round #{pg.id?.slice(-4)}</p>
                 </div>
             ))}
         </div>

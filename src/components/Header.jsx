@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Wallet, LogOut, ArrowUpRight } from "lucide-react";
+import { ChevronDown, Wallet, LogOut, ArrowUpRight, LayoutDashboard } from "lucide-react";
 // FIREBASE IMPORTS
 import { auth, db } from "@/lib/firebase";
 import { doc, onSnapshot, updateDoc } from "firebase/firestore";
@@ -14,7 +14,8 @@ export default function Header() {
   const [userData, setUserData] = useState({
     wallet: "0.00",
     referralBonus: "0.00",
-    gameCredits: "0.00"
+    gameCredits: "0.00",
+    isAgent: false // ADDED: to track agent status
   });
 
   useEffect(() => {
@@ -27,13 +28,14 @@ export default function Header() {
             setUserData({
               wallet: data.wallet?.toFixed(2) || "0.00",
               referralBonus: data.referralBonus?.toFixed(2) || "0.00",
-              gameCredits: data.gameCredits?.toFixed(2) || "0.00"
+              gameCredits: data.gameCredits?.toFixed(2) || "0.00",
+              isAgent: data.isAgent || false // ADDED: mapping from Firestore
             });
           }
         });
         return () => unsubscribeDoc();
       } else {
-        setUserData({ wallet: "0.00", referralBonus: "0.00", gameCredits: "0.00" });
+        setUserData({ wallet: "0.00", referralBonus: "0.00", gameCredits: "0.00", isAgent: false });
       }
     });
 
@@ -48,6 +50,11 @@ export default function Header() {
   const handleWithdrawClick = () => {
     setShowBalances(false);
     router.push("/withdrawal");
+  };
+
+  const handleAgentDashboardClick = () => {
+    setShowBalances(false);
+    router.push("/agent/dashboard");
   };
 
   const handleLogout = async () => {
@@ -102,6 +109,17 @@ export default function Header() {
                 </div>
 
                 <div className="space-y-2">
+                  {/* ADDED: Agent Dashboard Button (only shows if user is agent) */}
+                  {userData.isAgent && (
+                    <button 
+                      onClick={handleAgentDashboardClick}
+                      className="w-full bg-[#613de6] hover:bg-[#7251ed] py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-[#613de6]/20 active:scale-95 flex items-center justify-center space-x-2 border border-white/10"
+                    >
+                      <LayoutDashboard size={14} />
+                      <span>Agent Dashboard</span>
+                    </button>
+                  )}
+
                   {/* Withdrawal Button */}
                   <button 
                     onClick={handleWithdrawClick}

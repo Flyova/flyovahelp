@@ -2,6 +2,7 @@ import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getDatabase } from "firebase/database";
+import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCs_o33GpB1L8Bp9IcrSrq-YgQuvlADaCc",
@@ -16,5 +17,6 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0
 const auth = getAuth(app);
 const db = getFirestore(app);
 const rtdb = getDatabase(app); // Used for "Online/Busy" real-time status
+const storage = getStorage(app);
 
-export { auth, db, rtdb };
+export { auth, db, rtdb, storage };

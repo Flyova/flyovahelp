@@ -1,145 +1,268 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Wallet, ArrowUpCircle, Gift, Gamepad2, ChevronRight, CreditCard, Landmark } from "lucide-react";
-// FIREBASE IMPORTS
+import { useRouter } from "next/navigation";
+import { 
+  Wallet, 
+  Coins, 
+  Check, 
+  ArrowRight, 
+  UserCheck,
+  Loader2,
+  MapPin,
+  Users
+} from "lucide-react";
 import { auth, db } from "@/lib/firebase";
-import { doc, onSnapshot } from "firebase/firestore";
+import { 
+  doc, 
+  onSnapshot, 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  getDoc,
+  addDoc, 
+  serverTimestamp,
+  limit
+} from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 
 export default function DepositPage() {
-  const [activeTab, setActiveTab] = useState("main");
+  const router = useRouter();
   const [depositAmount, setDepositAmount] = useState("");
-  const [userData, setUserData] = useState({
-    main: 0,
-    referral: 0,
-    game: 0
-  });
+  const [method, setMethod] = useState("usdt");
+  const [loading, setLoading] = useState(false);
+  const [agentsLoading, setAgentsLoading] = useState(false);
+  const [userData, setUserData] = useState({ main: 0, country: "", uid: "" });
+  const [agents, setAgents] = useState([]);
+  const [selectedAgent, setSelectedAgent] = useState(null);
+  const [showAllAgents, setShowAllAgents] = useState(false);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
         const userRef = doc(db, "users", user.uid);
-        const unsubscribeSnap = onSnapshot(userRef, (docSnap) => {
+        onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
-            setUserData({
-              main: data.wallet || 0,
-              referral: data.referralBonus || 0,
-              game: data.gameCredits || 0
+            setUserData({ 
+              main: data.wallet || 0, 
+              country: data.country || "",
+              uid: user.uid 
             });
           }
         });
-        return () => unsubscribeSnap();
       }
     });
     return () => unsubscribeAuth();
   }, []);
 
-  const balanceData = {
-    main: { amount: userData.main.toFixed(2), icon: <Wallet />, desc: "Used for withdrawals and stakes" },
-    referral: { amount: userData.referral.toFixed(2), icon: <Gift />, desc: "Earned from inviting friends" },
-    game: { amount: userData.game.toFixed(2), icon: <Gamepad2 />, desc: "Specific credits for round fees" }
+  useEffect(() => {
+    if (method === "agent" && userData.country) {
+      fetchAgents(userData.country, parseFloat(depositAmount) || 0);
+    }
+  }, [depositAmount, method, userData.country]);
+
+  const fetchAgents = async (country, amount) => {
+    setAgentsLoading(true);
+    try {
+        const userQuery = query(
+          collection(db, "users"),
+          where("isAgent", "==", true),
+          where("country", "==", country),
+          limit(30)
+        );
+        
+        const userSnap = await getDocs(userQuery);
+        
+        const agentPromises = userSnap.docs.map(async (userDoc) => {
+            const uData = userDoc.data();
+            const uId = userDoc.id;
+            const walletBalance = Number(uData.wallet || 0);
+
+            if (walletBalance < amount || uId === userData.uid) return null;
+
+            const agentProfileDoc = await getDoc(doc(db, "agents", uId));
+            
+            if (agentProfileDoc.exists()) {
+                const pData = agentProfileDoc.data();
+                if (pData.application_status !== "approved") return null;
+
+                return {
+                    id: uId,
+                    wallet: walletBalance,
+                    full_name: pData.full_name || uData.fullName || "Active Agent", 
+                    exchange_rate: Number(pData.exchange_rate || 0),
+                };
+            }
+            return null;
+        });
+
+        const results = await Promise.all(agentPromises);
+        setAgents(results.filter(a => a !== null));
+    } catch (e) {
+        console.error("Fetch Error:", e);
+    } finally {
+        setAgentsLoading(false);
+    }
   };
 
-  const totalBalance = (userData.main + userData.referral + userData.game).toFixed(2);
+  const handleDeposit = async () => {
+    const amountNum = parseFloat(depositAmount);
+    if (!depositAmount || amountNum <= 0) return alert("Enter valid amount");
+    
+    if (method === "usdt") {
+      router.push(`/deposit/direct?amount=${depositAmount}`);
+    } else {
+      if (!selectedAgent) return alert("Please select an agent");
+      
+      setLoading(true);
+      try {
+        // 1. Check if USER already has a pending trade
+        const userTradeQ = query(
+          collection(db, "trades"), 
+          where("senderId", "==", auth.currentUser.uid), 
+          where("status", "==", "pending"),
+          limit(1)
+        );
+        const userSnap = await getDocs(userTradeQ);
+        if (!userSnap.empty) {
+          alert("You already have an active pending trade.");
+          setLoading(false);
+          return;
+        }
+
+        // 2. Check if AGENT already has a pending trade
+        const agentTradeQ = query(
+          collection(db, "trades"), 
+          where("agentId", "==", selectedAgent.id), 
+          where("status", "==", "pending"),
+          limit(1)
+        );
+        const agentSnap = await getDocs(agentTradeQ);
+        if (!agentSnap.empty) {
+          alert("This agent is currently busy with another client. Please select another agent.");
+          setLoading(false);
+          return;
+        }
+
+        // 3. Create Trade
+        const tradeRef = await addDoc(collection(db, "trades"), {
+          senderId: auth.currentUser.uid,
+          agentId: selectedAgent.id,
+          amount: amountNum,
+          rate: Number(selectedAgent.exchange_rate),
+          type: "deposit",
+          status: "pending",
+          createdAt: serverTimestamp()
+        });
+        
+        router.push(`/trade/${tradeRef.id}`);
+      } catch (e) {
+        console.error("Trade Error Detail:", e);
+        alert("Transaction failed: " + (e.message || "Unknown error"));
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
   const quickAmounts = [10, 20, 50, 100, 500];
+  const displayedAgents = showAllAgents ? agents : agents.slice(0, 5);
 
   return (
     <div className="min-h-screen bg-[#0f172a] pb-24 text-white">
-      {/* Top Balance Summary */}
-      <div className="bg-[#613de6] p-6 rounded-b-[3rem] shadow-xl">
-        <p className="text-center text-white/70 text-xs font-bold uppercase tracking-widest mb-2">Total Combined Balance</p>
-        <h1 className="text-4xl font-black text-center italic mb-6">
-          <span className="text-[#fc7952]">$</span>{totalBalance}
+      <div className="bg-[#613de6] p-10 pt-16 rounded-b-[3.5rem] shadow-2xl relative overflow-hidden text-center">
+        <div className="absolute top-0 right-0 p-10 opacity-10 rotate-12"><Wallet size={120} /></div>
+        <p className="relative z-10 text-white/60 text-[10px] font-black uppercase tracking-[0.3em] mb-2">Available Balance</p>
+        <h1 className="relative z-10 text-5xl font-black italic tracking-tighter">
+          <span className="text-[#fc7952] mr-1">$</span>{userData.main.toLocaleString()}
         </h1>
-        
-        {/* Tab Switcher */}
-        <div className="flex bg-black/20 p-1 rounded-2xl">
-          {Object.keys(balanceData).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${
-                activeTab === tab ? 'bg-white text-[#613de6] shadow-lg' : 'text-white/50'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className="p-6 max-w-md mx-auto space-y-8">
-        {/* Active Balance Detail */}
-        <div className="bg-[#1e293b] border border-gray-800 p-5 rounded-3xl flex items-center justify-between shadow-2xl">
-          <div className="flex items-center space-x-4">
-            <div className="p-3 bg-[#613de6]/10 rounded-2xl text-[#613de6]">
-              {balanceData[activeTab].icon}
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 font-bold uppercase">{activeTab} Balance</p>
-              <p className="text-xl font-black text-white italic">${balanceData[activeTab].amount}</p>
-            </div>
+        <div className="space-y-3">
+          <p className="text-[10px] font-black uppercase text-gray-500 ml-1">Deposit Method</p>
+          <div className="grid grid-cols-2 gap-3">
+            <button onClick={() => setMethod("usdt")} 
+              className={`p-5 rounded-3xl border flex flex-col items-center gap-2 transition-all ${method === 'usdt' ? 'bg-[#613de6] border-[#613de6]' : 'bg-[#1e293b] border-white/5 opacity-60'}`}>
+              <Coins size={22} />
+              <span className="text-[10px] font-black uppercase">Direct USDT</span>
+            </button>
+            <button onClick={() => setMethod("agent")} 
+              className={`p-5 rounded-3xl border flex flex-col items-center gap-2 transition-all ${method === 'agent' ? 'bg-[#613de6] border-[#613de6]' : 'bg-[#1e293b] border-white/5 opacity-60'}`}>
+              <UserCheck size={22} />
+              <span className="text-[10px] font-black uppercase">Local Agent</span>
+            </button>
           </div>
-          <ArrowUpCircle className="text-[#fc7952] opacity-50" />
         </div>
 
-        {/* Deposit Section */}
-        <div>
-          <h3 className="text-sm font-black uppercase italic mb-4 flex items-center">
-            <CreditCard size={18} className="mr-2 text-[#fc7952]" /> Quick Deposit
-          </h3>
-          
-          <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-2">
             {quickAmounts.map((amt) => (
-              <button
-                key={amt}
-                onClick={() => setDepositAmount(amt.toString())}
-                className="bg-[#1e293b] border border-gray-800 py-3 rounded-xl font-bold hover:border-[#613de6] hover:text-[#613de6] transition-all active:scale-95"
-              >
+              <button key={amt} onClick={() => setDepositAmount(amt.toString())}
+                className="bg-[#1e293b] py-3 rounded-xl font-black text-xs border border-white/5 active:scale-95 transition-all hover:border-[#613de6]">
                 ${amt}
               </button>
             ))}
           </div>
-
-          <div className="relative mb-6">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-500">$</span>
-            <input 
-              type="number"
-              value={depositAmount}
-              onChange={(e) => setDepositAmount(e.target.value)}
-              placeholder="Enter custom amount"
-              className="w-full bg-[#1e293b] border border-gray-800 p-4 pl-10 rounded-2xl focus:ring-2 focus:ring-[#613de6] outline-none font-black text-white"
-            />
+          <div className="relative">
+            <span className="absolute left-5 top-1/2 -translate-y-1/2 font-black text-[#613de6] text-xl">$</span>
+            <input type="number" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)}
+              placeholder="0.00" className="w-full bg-[#1e293b] border border-white/5 p-6 pl-12 rounded-[2rem] font-black text-2xl outline-none focus:border-[#613de6]/50 transition-all" />
           </div>
-
-          {/* Payment Methods */}
-          <div className="space-y-3">
-            <PaymentMethod icon={<Landmark size={20}/>} name="Bank Transfer" />
-            <PaymentMethod icon={<CreditCard size={20}/>} name="Debit/Credit Card" />
-          </div>
-
-          <button 
-            disabled={!depositAmount || parseFloat(depositAmount) <= 0}
-            className="w-full mt-8 py-4 rounded-2xl font-black text-white shadow-xl transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-30 disabled:grayscale"
-            style={{ backgroundColor: '#613de6' }}
-          >
-            CONFIRM DEPOSIT
-          </button>
         </div>
-      </div>
-    </div>
-  );
-}
 
-function PaymentMethod({ icon, name }) {
-  return (
-    <div className="flex items-center justify-between bg-[#1e293b]/50 border border-gray-800 p-4 rounded-2xl cursor-pointer hover:bg-[#1e293b] hover:border-[#613de6]/50 transition-all group">
-      <div className="flex items-center space-x-3">
-        <div className="text-gray-500 group-hover:text-[#613de6] transition-colors">{icon}</div>
-        <span className="text-sm font-bold text-gray-300 group-hover:text-white transition-colors">{name}</span>
+        {method === "agent" && (
+          <div className="space-y-4 animate-in fade-in">
+             <div className="flex justify-between items-end px-1">
+                <div>
+                    <h4 className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Available Agents</h4>
+                    <p className="text-[11px] font-bold text-[#fc7952] flex items-center gap-1">
+                        <MapPin size={10} /> {userData.country || "Your Region"}
+                    </p>
+                </div>
+             </div>
+
+             {agentsLoading ? (
+                <div className="space-y-3">
+                    {[1,2,3].map(i => (
+                        <div key={i} className="h-20 bg-[#1e293b] rounded-3xl animate-pulse" />
+                    ))}
+                </div>
+             ) : agents.length > 0 ? (
+                <div className="space-y-3">
+                    {displayedAgents.map((agent) => (
+                    <div key={agent.id} onClick={() => setSelectedAgent(agent)}
+                        className={`p-5 rounded-3xl border transition-all cursor-pointer flex justify-between items-center group ${selectedAgent?.id === agent.id ? 'bg-[#613de6]/10 border-[#613de6]' : 'bg-[#1e293b] border-white/5 hover:border-white/10'}`}>
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-[#613de6] rounded-2xl flex items-center justify-center font-black italic text-white shadow-lg">
+                                {agent.full_name?.charAt(0)}
+                            </div>
+                            <div>
+                                <p className="text-sm font-black uppercase italic tracking-tight">{agent.full_name}</p>
+                                <p className="text-[9px] font-bold text-gray-500 uppercase">Rate: {agent.exchange_rate} / $</p>
+                            </div>
+                        </div>
+                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selectedAgent?.id === agent.id ? 'border-[#613de6] bg-[#613de6]' : 'border-white/10'}`}>
+                            {selectedAgent?.id === agent.id && <Check size={12} className="text-white" />}
+                        </div>
+                    </div>
+                    ))}
+                </div>
+             ) : (
+                <div className="bg-[#1e293b] p-8 rounded-3xl border border-dashed border-white/10 text-center">
+                    <Users size={30} className="mx-auto mb-2 text-gray-700" />
+                    <p className="text-[10px] font-black uppercase text-gray-500">No agent found in {userData.country}</p>
+                </div>
+             )}
+          </div>
+        )}
+
+        <button onClick={handleDeposit} disabled={loading || !depositAmount || (method === 'agent' && !selectedAgent)}
+          className="w-full bg-[#613de6] py-5 rounded-[2rem] font-black uppercase italic text-sm shadow-2xl flex items-center justify-center gap-3 disabled:opacity-30 active:scale-95 transition-all">
+          {loading ? <Loader2 className="animate-spin" /> : <>PROCEED <ArrowRight size={20}/></>}
+        </button>
       </div>
-      <ChevronRight size={16} className="text-gray-600 group-hover:text-[#fc7952] transition-colors" />
     </div>
   );
 }
