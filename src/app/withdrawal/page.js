@@ -74,48 +74,42 @@ export default function WithdrawalPage() {
     }
   }, [amount, method, userData.country]);
 
+  // UPDATED: Now checks 'agent_balance' and 'withdrawal_rate' in the 'agents' collection
   const fetchAgents = async (country, requiredAmount) => {
     setAgentsLoading(true);
     try {
+      // Step 1: Query approved agents in the country
       const q = query(
-        collection(db, "users"),
-        where("isAgent", "==", true),
+        collection(db, "agents"),
+        where("application_status", "==", "approved"),
         where("country", "==", country),
         limit(30)
       );
       
       const snap = await getDocs(q);
       
-      const agentPromises = snap.docs.map(async (userDoc) => {
-        const uData = userDoc.data();
-        const uId = userDoc.id;
+      const validAgents = snap.docs.map((agentDoc) => {
+        const aData = agentDoc.data();
+        const aId = agentDoc.id;
         
-        const agentWalletBalance = Number(uData.wallet || 0);
+        // Logic: Agent must have enough business liquidity to pay the user
+        const businessBalance = Number(aData.agent_balance || 0);
         const requestedAmt = Number(requiredAmount);
 
-        // HIDE AGENTS WHO CAN'T AFFORD TO PAY THE USER
-        if (agentWalletBalance < requestedAmt || uId === userData.uid) return null;
+        // HIDE AGENTS WHO CAN'T AFFORD TO PAY OR SELF
+        if (businessBalance < requestedAmt || aId === userData.uid) return null;
 
-        const agentProfileDoc = await getDoc(doc(db, "agents", uId));
-        if (agentProfileDoc.exists()) {
-          const pData = agentProfileDoc.data();
-          if (pData.application_status !== "approved") return null;
+        return {
+          id: aId,
+          full_name: aData.full_name || "Active Agent",
+          exchange_rate: Number(aData.withdrawal_rate || 0), // Use specific withdrawal rate
+          agentBalance: businessBalance 
+        };
+      }).filter(a => a !== null);
 
-          return {
-            id: uId,
-            full_name: pData.full_name || uData.fullName || "Active Agent",
-            exchange_rate: Number(pData.exchange_rate || 0),
-            agentWallet: agentWalletBalance 
-          };
-        }
-        return null;
-      });
+      setAgents(validAgents);
 
-      const results = await Promise.all(agentPromises);
-      const filteredResults = results.filter(a => a !== null);
-      setAgents(filteredResults);
-
-      if (selectedAgent && !filteredResults.find(a => a.id === selectedAgent.id)) {
+      if (selectedAgent && !validAgents.find(a => a.id === selectedAgent.id)) {
         setSelectedAgent(null);
       }
 
@@ -182,18 +176,10 @@ export default function WithdrawalPage() {
         await addDoc(collection(db, "users", user.uid, "transactions"), txData);
         router.push("/dashboard");
       } else {
-        const userTradeQ = query(collection(db, "trades"), where("senderId", "==", auth.currentUser.uid), limit(10));
+        const userTradeQ = query(collection(db, "trades"), where("senderId", "==", auth.currentUser.uid), where("status", "==", "pending"), limit(1));
         const userSnap = await getDocs(userTradeQ);
-        if (userSnap.docs.some(d => d.data().status === "pending")) {
-          alert("You have a pending trade.");
-          setLoading(false);
-          return;
-        }
-
-        const agentTradeQ = query(collection(db, "trades"), where("agentId", "==", selectedAgent.id), limit(10));
-        const agentSnap = await getDocs(agentTradeQ);
-        if (agentSnap.docs.some(d => d.data().status === "pending")) {
-          alert("Agent is busy.");
+        if (!userSnap.empty) {
+          alert("You have an active pending trade.");
           setLoading(false);
           return;
         }
@@ -205,7 +191,8 @@ export default function WithdrawalPage() {
           rate: Number(selectedAgent.exchange_rate),
           type: "withdrawal",
           status: "pending",
-          createdAt: serverTimestamp()
+          createdAt: serverTimestamp(),
+          senderName: userData.fullName || "User"
         });
         
         router.push(`/trade/${tradeRef.id}`);
@@ -222,7 +209,7 @@ export default function WithdrawalPage() {
     <div className="min-h-screen bg-[#0f172a] text-white pb-10">
       <div className="p-6 pt-12 flex items-center justify-between bg-[#613de6] rounded-b-[2.5rem] shadow-xl">
         <button onClick={() => router.back()} className="p-2 bg-white/10 rounded-xl"><ChevronLeft size={20} /></button>
-        <h1 className="font-black italic uppercase tracking-wider text-xs">Withdraw Funds</h1>
+        <h1 className="font-black italic uppercase tracking-wider text-xs text-white">Withdraw Funds</h1>
         <div className="w-10" />
       </div>
 
@@ -236,13 +223,13 @@ export default function WithdrawalPage() {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <button onClick={() => setMethod("bank")} className={`p-5 rounded-3xl border-2 transition-all ${method === "bank" ? "border-[#613de6] bg-[#613de6]/10 shadow-lg shadow-[#613de6]/10" : "border-white/5 bg-[#1e293b] opacity-60"}`}>
-            <Landmark size={24} className="mx-auto mb-2" />
+          <button onClick={() => setMethod("bank")} className={`p-5 rounded-3xl border-2 transition-all ${method === "bank" ? "border-[#613de6] bg-[#613de6]/10 shadow-lg" : "border-white/5 bg-[#1e293b] opacity-60"}`}>
+            <Landmark size={24} className="mx-auto mb-2 text-[#613de6]" />
             <span className="text-[10px] font-black uppercase block text-center">Local Agent</span>
           </button>
-          <button onClick={() => setMethod("usdt")} className={`p-5 rounded-3xl border-2 transition-all ${method === "usdt" ? "border-[#613de6] bg-[#613de6]/10 shadow-lg shadow-[#613de6]/10" : "border-white/5 bg-[#1e293b] opacity-60"}`}>
-            <Coins size={24} className="mx-auto mb-2" />
-            <span className="text-[10px] font-black uppercase block text-center">USDT</span>
+          <button onClick={() => setMethod("usdt")} className={`p-5 rounded-3xl border-2 transition-all ${method === "usdt" ? "border-[#613de6] bg-[#613de6]/10 shadow-lg" : "border-white/5 bg-[#1e293b] opacity-60"}`}>
+            <Coins size={24} className="mx-auto mb-2 text-blue-400" />
+            <span className="text-[10px] font-black uppercase block text-center">USDT (TRC20)</span>
           </button>
         </div>
 
@@ -255,8 +242,8 @@ export default function WithdrawalPage() {
         {method === "bank" && (
           <div className="space-y-4">
             <div className="flex justify-between items-center px-1">
-              <h4 className="text-[10px] font-black uppercase text-gray-500">Qualified Agents</h4>
-              <p className="text-[10px] font-bold text-[#fc7952] flex items-center gap-1"><MapPin size={10} /> {userData.country}</p>
+              <h4 className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Qualified Merchants</h4>
+              <p className="text-[10px] font-bold text-[#fc7952] flex items-center gap-1 uppercase"><MapPin size={10} /> {userData.country}</p>
             </div>
 
             {agentsLoading ? (
@@ -267,10 +254,10 @@ export default function WithdrawalPage() {
                   <div key={agent.id} onClick={() => setSelectedAgent(agent)}
                     className={`p-5 rounded-3xl border-2 transition-all cursor-pointer flex justify-between items-center ${selectedAgent?.id === agent.id ? "border-[#613de6] bg-[#613de6]/10 shadow-lg" : "border-white/5 bg-[#1e293b]"}`}>
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-[#613de6] rounded-2xl flex items-center justify-center font-black italic text-white shadow-lg">{agent.full_name.charAt(0)}</div>
+                      <div className="w-12 h-12 bg-[#613de6] rounded-2xl flex items-center justify-center font-black italic text-white shadow-lg uppercase">{agent.full_name.charAt(0)}</div>
                       <div>
-                        <p className="font-black uppercase text-sm italic">{agent.full_name}</p>
-                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">Rate: {agent.exchange_rate} / $</p>
+                        <p className="font-black uppercase text-sm italic tracking-tight">{agent.full_name}</p>
+                        <p className="text-[9px] font-bold text-blue-400 uppercase tracking-tighter">Sell Rate: {agent.exchange_rate} / $</p>
                       </div>
                     </div>
                     <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selectedAgent?.id === agent.id ? 'border-[#613de6] bg-[#613de6]' : 'border-white/10'}`}>
@@ -281,20 +268,25 @@ export default function WithdrawalPage() {
               </div>
             ) : (
               <div className="bg-[#1e293b] p-10 rounded-3xl border border-dashed border-white/10 text-center">
-                <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest leading-relaxed">No agents with sufficient balance found in {userData.country}</p>
+                <AlertCircle size={24} className="mx-auto mb-2 text-gray-700" />
+                <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest leading-relaxed">No agents with sufficient liquidity found in {userData.country}</p>
               </div>
             )}
           </div>
         )}
 
         {method === "usdt" && (
-            <input type="text" placeholder="TRC20 Address" value={usdtAddress} onChange={(e) => setUsdtAddress(e.target.value)}
-                className="w-full bg-[#1e293b] border border-white/5 p-5 rounded-2xl text-sm font-bold focus:border-[#613de6] outline-none transition-all" />
+            <div className="space-y-3 animate-in fade-in duration-300">
+                <p className="text-[10px] font-black uppercase text-gray-500 ml-1">TRC20 Wallet Address</p>
+                <input type="text" placeholder="Enter TRC20 Address" value={usdtAddress} onChange={(e) => setUsdtAddress(e.target.value)}
+                    className="w-full bg-[#1e293b] border border-white/5 p-5 rounded-2xl text-sm font-bold focus:border-[#613de6] outline-none transition-all placeholder:opacity-20" />
+                <p className="text-[9px] font-bold text-rose-500 uppercase flex items-center gap-1"><AlertCircle size={10} /> Double check your address</p>
+            </div>
         )}
 
         <button onClick={handleWithdraw} disabled={loading || !amount || (method === 'bank' && !selectedAgent)}
-          className="w-full bg-[#fc7952] py-6 rounded-[2rem] font-black italic uppercase flex items-center justify-center gap-2 shadow-2xl shadow-[#fc7952]/20 disabled:opacity-30 active:scale-95 transition-all">
-          {loading ? <Loader2 className="animate-spin" /> : <>PROCEED <ArrowRight size={20} /></>}
+          className="w-full bg-[#fc7952] py-6 rounded-[2rem] font-black italic uppercase flex items-center justify-center gap-2 shadow-2xl shadow-[#fc7952]/20 disabled:opacity-30 active:scale-95 transition-all text-white">
+          {loading ? <Loader2 className="animate-spin" /> : <>PROCEED TO WITHDRAW <ArrowRight size={20} /></>}
         </button>
       </div>
     </div>

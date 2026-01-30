@@ -15,27 +15,45 @@ export default function Header() {
     wallet: "0.00",
     referralBonus: "0.00",
     gameCredits: "0.00",
-    isAgent: false // ADDED: to track agent status
+    agentBalance: "0.00", // Track agent-specific balance
+    isAgent: false 
   });
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
+        // 1. Listen to User Document
         const userDocRef = doc(db, "users", user.uid);
-        const unsubscribeDoc = onSnapshot(userDocRef, (docSnap) => {
+        const unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
-            setUserData({
+            setUserData(prev => ({
+              ...prev,
               wallet: data.wallet?.toFixed(2) || "0.00",
               referralBonus: data.referralBonus?.toFixed(2) || "0.00",
               gameCredits: data.gameCredits?.toFixed(2) || "0.00",
-              isAgent: data.isAgent || false // ADDED: mapping from Firestore
-            });
+              isAgent: data.isAgent || false
+            }));
+
+            // 2. If user is an agent, listen to the Agents collection for the specific agent_balance field
+            if (data.isAgent) {
+              const agentDocRef = doc(db, "agents", user.uid);
+              const unsubscribeAgent = onSnapshot(agentDocRef, (agentSnap) => {
+                if (agentSnap.exists()) {
+                  const agentData = agentSnap.data();
+                  setUserData(prev => ({
+                    ...prev,
+                    agentBalance: agentData.agent_balance?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0.00"
+                  }));
+                }
+              });
+              return () => unsubscribeAgent();
+            }
           }
         });
-        return () => unsubscribeDoc();
+        return () => unsubscribeUser();
       } else {
-        setUserData({ wallet: "0.00", referralBonus: "0.00", gameCredits: "0.00", isAgent: false });
+        setUserData({ wallet: "0.00", referralBonus: "0.00", gameCredits: "0.00", agentBalance: "0.00", isAgent: false });
       }
     });
 
@@ -61,7 +79,6 @@ export default function Header() {
     try {
       const user = auth.currentUser;
       if (user) {
-        // Mark user as offline in Firestore before logging out
         const userRef = doc(db, "users", user.uid);
         await updateDoc(userRef, { status: "offline" });
       }
@@ -77,7 +94,6 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-[100] w-full bg-[#613de6] text-white shadow-lg">
       <div className="container mx-auto px-4 h-14 flex items-center justify-between">
-        {/* Logo - Clickable to Dashboard */}
         <div 
           className="flex items-center space-x-2 cursor-pointer"
           onClick={() => router.push('/dashboard')}
@@ -85,7 +101,6 @@ export default function Header() {
           <Image src="/logo.svg" alt="Logo" width={100} height={22} />
         </div>
 
-        {/* Real-Time Balance Selector */}
         <div className="relative">
           <button 
             onClick={() => setShowBalances(!showBalances)}
@@ -105,11 +120,18 @@ export default function Header() {
                 
                 <div className="px-1 space-y-3">
                     <BalanceItem label="Referral Bonus" amount={userData.referralBonus} color="text-green-400" />
-                    <BalanceItem label="Active Stakes" amount={userData.gameCredits} color="text-[#fc7952]" />
+                    
+                    {/* Switch between Agent Balance and Active Stakes based on role */}
+                    {userData.isAgent ? (
+                      <BalanceItem label="Agent Balance" amount={userData.agentBalance} color="text-[#fc7952]" />
+                    ) : (
+                      Number(userData.gameCredits) > 0 && (
+                        <BalanceItem label="Active Stakes" amount={userData.gameCredits} color="text-[#fc7952]" />
+                      )
+                    )}
                 </div>
 
                 <div className="space-y-2">
-                  {/* ADDED: Agent Dashboard Button (only shows if user is agent) */}
                   {userData.isAgent && (
                     <button 
                       onClick={handleAgentDashboardClick}
@@ -120,7 +142,6 @@ export default function Header() {
                     </button>
                   )}
 
-                  {/* Withdrawal Button */}
                   <button 
                     onClick={handleWithdrawClick}
                     className="w-full bg-green-500 hover:bg-green-600 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-green-500/20 active:scale-95 flex items-center justify-center space-x-2"
@@ -129,7 +150,6 @@ export default function Header() {
                     <span>Withdraw Funds</span>
                   </button>
 
-                  {/* Deposit Button */}
                   <button 
                     onClick={handleDepositClick}
                     className="w-full bg-[#fc7952] hover:bg-[#ff8a6a] py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-[#fc7952]/20 active:scale-95"
@@ -137,7 +157,6 @@ export default function Header() {
                     DEPOSIT FUNDS
                   </button>
 
-                  {/* Logout Button */}
                   <button 
                     onClick={handleLogout}
                     className="w-full flex items-center justify-center space-x-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border border-red-500/20 active:scale-95 group"

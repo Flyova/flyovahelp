@@ -8,7 +8,7 @@ import {
 } from "firebase/firestore";
 import { 
   Send, ShieldCheck, Landmark, AlertCircle, 
-  CheckCircle2, Loader2, MessageSquare, Info, Paperclip, ImageIcon 
+  CheckCircle2, Loader2, MessageSquare, Info, Paperclip, ImageIcon, Clock, XCircle, ArrowLeft, Receipt, Copy
 } from "lucide-react";
 
 export default function TradeRoom() {
@@ -19,6 +19,8 @@ export default function TradeRoom() {
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [agentBank, setAgentBank] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(null);
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -28,27 +30,57 @@ export default function TradeRoom() {
 
   useEffect(() => {
     if (!id) return;
-    const unsubTrade = onSnapshot(doc(db, "trades", id), (snap) => {
-      if (snap.exists()) setTrade({ id: snap.id, ...snap.data() });
+    const unsubTrade = onSnapshot(doc(db, "trades", id), async (snap) => {
+      if (snap.exists()) {
+        const data = { id: snap.id, ...snap.data() };
+        setTrade(data);
+
+        if (data.type === "deposit" && auth.currentUser?.uid === data.senderId && !agentBank) {
+            const agentSnap = await getDoc(doc(db, "agents", data.agentId));
+            if (agentSnap.exists()) {
+                setAgentBank(agentSnap.data());
+            }
+        }
+        
+        if (data.status === 'pending' && data.createdAt) {
+          const startTime = data.createdAt.toDate().getTime();
+          const expiryTime = startTime + (15 * 60 * 1000); 
+          const timer = setInterval(() => {
+            const now = new Date().getTime();
+            const diff = Math.max(0, Math.floor((expiryTime - now) / 1000));
+            setTimeLeft(diff);
+            if (diff <= 0) {
+              clearInterval(timer);
+              updateDoc(doc(db, "trades", id), { status: "cancelled", reason: "Expired" });
+            }
+          }, 1000);
+          return () => clearInterval(timer);
+        }
+      }
     });
+
     const q = query(collection(db, "trades", id, "messages"), orderBy("createdAt", "asc"));
     const unsubChat = onSnapshot(q, (snap) => {
       setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     });
+
     return () => { unsubTrade(); unsubChat(); };
-  }, [id]);
+  }, [id, agentBank]);
 
   const sendMessage = async (imageUrl = null) => {
     if (!newMessage.trim() && !imageUrl) return;
     const textToSend = newMessage;
     setNewMessage(""); 
-    await addDoc(collection(db, "trades", id, "messages"), {
-      text: imageUrl ? "" : textToSend,
-      image: imageUrl || null,
-      senderId: auth.currentUser.uid,
-      createdAt: serverTimestamp(),
-    });
+    try {
+        await addDoc(collection(db, "trades", id, "messages"), {
+            text: imageUrl ? "" : textToSend,
+            image: imageUrl || null,
+            senderId: auth.currentUser.uid,
+            createdAt: serverTimestamp(),
+            type: imageUrl ? "image" : "text"
+        });
+    } catch (e) { console.error(e); }
   };
 
   const handleFileUpload = async (e) => {
@@ -71,144 +103,224 @@ export default function TradeRoom() {
     }
   };
 
-  const handleFinalConfirm = async () => {
-    if (!window.confirm("Confirm funds received? Money will move immediately!")) return;
-    setLoading(true);
+  const handleAcceptTrade = async () => {
+    const amount = Number(trade.amount);
+    const feePercent = trade.type === "deposit" ? 0.03 : 0.05;
+    const feeAmount = amount * feePercent;
+    
+    // For DEPOSITS: Agent must have (Amount + Fee) in balance
+    const totalRequired = amount + feeAmount;
 
+    if (!window.confirm(`Accept trade? You'll be charged $${amount} + $${feeAmount.toFixed(2)} admin fee.`)) return;
+    
+    setLoading(true);
     try {
       const batch = writeBatch(db);
-      const tradeRef = doc(db, "trades", id);
-      const userRef = doc(db, "users", trade.senderId);
-      const agentRef = doc(db, "users", trade.agentId);
-      const amount = Number(trade.amount);
+      const agentRef = doc(db, "agents", auth.currentUser.uid);
+      const agentSnap = await getDoc(agentRef);
+      const agentData = agentSnap.data();
 
-      // --- BALANCE CHECK LOGIC ---
-      // Determine who is paying the USDT
-      const payerRef = trade.type === "deposit" ? agentRef : userRef;
-      const payerSnap = await getDoc(payerRef);
-      
-      if (!payerSnap.exists()) throw new Error("Payer account not found.");
-      
-      const currentBalance = payerSnap.data().wallet || 0;
-
-      if (currentBalance < amount) {
-        alert(`Insufficient Wallet Balance! Required: $${amount}, Available: $${currentBalance}`);
-        setLoading(false);
-        return; // STOP the transaction
-      }
-      // --- END BALANCE CHECK ---
-
+      // Only check and deduct balance upfront for DEPOSITS
       if (trade.type === "deposit") {
-        batch.update(agentRef, { wallet: increment(-amount) });
-        batch.update(userRef, { wallet: increment(amount) });
-      } else {
-        batch.update(userRef, { wallet: increment(-amount) });
-        batch.update(agentRef, { wallet: increment(amount) });
+        if ((agentData.agent_balance || 0) < totalRequired) {
+          alert(`Insufficient Balance! Need $${totalRequired.toFixed(2)}`);
+          setLoading(false);
+          return;
+        }
+        batch.update(agentRef, { agent_balance: increment(-totalRequired) });
       }
 
-      batch.update(tradeRef, { status: "completed", completedAt: serverTimestamp() });
+      batch.update(doc(db, "trades", id), { 
+        status: "acknowledged", 
+        acceptedAt: serverTimestamp(),
+        feeCharged: feeAmount,
+        agentImpact: trade.type === "deposit" ? -totalRequired : (amount - feeAmount)
+      });
 
       await batch.commit();
-      alert("Trade Completed Successfully!");
-    } catch (e) {
-      console.error(e);
-      alert("Error finalizing trade: " + e.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { alert(e.message); } finally { setLoading(false); }
   };
 
-  if (!trade) return <div className="min-h-screen bg-[#0f172a] flex items-center justify-center"><Loader2 className="animate-spin text-[#613de6]" /></div>;
+  const handleFinalConfirm = async () => {
+    if (!window.confirm("Confirm payment received?")) return;
+    setLoading(true);
+    try {
+      const batch = writeBatch(db);
+      const userRef = doc(db, "users", trade.senderId);
+      const agentRef = doc(db, "agents", trade.agentId);
+      const amount = Number(trade.amount);
+      const feePercent = trade.type === "deposit" ? 0.03 : 0.05;
+      const feeAmount = amount * feePercent;
+
+      if (trade.type === "deposit") {
+        // User receives the full deposit amount
+        batch.update(userRef, { wallet: increment(amount) });
+      } else {
+        // WITHDRAWAL LOGIC:
+        // User was already debited at creation. 
+        // Agent now receives the (Amount - 5% Fee) into their agent_balance
+        const netToAgent = amount - feeAmount;
+        batch.update(agentRef, { agent_balance: increment(netToAgent) });
+      }
+
+      batch.update(doc(db, "trades", id), { 
+        status: "completed", 
+        completedAt: serverTimestamp() 
+      });
+      
+      await batch.commit();
+    } catch (e) { alert(e.message); } finally { setLoading(false); }
+  };
+
+  if (!trade) return null;
 
   const isAgent = auth.currentUser?.uid === trade.agentId;
   const canConfirm = (trade.type === "deposit" && isAgent) || (trade.type === "withdrawal" && !isAgent);
+  const feePercent = trade.type === "deposit" ? 0.03 : 0.05;
+  const calculatedFee = Number(trade.amount) * feePercent;
 
   return (
-    <div className="min-h-screen bg-[#0f172a] flex flex-col text-white pb-28"> 
-      <div className="bg-[#1e293b] p-6 pt-12 border-b border-white/5 flex items-center justify-between shadow-xl sticky top-0 z-50">
+    <div className="min-h-screen bg-[#0f172a] flex flex-col text-white pb-48"> 
+      <div className="bg-[#1e293b] p-6 pt-12 border-b border-white/5 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-[#613de6] rounded-2xl flex items-center justify-center font-black italic shadow-lg">
-            {trade.type === 'deposit' ? 'DP' : 'WD'}
-          </div>
+          <button onClick={() => router.back()} className="p-2 hover:bg-white/5 rounded-full"><ArrowLeft size={20}/></button>
           <div>
             <h1 className="font-black uppercase italic tracking-tighter text-sm">
-              {trade.type === 'deposit' ? 'Purchase USDT' : 'Sell USDT'}
+              Trade with {isAgent ? (trade.senderName || "User") : (trade.agentName || "Agent")}
             </h1>
-            <p className="text-[10px] font-bold text-[#fc7952] uppercase tracking-widest">${trade.amount.toLocaleString()}</p>
+            <p className="text-[10px] font-bold text-[#fc7952] uppercase tracking-widest">${Number(trade.amount).toLocaleString()}</p>
           </div>
         </div>
-        <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase ${trade.status === 'completed' ? 'bg-green-500/20 text-green-400' : 'bg-orange-500/20 text-orange-400 animate-pulse'}`}>
-          {trade.status}
-        </div>
+        <StatusBadge status={trade.status} />
       </div>
 
-      <div className="p-4 bg-[#613de6]/10 border-b border-[#613de6]/20">
-        <div className="flex gap-3 mb-2">
-            <Info className="text-[#613de6] shrink-0" size={16} />
-            <p className="text-[10px] font-black uppercase text-white tracking-tight">Trade Steps:</p>
-        </div>
-        <p className="text-[11px] font-bold text-gray-400 leading-relaxed pl-7">
-          {trade.type === 'deposit' 
-            ? (isAgent ? "Send your bank details. Wait for the user to upload payment proof." : "Transfer money to the agent's bank and UPLOAD the screenshot proof.")
-            : (isAgent ? "Wait for user's bank details, pay them, and UPLOAD the payment receipt." : "Send your bank details and wait for the agent to upload payment proof.")
-          }
-        </p>
-      </div>
-
-      <div className="pb-50 flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar min-h-[300px]">
-        {messages.map((msg) => (
-          <div key={msg.id} className={`flex ${msg.senderId === auth.currentUser.uid ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] rounded-3xl overflow-hidden shadow-2xl ${
-              msg.senderId === auth.currentUser.uid 
-              ? 'bg-[#613de6] text-white rounded-tr-none' 
-              : 'bg-[#1e293b] text-gray-300 rounded-tl-none border border-white/5'
-            }`}>
-              {msg.image ? (
-                <div className="p-1 group relative">
-                  <img src={msg.image} className="w-full max-h-72 object-cover rounded-2xl cursor-pointer" onClick={() => window.open(msg.image, '_blank')} />
-                  <div className="p-2 flex items-center gap-2">
-                    <ImageIcon size={12} className="text-white/50" />
-                    <span className="text-[8px] font-black uppercase tracking-widest opacity-60">Payment Proof</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-4 text-sm font-bold leading-relaxed">{msg.text}</div>
-              )}
+      {isAgent && (
+        <div className="m-4 p-5 bg-[#613de6]/10 rounded-3xl border border-[#613de6]/20 space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Receipt size={14} className="text-[#613de6]" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-[#613de6]">
+                Agent {trade.type === "deposit" ? "Deduction" : "Earnings"} Summary
+              </span>
             </div>
+            <div className="grid grid-cols-2 gap-y-2">
+              <span className="text-[10px] font-bold opacity-50 uppercase">Trade Amount:</span>
+              <span className="text-[10px] font-black text-right">${Number(trade.amount).toFixed(2)}</span>
+              <span className="text-[10px] font-bold opacity-50 uppercase">Admin Fee ({feePercent * 100}%):</span>
+              <span className="text-[10px] font-black text-right text-rose-400">-${calculatedFee.toFixed(2)}</span>
+              <div className="col-span-2 h-px bg-white/5 my-1" />
+              <span className="text-[11px] font-black uppercase">
+                {trade.type === "deposit" ? "Total Deduction:" : "Net to Agent Balance:"}
+              </span>
+              <span className={`text-[11px] font-black text-right ${trade.type === "deposit" ? 'text-rose-400' : 'text-emerald-400'}`}>
+                ${trade.type === "deposit" 
+                  ? (Number(trade.amount) + calculatedFee).toFixed(2) 
+                  : (Number(trade.amount) - calculatedFee).toFixed(2)}
+              </span>
+            </div>
+        </div>
+      )}
+
+      {!isAgent && (
+        <div className="m-4 space-y-3">
+            <div className="p-5 bg-[#1e293b] rounded-3xl border border-white/5 flex justify-between items-center">
+                <div>
+                    <p className="text-[9px] font-black uppercase opacity-40 mb-1">Trade Amount</p>
+                    <p className="text-xl font-black italic text-[#613de6]">${Number(trade.amount).toLocaleString()}</p>
+                </div>
+                <div className="text-right">
+                    <p className="text-[9px] font-black uppercase opacity-40 mb-1">Total to Pay/Receive</p>
+                    <p className="text-xl font-black italic text-[#fc7952]">{(trade.rate * trade.amount).toLocaleString()}</p>
+                </div>
+            </div>
+
+            {trade.type === "deposit" && agentBank && (
+                <div className="p-5 bg-white text-slate-900 rounded-3xl shadow-2xl space-y-3 border-l-8 border-[#613de6]">
+                    <div className="flex justify-between items-start">
+                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Agent Bank Details</p>
+                        < Landmark size={16} className="text-[#613de6]" />
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-[11px] font-black uppercase tracking-tighter text-slate-500">{agentBank.bankName}</p>
+                        <div className="flex items-center justify-between">
+                            <p className="text-2xl font-black tracking-widest text-[#0f172a]">{agentBank.accountNumber}</p>
+                            <button onClick={() => {navigator.clipboard.writeText(agentBank.accountNumber); alert("Copied!")}} className="p-2 bg-slate-100 rounded-lg active:scale-90"><Copy size={14}/></button>
+                        </div>
+                        <p className="text-xs font-bold text-slate-600 uppercase italic">
+                           {agentBank.accountName || agentBank.full_name}
+                        </p>
+                    </div>
+                </div>
+            )}
+        </div>
+      )}
+
+      {trade.status === 'pending' && timeLeft !== null && (
+          <div className="mx-4 mb-4 flex items-center justify-center gap-2 bg-orange-500/10 py-3 rounded-2xl text-orange-500 font-black text-[10px] uppercase border border-orange-500/10">
+              <Clock size={12} /> Expires In: {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
           </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        {messages.map((msg) => (
+           <MessageBubble key={msg.id} msg={msg} isMe={msg.senderId === auth.currentUser.uid} />
         ))}
         <div ref={scrollRef} />
       </div>
 
-      <div className="p-6 bg-[#0f172a]/95 backdrop-blur-md border-t border-white/5 space-y-4 fixed bottom-24 left-0 right-0 z-40">
-        {trade.status === 'pending' && (
-          <div className="flex gap-2 max-w-md mx-auto w-full">
-            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileUpload} />
-            <button disabled={uploading} onClick={() => fileInputRef.current.click()} className="bg-[#1e293b] p-4 rounded-2xl border border-white/5 text-[#613de6] active:scale-90 transition-all shadow-lg min-w-[56px]">
-              {uploading ? <Loader2 className="animate-spin" size={20} /> : <Paperclip size={20} />}
-            </button>
-            <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} placeholder="Message..." className="flex-1 bg-[#1e293b] border border-white/5 p-4 rounded-2xl outline-none focus:border-[#613de6] text-sm font-bold shadow-inner" />
-            <button onClick={() => sendMessage()} className="bg-[#613de6] p-4 rounded-2xl active:scale-90 shadow-lg shadow-[#613de6]/20"><Send size={20} /></button>
-          </div>
-        )}
-
-        {trade.status === 'pending' && canConfirm && (
-          <div className="max-w-md mx-auto w-full">
-            <button onClick={handleFinalConfirm} disabled={loading} className="w-full bg-green-600 py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all">
-                {loading ? <Loader2 className="animate-spin" /> : <CheckCircle2 size={18} />}
-                CONFIRM PAYMENT RECEIVED
+      <div className="fixed bottom-0 left-0 right-0 p-6 bg-[#0f172a]/95 backdrop-blur-md border-t border-white/5 z-50 pb-20">
+        {trade.status === 'pending' && isAgent && (
+          <div className="flex gap-3 mb-4 max-w-md mx-auto">
+            <button onClick={() => updateDoc(doc(db, "trades", id), { status: "cancelled" })} className="flex-1 bg-rose-500/10 text-rose-500 py-4 rounded-2xl font-black uppercase text-[10px] border border-rose-500/20">Decline</button>
+            <button onClick={handleAcceptTrade} disabled={loading} className="flex-[2] bg-emerald-500 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 shadow-lg">
+                {loading ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />} Accept Trade
             </button>
           </div>
         )}
 
-        {trade.status === 'completed' && (
-          <div className="max-w-md mx-auto w-full bg-green-500/10 p-5 rounded-2xl border border-green-500/20 text-center animate-in zoom-in duration-300">
-             <p className="text-green-500 font-black uppercase text-[10px] italic flex items-center justify-center gap-2">
-                <CheckCircle2 size={14} /> Trade Completed Successfully
-             </p>
-          </div>
+        {trade.status !== 'completed' && trade.status !== 'cancelled' && (
+             <div className="flex gap-2 max-w-md mx-auto w-full mb-4 items-center">
+                <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="image/*" />
+                <button onClick={() => fileInputRef.current.click()} disabled={uploading} className="bg-[#1e293b] p-4 rounded-2xl text-[#613de6] shadow-inner">
+                  {uploading ? <Loader2 className="animate-spin" size={20} /> : <ImageIcon size={20} />}
+                </button>
+                <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} placeholder="Type a message..." className="flex-1 bg-[#1e293b] border border-white/5 p-4 rounded-2xl outline-none focus:border-[#613de6] text-sm font-bold shadow-inner" />
+                <button onClick={() => sendMessage()} className="bg-[#613de6] p-4 rounded-2xl shadow-lg active:scale-95 transition-all"><Send size={20} /></button>
+             </div>
+        )}
+
+        {trade.status === 'acknowledged' && canConfirm && (
+             <button onClick={handleFinalConfirm} disabled={loading} className="max-w-md mx-auto w-full bg-green-600 py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all">
+                {loading ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />} CONFIRM PAYMENT RECEIVED
+             </button>
         )}
       </div>
     </div>
   );
+}
+
+function StatusBadge({ status }) {
+    const colors = { 
+        pending: "bg-orange-500/20 text-orange-400", 
+        acknowledged: "bg-blue-500/20 text-blue-400", 
+        completed: "bg-green-500/20 text-green-400", 
+        cancelled: "bg-rose-500/20 text-rose-400" 
+    };
+    return <div className={`px-4 py-1.5 rounded-full text-[8px] font-black uppercase tracking-tighter ${colors[status]}`}>{status}</div>;
+}
+
+function MessageBubble({ msg, isMe }) {
+    return (
+        <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}>
+            <div className={`max-w-[80%] p-4 rounded-2xl text-[13px] font-bold ${isMe ? 'bg-[#613de6] text-white rounded-tr-none shadow-lg' : 'bg-[#1e293b] text-gray-300 rounded-tl-none border border-white/5 shadow-inner'}`}>
+                {msg.image ? (
+                  <div className="space-y-2">
+                    <img src={msg.image} alt="Proof" className="max-w-full rounded-lg cursor-pointer" onClick={() => window.open(msg.image, '_blank')} />
+                    <p className="text-[8px] font-black uppercase opacity-50 flex items-center gap-1"><ImageIcon size={10}/> Payment Proof</p>
+                  </div>
+                ) : (
+                  msg.text
+                )}
+            </div>
+        </div>
+    );
 }
