@@ -30,7 +30,8 @@ import {
   Plus,
   ArrowRightLeft,
   History,
-  Clock
+  Clock,
+  ArrowDownLeft
 } from "lucide-react";
 
 export default function AgentDashboard() {
@@ -43,19 +44,21 @@ export default function AgentDashboard() {
   // Modal States
   const [isRateModalOpen, setIsRateModalOpen] = useState(false);
   const [isTopupModalOpen, setIsTopupModalOpen] = useState(false);
+  const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   
   const [rates, setRates] = useState({ deposit: "", withdrawal: "" });
   const [topupAmount, setTopupAmount] = useState("");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
   
   const [updating, setUpdating] = useState(false);
   const [topupLoading, setTopupLoading] = useState(false);
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(null);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
       if (!u) return router.push("/login");
       
-      // 1. Listen to Agent Data
       const agentRef = doc(db, "agents", u.uid);
       const unsubAgent = onSnapshot(agentRef, (snap) => {
         if (!snap.exists() || snap.data().application_status !== "approved") {
@@ -69,13 +72,11 @@ export default function AgentDashboard() {
         });
       });
 
-      // 2. Listen to User Data (for main wallet balance)
       const userRef = doc(db, "users", u.uid);
       const unsubUser = onSnapshot(userRef, (snap) => {
         if (snap.exists()) setUserProfile(snap.data());
       });
 
-      // 3. Listen to Active Trades
       const qActive = query(
         collection(db, "trades"),
         where("agentId", "==", u.uid),
@@ -85,7 +86,6 @@ export default function AgentDashboard() {
         setTrades(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       });
 
-      // 4. Listen to Trade History (Recent 10 completed/cancelled)
       const qHistory = query(
         collection(db, "trades"),
         where("agentId", "==", u.uid),
@@ -133,6 +133,35 @@ export default function AgentDashboard() {
       alert("Transfer failed: " + e.message);
     } finally {
       setTopupLoading(false);
+    }
+  };
+
+  const handleWithdrawToMain = async () => {
+    const amount = Number(withdrawAmount);
+    if (!amount || amount <= 0) return alert("Please enter a valid amount");
+    
+    if ((agent?.agent_balance || 0) < amount) {
+      alert(`Insufficient funds in your agent balance. Available: $${agent?.agent_balance?.toLocaleString()}`);
+      return;
+    }
+
+    setWithdrawLoading(true);
+    try {
+      const batch = writeBatch(db);
+      const userRef = doc(db, "users", auth.currentUser.uid);
+      const agentRef = doc(db, "agents", auth.currentUser.uid);
+
+      batch.update(agentRef, { agent_balance: increment(-amount) });
+      batch.update(userRef, { wallet: increment(amount) });
+
+      await batch.commit();
+      setIsWithdrawModalOpen(false);
+      setWithdrawAmount("");
+      alert("Transfer to Main Wallet Successful!");
+    } catch (e) {
+      alert("Transfer failed: " + e.message);
+    } finally {
+      setWithdrawLoading(false);
     }
   };
 
@@ -188,7 +217,6 @@ export default function AgentDashboard() {
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-white pb-20">
-      {/* Header Section */}
       <div className="bg-[#613de6] p-8 pt-14 rounded-b-[3.5rem] shadow-2xl relative overflow-hidden">
         <div className="relative z-10 space-y-6">
             <div className="flex justify-between items-center">
@@ -220,13 +248,22 @@ export default function AgentDashboard() {
                       </div>
                     </div>
                     
-                    <button 
-                      onClick={() => setIsTopupModalOpen(true)}
-                      className="w-full bg-white text-slate-900 py-3.5 rounded-2xl font-black uppercase italic text-[10px] tracking-widest shadow-xl hover:bg-slate-100 active:scale-95 transition-all flex items-center justify-center gap-2"
-                    >
-                      <Plus size={14} />
-                      Topup Balance
-                    </button>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => setIsTopupModalOpen(true)}
+                        className="flex-1 bg-white text-slate-900 py-3.5 rounded-2xl font-black uppercase italic text-[9px] tracking-widest shadow-xl hover:bg-slate-100 active:scale-95 transition-all flex items-center justify-center gap-2"
+                      >
+                        <Plus size={14} />
+                        Topup
+                      </button>
+                      <button 
+                        onClick={() => setIsWithdrawModalOpen(true)}
+                        className="flex-1 bg-emerald-500 text-white py-3.5 rounded-2xl font-black uppercase italic text-[9px] tracking-widest shadow-xl hover:bg-emerald-600 active:scale-95 transition-all flex items-center justify-center gap-2"
+                      >
+                        <ArrowDownLeft size={14} />
+                        Withdraw
+                      </button>
+                    </div>
                 </div>
                 
                 <div className="bg-black/20 p-6 rounded-[2.5rem] border border-white/5 flex flex-col gap-4">
@@ -255,7 +292,6 @@ export default function AgentDashboard() {
       </div>
 
       <div className="p-6 space-y-10">
-        {/* Active Orders Section */}
         <section className="space-y-6">
             <div className="flex justify-between items-center px-2">
             <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-500">Active Market Orders</h2>
@@ -320,7 +356,6 @@ export default function AgentDashboard() {
             )}
         </section>
 
-        {/* Trade History Section */}
         <section className="space-y-6">
             <div className="flex justify-between items-center px-2">
                 <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-500 flex items-center gap-2">
@@ -397,6 +432,45 @@ export default function AgentDashboard() {
                   className="w-full bg-[#613de6] py-6 rounded-2xl font-black uppercase italic text-xs tracking-widest shadow-xl shadow-[#613de6]/30 active:scale-95 transition-all flex items-center justify-center gap-2"
                 >
                     {topupLoading ? <Loader2 className="animate-spin" /> : <>Transfer Funds <ArrowRightLeft size={16} /></>}
+                </button>
+            </div>
+        </div>
+      )}
+
+      {/* WITHDRAW TO MAIN MODAL */}
+      {isWithdrawModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#0f172a]/95 backdrop-blur-md">
+            <div className="bg-[#1e293b] w-full max-w-sm rounded-[3rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in duration-200">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="font-black uppercase italic text-sm tracking-wider">Transfer to Main Wallet</h3>
+                    <button onClick={() => setIsWithdrawModalOpen(false)} className="p-2 bg-white/5 rounded-xl hover:bg-white/10 transition-colors"><X size={18} /></button>
+                </div>
+                
+                <div className="bg-emerald-500/10 p-4 rounded-2xl border border-emerald-500/20 mb-6 flex justify-between items-center">
+                    <span className="text-[9px] font-black uppercase text-white/40">Available Agent Balance</span>
+                    <span className="text-sm font-black text-emerald-400">${agent?.agent_balance?.toLocaleString() || "0.00"}</span>
+                </div>
+
+                <div className="bg-[#0f172a] p-5 rounded-3xl border border-white/5 mb-8">
+                    <label className="text-[9px] font-black uppercase text-emerald-500 block mb-2">Amount to Withdraw</label>
+                    <div className="relative">
+                      <span className="absolute left-0 top-1/2 -translate-y-1/2 text-3xl font-black text-white/20">$</span>
+                      <input 
+                          type="number" 
+                          value={withdrawAmount} 
+                          onChange={(e) => setWithdrawAmount(e.target.value)} 
+                          className="w-full bg-transparent font-black text-3xl outline-none text-white pl-6" 
+                          placeholder="0.00" 
+                      />
+                    </div>
+                </div>
+
+                <button 
+                  onClick={handleWithdrawToMain} 
+                  disabled={withdrawLoading} 
+                  className="w-full bg-emerald-500 py-6 rounded-2xl font-black uppercase italic text-xs tracking-widest shadow-xl shadow-emerald-500/30 active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                    {withdrawLoading ? <Loader2 className="animate-spin" /> : <>Transfer to Wallet <ArrowRightLeft size={16} /></>}
                 </button>
             </div>
         </div>

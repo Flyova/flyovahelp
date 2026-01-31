@@ -20,6 +20,7 @@ export default function TradeRoom() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [agentBank, setAgentBank] = useState(null);
+  const [otherPartyName, setOtherPartyName] = useState("");
   const [timeLeft, setTimeLeft] = useState(null);
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -35,7 +36,17 @@ export default function TradeRoom() {
         const data = { id: snap.id, ...snap.data() };
         setTrade(data);
 
-        if (data.type === "deposit" && auth.currentUser?.uid === data.senderId && !agentBank) {
+        const isAgent = auth.currentUser?.uid === data.agentId;
+        const otherPartyId = isAgent ? data.senderId : data.agentId;
+        const otherPartyCollection = isAgent ? "users" : "agents";
+        
+        const partySnap = await getDoc(doc(db, otherPartyCollection, otherPartyId));
+        if (partySnap.exists()) {
+            const pData = partySnap.data();
+            setOtherPartyName(pData.full_name || pData.fullName || (isAgent ? data.senderName : data.agentName));
+        }
+
+        if (data.type === "deposit" && !isAgent && !agentBank) {
             const agentSnap = await getDoc(doc(db, "agents", data.agentId));
             if (agentSnap.exists()) {
                 setAgentBank(agentSnap.data());
@@ -107,34 +118,47 @@ export default function TradeRoom() {
     const amount = Number(trade.amount);
     const feePercent = trade.type === "deposit" ? 0.03 : 0.05;
     const feeAmount = amount * feePercent;
-    
-    // For DEPOSITS: Agent must have (Amount + Fee) in balance
     const totalRequired = amount + feeAmount;
 
-    if (!window.confirm(`Accept trade? You'll be charged $${amount} + $${feeAmount.toFixed(2)} admin fee.`)) return;
+    // Updated Logic: Only inform Agent of charge if it's a Deposit.
+    // For Withdrawals, they are just acknowledging the user's request.
+    const confirmMsg = trade.type === "deposit" 
+      ? `Accept trade? You'll be charged $${amount} + $${feeAmount.toFixed(2)} admin fee.`
+      : `Accept this withdrawal request for $${amount}?`;
+
+    if (!window.confirm(confirmMsg)) return;
     
     setLoading(true);
     try {
       const batch = writeBatch(db);
-      const agentRef = doc(db, "agents", auth.currentUser.uid);
-      const agentSnap = await getDoc(agentRef);
-      const agentData = agentSnap.data();
-
-      // Only check and deduct balance upfront for DEPOSITS
+      
       if (trade.type === "deposit") {
-        if ((agentData.agent_balance || 0) < totalRequired) {
-          alert(`Insufficient Balance! Need $${totalRequired.toFixed(2)}`);
+        const agentRef = doc(db, "agents", auth.currentUser.uid);
+        const agentSnap = await getDoc(agentRef);
+        if ((agentSnap.data().agent_balance || 0) < totalRequired) {
+          alert(`Insufficient Agent Balance! Need $${totalRequired.toFixed(2)}`);
           setLoading(false);
           return;
         }
         batch.update(agentRef, { agent_balance: increment(-totalRequired) });
+      } else {
+        // WITHDRAWAL: Debit the User's wallet (amount + fee) to hold it in escrow
+        const userRef = doc(db, "users", trade.senderId);
+        const userSnap = await getDoc(userRef);
+        if ((userSnap.data().wallet || 0) < totalRequired) {
+          alert(`The user has insufficient funds in their wallet for this withdrawal.`);
+          setLoading(false);
+          return;
+        }
+        batch.update(userRef, { wallet: increment(-totalRequired) });
       }
 
       batch.update(doc(db, "trades", id), { 
         status: "acknowledged", 
         acceptedAt: serverTimestamp(),
         feeCharged: feeAmount,
-        agentImpact: trade.type === "deposit" ? -totalRequired : (amount - feeAmount)
+        // Impact track: Deposits remove money from Agent, Withdrawals will eventually add (amount - fee)
+        agentImpact: trade.type === "deposit" ? -totalRequired : 0 
       });
 
       await batch.commit();
@@ -153,12 +177,10 @@ export default function TradeRoom() {
       const feeAmount = amount * feePercent;
 
       if (trade.type === "deposit") {
-        // User receives the full deposit amount
+        // Deposit: User gets the net amount credited to their wallet
         batch.update(userRef, { wallet: increment(amount) });
       } else {
-        // WITHDRAWAL LOGIC:
-        // User was already debited at creation. 
-        // Agent now receives the (Amount - 5% Fee) into their agent_balance
+        // Withdrawal: Agent gets the net amount (amount - fee) credited to their agent balance
         const netToAgent = amount - feeAmount;
         batch.update(agentRef, { agent_balance: increment(netToAgent) });
       }
@@ -186,7 +208,7 @@ export default function TradeRoom() {
           <button onClick={() => router.back()} className="p-2 hover:bg-white/5 rounded-full"><ArrowLeft size={20}/></button>
           <div>
             <h1 className="font-black uppercase italic tracking-tighter text-sm">
-              Trade with {isAgent ? (trade.senderName || "User") : (trade.agentName || "Agent")}
+              Trade with {otherPartyName || "Loading..."}
             </h1>
             <p className="text-[10px] font-bold text-[#fc7952] uppercase tracking-widest">${Number(trade.amount).toLocaleString()}</p>
           </div>
