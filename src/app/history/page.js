@@ -25,7 +25,7 @@ export default function HistoryPage() {
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
-        // 1. STAKES & WINS (Sub-collection)
+        // 1. STAKES, WINS & USDT WITHDRAWALS (Sub-collection)
         const transRef = collection(db, "users", user.uid, "transactions");
         const qTrans = query(transRef, orderBy("timestamp", "desc"));
 
@@ -43,16 +43,20 @@ export default function HistoryPage() {
         const syncData = () => {
           setLoading(true);
           
-          // Using a simple object to merge and sort by date later
-          let allData = [];
-
           const unsubTrans = onSnapshot(qTrans, (snap) => {
-            const data = snap.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data(),
-              category: 'games',
-              date: doc.data().timestamp?.toDate() || new Date()
-            }));
+            const data = snap.docs.map(doc => {
+              const docData = doc.data();
+              // LOGIC: If type is withdrawal or category is finance, set category to finance.
+              // Otherwise, default to games (for stakes/wins).
+              const isFinance = docData.type === 'withdrawal' || docData.category === 'finance';
+              
+              return {
+                id: doc.id,
+                ...docData,
+                category: isFinance ? 'finance' : 'games',
+                date: docData.timestamp?.toDate() || new Date()
+              };
+            });
             updateState(data, 'trans');
           });
 
@@ -169,7 +173,7 @@ export default function HistoryPage() {
 
                   <div>
                     <h4 className="font-black text-xs text-white uppercase tracking-tight">
-                      {item.title || (item.type === 'win' ? 'Round Victory' : 'Game Stake')}
+                      {item.title || (item.type === 'win' ? 'Round Victory' : item.type === 'withdrawal' ? 'Withdrawal' : 'Game Stake')}
                     </h4>
                     <div className="flex items-center gap-2 mt-0.5">
                         <p className="text-[9px] text-gray-500 font-bold uppercase">{dateStr}</p>

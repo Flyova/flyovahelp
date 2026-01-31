@@ -26,7 +26,8 @@ import {
   MapPin,
   Loader2,
   Check,
-  AlertCircle
+  AlertCircle,
+  Receipt
 } from "lucide-react";
 
 export default function WithdrawalPage() {
@@ -64,7 +65,6 @@ export default function WithdrawalPage() {
     return () => unsub();
   }, [router]);
 
-  // RE-FETCH AGENTS: Triggered every time the amount or country changes
   useEffect(() => {
     if (method === "bank" && userData.country) {
       const timer = setTimeout(() => {
@@ -74,11 +74,9 @@ export default function WithdrawalPage() {
     }
   }, [amount, method, userData.country]);
 
-  // UPDATED: Now checks 'agent_balance' and 'withdrawal_rate' in the 'agents' collection
   const fetchAgents = async (country, requiredAmount) => {
     setAgentsLoading(true);
     try {
-      // Step 1: Query approved agents in the country
       const q = query(
         collection(db, "agents"),
         where("application_status", "==", "approved"),
@@ -91,18 +89,15 @@ export default function WithdrawalPage() {
       const validAgents = snap.docs.map((agentDoc) => {
         const aData = agentDoc.data();
         const aId = agentDoc.id;
-        
-        // Logic: Agent must have enough business liquidity to pay the user
         const businessBalance = Number(aData.agent_balance || 0);
         const requestedAmt = Number(requiredAmount);
 
-        // HIDE AGENTS WHO CAN'T AFFORD TO PAY OR SELF
         if (businessBalance < requestedAmt || aId === userData.uid) return null;
 
         return {
           id: aId,
           full_name: aData.full_name || "Active Agent",
-          exchange_rate: Number(aData.withdrawal_rate || 0), // Use specific withdrawal rate
+          exchange_rate: Number(aData.withdrawal_rate || 0),
           agentBalance: businessBalance 
         };
       }).filter(a => a !== null);
@@ -145,13 +140,17 @@ export default function WithdrawalPage() {
     return 0.00;
   };
 
+  // Pre-calculate values for the UI
+  const currentFee = calculateWithdrawalFee(amount);
+  const totalDeductible = (parseFloat(amount) || 0) + currentFee;
+
   const handleWithdraw = async () => {
     const withdrawAmount = parseFloat(amount);
-    const fee = method === "usdt" ? calculateWithdrawalFee(withdrawAmount) : 0;
+    const fee = calculateWithdrawalFee(withdrawAmount);
     const totalDeduct = withdrawAmount + fee;
 
     if (!withdrawAmount || withdrawAmount <= 0) return alert("Enter a valid amount");
-    if (totalDeduct > userData.main) return alert(`Insufficient balance.`);
+    if (totalDeduct > userData.main) return alert(`Insufficient balance. You need $${totalDeduct.toFixed(2)} total (including fees).`);
     if (withdrawAmount < 10) return alert("Minimum withdrawal is $10.00");
     if (method === "usdt" && !usdtAddress) return alert("Please enter USDT address");
     if (method === "bank" && !selectedAgent) return alert("Please select an agent");
@@ -238,6 +237,25 @@ export default function WithdrawalPage() {
           <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00"
             className="w-full bg-transparent font-black text-4xl text-white outline-none" />
         </div>
+
+        {/* FEE SPECIFICATION SUMMARY */}
+        {parseFloat(amount) >= 10 && (
+          <div className="bg-[#613de6]/5 border border-[#613de6]/20 p-5 rounded-3xl space-y-3 animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center gap-2 mb-1">
+               <Receipt size={14} className="text-[#613de6]" />
+               <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Transaction Summary</span>
+            </div>
+            <div className="flex justify-between items-center">
+               <span className="text-[11px] font-bold text-gray-500">Service Fee</span>
+               <span className="text-[11px] font-black text-rose-500">+ ${currentFee.toFixed(2)}</span>
+            </div>
+            <div className="h-px bg-white/5 w-full" />
+            <div className="flex justify-between items-center">
+               <span className="text-[11px] font-bold text-white">Total Deductible</span>
+               <span className="text-lg font-black italic text-[#fc7952]">${totalDeductible.toFixed(2)}</span>
+            </div>
+          </div>
+        )}
 
         {method === "bank" && (
           <div className="space-y-4">

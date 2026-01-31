@@ -22,7 +22,8 @@ import {
   getDoc,
   addDoc, 
   serverTimestamp,
-  limit
+  limit,
+  orderBy
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 
@@ -61,11 +62,9 @@ export default function DepositPage() {
     }
   }, [depositAmount, method, userData.country]);
 
-  // UPDATED: Now checks 'agent_balance' and 'deposit_rate' in the 'agents' collection
   const fetchAgents = async (country, amount) => {
     setAgentsLoading(true);
     try {
-        // Step 1: Find approved agents in the 'agents' collection
         const agentQuery = query(
           collection(db, "agents"),
           where("application_status", "==", "approved"),
@@ -78,18 +77,15 @@ export default function DepositPage() {
         const validAgents = agentSnap.docs.map((agentDoc) => {
             const aData = agentDoc.data();
             const aId = agentDoc.id;
-            
-            // Logic: Agent must have enough business balance to SELL to the user
             const businessBalance = Number(aData.agent_balance || 0);
 
-            // Exclude self and agents without enough liquidity
             if (aId === userData.uid || businessBalance < amount) return null;
 
             return {
                 id: aId,
                 agent_balance: businessBalance,
                 full_name: aData.full_name || "Verified Agent", 
-                exchange_rate: Number(aData.deposit_rate || 0), // Use specific deposit rate
+                exchange_rate: Number(aData.deposit_rate || 0),
             };
         }).filter(a => a !== null);
 
@@ -105,14 +101,43 @@ export default function DepositPage() {
     const amountNum = parseFloat(depositAmount);
     if (!depositAmount || amountNum <= 0) return alert("Enter valid amount");
     
-    if (method === "usdt") {
-      router.push(`/deposit/direct?amount=${depositAmount}`);
-    } else {
-      if (!selectedAgent) return alert("Please select an agent");
-      
-      setLoading(true);
-      try {
-        // Check for active pending trades
+    setLoading(true);
+    try {
+      if (method === "usdt") {
+        // CHECK FOR ACTIVE PENDING DIRECT DEPOSITS (30 MIN LIMIT)
+        const q = query(
+          collection(db, "deposits"),
+          where("userId", "==", auth.currentUser.uid),
+          where("status", "==", "pending"),
+          orderBy("createdAt", "desc"),
+          limit(1)
+        );
+
+        try {
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+              const lastDeposit = snap.docs[0].data();
+              const lastTime = lastDeposit.createdAt?.toDate().getTime();
+              const now = Date.now();
+              
+              if (lastTime && (now - lastTime) < 1800000) {
+                const minutesLeft = Math.ceil((1800000 - (now - lastTime)) / 60000);
+                alert(`You have an active deposit session. Please wait ${minutesLeft} minutes or complete your current payment.`);
+                return router.push(`/deposit/direct?amount=${lastDeposit.amount}`);
+              }
+            }
+        } catch (indexError) {
+            // This logs the specific error to your browser's F12 console where you can click the link
+            console.error("FIREBASE INDEX ERROR:", indexError);
+            alert("Index Required. Open your browser console (F12) to click the creation link.");
+            setLoading(false);
+            return;
+        }
+        
+        router.push(`/deposit/direct?amount=${depositAmount}`);
+      } else {
+        if (!selectedAgent) return alert("Please select an agent");
+        
         const userTradeQ = query(
           collection(db, "trades"), 
           where("senderId", "==", auth.currentUser.uid), 
@@ -126,12 +151,11 @@ export default function DepositPage() {
           return;
         }
 
-        // Create Trade with correct rate
         const tradeRef = await addDoc(collection(db, "trades"), {
           senderId: auth.currentUser.uid,
           agentId: selectedAgent.id,
           amount: amountNum,
-          rate: Number(selectedAgent.exchange_rate), // This is now the deposit_rate
+          rate: Number(selectedAgent.exchange_rate),
           type: "deposit",
           status: "pending",
           createdAt: serverTimestamp(),
@@ -139,11 +163,12 @@ export default function DepositPage() {
         });
         
         router.push(`/trade/${tradeRef.id}`);
-      } catch (e) {
-        alert("Transaction failed: " + e.message);
-      } finally {
-        setLoading(false);
       }
+    } catch (e) {
+      console.error("GENERAL DEPOSIT ERROR:", e);
+      alert("Transaction failed. Details logged in console.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -161,7 +186,6 @@ export default function DepositPage() {
       </div>
 
       <div className="p-6 max-w-md mx-auto space-y-8">
-        {/* Method Toggles */}
         <div className="space-y-3">
           <p className="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest">Deposit Method</p>
           <div className="grid grid-cols-2 gap-3">
@@ -178,7 +202,6 @@ export default function DepositPage() {
           </div>
         </div>
 
-        {/* Input Area */}
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-2">
             {quickAmounts.map((amt) => (

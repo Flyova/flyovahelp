@@ -1,9 +1,12 @@
 "use client";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
-import { Timer, Copy, CheckCircle, AlertTriangle, Loader2, QrCode } from "lucide-react";
+import { 
+  Timer, Copy, CheckCircle, AlertTriangle, 
+  Loader2, QrCode, ImageIcon, Hash, UploadCloud, X 
+} from "lucide-react";
 import QRCode from "react-qr-code";
 
 function DirectDepositContent() {
@@ -12,7 +15,20 @@ function DirectDepositContent() {
   const amount = searchParams.get("amount") || "0";
   const [timeLeft, setTimeLeft] = useState(1800); // 30 Minutes
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showProofForm, setShowProofForm] = useState(false);
+  
+  // Proof Form States
+  const [hashId, setHashId] = useState("");
+  const [image, setImage] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const fileInputRef = useRef(null);
+
   const USDT_ADDRESS = "TVatYHhNgVriJQwvyzUvo2jYbNqxVKqk1Q";
+
+  // Cloudinary Config (Based on your TradeRoom setup)
+  const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dq9o866sc/image/upload";
+  const UPLOAD_PRESET = "p_trade_proof"; 
+  const API_KEY = "823961819667685"; // From your TradeRoom file
 
   useEffect(() => {
     if (timeLeft <= 0) {
@@ -35,22 +51,60 @@ function DirectDepositContent() {
     alert("Address copied!");
   };
 
-  const handlePaid = async () => {
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImage(file);
+      setPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleSubmitDeposit = async (e) => {
+    e.preventDefault();
+    if (!hashId.trim()) return alert("Please enter the Transaction Hash/ID");
+    if (!image) return alert("Please upload a payment screenshot");
+    if (!auth.currentUser) return alert("Session expired. Please login again.");
+
     setIsSubmitting(true);
     try {
+      // 1. Upload to Cloudinary
+      const formData = new FormData();
+      formData.append("file", image);
+      formData.append("upload_preset", UPLOAD_PRESET);
+      formData.append("api_key", API_KEY); // Added API Key to resolve "Unknown API Key"
+
+      const res = await fetch(CLOUDINARY_URL, {
+        method: "POST",
+        body: formData,
+      });
+      
+      const uploadData = await res.json();
+      
+      if (!uploadData.secure_url) {
+        console.error("Cloudinary Error:", uploadData);
+        throw new Error(uploadData.error?.message || "Image upload failed. Check Cloudinary settings.");
+      }
+
+      const imageUrl = uploadData.secure_url;
+
+      // 2. Save to Firestore
       await addDoc(collection(db, "deposits"), {
         userId: auth.currentUser.uid,
         amount: parseFloat(amount),
-        type: "USDT_DIRECT",
+        type: "deposit",
         status: "pending",
         network: "TRC20",
         addressUsed: USDT_ADDRESS,
+        transactionHash: hashId.trim(),
+        proofImage: imageUrl,
         createdAt: serverTimestamp(),
       });
+
+      alert("Deposit Submitted! Please wait for admin confirmation.");
       router.push("/dashboard"); 
-      alert("Deposit Logged! Please wait for confirmation.");
     } catch (error) {
-      alert("Error logging deposit. Please try again.");
+      console.error("Submission Error:", error);
+      alert(error.message || "Error submitting deposit. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -69,62 +123,102 @@ function DirectDepositContent() {
           </div>
         </div>
 
-        <div className="bg-[#1e293b] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6">
-          
-          {/* Amount Display */}
-          <div className="space-y-1 text-center">
-            <p className="text-[10px] font-black text-gray-500 uppercase">Amount to Send</p>
-            <p className="text-4xl font-black text-[#613de6] italic">${amount} <span className="text-sm">USDT</span></p>
-          </div>
-
-          {/* Network Warning */}
-          <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl flex gap-3">
-            <AlertTriangle className="text-yellow-500 shrink-0" />
-            <p className="text-[10px] font-bold text-yellow-200/80 leading-relaxed">
-              ONLY send USDT via the <span className="text-yellow-500 font-black">TRC20 (Tron)</span> network. 
-              Incorrect networks result in lost funds.
-            </p>
-          </div>
-
-          {/* QR CODE SECTION */}
-          <div className="flex flex-col items-center space-y-4 py-2">
-            <div className="bg-white p-4 rounded-3xl shadow-xl shadow-black/20">
-              <QRCode 
-                value={USDT_ADDRESS}
-                size={160}
-                level="H"
-                style={{ height: "auto", maxWidth: "100%", width: "100%" }}
-              />
+        {!showProofForm ? (
+          /* STEP 1: PAYMENT DETAILS */
+          <div className="bg-[#1e293b] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-1 text-center">
+              <p className="text-[10px] font-black text-gray-500 uppercase">Amount to Send</p>
+              <p className="text-4xl font-black text-[#613de6] italic">${amount} <span className="text-sm">USDT</span></p>
             </div>
-            <p className="text-[9px] font-black text-gray-500 uppercase flex items-center gap-2">
-               <QrCode size={12} /> Scan to copy address
-            </p>
-          </div>
 
-          {/* Wallet Address Copy Area */}
-          <div className="space-y-3">
-            <p className="text-[10px] font-black text-gray-500 uppercase ml-2">USDT TRC20 Address</p>
-            <div className="bg-[#0f172a] p-4 rounded-2xl border border-white/5 flex items-center justify-between group active:scale-[0.98] transition-all">
-              <span className="text-[10px] font-bold break-all mr-4 text-gray-300 group-hover:text-white">{USDT_ADDRESS}</span>
+            <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl flex gap-3">
+              <AlertTriangle className="text-yellow-500 shrink-0" />
+              <p className="text-[10px] font-bold text-yellow-200/80 leading-relaxed">
+                ONLY send USDT via the <span className="text-yellow-500 font-black">TRC20 (Tron)</span> network. 
+                Incorrect networks result in lost funds.
+              </p>
+            </div>
+
+            <div className="flex flex-col items-center space-y-4 py-2">
+              <div className="bg-white p-4 rounded-3xl shadow-xl shadow-black/20">
+                <QRCode value={USDT_ADDRESS} size={160} level="H" style={{ height: "auto", maxWidth: "100%", width: "100%" }} />
+              </div>
+              <p className="text-[9px] font-black text-gray-500 uppercase flex items-center gap-2">
+                 <QrCode size={12} /> Scan to copy address
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-[10px] font-black text-gray-500 uppercase ml-2">USDT TRC20 Address</p>
+              <div className="bg-[#0f172a] p-4 rounded-2xl border border-white/5 flex items-center justify-between group active:scale-[0.98] transition-all">
+                <span className="text-[10px] font-bold break-all mr-4 text-gray-300 group-hover:text-white">{USDT_ADDRESS}</span>
+                <button onClick={copyToClipboard} className="p-3 bg-[#613de6] hover:bg-[#7251ed] rounded-xl shadow-lg transition-colors shrink-0">
+                  <Copy size={16} />
+                </button>
+              </div>
+            </div>
+
+            <button 
+              onClick={() => setShowProofForm(true)}
+              className="w-full bg-[#fc7952] hover:bg-[#ff8a6a] py-5 rounded-3xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-3 shadow-xl shadow-[#fc7952]/20 active:scale-95 transition-all"
+            >
+              <CheckCircle size={18} /> I HAVE PAID
+            </button>
+          </div>
+        ) : (
+          /* STEP 2: PROOF SUBMISSION */
+          <div className="bg-[#1e293b] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6 animate-in zoom-in-95 duration-300">
+            <div className="flex items-center justify-between">
+              <h2 className="font-black uppercase italic text-sm tracking-tight text-[#fc7952]">Upload Payment Proof</h2>
+              <button onClick={() => setShowProofForm(false)} className="text-gray-500"><X size={20}/></button>
+            </div>
+
+            <form onSubmit={handleSubmitDeposit} className="space-y-5">
+              {/* Hash Input */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-gray-500 ml-2">Transaction Hash (TXID)</label>
+                <div className="relative">
+                  <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-[#613de6]" size={16} />
+                  <input 
+                    required
+                    value={hashId}
+                    onChange={(e) => setHashId(e.target.value)}
+                    placeholder="Enter 64-character hash"
+                    className="w-full bg-[#0f172a] border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-sm font-bold focus:border-[#613de6] outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Image Upload */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-gray-500 ml-2">Payment Screenshot</label>
+                <div 
+                  onClick={() => fileInputRef.current.click()}
+                  className="aspect-video bg-[#0f172a] border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center justify-center cursor-pointer hover:border-[#613de6] transition-all overflow-hidden relative"
+                >
+                  {preview ? (
+                    <img src={preview} alt="Preview" className="w-full h-full object-cover" />
+                  ) : (
+                    <>
+                      <UploadCloud size={32} className="text-gray-600 mb-2" />
+                      <p className="text-[10px] font-black text-gray-500 uppercase">Click to upload image</p>
+                    </>
+                  )}
+                  <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/*" className="hidden" />
+                </div>
+              </div>
+
               <button 
-                onClick={copyToClipboard} 
-                className="p-3 bg-[#613de6] hover:bg-[#7251ed] rounded-xl shadow-lg transition-colors shrink-0"
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full bg-[#613de6] hover:bg-[#7251ed] py-5 rounded-3xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-3 shadow-xl shadow-[#613de6]/20 active:scale-95 transition-all disabled:opacity-50"
               >
-                <Copy size={16} />
+                {isSubmitting ? <Loader2 className="animate-spin" /> : <CheckCircle size={18} />}
+                SUBMIT
               </button>
-            </div>
+            </form>
           </div>
-
-          {/* Submit Button */}
-          <button 
-            onClick={handlePaid}
-            disabled={isSubmitting}
-            className="w-full bg-[#fc7952] hover:bg-[#ff8a6a] py-5 rounded-3xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-3 shadow-xl shadow-[#fc7952]/20 active:scale-95 transition-all disabled:opacity-50"
-          >
-            {isSubmitting ? <Loader2 className="animate-spin" /> : <CheckCircle size={18} />}
-            I HAVE PAID
-          </button>
-        </div>
+        )}
 
         <p className="text-center text-[10px] font-bold text-gray-600 uppercase tracking-widest">
             Automatic confirmation within 10 minutes
