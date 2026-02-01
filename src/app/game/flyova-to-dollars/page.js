@@ -14,7 +14,8 @@ import {
   orderBy,
   limit,
   getDocs,
-  runTransaction
+  runTransaction,
+  getDoc
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { Timer, CheckCircle2, Trophy, History, XCircle, Plus } from "lucide-react";
@@ -114,7 +115,6 @@ export default function FlyovaToDollars() {
     );
     const snap = await getDocs(q);
     const bets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    console.log(`Fetched ${bets.length} bets for game ${gameId}:`, bets);
     setActiveBets(bets);
   };
 
@@ -141,19 +141,13 @@ export default function FlyovaToDollars() {
     });
   };
 
-  // FIXED REVEAL RESULTS - Using gameId matching like other games
   const revealResults = async () => {
     if (gameStatus === "results" || !currentGame || !user) return;
-    
-    console.log("=== REVEALING RESULTS ===");
-    console.log("Game ID:", currentGame.id);
-    console.log("Winning numbers:", currentGame.winners);
     
     setGameStatus("results");
     const winners = currentGame.winners || [];
     setLastWinners(winners);
 
-    // Fetch bets AGAIN to ensure we have the latest for this game
     const q = query(
       collection(db, "users", user.uid, "transactions"), 
       where("gameId", "==", currentGame.id),
@@ -164,30 +158,14 @@ export default function FlyovaToDollars() {
     const snap = await getDocs(q);
     const currentGameBets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     
-    console.log(`Found ${currentGameBets.length} bets for game ${currentGame.id}:`, currentGameBets);
-
     if (currentGameBets.length > 0) {
       try {
         let totalWinToCredit = 0;
         let hasAnyWin = false;
         
-        // First, check each bet to see if it wins
         for (const bet of currentGameBets) {
-          console.log("Checking bet:", {
-            betId: bet.id,
-            userPicks: bet.picks,
-            winners: winners,
-            betAmount: bet.amount,
-            gameId: bet.gameId
-          });
+          if (bet.gameId !== currentGame.id) continue;
           
-          // Ensure we're comparing with the correct game
-          if (bet.gameId !== currentGame.id) {
-            console.log("Skipping bet - wrong game ID");
-            continue;
-          }
-          
-          // Sort arrays for comparison (order doesn't matter)
           const sortedUserPicks = [...(bet.picks || [])].sort((a, b) => a - b);
           const sortedWinners = [...winners].sort((a, b) => a - b);
           
@@ -196,32 +174,25 @@ export default function FlyovaToDollars() {
                           sortedUserPicks[0] === sortedWinners[0] && 
                           sortedUserPicks[1] === sortedWinners[1];
           
-          console.log("Sorted picks:", sortedUserPicks, "Sorted winners:", sortedWinners);
-          console.log("Is winner?", isWinner);
-          
           if (isWinner) {
             const payout = parseFloat((bet.amount * WIN_MULTIPLIER).toFixed(2));
             totalWinToCredit += payout;
             hasAnyWin = true;
-            console.log(`WINNER! Payout: $${payout}, Total: $${totalWinToCredit}`);
           }
         }
         
-        console.log("Final calculation - Total win:", totalWinToCredit, "Has win:", hasAnyWin);
-        
-        // Update UI immediately
         setWinAmount(totalWinToCredit);
         setResultType(hasAnyWin ? 'win' : 'lose');
         setShowResultAlert(true);
         
-        // Process database updates in transaction
         await runTransaction(db, async (transaction) => {
           const userRef = doc(db, "users", user.uid);
+          const userSnap = await transaction.get(userRef);
+          const userData = userSnap.data();
           
           for (const bet of currentGameBets) {
             const transRef = doc(db, "users", user.uid, "transactions", bet.id);
             
-            // Sort arrays for comparison
             const sortedUserPicks = [...(bet.picks || [])].sort((a, b) => a - b);
             const sortedWinners = [...winners].sort((a, b) => a - b);
             
@@ -232,8 +203,6 @@ export default function FlyovaToDollars() {
             
             if (isWinner) {
               const payout = parseFloat((bet.amount * WIN_MULTIPLIER).toFixed(2));
-              
-              // Update transaction as WIN
               transaction.update(transRef, {
                 status: "win",
                 amount: payout,
@@ -242,21 +211,34 @@ export default function FlyovaToDollars() {
                 timestamp: serverTimestamp()
               });
             } else {
-              // Update transaction as LOSS
               transaction.update(transRef, {
                 status: "loss",
                 type: "loss",
                 timestamp: serverTimestamp()
               });
+
+              // REFERRAL COMMISSION LOGIC (0.5% on Loss)
+              if (userData.referredBy) {
+                const commission = parseFloat((bet.amount * 0.005).toFixed(4));
+                const referrerRef = doc(db, "users", userData.referredBy);
+                transaction.update(referrerRef, { referralBonus: increment(commission) });
+                
+                // Log commission to referrer's history
+                const commissionLogRef = doc(collection(db, "users", userData.referredBy, "transactions"));
+                transaction.set(commissionLogRef, {
+                  title: "Game Referral Commission",
+                  amount: commission,
+                  type: "referral_reward",
+                  status: "completed",
+                  description: `0.5% stake commission from @${userData.username}`,
+                  timestamp: serverTimestamp()
+                });
+              }
             }
           }
           
-          // Credit wallet if there are wins
           if (totalWinToCredit > 0) {
             transaction.update(userRef, { wallet: increment(totalWinToCredit) });
-            console.log("Wallet credited with: $", totalWinToCredit);
-            
-            // Add a win transaction
             await addDoc(collection(db, "users", user.uid, "transactions"), {
               title: "Flyova Win Payout",
               amount: totalWinToCredit,
@@ -267,32 +249,23 @@ export default function FlyovaToDollars() {
           }
         });
         
-        console.log("Transaction completed successfully");
-        
       } catch (err) { 
         console.error("Transaction error:", err);
-        console.error("Error details:", err.code, err.message);
-        
-        // Still show result to user
         if (err.code === 'failed-precondition') {
-          console.log("Transaction conflict - retrying...");
           setTimeout(() => revealResults(), 1000);
         }
       }
     } else {
-      console.log("No bets found for this game");
       setResultType('lose');
       setShowResultAlert(true);
     }
 
-    // Mark game as completed
     try {
       await updateDoc(doc(db, "timed_games", currentGame.id), { 
         status: "completed", 
         processed: true,
         processedAt: serverTimestamp()
       });
-      console.log("Game marked as completed:", currentGame.id);
     } catch (err) {
       console.error("Error updating game status:", err);
     }
@@ -302,17 +275,12 @@ export default function FlyovaToDollars() {
 
   const placeBet = async () => {
     const finalStake = stake === "" ? 1 : stake;
-    if (selectedNumbers.length !== 2 || myWallet < finalStake || !currentGame) {
-      console.log("Cannot place bet - invalid conditions");
-      return;
-    }
+    if (selectedNumbers.length !== 2 || myWallet < finalStake || !currentGame) return;
     
     try {
       await runTransaction(db, async (transaction) => {
         const userRef = doc(db, "users", user.uid);
         const transRef = doc(collection(db, "users", user.uid, "transactions"));
-        
-        // Sort picks for consistent storage
         const sortedPicks = [...selectedNumbers].sort((a, b) => a - b);
         
         transaction.update(userRef, { wallet: increment(-finalStake) });
@@ -320,18 +288,16 @@ export default function FlyovaToDollars() {
             title: "Flyova Stake", 
             amount: finalStake, 
             picks: sortedPicks,
-            gameId: currentGame.id, // CRITICAL: Store gameId
+            gameId: currentGame.id,
             type: "stake", 
             status: "pending", 
             timestamp: serverTimestamp()
         });
       });
       
-      console.log("Bet placed successfully for game:", currentGame.id);
       fetchUserBetsFromTransactions(currentGame.id);
       setSelectedNumbers([]); 
     } catch (e) { 
-      console.error("Bet placement error:", e);
       alert("Insufficient Balance"); 
     }
   };
@@ -374,8 +340,6 @@ export default function FlyovaToDollars() {
           </div>
         </div>
       )}
-
-      
 
       {/* Header & Timer Bar */}
       <div className="p-8 text-center bg-[#1e293b] border-b border-white/5 relative">

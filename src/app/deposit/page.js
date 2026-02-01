@@ -101,6 +101,9 @@ export default function DepositPage() {
     const amountNum = parseFloat(depositAmount);
     if (!depositAmount || amountNum <= 0) return alert("Enter valid amount");
     
+    // Minimum deposit requirement
+    if (amountNum < 10) return alert("Minimum deposit is $10.00");
+    
     setLoading(true);
     try {
       if (method === "usdt") {
@@ -127,7 +130,6 @@ export default function DepositPage() {
               }
             }
         } catch (indexError) {
-            // This logs the specific error to your browser's F12 console where you can click the link
             console.error("FIREBASE INDEX ERROR:", indexError);
             alert("Index Required. Open your browser console (F12) to click the creation link.");
             setLoading(false);

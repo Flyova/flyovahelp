@@ -19,6 +19,8 @@ import {
   Trash2,
   UserPen,
   Phone,
+  Globe,
+  Fingerprint,
   X
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -44,8 +46,9 @@ export default function Settings() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // Referral State
+  // Copy States
   const [copied, setCopied] = useState(false);
+  const [pinCopied, setPinCopied] = useState(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -75,7 +78,6 @@ export default function Settings() {
     try {
       const updates = {};
       
-      // Handle Username Change with Duplicate Check
       if (newUsername !== userData.username) {
         const q = query(collection(db, "users"), where("username", "==", newUsername));
         const querySnapshot = await getDocs(q);
@@ -85,9 +87,8 @@ export default function Settings() {
         updates.username = newUsername;
       }
 
-      // Handle Phone and DOB changes
-      if (newPhone !== userData.phone) updates.phone = newPhone;
-      if (newDob !== userData.dob) updates.dob = newDob;
+      if (!userData.phone && newPhone) updates.phone = newPhone;
+      if (!userData.dob && newDob) updates.dob = newDob;
 
       if (Object.keys(updates).length > 0) {
         await updateDoc(doc(db, "users", user.uid), updates);
@@ -130,11 +131,8 @@ export default function Settings() {
       const userToAuthDelete = auth.currentUser;
       await deleteDoc(doc(db, "users", user.uid));
       await deleteUser(userToAuthDelete);
-      
-      alert("Goodbye, sorry to see you go. Please reach out to support if you have any questions.");
       router.push("/login");
     } catch (err) {
-      console.error(err);
       if (err.code === "auth/requires-recent-login") {
         alert("Security Rule: Please logout and login again before deleting your account.");
       } else {
@@ -143,6 +141,14 @@ export default function Settings() {
       setShowDeleteModal(false);
     }
     setDeleteLoading(false);
+  };
+
+  const copyPin = () => {
+    const pinToCopy = userData?.pin || "";
+    if (!pinToCopy) return;
+    navigator.clipboard.writeText(pinToCopy);
+    setPinCopied(true);
+    setTimeout(() => setPinCopied(false), 2000);
   };
 
   const copyReferral = () => {
@@ -161,7 +167,7 @@ export default function Settings() {
     );
   }
 
-  const hasChanges = newUsername !== userData?.username || newPhone !== userData?.phone || newDob !== userData?.dob;
+  const hasChanges = newUsername !== userData?.username || (!userData?.phone && newPhone) || (!userData?.dob && newDob);
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-white flex flex-col pb-10">
@@ -205,6 +211,27 @@ export default function Settings() {
           </div>
 
           <form onSubmit={handleUpdateProfile} className="space-y-4 relative z-10">
+            
+            {/* ACCOUNT PIN WITH COPY BUTTON */}
+            <div className="bg-black/20 p-4 rounded-2xl border border-white/5 flex items-center justify-between">
+              <div>
+                <p className="text-[9px] font-black uppercase text-white/40 mb-1">Account PIN</p>
+                <div className="flex items-center gap-2">
+                  <Fingerprint size={14} className="text-[#613de6]" />
+                  <p className="font-mono text-sm font-black tracking-[0.4em] text-white">
+                    {userData?.pin || "XXXXX"}
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                onClick={copyPin}
+                className={`p-3 rounded-xl transition-all active:scale-90 ${pinCopied ? 'bg-green-500' : 'bg-[#613de6]'}`}
+              >
+                {pinCopied ? <CheckCircle size={14} /> : <Copy size={14} />}
+              </button>
+            </div>
+
             {/* Username Field */}
             <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
               <p className="text-[9px] font-black uppercase text-white/40 mb-2">Unique Username</p>
@@ -218,30 +245,58 @@ export default function Settings() {
               </div>
             </div>
 
+            {/* Email Field (Read Only) */}
+            <div className="bg-black/20 p-4 rounded-2xl border border-white/5 opacity-60">
+              <p className="text-[9px] font-black uppercase text-white/40 mb-2">Email Address</p>
+              <div className="flex items-center gap-2">
+                <Mail size={16} className="text-gray-500" />
+                <input 
+                  value={userData?.email || user?.email || ""}
+                  readOnly
+                  className="flex-1 bg-transparent font-bold text-sm outline-none text-white/50 cursor-not-allowed"
+                />
+              </div>
+            </div>
+
+             {/* Country Field (Read Only) */}
+             <div className="bg-black/20 p-4 rounded-2xl border border-white/5 opacity-60">
+              <p className="text-[9px] font-black uppercase text-white/40 mb-2">Registered Country</p>
+              <div className="flex items-center gap-2">
+                <Globe size={16} className="text-gray-500" />
+                <input 
+                  value={userData?.country || "Not Specified"}
+                  readOnly
+                  className="flex-1 bg-transparent font-bold text-sm outline-none text-white/50 cursor-not-allowed"
+                />
+              </div>
+            </div>
+
             {/* Phone Number Field */}
-            <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
+            <div className={`bg-black/20 p-4 rounded-2xl border border-white/5 ${userData?.phone ? 'opacity-60' : ''}`}>
               <p className="text-[9px] font-black uppercase text-white/40 mb-2">Phone Number</p>
               <div className="flex items-center gap-2">
-                <Phone size={16} className="text-[#613de6]" />
+                <Phone size={16} className={userData?.phone ? "text-gray-500" : "text-[#613de6]"} />
                 <input 
                   value={newPhone}
                   placeholder="e.g. +44 7700 900000"
+                  readOnly={!!userData?.phone}
                   onChange={(e) => setNewPhone(e.target.value)}
-                  className="flex-1 bg-transparent font-bold text-sm outline-none text-white placeholder:text-white/20"
+                  className={`flex-1 bg-transparent font-bold text-sm outline-none text-white placeholder:text-white/20 ${userData?.phone ? 'cursor-not-allowed text-white/50' : ''}`}
                 />
               </div>
             </div>
 
             {/* Date of Birth Field */}
-            <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
+            <div className={`bg-black/20 p-4 rounded-2xl border border-white/5 ${userData?.dob ? 'opacity-60' : ''}`}>
               <p className="text-[9px] font-black uppercase text-white/40 mb-2">Date of Birth</p>
               <div className="flex items-center gap-2">
-                <Calendar size={16} className="text-[#613de6]" />
+                <Calendar size={16} className={userData?.dob ? "text-gray-500" : "text-[#613de6]"} />
                 <input 
-                  type="date"
+                  type={userData?.dob ? "text" : "date"}
                   value={newDob}
+                  readOnly={!!userData?.dob}
                   onChange={(e) => setNewDob(e.target.value)}
-                  className="flex-1 bg-transparent font-bold text-sm outline-none text-white invert-[0.8] brightness-200"
+                  className={`flex-1 bg-transparent font-bold text-sm outline-none text-white invert-[0.1] brightness-200 ${userData?.dob ? 'cursor-not-allowed text-white/50 invert-0' : ''}`}
                 />
               </div>
             </div>
@@ -268,7 +323,7 @@ export default function Settings() {
         <div className="bg-[#1e293b] rounded-[2rem] p-6 border border-white/5 shadow-xl">
           <div className="flex items-center space-x-2 mb-4">
             <Share2 size={18} className="text-[#fc7952]" />
-            <h3 className="font-black italic uppercase text-sm">Referral Network</h3>
+            <h3 className="font-black italic uppercase text-sm">Referral CODE</h3>
           </div>
           <p className="text-[10px] text-white/50 mb-4 font-bold">Share your unique link and build your network.</p>
           <div className="flex items-center bg-black/40 p-3 rounded-2xl border border-white/10 gap-2">

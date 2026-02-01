@@ -10,7 +10,8 @@ import {
   Clock, 
   CheckCircle2, 
   XCircle,
-  Loader2
+  Loader2,
+  Send
 } from "lucide-react";
 // FIREBASE IMPORTS
 import { auth, db } from "@/lib/firebase";
@@ -38,21 +39,52 @@ export default function HistoryPage() {
         const qTrade = query(tradeRef, where("senderId", "==", user.uid), orderBy("createdAt", "desc"));
 
         const unsubscribes = [];
+        let streamStorage = { trans: [], depo: [], trade: [] };
 
-        // Combine all listeners
+        const updateState = (newData, streamKey) => {
+          streamStorage[streamKey] = newData;
+          const combined = [...streamStorage.trans, ...streamStorage.depo, ...streamStorage.trade]
+            .sort((a, b) => b.date - a.date);
+          
+          setTransactions(combined);
+          setLoading(false);
+        };
+
         const syncData = () => {
           setLoading(true);
           
           const unsubTrans = onSnapshot(qTrans, (snap) => {
             const data = snap.docs.map(doc => {
               const docData = doc.data();
-              // LOGIC: If type is withdrawal or category is finance, set category to finance.
-              // Otherwise, default to games (for stakes/wins).
-              const isFinance = docData.type === 'withdrawal' || docData.category === 'finance';
+              const isTransfer = docData.type === 'p2p_transfer';
+              const isFinance = docData.type === 'withdrawal' || docData.category === 'finance' || isTransfer;
               
+              let mainTitle = "";
+              let subDetail = docData.title || "";
+
+              if (isTransfer) {
+                mainTitle = "P2P TRANSFER";
+                subDetail = docData.direction === 'in' 
+                  ? `From ${docData.senderName || 'User'}` 
+                  : `To ${docData.receiverName || 'User'}`;
+              } else if (docData.type === 'win') {
+                mainTitle = "GAME VICTORY";
+                subDetail = "Round Victory";
+              } else if (docData.type === 'stake') {
+                mainTitle = "GAME STAKE";
+                subDetail = "Match Entry";
+              } else if (docData.type === 'withdrawal') {
+                mainTitle = "WITHDRAWAL";
+                subDetail = "USDT Payout";
+              } else {
+                mainTitle = "TRANSACTION";
+              }
+
               return {
                 id: doc.id,
                 ...docData,
+                mainTitle,
+                subDetail,
                 category: isFinance ? 'finance' : 'games',
                 date: docData.timestamp?.toDate() || new Date()
               };
@@ -64,7 +96,8 @@ export default function HistoryPage() {
             const data = snap.docs.map(doc => ({
               id: doc.id,
               ...doc.data(),
-              title: "Direct Deposit",
+              mainTitle: "DIRECT DEPOSIT",
+              subDetail: "Account Credit",
               type: "deposit",
               category: 'finance',
               date: doc.data().createdAt?.toDate() || new Date()
@@ -76,7 +109,8 @@ export default function HistoryPage() {
             const data = snap.docs.map(doc => ({
               id: doc.id,
               ...doc.data(),
-              title: doc.data().type === 'deposit' ? "Agent Deposit" : "Agent Withdrawal",
+              mainTitle: doc.data().type === 'deposit' ? "AGENT DEPOSIT" : "AGENT WITHDRAWAL",
+              subDetail: doc.data().type === 'deposit' ? "P2P Agent Credit" : "P2P Agent Debit",
               category: 'finance',
               date: doc.data().createdAt?.toDate() || new Date()
             }));
@@ -84,17 +118,6 @@ export default function HistoryPage() {
           });
 
           unsubscribes.push(unsubTrans, unsubDepo, unsubTrade);
-        };
-
-        // Helper to merge data from different streams
-        let streamStorage = { trans: [], depo: [], trade: [] };
-        const updateState = (newData, streamKey) => {
-          streamStorage[streamKey] = newData;
-          const combined = [...streamStorage.trans, ...streamStorage.depo, ...streamStorage.trade]
-            .sort((a, b) => b.date - a.date);
-          
-          setTransactions(combined);
-          setLoading(false);
         };
 
         syncData();
@@ -153,7 +176,7 @@ export default function HistoryPage() {
               <p className="text-gray-500 font-black uppercase text-[10px] tracking-widest">Syncing Nodes...</p>
             </div>
           ) : filteredData.map((item) => {
-            const isPositive = item.type === 'deposit' || item.type === 'win';
+            const isPositive = item.type === 'win' || item.type === 'deposit' || (item.type === 'p2p_transfer' && item.direction === 'in');
             const dateStr = item.date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
             
             return (
@@ -162,27 +185,34 @@ export default function HistoryPage() {
                 className="bg-[#1e293b] border border-white/5 p-5 rounded-[2.5rem] flex items-center justify-between group hover:border-[#613de6]/50 transition-all duration-300 shadow-xl"
               >
                 <div className="flex items-center space-x-4">
-                  {/* Icon Logic */}
                   <div className={`p-4 rounded-2xl shadow-inner ${
                     isPositive ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
                   }`}>
                     {item.type === 'win' ? <Trophy size={20}/> : 
                      item.type === 'stake' ? <Swords size={20}/> :
+                     item.type === 'p2p_transfer' ? <Send size={20}/> :
                      item.type === 'deposit' ? <ArrowDownLeft size={20}/> : <ArrowUpRight size={20}/>}
                   </div>
 
                   <div>
-                    <h4 className="font-black text-xs text-white uppercase tracking-tight">
-                      {item.title || (item.type === 'win' ? 'Round Victory' : item.type === 'withdrawal' ? 'Withdrawal' : 'Game Stake')}
+                    {/* GRAY Main Category Label */}
+                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-0.5">
+                      {item.mainTitle}
+                    </p>
+
+                    {/* WHITE Original Title (Larger/Bold) */}
+                    <h4 className="font-black text-xs text-white uppercase tracking-tight leading-tight">
+                      {item.subDetail}
                     </h4>
-                    <div className="flex items-center gap-2 mt-0.5">
+                    
+                    <div className="flex items-center gap-2 mt-1">
                         <p className="text-[9px] text-gray-500 font-bold uppercase">{dateStr}</p>
                         {item.status && (
                             <div className={`flex items-center gap-1 text-[8px] font-black uppercase px-2 py-0.5 rounded-md ${
-                                item.status === 'completed' ? 'bg-green-500/20 text-green-400' : 
+                                item.status === 'completed' || item.status === 'win' ? 'bg-green-500/20 text-green-400' : 
                                 item.status === 'pending' ? 'bg-orange-500/20 text-orange-400' : 'bg-red-500/20 text-red-400'
                             }`}>
-                                {item.status === 'completed' ? <CheckCircle2 size={10}/> : item.status === 'pending' ? <Clock size={10}/> : <XCircle size={10}/>}
+                                {(item.status === 'completed' || item.status === 'win') ? <CheckCircle2 size={10}/> : item.status === 'pending' ? <Clock size={10}/> : <XCircle size={10}/>}
                                 {item.status}
                             </div>
                         )}
@@ -197,7 +227,7 @@ export default function HistoryPage() {
                     {isPositive ? '+' : '-'}${Math.abs(parseFloat(item.amount || 0)).toFixed(2)}
                   </p>
                   <span className="text-[8px] font-black uppercase opacity-30 tracking-widest">
-                    {item.type || 'Transfer'}
+                    {item.type === 'p2p_transfer' ? 'P2P Transfer' : (item.type || 'Transaction')}
                   </span>
                 </div>
               </div>
@@ -205,7 +235,6 @@ export default function HistoryPage() {
           })}
         </div>
 
-        {/* Empty State */}
         {!loading && filteredData.length === 0 && (
           <div className="text-center py-24 bg-[#1e293b] rounded-[3rem] border border-dashed border-white/5 opacity-50">
             <Coins size={48} className="mx-auto mb-4 text-gray-700" />

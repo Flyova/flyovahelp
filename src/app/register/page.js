@@ -37,6 +37,11 @@ function RegisterForm() {
     confirmPassword: "", // Added confirm password to state
   });
 
+  // LOGIC: Generate 8-digit identity PIN for transfers (Hidden)
+  const generateUserPin = () => {
+    return Math.floor(10000000 + Math.random() * 90000000).toString();
+  };
+
   // Fetch Countries on Load
   useEffect(() => {
     fetch("https://restcountries.com/v3.1/all?fields=name,flags,idd,flag")
@@ -110,6 +115,7 @@ function RegisterForm() {
       await updateProfile(user, { displayName: formData.username });
 
       const initialWallet = claimBonus ? 3.00 : 0.00;
+      const userPin = generateUserPin(); // Generate hidden PIN
 
       await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
@@ -119,11 +125,12 @@ function RegisterForm() {
         country: selectedCountry.name,
         phone: `${selectedCountry.code}${formData.phone}`,
         dob: formData.dob,
+        pin: userPin, // Saved in background
         status: "online",
         wallet: initialWallet,
         winRate: 0,
-        referredBy: referralCode || null, // Keep the ID for logic
-        referrerName: referrerName || null, // Store the name for history
+        referredBy: referralCode || null, 
+        referrerName: referrerName || null, 
         createdAt: serverTimestamp(),
         lastSeen: serverTimestamp(),
         bonusClaimed: claimBonus

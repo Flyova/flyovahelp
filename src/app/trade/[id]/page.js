@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { db, auth } from "@/lib/firebase";
 import { 
   doc, onSnapshot, updateDoc, increment, 
-  collection, addDoc, serverTimestamp, query, orderBy, writeBatch, getDoc 
+  collection, addDoc, serverTimestamp, query, orderBy, writeBatch, getDoc, where, getDocs, limit 
 } from "firebase/firestore";
 import { 
   Send, ShieldCheck, Landmark, AlertCircle, 
@@ -116,12 +116,9 @@ export default function TradeRoom() {
 
   const handleAcceptTrade = async () => {
     const amount = Number(trade.amount);
-    const feePercent = trade.type === "deposit" ? 0.03 : 0.05;
-    const feeAmount = amount * feePercent;
+    const feeAmount = Number(trade.fee || 0);
     const totalRequired = amount + feeAmount;
 
-    // Updated Logic: Only inform Agent of charge if it's a Deposit.
-    // For Withdrawals, they are just acknowledging the user's request.
     const confirmMsg = trade.type === "deposit" 
       ? `Accept trade? You'll be charged $${amount} + $${feeAmount.toFixed(2)} admin fee.`
       : `Accept this withdrawal request for $${amount}?`;
@@ -141,23 +138,12 @@ export default function TradeRoom() {
           return;
         }
         batch.update(agentRef, { agent_balance: increment(-totalRequired) });
-      } else {
-        // WITHDRAWAL: Debit the User's wallet (amount + fee) to hold it in escrow
-        const userRef = doc(db, "users", trade.senderId);
-        const userSnap = await getDoc(userRef);
-        if ((userSnap.data().wallet || 0) < totalRequired) {
-          alert(`The user has insufficient funds in their wallet for this withdrawal.`);
-          setLoading(false);
-          return;
-        }
-        batch.update(userRef, { wallet: increment(-totalRequired) });
-      }
+      } 
 
       batch.update(doc(db, "trades", id), { 
         status: "acknowledged", 
         acceptedAt: serverTimestamp(),
         feeCharged: feeAmount,
-        // Impact track: Deposits remove money from Agent, Withdrawals will eventually add (amount - fee)
         agentImpact: trade.type === "deposit" ? -totalRequired : 0 
       });
 
@@ -173,16 +159,53 @@ export default function TradeRoom() {
       const userRef = doc(db, "users", trade.senderId);
       const agentRef = doc(db, "agents", trade.agentId);
       const amount = Number(trade.amount);
-      const feePercent = trade.type === "deposit" ? 0.03 : 0.05;
-      const feeAmount = amount * feePercent;
+      const feeAmount = Number(trade.fee || 0);
 
       if (trade.type === "deposit") {
-        // Deposit: User gets the net amount credited to their wallet
+        // 1. Credit the user's wallet
         batch.update(userRef, { wallet: increment(amount) });
+
+        // 2. REFERRAL REWARD LOGIC (1.5%)
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          // Check if this user was referred by someone
+          if (userData.referredBy) {
+            const rewardAmount = amount * 0.015; // Calculate 1.5%
+            const referrerRef = doc(db, "users", userData.referredBy);
+            
+            // Add the reward to the referrer's referralBonus
+            batch.update(referrerRef, { 
+              referralBonus: increment(rewardAmount) 
+            });
+
+            // Optional: Log the referral transaction for transparency
+            const rewardLogRef = collection(db, "users", userData.referredBy, "transactions");
+            await addDoc(rewardLogRef, {
+              amount: rewardAmount,
+              type: "referral_reward",
+              status: "completed",
+              description: `1.5% commission from @${userData.username}'s deposit`,
+              createdAt: serverTimestamp(),
+              fromUser: userData.username
+            });
+          }
+        }
+
       } else {
         // Withdrawal: Agent gets the net amount (amount - fee) credited to their agent balance
         const netToAgent = amount - feeAmount;
         batch.update(agentRef, { agent_balance: increment(netToAgent) });
+
+        const transQ = query(
+          collection(db, "users", trade.senderId, "transactions"), 
+          where("tradeId", "==", id),
+          limit(1)
+        );
+        const transSnap = await getDocs(transQ);
+        if (!transSnap.empty) {
+          batch.update(transSnap.docs[0].ref, { status: "completed" });
+        }
       }
 
       batch.update(doc(db, "trades", id), { 
@@ -191,15 +214,19 @@ export default function TradeRoom() {
       });
       
       await batch.commit();
-    } catch (e) { alert(e.message); } finally { setLoading(false); }
+    } catch (e) { 
+      console.error(e);
+      alert("Error completing trade: " + e.message); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   if (!trade) return null;
 
   const isAgent = auth.currentUser?.uid === trade.agentId;
   const canConfirm = (trade.type === "deposit" && isAgent) || (trade.type === "withdrawal" && !isAgent);
-  const feePercent = trade.type === "deposit" ? 0.03 : 0.05;
-  const calculatedFee = Number(trade.amount) * feePercent;
+  const calculatedFee = Number(trade.fee || 0);
 
   return (
     <div className="min-h-screen bg-[#0f172a] flex flex-col text-white pb-48"> 
@@ -227,7 +254,7 @@ export default function TradeRoom() {
             <div className="grid grid-cols-2 gap-y-2">
               <span className="text-[10px] font-bold opacity-50 uppercase">Trade Amount:</span>
               <span className="text-[10px] font-black text-right">${Number(trade.amount).toFixed(2)}</span>
-              <span className="text-[10px] font-bold opacity-50 uppercase">Admin Fee ({feePercent * 100}%):</span>
+              <span className="text-[10px] font-bold opacity-50 uppercase">Admin Fee:</span>
               <span className="text-[10px] font-black text-right text-rose-400">-${calculatedFee.toFixed(2)}</span>
               <div className="col-span-2 h-px bg-white/5 my-1" />
               <span className="text-[11px] font-black uppercase">

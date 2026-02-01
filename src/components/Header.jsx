@@ -2,7 +2,17 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Wallet, LogOut, ArrowUpRight, LayoutDashboard } from "lucide-react";
+import { 
+  ChevronDown, 
+  Wallet, 
+  LogOut, 
+  ArrowUpRight, 
+  LayoutDashboard,
+  Send,
+  Copy,
+  Check,
+  Users // Added icon for referrals
+} from "lucide-react";
 // FIREBASE IMPORTS
 import { auth, db } from "@/lib/firebase";
 import { doc, onSnapshot, updateDoc } from "firebase/firestore";
@@ -11,20 +21,26 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 export default function Header() {
   const router = useRouter();
   const [showBalances, setShowBalances] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [userData, setUserData] = useState({
     wallet: "0.00",
     referralBonus: "0.00",
     gameCredits: "0.00",
-    agentBalance: "0.00", // Track agent-specific balance
+    agentBalance: "0.00",
+    pin: "--------",
     isAgent: false 
   });
 
   useEffect(() => {
+    let unsubscribeUser = null;
+    let unsubscribeAgent = null;
+
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
-        // 1. Listen to User Document
         const userDocRef = doc(db, "users", user.uid);
-        const unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
+        
+        // Listen to User Document
+        unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
             setUserData(prev => ({
@@ -32,13 +48,14 @@ export default function Header() {
               wallet: data.wallet?.toFixed(2) || "0.00",
               referralBonus: data.referralBonus?.toFixed(2) || "0.00",
               gameCredits: data.gameCredits?.toFixed(2) || "0.00",
+              pin: data.pin || "--------",
               isAgent: data.isAgent || false
             }));
 
-            // 2. If user is an agent, listen to the Agents collection for the specific agent_balance field
+            // Handle Agent Specific Balance
             if (data.isAgent) {
               const agentDocRef = doc(db, "agents", user.uid);
-              const unsubscribeAgent = onSnapshot(agentDocRef, (agentSnap) => {
+              unsubscribeAgent = onSnapshot(agentDocRef, (agentSnap) => {
                 if (agentSnap.exists()) {
                   const agentData = agentSnap.data();
                   setUserData(prev => ({
@@ -47,18 +64,33 @@ export default function Header() {
                   }));
                 }
               });
-              return () => unsubscribeAgent();
             }
           }
+        }, (err) => {
+          if (err.code !== 'permission-denied') {
+            console.error("Firestore error:", err);
+          }
         });
-        return () => unsubscribeUser();
       } else {
-        setUserData({ wallet: "0.00", referralBonus: "0.00", gameCredits: "0.00", agentBalance: "0.00", isAgent: false });
+        if (unsubscribeUser) unsubscribeUser();
+        if (unsubscribeAgent) unsubscribeAgent();
+        setUserData({ wallet: "0.00", referralBonus: "0.00", gameCredits: "0.00", agentBalance: "0.00", pin: "--------", isAgent: false });
       }
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeUser) unsubscribeUser();
+      if (unsubscribeAgent) unsubscribeAgent();
+    };
   }, []);
+
+  const handleCopyPin = (e) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(userData.pin);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const handleDepositClick = () => {
     setShowBalances(false);
@@ -70,9 +102,19 @@ export default function Header() {
     router.push("/withdrawal");
   };
 
+  const handleTransferClick = () => {
+    setShowBalances(false);
+    router.push("/transfer");
+  };
+
   const handleAgentDashboardClick = () => {
     setShowBalances(false);
     router.push("/agent/dashboard");
+  };
+
+  const handleReferralsClick = () => {
+    setShowBalances(false);
+    router.push("/referrals");
   };
 
   const handleLogout = async () => {
@@ -114,6 +156,20 @@ export default function Header() {
           {showBalances && (
             <div className="absolute right-0 mt-3 w-64 bg-[#1e293b] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/5 overflow-hidden animate-in fade-in zoom-in-95">
               <div className="p-4 space-y-4">
+                
+                <div className="bg-[#0f172a] p-3 rounded-xl border border-white/5 flex justify-between items-center">
+                    <div>
+                        <p className="text-[8px] font-black uppercase text-gray-500 tracking-widest leading-none mb-1">Identity PIN</p>
+                        <p className="text-sm font-mono font-black text-[#fc7952] tracking-wider">{userData.pin}</p>
+                    </div>
+                    <button 
+                        onClick={handleCopyPin}
+                        className="p-2 hover:bg-white/5 rounded-lg transition-colors active:scale-90"
+                    >
+                        {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} className="text-gray-500" />}
+                    </button>
+                </div>
+
                 <div className="bg-black/20 p-3 rounded-xl">
                     <BalanceItem label="Main Balance" amount={userData.wallet} color="text-white text-lg" />
                 </div>
@@ -121,7 +177,6 @@ export default function Header() {
                 <div className="px-1 space-y-3">
                     <BalanceItem label="Referral Bonus" amount={userData.referralBonus} color="text-green-400" />
                     
-                    {/* Switch between Agent Balance and Active Stakes based on role */}
                     {userData.isAgent ? (
                       <BalanceItem label="Agent Balance" amount={userData.agentBalance} color="text-[#fc7952]" />
                     ) : (
@@ -143,6 +198,14 @@ export default function Header() {
                   )}
 
                   <button 
+                    onClick={handleTransferClick}
+                    className="w-full bg-blue-500 hover:bg-blue-600 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-500/20 active:scale-95 flex items-center justify-center space-x-2"
+                  >
+                    <Send size={14} />
+                    <span>Transfer Funds</span>
+                  </button>
+
+                  <button 
                     onClick={handleWithdrawClick}
                     className="w-full bg-green-500 hover:bg-green-600 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-green-500/20 active:scale-95 flex items-center justify-center space-x-2"
                   >
@@ -155,6 +218,15 @@ export default function Header() {
                     className="w-full bg-[#fc7952] hover:bg-[#ff8a6a] py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-[#fc7952]/20 active:scale-95"
                   >
                     DEPOSIT FUNDS
+                  </button>
+
+                  {/* NEW REFERRALS BUTTON */}
+                  <button 
+                    onClick={handleReferralsClick}
+                    className="w-full bg-white/5 hover:bg-white/10 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center space-x-2 border border-white/5"
+                  >
+                    <Users size={14} className="text-green-400" />
+                    <span>My Referrals</span>
                   </button>
 
                   <button 

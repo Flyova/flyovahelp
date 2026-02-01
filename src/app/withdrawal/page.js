@@ -54,7 +54,8 @@ export default function WithdrawalPage() {
             setUserData({ 
               main: data.wallet || 0, 
               country: data.country || "",
-              uid: u.uid 
+              uid: u.uid,
+              fullName: data.fullName || data.username || "User"
             });
           }
         });
@@ -116,6 +117,9 @@ export default function WithdrawalPage() {
   };
 
   const calculateWithdrawalFee = (amt) => {
+    // Only apply fee logic if the method is USDT
+    if (method !== "usdt") return 0.00;
+
     const a = parseFloat(amt);
     if (!a || a < 10) return 0;
     if (a >= 10001) return 300.00;
@@ -140,7 +144,6 @@ export default function WithdrawalPage() {
     return 0.00;
   };
 
-  // Pre-calculate values for the UI
   const currentFee = calculateWithdrawalFee(amount);
   const totalDeductible = (parseFloat(amount) || 0) + currentFee;
 
@@ -183,15 +186,31 @@ export default function WithdrawalPage() {
           return;
         }
 
+        // Logic Fix: For Agent withdrawals, fee is 0, so only deduct the withdrawAmount
+        await updateDoc(doc(db, "users", user.uid), { wallet: increment(-withdrawAmount) });
+
         const tradeRef = await addDoc(collection(db, "trades"), {
           senderId: auth.currentUser.uid,
           agentId: selectedAgent.id,
           amount: withdrawAmount,
+          fee: 0, // No fee applied for agent withdrawals
           rate: Number(selectedAgent.exchange_rate),
           type: "withdrawal",
           status: "pending",
           createdAt: serverTimestamp(),
           senderName: userData.fullName || "User"
+        });
+
+        // Log transaction history without fees for Agent method
+        await addDoc(collection(db, "users", user.uid, "transactions"), {
+          amount: -withdrawAmount,
+          fee: 0,
+          type: "withdrawal",
+          method: "agent",
+          agentName: selectedAgent.full_name,
+          tradeId: tradeRef.id,
+          status: "pending",
+          timestamp: serverTimestamp()
         });
         
         router.push(`/trade/${tradeRef.id}`);
@@ -238,8 +257,8 @@ export default function WithdrawalPage() {
             className="w-full bg-transparent font-black text-4xl text-white outline-none" />
         </div>
 
-        {/* FEE SPECIFICATION SUMMARY */}
-        {parseFloat(amount) >= 10 && (
+        {/* FEE SUMMARY: Only visible for USDT withdrawals now */}
+        {parseFloat(amount) >= 10 && method === "usdt" && (
           <div className="bg-[#613de6]/5 border border-[#613de6]/20 p-5 rounded-3xl space-y-3 animate-in fade-in slide-in-from-top-2">
             <div className="flex items-center gap-2 mb-1">
                <Receipt size={14} className="text-[#613de6]" />

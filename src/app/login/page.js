@@ -6,16 +6,21 @@ import { X } from "lucide-react";
 // FIREBASE IMPORTS
 import { auth, db } from "@/lib/firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, updateDoc, getDoc, serverTimestamp } from "firebase/firestore";
 
 export default function LoginPage() {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    email: "", // Switched to email for Firebase Auth stability
+    email: "", 
     password: "",
   });
+
+  // Helper to generate a unique 8-digit PIN
+  const generateUserPin = () => {
+    return Math.floor(10000000 + Math.random() * 90000000).toString();
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -24,12 +29,22 @@ export default function LoginPage() {
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
+      const userRef = doc(db, "users", userCredential.user.uid);
       
-      // Update status to online upon login
-      await updateDoc(doc(db, "users", userCredential.user.uid), {
+      // Fetch user data to check for existing PIN
+      const userSnap = await getDoc(userRef);
+      
+      let updateData = {
         status: "online",
         lastSeen: serverTimestamp()
-      });
+      };
+
+      // logic: If user doesn't have a PIN, assign one now
+      if (userSnap.exists() && !userSnap.data().pin) {
+        updateData.pin = generateUserPin();
+      }
+
+      await updateDoc(userRef, updateData);
 
       router.push("/dashboard");
     } catch (err) {
@@ -80,7 +95,7 @@ export default function LoginPage() {
         </form>
 
         <div className="mt-8 flex justify-between px-2">
-          <Link href="/forgot-password" size={14} className="text-[#fc7952] text-xs font-bold hover:brightness-110">
+          <Link href="/forgot-password" text-size={14} className="text-[#fc7952] text-xs font-bold hover:brightness-110">
             Forgot Password?
           </Link>
           <Link href="/register" className="text-[#fc7952] text-xs font-bold hover:brightness-110">
