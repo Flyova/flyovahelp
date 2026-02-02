@@ -6,93 +6,82 @@ import {
 import { NextResponse } from "next/server";
 
 export async function GET() {
+  const now = Date.now();
+  console.log(`--- Engine Run at ${new Date(now).toISOString()} ---`);
+
   try {
     const WIN_MULTIPLIER = 1.3;
-    const REF_COMMISSION = 0.005; // 0.5% referral bonus on losses
-    const RESULT_DISPLAY_TIME = 30000; // 30 seconds in milliseconds
+    const REF_COMMISSION = 0.005; 
+    const RESULT_DISPLAY_TIME = 30000; // 30 seconds
 
-    // 1. PHASE ONE: Find and Payout Expired Active Games
+    // 1. PHASE ONE: Handle Expired Active Games
     const qActive = query(
       collection(db, "timed_games"),
       where("status", "==", "active"),
-      where("endTime", "<=", Date.now()),
+      where("endTime", "<=", now),
       limit(1)
     );
+    
     const activeSnap = await getDocs(qActive);
 
     if (!activeSnap.empty) {
       const gameDoc = activeSnap.docs[0];
       const gameData = { id: gameDoc.id, ...gameDoc.data() };
-      const winners = gameData.winners || [];
+      console.log(`Found expired game: ${gameData.id}. Starting payouts...`);
 
-      // Loop through users to find their bets for this specific game
       const usersSnap = await getDocs(collection(db, "users"));
       
       for (const userDoc of usersSnap.docs) {
         const userId = userDoc.id;
         const userData = userDoc.data();
         
-        // Find "pending" stakes for this specific gameId under this user
         const userBetsQ = query(
           collection(db, "users", userId, "transactions"),
           where("gameId", "==", gameData.id),
-          where("status", "==", "pending"),
-          where("type", "==", "stake")
+          where("status", "==", "pending")
         );
         const userBetsSnap = await getDocs(userBetsQ);
 
         if (!userBetsSnap.empty) {
           await runTransaction(db, async (transaction) => {
             let totalPayout = 0;
-
-            for (const betDoc of userBetsSnap.docs) {
+            userBetsSnap.forEach((betDoc) => {
               const bet = betDoc.data();
-              
-              // Sort both to ensure [2, 5] matches [5, 2]
-              const sortedPicks = [...(bet.picks || [])].sort((a, b) => a - b);
-              const sortedWinners = [...winners].sort((a, b) => a - b);
-              const isWinner = sortedPicks.length === sortedWinners.length && 
-                               sortedPicks.every((val, index) => val === sortedWinners[index]);
+              const isWinner = JSON.stringify([...(bet.picks || [])].sort()) === 
+                               JSON.stringify([...(gameData.winners || [])].sort());
 
               const transRef = doc(db, "users", userId, "transactions", betDoc.id);
-
               if (isWinner) {
                 const payout = parseFloat((bet.amount * WIN_MULTIPLIER).toFixed(2));
                 totalPayout += payout;
                 transaction.update(transRef, { status: "win", amount: payout, type: "win" });
               } else {
                 transaction.update(transRef, { status: "loss" });
-
-                // Pay referral commission to the person who invited them
                 if (userData.referredBy) {
-                  const commission = parseFloat((bet.amount * REF_COMMISSION).toFixed(4));
-                  const referrerRef = doc(db, "users", userData.referredBy);
-                  transaction.update(referrerRef, { 
-                    referralBonus: increment(commission) 
+                  transaction.update(doc(db, "users", userData.referredBy), { 
+                    referralBonus: increment(bet.amount * REF_COMMISSION) 
                   });
                 }
               }
-            }
+            });
 
             if (totalPayout > 0) {
-              const userRef = doc(db, "users", userId);
-              transaction.update(userRef, { wallet: increment(totalPayout) });
+              transaction.update(doc(db, "users", userId), { wallet: increment(totalPayout) });
             }
           });
         }
       }
 
-      // Mark game as completed and record completion time to start the 30s display clock
       await updateDoc(doc(db, "timed_games", gameData.id), { 
         status: "completed", 
-        processed: true,
-        completedAt: Date.now() 
+        completedAt: now 
       });
 
-      return NextResponse.json({ message: "Game rewarded and moved to results phase" });
+      return NextResponse.json({ message: `Processed payouts for ${gameData.id}` });
     }
 
-    // 2. PHASE TWO: Check if it's time to start a NEW round
+    // 2. PHASE TWO: Start New Game
+    // We check for the most recent completed game
     const qLast = query(
       collection(db, "timed_games"), 
       where("status", "==", "completed"), 
@@ -101,41 +90,52 @@ export async function GET() {
     );
     const lastSnap = await getDocs(qLast);
 
-    if (!lastSnap.empty) {
+    // Check if there is an active game ALREADY running
+    const qRunning = query(collection(db, "timed_games"), where("status", "==", "active"), limit(1));
+    const runningSnap = await getDocs(qRunning);
+
+    if (!runningSnap.empty) {
+        return NextResponse.json({ message: "Game already in progress..." });
+    }
+
+    let shouldStartNew = false;
+    if (lastSnap.empty) {
+      console.log("No previous games found at all. Starting fresh.");
+      shouldStartNew = true;
+    } else {
       const lastGame = lastSnap.docs[0].data();
-      const timeSinceCompletion = Date.now() - lastGame.completedAt;
-
-      // Check if an active game already exists
-      const qCheckActive = query(collection(db, "timed_games"), where("status", "==", "active"), limit(1));
-      const activeCheck = await getDocs(qCheckActive);
-
-      // Start new game ONLY if 30 seconds has passed since the last one ended
-      if (activeCheck.empty && timeSinceCompletion >= RESULT_DISPLAY_TIME) {
-        const newGameId = `game_${Math.floor(Date.now() / 1000)}`;
-        
-        // Generate 2 random winning numbers (1-20)
-        const winners = [];
-        while(winners.length < 2) {
-            const r = Math.floor(Math.random() * 20) + 1;
-            if(!winners.includes(r)) winners.push(r);
-        }
-
-        await addDoc(collection(db, "timed_games"), {
-            gameId: newGameId,
-            status: "active",
-            startTime: Date.now(),
-            endTime: Date.now() + (120 * 1000), // 2 Minute duration
-            winners: winners,
-            createdAt: serverTimestamp()
-        });
-
-        return NextResponse.json({ message: "New game started" });
+      const waitTimeRemaining = (lastGame.completedAt + RESULT_DISPLAY_TIME) - now;
+      
+      if (waitTimeRemaining <= 0) {
+        shouldStartNew = true;
+      } else {
+        console.log(`Still in result phase. ${Math.round(waitTimeRemaining/1000)}s left.`);
+        return NextResponse.json({ message: "Waiting for 30s result display to finish" });
       }
     }
 
-    return NextResponse.json({ message: "No action needed (Game in progress or result phase)" });
+    if (shouldStartNew) {
+      const winners = [];
+      while(winners.length < 2) {
+          const r = Math.floor(Math.random() * 20) + 1;
+          if(!winners.includes(r)) winners.push(r);
+      }
+
+      const newGame = {
+          status: "active",
+          startTime: now,
+          endTime: now + (120 * 1000), // 2 minutes
+          winners: winners,
+          createdAt: serverTimestamp()
+      };
+
+      await addDoc(collection(db, "timed_games"), newGame);
+      return NextResponse.json({ message: "New game started successfully!" });
+    }
+
+    return NextResponse.json({ message: "Standby" });
   } catch (err) {
-    console.error("Engine Error:", err);
+    console.error("ENGINE CRITICAL ERROR:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
