@@ -66,8 +66,8 @@ export default function FlyovaToDollars() {
       if (!snap.empty) {
         const gameData = { id: snap.docs[0].id, ...snap.docs[0].data() };
         
-        // When server marks game as completed, show the result alert
-        if (gameData.status === "completed" && gameStatus !== "results") {
+        // Fix: Only show results if the game that just finished is the one the user was actually looking at
+        if (gameData.status === "completed" && gameStatus !== "results" && currentGame?.id === gameData.id) {
             setGameStatus("results");
             const winners = gameData.winners || [];
             setLastWinners(winners);
@@ -104,7 +104,7 @@ export default function FlyovaToDollars() {
             setCurrentGame(gameData);
             fetchUserBetsFromTransactions(gameData.id); 
             
-            if (gameStatus === "results") {
+            if (gameStatus === "results" || !currentGame) {
                 setGameStatus("betting");
                 setSelectedNumbers([]);
                 setLastWinners([]);
@@ -121,7 +121,7 @@ export default function FlyovaToDollars() {
     });
 
     return () => { unsubActive(); unsubHistory(); };
-  }, [user, gameStatus]);
+  }, [user, gameStatus, currentGame?.id]); // Added currentGame.id to dependencies
 
   // 3. Countdown Timer Sync
   useEffect(() => {
@@ -129,7 +129,6 @@ export default function FlyovaToDollars() {
     const interval = setInterval(() => {
       const diff = Math.max(0, Math.floor((currentGame.endTime - Date.now()) / 1000));
       setTimeLeft(diff);
-      // Removed revealResults() trigger; server now handles this
     }, 1000);
     return () => clearInterval(interval);
   }, [currentGame, gameStatus]);

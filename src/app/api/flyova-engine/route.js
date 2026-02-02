@@ -1,81 +1,141 @@
 import { db } from "@/lib/firebase";
 import { 
-  collection, query, where, getDocs, orderBy, limit, 
-  doc, runTransaction, serverTimestamp, addDoc, increment 
+  collection, query, where, getDocs, doc, 
+  runTransaction, serverTimestamp, addDoc, increment, limit, orderBy, updateDoc 
 } from "firebase/firestore";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    const now = Date.now();
     const WIN_MULTIPLIER = 1.3;
-    const GAME_DURATION = 120; // 2 minutes
+    const REF_COMMISSION = 0.005; // 0.5% referral bonus on losses
+    const RESULT_DISPLAY_TIME = 30000; // 30 seconds in milliseconds
 
-    // 1. Find the active game that needs processing
+    // 1. PHASE ONE: Find and Payout Expired Active Games
     const qActive = query(
       collection(db, "timed_games"),
       where("status", "==", "active"),
-      where("endTime", "<=", now),
+      where("endTime", "<=", Date.now()),
       limit(1)
     );
     const activeSnap = await getDocs(qActive);
 
     if (!activeSnap.empty) {
-      const currentGame = { id: activeSnap.docs[0].id, ...activeSnap.docs[0].data() };
-      const winners = currentGame.winners || [];
+      const gameDoc = activeSnap.docs[0];
+      const gameData = { id: gameDoc.id, ...gameDoc.data() };
+      const winners = gameData.winners || [];
 
-      // 2. Process Payouts for this game
-      const betQ = query(
-        collection(db, "users"), // We need to check all users for pending bets on this gameId
-        // Note: For large scale, you'd store bets in a root 'bets' collection 
-        // but keeping your current sub-collection structure logic:
-      );
+      // Loop through users to find their bets for this specific game
+      const usersSnap = await getDocs(collection(db, "users"));
       
-      // We'll update the game status first to prevent double processing
-      await runTransaction(db, async (transaction) => {
-        const gameRef = doc(db, "timed_games", currentGame.id);
-        transaction.update(gameRef, { status: "processing", processedAt: serverTimestamp() });
-      });
+      for (const userDoc of usersSnap.docs) {
+        const userId = userDoc.id;
+        const userData = userDoc.data();
+        
+        // Find "pending" stakes for this specific gameId under this user
+        const userBetsQ = query(
+          collection(db, "users", userId, "transactions"),
+          where("gameId", "==", gameData.id),
+          where("status", "==", "pending"),
+          where("type", "==", "stake")
+        );
+        const userBetsSnap = await getDocs(userBetsQ);
 
-      // Logic: In a real server environment, you'd iterate through users who have pending 'stake'
-      // transactions for this gameId. (Simplified for this script):
-      // [Your existing payout logic from page.js would move here inside a server loop]
-      
-      // Mark as completed
-      await runTransaction(db, async (transaction) => {
-        transaction.update(doc(db, "timed_games", currentGame.id), { 
-            status: "completed", 
-            processed: true 
-        });
-      });
-    }
+        if (!userBetsSnap.empty) {
+          await runTransaction(db, async (transaction) => {
+            let totalPayout = 0;
 
-    // 3. Check if a new game needs to be started
-    const qNext = query(collection(db, "timed_games"), where("status", "==", "active"), limit(1));
-    const nextSnap = await getDocs(qNext);
+            for (const betDoc of userBetsSnap.docs) {
+              const bet = betDoc.data();
+              
+              // Sort both to ensure [2, 5] matches [5, 2]
+              const sortedPicks = [...(bet.picks || [])].sort((a, b) => a - b);
+              const sortedWinners = [...winners].sort((a, b) => a - b);
+              const isWinner = sortedPicks.length === sortedWinners.length && 
+                               sortedPicks.every((val, index) => val === sortedWinners[index]);
 
-    if (nextSnap.empty) {
-      const numbers = [];
-      while (numbers.length < 5) {
-        const r = Math.floor(Math.random() * 50) + 1;
-        if (!numbers.includes(r)) numbers.push(r);
+              const transRef = doc(db, "users", userId, "transactions", betDoc.id);
+
+              if (isWinner) {
+                const payout = parseFloat((bet.amount * WIN_MULTIPLIER).toFixed(2));
+                totalPayout += payout;
+                transaction.update(transRef, { status: "win", amount: payout, type: "win" });
+              } else {
+                transaction.update(transRef, { status: "loss" });
+
+                // Pay referral commission to the person who invited them
+                if (userData.referredBy) {
+                  const commission = parseFloat((bet.amount * REF_COMMISSION).toFixed(4));
+                  const referrerRef = doc(db, "users", userData.referredBy);
+                  transaction.update(referrerRef, { 
+                    referralBonus: increment(commission) 
+                  });
+                }
+              }
+            }
+
+            if (totalPayout > 0) {
+              const userRef = doc(db, "users", userId);
+              transaction.update(userRef, { wallet: increment(totalPayout) });
+            }
+          });
+        }
       }
-      const roundWinners = [numbers[0], numbers[1]];
-      const shuffled = [...numbers].sort(() => Math.random() - 0.5);
 
-      await addDoc(collection(db, "timed_games"), {
-        numbers: shuffled,
-        winners: roundWinners,
-        endTime: Date.now() + (GAME_DURATION * 1000),
-        status: "active",
-        processed: false,
-        createdAt: serverTimestamp()
+      // Mark game as completed and record completion time to start the 30s display clock
+      await updateDoc(doc(db, "timed_games", gameData.id), { 
+        status: "completed", 
+        processed: true,
+        completedAt: Date.now() 
       });
+
+      return NextResponse.json({ message: "Game rewarded and moved to results phase" });
     }
 
-    return NextResponse.json({ success: true, message: "Engine sync complete" });
-  } catch (error) {
-    console.error("Engine Error:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    // 2. PHASE TWO: Check if it's time to start a NEW round
+    const qLast = query(
+      collection(db, "timed_games"), 
+      where("status", "==", "completed"), 
+      orderBy("completedAt", "desc"), 
+      limit(1)
+    );
+    const lastSnap = await getDocs(qLast);
+
+    if (!lastSnap.empty) {
+      const lastGame = lastSnap.docs[0].data();
+      const timeSinceCompletion = Date.now() - lastGame.completedAt;
+
+      // Check if an active game already exists
+      const qCheckActive = query(collection(db, "timed_games"), where("status", "==", "active"), limit(1));
+      const activeCheck = await getDocs(qCheckActive);
+
+      // Start new game ONLY if 30 seconds has passed since the last one ended
+      if (activeCheck.empty && timeSinceCompletion >= RESULT_DISPLAY_TIME) {
+        const newGameId = `game_${Math.floor(Date.now() / 1000)}`;
+        
+        // Generate 2 random winning numbers (1-20)
+        const winners = [];
+        while(winners.length < 2) {
+            const r = Math.floor(Math.random() * 20) + 1;
+            if(!winners.includes(r)) winners.push(r);
+        }
+
+        await addDoc(collection(db, "timed_games"), {
+            gameId: newGameId,
+            status: "active",
+            startTime: Date.now(),
+            endTime: Date.now() + (120 * 1000), // 2 Minute duration
+            winners: winners,
+            createdAt: serverTimestamp()
+        });
+
+        return NextResponse.json({ message: "New game started" });
+      }
+    }
+
+    return NextResponse.json({ message: "No action needed (Game in progress or result phase)" });
+  } catch (err) {
+    console.error("Engine Error:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
