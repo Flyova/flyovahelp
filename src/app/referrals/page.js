@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { db, auth } from "@/lib/firebase";
 import { 
-  doc, onSnapshot, collection, query, where, getDocs 
+  doc, onSnapshot, collection, query, where, getDocs, updateDoc, increment, addDoc, serverTimestamp 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { 
@@ -13,7 +13,11 @@ import {
   TrendingUp, 
   UserCircle,
   Hash,
-  Fingerprint
+  Fingerprint,
+  ArrowRightLeft,
+  X,
+  Loader2,
+  CheckCircle2
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -25,19 +29,22 @@ export default function ReferralsPage() {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
+  // Withdraw Modal States
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
       if (!u) return router.push("/login");
       setUser(u);
       
-      // 1. Listen to Current User Data
       const unsubUser = onSnapshot(doc(db, "users", u.uid), (snap) => {
         if (snap.exists()) {
           setUserData(snap.data());
         }
       });
 
-      // 2. Fetch Referrals (Users where referredBy == u.uid)
       const fetchReferrals = async () => {
         try {
           const q = query(
@@ -71,6 +78,43 @@ export default function ReferralsPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleWithdrawBonus = async () => {
+    const amount = parseFloat(withdrawAmount);
+    const availableBonus = userData?.referralBonus || 0;
+
+    if (!amount || amount <= 0) return alert("Please enter a valid amount");
+    if (amount > availableBonus) return alert("Insufficient referral bonus balance");
+    if (amount < 1) return alert("Minimum withdrawal is $1.00");
+
+    setWithdrawLoading(true);
+    try {
+      const userRef = doc(db, "users", user.uid);
+      
+      await updateDoc(userRef, {
+        referralBonus: increment(-amount),
+        wallet: increment(amount)
+      });
+
+      await addDoc(collection(db, "users", user.uid, "transactions"), {
+        title: "Referral Bonus Withdrawal",
+        amount: amount,
+        type: "referral_withdrawal",
+        status: "completed",
+        timestamp: serverTimestamp(),
+        description: `Transferred $${amount} from referral bonus to main wallet`
+      });
+
+      setShowWithdrawModal(false);
+      setWithdrawAmount("");
+      alert("Bonus successfully transferred to main wallet!");
+    } catch (err) {
+      console.error(err);
+      alert("Transfer failed. Please try again.");
+    } finally {
+      setWithdrawLoading(false);
+    }
+  };
+
   if (loading) return (
     <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
       <div className="font-black italic text-white animate-pulse uppercase tracking-widest">Loading Network...</div>
@@ -96,11 +140,23 @@ export default function ReferralsPage() {
         {/* EARNINGS CARD */}
         <div className="bg-gradient-to-br from-[#613de6] to-[#4c2bb3] p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden">
             <TrendingUp className="absolute -right-4 -bottom-4 w-32 h-32 opacity-10 rotate-12" />
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60 mb-1">Referral Balance</p>
-            <h2 className="text-5xl font-black italic tracking-tighter">
-                ${userData?.referralBonus?.toFixed(2) || "0.00"}
-            </h2>
-            <div className="mt-6 inline-flex items-center bg-black/20 px-4 py-2 rounded-full border border-white/10">
+            <div className="flex justify-between items-start relative z-10">
+                <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60 mb-1">Referral Balance</p>
+                    <h2 className="text-5xl font-black italic tracking-tighter">
+                        ${userData?.referralBonus?.toFixed(2) || "0.00"}
+                    </h2>
+                </div>
+                {/* Updated Button with Label */}
+                <button 
+                  onClick={() => setShowWithdrawModal(true)}
+                  className="bg-white/10 px-4 py-2.5 rounded-2xl border border-white/20 hover:bg-white/20 transition-all flex items-center gap-2"
+                >
+                  <ArrowRightLeft size={16} />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Transfer</span>
+                </button>
+            </div>
+            <div className="mt-6 inline-flex items-center bg-black/20 px-4 py-2 rounded-full border border-white/10 relative z-10">
                 <Users size={14} className="mr-2 text-green-400" />
                 <span className="text-[10px] font-black uppercase tracking-widest">
                     {referrals.length} Active Referrals
@@ -170,6 +226,54 @@ export default function ReferralsPage() {
         </div>
 
       </div>
+
+      {/* WITHDRAW MODAL */}
+      {showWithdrawModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-[#0f172a]/90 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-[#1e293b] w-full max-w-sm rounded-[2.5rem] border border-white/10 p-8 shadow-2xl space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-black italic uppercase tracking-tighter">Withdraw Bonus</h2>
+              <button onClick={() => setShowWithdrawModal(false)} className="p-2 bg-white/5 rounded-xl"><X size={20} /></button>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.1em]">Transfer Amount</p>
+              <div className="bg-black/20 p-6 rounded-3xl border border-white/5 relative">
+                <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-black italic text-[#613de6]">$</span>
+                <input 
+                  type="number" 
+                  value={withdrawAmount}
+                  onChange={(e) => setWithdrawAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full bg-transparent pl-6 text-3xl font-black italic text-white outline-none"
+                />
+              </div>
+              <p className="text-[9px] font-bold text-[#fc7952] uppercase px-2">
+                Available: ${userData?.referralBonus?.toFixed(2) || "0.00"}
+              </p>
+            </div>
+
+            <div className="bg-[#613de6]/5 border border-[#613de6]/20 p-5 rounded-3xl space-y-1">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-bold text-gray-400 uppercase">Destination</span>
+                <span className="text-[10px] font-black uppercase italic text-green-500">Main Wallet</span>
+              </div>
+            </div>
+
+            <button 
+              onClick={handleWithdrawBonus}
+              disabled={withdrawLoading || !withdrawAmount}
+              className="w-full bg-[#613de6] py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"
+            >
+              {withdrawLoading ? (
+                <Loader2 className="animate-spin" size={16} />
+              ) : (
+                <>CONFIRM TRANSFER <CheckCircle2 size={16} /></>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -9,7 +9,9 @@ import {
   UserCheck,
   Loader2,
   MapPin,
-  Users
+  Users,
+  Clock,
+  ExternalLink
 } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import { 
@@ -19,7 +21,6 @@ import {
   query, 
   where, 
   getDocs, 
-  getDoc,
   addDoc, 
   serverTimestamp,
   limit,
@@ -36,6 +37,9 @@ export default function DepositPage() {
   const [userData, setUserData] = useState({ main: 0, country: "", uid: "" });
   const [agents, setAgents] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState(null);
+  
+  // State for active USDT session
+  const [activeUsdtSession, setActiveUsdtSession] = useState(null);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
@@ -47,10 +51,13 @@ export default function DepositPage() {
             setUserData({ 
               main: data.wallet || 0, 
               country: data.country || "",
-              uid: user.uid 
+              uid: user.uid,
+              fullName: data.fullName || data.username || "User"
             });
           }
         });
+        // Check for active USDT deposits on load
+        checkActiveUsdtSession(user.uid);
       }
     });
     return () => unsubscribeAuth();
@@ -61,6 +68,33 @@ export default function DepositPage() {
       fetchAgents(userData.country, parseFloat(depositAmount) || 0);
     }
   }, [depositAmount, method, userData.country]);
+
+  const checkActiveUsdtSession = async (uid) => {
+    const q = query(
+      collection(db, "deposits"),
+      where("userId", "==", uid),
+      where("status", "==", "pending"),
+      orderBy("createdAt", "desc"),
+      limit(1)
+    );
+
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const depositDoc = snap.docs[0];
+      const deposit = depositDoc.data();
+      const createdAt = deposit.createdAt?.toDate().getTime();
+      const now = Date.now();
+      
+      // 30 minutes = 1,800,000 ms
+      if (createdAt && (now - createdAt) < 1800000) {
+        setActiveUsdtSession({
+            id: depositDoc.id,
+            ...deposit,
+            timeLeft: Math.ceil((1800000 - (now - createdAt)) / 60000)
+        });
+      }
+    }
+  };
 
   const fetchAgents = async (country, amount) => {
     setAgentsLoading(true);
@@ -100,14 +134,12 @@ export default function DepositPage() {
   const handleDeposit = async () => {
     const amountNum = parseFloat(depositAmount);
     if (!depositAmount || amountNum <= 0) return alert("Enter valid amount");
-    
-    // Minimum deposit requirement
     if (amountNum < 10) return alert("Minimum deposit is $10.00");
     
     setLoading(true);
     try {
       if (method === "usdt") {
-        // CHECK FOR ACTIVE PENDING DIRECT DEPOSITS (30 MIN LIMIT)
+        // 1. Final check for active sessions before proceeding
         const q = query(
           collection(db, "deposits"),
           where("userId", "==", auth.currentUser.uid),
@@ -116,27 +148,34 @@ export default function DepositPage() {
           limit(1)
         );
 
-        try {
-            const snap = await getDocs(q);
-            if (!snap.empty) {
-              const lastDeposit = snap.docs[0].data();
-              const lastTime = lastDeposit.createdAt?.toDate().getTime();
-              const now = Date.now();
-              
-              if (lastTime && (now - lastTime) < 1800000) {
-                const minutesLeft = Math.ceil((1800000 - (now - lastTime)) / 60000);
-                alert(`You have an active deposit session. Please wait ${minutesLeft} minutes or complete your current payment.`);
-                return router.push(`/deposit/direct?amount=${lastDeposit.amount}`);
-              }
-            }
-        } catch (indexError) {
-            console.error("FIREBASE INDEX ERROR:", indexError);
-            alert("Index Required. Open your browser console (F12) to click the creation link.");
-            setLoading(false);
-            return;
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const lastDeposit = snap.docs[0].data();
+          const lastTime = lastDeposit.createdAt?.toDate().getTime();
+          const now = Date.now();
+          
+          if (lastTime && (now - lastTime) < 1800000) {
+            const minutesLeft = Math.ceil((1800000 - (now - lastTime)) / 60000);
+            alert(`You have an active deposit session. Please wait ${minutesLeft} minutes or complete your current payment.`);
+            // Redirect to the EXISTING deposit ID
+            return router.push(`/deposit/direct?id=${snap.docs[0].id}&amount=${lastDeposit.amount}`);
+          }
         }
+
+        // 2. CREATE THE INITIAL RECORD IMMEDIATELY
+        const docRef = await addDoc(collection(db, "deposits"), {
+          userId: auth.currentUser.uid,
+          amount: amountNum,
+          type: "deposit",
+          status: "pending",
+          network: "TRC20",
+          addressUsed: "TVatYHhNgVriJQwvyzUvo2jYbNqxVKqk1Q",
+          createdAt: serverTimestamp(),
+        });
         
-        router.push(`/deposit/direct?amount=${depositAmount}`);
+        // 3. PASS THE NEW DOC ID TO THE NEXT PAGE
+        router.push(`/deposit/direct?id=${docRef.id}&amount=${amountNum}`);
+
       } else {
         if (!selectedAgent) return alert("Please select an agent");
         
@@ -168,7 +207,7 @@ export default function DepositPage() {
       }
     } catch (e) {
       console.error("GENERAL DEPOSIT ERROR:", e);
-      alert("Transaction failed. Details logged in console.");
+      alert("Transaction failed. Check your connection.");
     } finally {
       setLoading(false);
     }
@@ -188,6 +227,29 @@ export default function DepositPage() {
       </div>
 
       <div className="p-6 max-w-md mx-auto space-y-8">
+        
+        {/* ACTIVE USDT SESSION NOTICE */}
+        {activeUsdtSession && method === "usdt" && (
+            <div className="bg-orange-500/10 border border-orange-500/20 p-6 rounded-[2rem] space-y-4 animate-in fade-in slide-in-from-top-4">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Clock size={16} className="text-orange-500" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-orange-500">Ongoing Deposit</span>
+                    </div>
+                    <span className="text-[10px] font-black text-white/40 uppercase">{activeUsdtSession.timeLeft}m Remaining</span>
+                </div>
+                <p className="text-xs font-bold text-gray-400 leading-relaxed">
+                    You have a pending USDT deposit of <span className="text-white">${activeUsdtSession.amount}</span>. You cannot start a new one until this expires or is completed.
+                </p>
+                <button 
+                  onClick={() => router.push(`/deposit/direct?id=${activeUsdtSession.id}&amount=${activeUsdtSession.amount}`)}
+                  className="w-full bg-orange-500/20 hover:bg-orange-500/30 py-3 rounded-xl flex items-center justify-center gap-2 text-orange-500 text-[10px] font-black uppercase tracking-widest transition-all"
+                >
+                    Return to Payment <ExternalLink size={14} />
+                </button>
+            </div>
+        )}
+
         <div className="space-y-3">
           <p className="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest">Deposit Method</p>
           <div className="grid grid-cols-2 gap-3">
@@ -204,7 +266,8 @@ export default function DepositPage() {
           </div>
         </div>
 
-        <div className="space-y-4">
+        {/* Amount Input Section - Disabled if active session exists */}
+        <div className={`space-y-4 ${(activeUsdtSession && method === "usdt") ? 'opacity-20 pointer-events-none' : ''}`}>
           <div className="grid grid-cols-3 gap-2">
             {quickAmounts.map((amt) => (
               <button key={amt} onClick={() => setDepositAmount(amt.toString())}
@@ -266,8 +329,11 @@ export default function DepositPage() {
           </div>
         )}
 
-        <button onClick={handleDeposit} disabled={loading || !depositAmount || (method === 'agent' && !selectedAgent)}
-          className="w-full bg-[#613de6] py-5 rounded-[2rem] font-black uppercase italic text-sm shadow-2xl flex items-center justify-center gap-3 disabled:opacity-30 active:scale-95 transition-all">
+        <button 
+          onClick={handleDeposit} 
+          disabled={loading || !depositAmount || (method === 'agent' && !selectedAgent) || (activeUsdtSession && method === "usdt")}
+          className="w-full bg-[#613de6] py-5 rounded-[2rem] font-black uppercase italic text-sm shadow-2xl flex items-center justify-center gap-3 disabled:opacity-30 active:scale-95 transition-all"
+        >
           {loading ? <Loader2 className="animate-spin" /> : <>PROCEED TO TRADE <ArrowRight size={20}/></>}
         </button>
       </div>

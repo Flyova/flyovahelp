@@ -91,9 +91,9 @@ export default function WithdrawalPage() {
         const aData = agentDoc.data();
         const aId = agentDoc.id;
         const businessBalance = Number(aData.agent_balance || 0);
-        const requestedAmt = Number(requiredAmount);
 
-        if (businessBalance < requestedAmt || aId === userData.uid) return null;
+        // Logic Update: Removed balance check so agents with 0 balance are visible for user withdrawals
+        if (aId === userData.uid) return null;
 
         return {
           id: aId,
@@ -242,7 +242,9 @@ export default function WithdrawalPage() {
 
         <div className="grid grid-cols-2 gap-4">
           <button onClick={() => setMethod("bank")} className={`p-5 rounded-3xl border-2 transition-all ${method === "bank" ? "border-[#613de6] bg-[#613de6]/10 shadow-lg" : "border-white/5 bg-[#1e293b] opacity-60"}`}>
-            <Landmark size={24} className="mx-auto mb-2 text-[#613de6]" />
+            <div className="relative">
+              <Landmark size={24} className="mx-auto mb-2 text-[#613de6]" />
+            </div>
             <span className="text-[10px] font-black uppercase block text-center">Local Agent</span>
           </button>
           <button onClick={() => setMethod("usdt")} className={`p-5 rounded-3xl border-2 transition-all ${method === "usdt" ? "border-[#613de6] bg-[#613de6]/10 shadow-lg" : "border-white/5 bg-[#1e293b] opacity-60"}`}>
@@ -306,7 +308,7 @@ export default function WithdrawalPage() {
             ) : (
               <div className="bg-[#1e293b] p-10 rounded-3xl border border-dashed border-white/10 text-center">
                 <AlertCircle size={24} className="mx-auto mb-2 text-gray-700" />
-                <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest leading-relaxed">No agents with sufficient liquidity found in {userData.country}</p>
+                <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest leading-relaxed">No agents found in {userData.country}</p>
               </div>
             )}
           </div>

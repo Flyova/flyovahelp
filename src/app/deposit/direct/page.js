@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { doc, updateDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { 
   Timer, Copy, CheckCircle, AlertTriangle, 
   Loader2, QrCode, ImageIcon, Hash, UploadCloud, X 
@@ -13,7 +13,9 @@ function DirectDepositContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const amount = searchParams.get("amount") || "0";
-  const [timeLeft, setTimeLeft] = useState(1800); // 30 Minutes
+  const depositId = searchParams.get("id"); // Get the ID created on the main deposit page
+  
+  const [timeLeft, setTimeLeft] = useState(1800); // Default 30 Minutes
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showProofForm, setShowProofForm] = useState(false);
   
@@ -28,17 +30,40 @@ function DirectDepositContent() {
   // Cloudinary Config (Based on your TradeRoom setup)
   const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dq9o866sc/image/upload";
   const UPLOAD_PRESET = "p_trade_proof"; 
-  const API_KEY = "823961819667685"; // From your TradeRoom file
+  const API_KEY = "823961819667685";
+
+  // SYNC TIMER WITH FIRESTORE CREATION TIME
+  useEffect(() => {
+    if (!depositId) return;
+
+    const syncTimer = async () => {
+      try {
+        const docSnap = await getDoc(doc(db, "deposits", depositId));
+        if (docSnap.exists()) {
+          const createdAt = docSnap.data().createdAt?.toDate().getTime();
+          if (createdAt) {
+            const elapsed = Math.floor((Date.now() - createdAt) / 1000);
+            const remaining = 1800 - elapsed;
+            if (remaining <= 0) {
+              alert("Payment Session Expired");
+              router.push("/deposit");
+            } else {
+              setTimeLeft(remaining);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Timer Sync Error:", err);
+      }
+    };
+    syncTimer();
+  }, [depositId, router]);
 
   useEffect(() => {
-    if (timeLeft <= 0) {
-      alert("Payment Session Expired");
-      router.push("/deposit");
-      return;
-    }
+    if (timeLeft <= 0) return;
     const timer = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
     return () => clearInterval(timer);
-  }, [timeLeft, router]);
+  }, [timeLeft]);
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -64,6 +89,7 @@ function DirectDepositContent() {
     if (!hashId.trim()) return alert("Please enter the Transaction Hash/ID");
     if (!image) return alert("Please upload a payment screenshot");
     if (!auth.currentUser) return alert("Session expired. Please login again.");
+    if (!depositId) return alert("Deposit session error. Please restart.");
 
     setIsSubmitting(true);
     try {
@@ -71,7 +97,7 @@ function DirectDepositContent() {
       const formData = new FormData();
       formData.append("file", image);
       formData.append("upload_preset", UPLOAD_PRESET);
-      formData.append("api_key", API_KEY); // Added API Key to resolve "Unknown API Key"
+      formData.append("api_key", API_KEY);
 
       const res = await fetch(CLOUDINARY_URL, {
         method: "POST",
@@ -81,23 +107,17 @@ function DirectDepositContent() {
       const uploadData = await res.json();
       
       if (!uploadData.secure_url) {
-        console.error("Cloudinary Error:", uploadData);
-        throw new Error(uploadData.error?.message || "Image upload failed. Check Cloudinary settings.");
+        throw new Error(uploadData.error?.message || "Image upload failed.");
       }
 
       const imageUrl = uploadData.secure_url;
 
-      // 2. Save to Firestore
-      await addDoc(collection(db, "deposits"), {
-        userId: auth.currentUser.uid,
-        amount: parseFloat(amount),
-        type: "deposit",
-        status: "pending",
-        network: "TRC20",
-        addressUsed: USDT_ADDRESS,
+      // 2. UPDATE THE EXISTING FIRESTORE RECORD
+      // We use updateDoc because the record was created when they hit "Proceed"
+      await updateDoc(doc(db, "deposits", depositId), {
         transactionHash: hashId.trim(),
         proofImage: imageUrl,
-        createdAt: serverTimestamp(),
+        submittedAt: serverTimestamp(), // Record when they actually finished
       });
 
       alert("Deposit Submitted! Please wait for admin confirmation.");
@@ -124,7 +144,6 @@ function DirectDepositContent() {
         </div>
 
         {!showProofForm ? (
-          /* STEP 1: PAYMENT DETAILS */
           <div className="bg-[#1e293b] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="space-y-1 text-center">
               <p className="text-[10px] font-black text-gray-500 uppercase">Amount to Send</p>
@@ -166,7 +185,6 @@ function DirectDepositContent() {
             </button>
           </div>
         ) : (
-          /* STEP 2: PROOF SUBMISSION */
           <div className="bg-[#1e293b] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6 animate-in zoom-in-95 duration-300">
             <div className="flex items-center justify-between">
               <h2 className="font-black uppercase italic text-sm tracking-tight text-[#fc7952]">Upload Payment Proof</h2>
@@ -174,7 +192,6 @@ function DirectDepositContent() {
             </div>
 
             <form onSubmit={handleSubmitDeposit} className="space-y-5">
-              {/* Hash Input */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase text-gray-500 ml-2">Transaction Hash (TXID)</label>
                 <div className="relative">
@@ -189,7 +206,6 @@ function DirectDepositContent() {
                 </div>
               </div>
 
-              {/* Image Upload */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase text-gray-500 ml-2">Payment Screenshot</label>
                 <div 

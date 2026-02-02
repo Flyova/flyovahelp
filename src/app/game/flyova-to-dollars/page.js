@@ -59,30 +59,59 @@ export default function FlyovaToDollars() {
     return () => unsub();
   }, [router]);
 
-  // 2. Global Game & History Listener
+  // 2. Global Game & History Listener - Modified to wait for server-side "completed" status
   useEffect(() => {
     const qActive = query(collection(db, "timed_games"), orderBy("endTime", "desc"), limit(1));
-    const unsubActive = onSnapshot(qActive, (snap) => {
+    const unsubActive = onSnapshot(qActive, async (snap) => {
       if (!snap.empty) {
         const gameData = { id: snap.docs[0].id, ...snap.docs[0].data() };
         
-        if (gameData.status === "completed") {
-            generateNewGame();
+        // When server marks game as completed, show the result alert
+        if (gameData.status === "completed" && gameStatus !== "results") {
+            setGameStatus("results");
+            const winners = gameData.winners || [];
+            setLastWinners(winners);
+
+            // Check if current user had a winning bet
+            if (user) {
+                const betQ = query(
+                    collection(db, "users", user.uid, "transactions"),
+                    where("gameId", "==", gameData.id),
+                    where("type", "==", "stake")
+                );
+                const betSnap = await getDocs(betQ);
+                let totalWin = 0;
+                let won = false;
+
+                betSnap.forEach(doc => {
+                    const data = doc.data();
+                    if (data.status === "win") {
+                        totalWin += (data.amount || 0);
+                        won = true;
+                    }
+                });
+
+                setWinAmount(totalWin);
+                setResultType(won ? 'win' : 'lose');
+                setShowResultAlert(true);
+                setTimeout(() => setShowResultAlert(false), 7000);
+            }
             return;
         }
 
-        setCurrentGame(gameData);
-        fetchUserBetsFromTransactions(gameData.id); 
-        
-        if (gameStatus === "results" && Date.now() < gameData.endTime) {
-            setGameStatus("betting");
-            setSelectedNumbers([]);
-            setLastWinners([]);
-            setActiveBets([]);
-            setShowResultAlert(false); 
+        // Reset UI for a new active game
+        if (gameData.status === "active") {
+            setCurrentGame(gameData);
+            fetchUserBetsFromTransactions(gameData.id); 
+            
+            if (gameStatus === "results") {
+                setGameStatus("betting");
+                setSelectedNumbers([]);
+                setLastWinners([]);
+                setActiveBets([]);
+                setShowResultAlert(false); 
+            }
         }
-      } else {
-        generateNewGame(); 
       }
     });
 
@@ -100,7 +129,7 @@ export default function FlyovaToDollars() {
     const interval = setInterval(() => {
       const diff = Math.max(0, Math.floor((currentGame.endTime - Date.now()) / 1000));
       setTimeLeft(diff);
-      if (diff === 0) revealResults();
+      // Removed revealResults() trigger; server now handles this
     }, 1000);
     return () => clearInterval(interval);
   }, [currentGame, gameStatus]);
@@ -116,161 +145,6 @@ export default function FlyovaToDollars() {
     const snap = await getDocs(q);
     const bets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     setActiveBets(bets);
-  };
-
-  const generateNewGame = async () => {
-    const q = query(collection(db, "timed_games"), where("status", "==", "active"), limit(1));
-    const existing = await getDocs(q);
-    if (!existing.empty) return;
-
-    const numbers = [];
-    while (numbers.length < 5) {
-      const r = Math.floor(Math.random() * 50) + 1;
-      if (!numbers.includes(r)) numbers.push(r);
-    }
-    const winners = [numbers[0], numbers[1]]; 
-    const shuffled = [...numbers].sort(() => Math.random() - 0.5);
-
-    await addDoc(collection(db, "timed_games"), {
-      numbers: shuffled,
-      winners: winners,
-      endTime: Date.now() + (GAME_DURATION * 1000), 
-      status: "active",
-      processed: false,
-      createdAt: serverTimestamp()
-    });
-  };
-
-  const revealResults = async () => {
-    if (gameStatus === "results" || !currentGame || !user) return;
-    
-    setGameStatus("results");
-    const winners = currentGame.winners || [];
-    setLastWinners(winners);
-
-    const q = query(
-      collection(db, "users", user.uid, "transactions"), 
-      where("gameId", "==", currentGame.id),
-      where("status", "==", "pending"),
-      where("type", "==", "stake")
-    );
-    
-    const snap = await getDocs(q);
-    const currentGameBets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    
-    if (currentGameBets.length > 0) {
-      try {
-        let totalWinToCredit = 0;
-        let hasAnyWin = false;
-        
-        for (const bet of currentGameBets) {
-          if (bet.gameId !== currentGame.id) continue;
-          
-          const sortedUserPicks = [...(bet.picks || [])].sort((a, b) => a - b);
-          const sortedWinners = [...winners].sort((a, b) => a - b);
-          
-          const isWinner = sortedUserPicks.length === 2 && 
-                          sortedWinners.length === 2 &&
-                          sortedUserPicks[0] === sortedWinners[0] && 
-                          sortedUserPicks[1] === sortedWinners[1];
-          
-          if (isWinner) {
-            const payout = parseFloat((bet.amount * WIN_MULTIPLIER).toFixed(2));
-            totalWinToCredit += payout;
-            hasAnyWin = true;
-          }
-        }
-        
-        setWinAmount(totalWinToCredit);
-        setResultType(hasAnyWin ? 'win' : 'lose');
-        setShowResultAlert(true);
-        
-        await runTransaction(db, async (transaction) => {
-          const userRef = doc(db, "users", user.uid);
-          const userSnap = await transaction.get(userRef);
-          const userData = userSnap.data();
-          
-          for (const bet of currentGameBets) {
-            const transRef = doc(db, "users", user.uid, "transactions", bet.id);
-            
-            const sortedUserPicks = [...(bet.picks || [])].sort((a, b) => a - b);
-            const sortedWinners = [...winners].sort((a, b) => a - b);
-            
-            const isWinner = sortedUserPicks.length === 2 && 
-                            sortedWinners.length === 2 &&
-                            sortedUserPicks[0] === sortedWinners[0] && 
-                            sortedUserPicks[1] === sortedWinners[1];
-            
-            if (isWinner) {
-              const payout = parseFloat((bet.amount * WIN_MULTIPLIER).toFixed(2));
-              transaction.update(transRef, {
-                status: "win",
-                amount: payout,
-                title: "Flyova Win",
-                type: "win",
-                timestamp: serverTimestamp()
-              });
-            } else {
-              transaction.update(transRef, {
-                status: "loss",
-                type: "loss",
-                timestamp: serverTimestamp()
-              });
-
-              // REFERRAL COMMISSION LOGIC (0.5% on Loss)
-              if (userData.referredBy) {
-                const commission = parseFloat((bet.amount * 0.005).toFixed(4));
-                const referrerRef = doc(db, "users", userData.referredBy);
-                transaction.update(referrerRef, { referralBonus: increment(commission) });
-                
-                // Log commission to referrer's history
-                const commissionLogRef = doc(collection(db, "users", userData.referredBy, "transactions"));
-                transaction.set(commissionLogRef, {
-                  title: "Game Referral Commission",
-                  amount: commission,
-                  type: "referral_reward",
-                  status: "completed",
-                  description: `0.5% stake commission from @${userData.username}`,
-                  timestamp: serverTimestamp()
-                });
-              }
-            }
-          }
-          
-          if (totalWinToCredit > 0) {
-            transaction.update(userRef, { wallet: increment(totalWinToCredit) });
-            await addDoc(collection(db, "users", user.uid, "transactions"), {
-              title: "Flyova Win Payout",
-              amount: totalWinToCredit,
-              type: "win",
-              status: "win",
-              timestamp: serverTimestamp()
-            });
-          }
-        });
-        
-      } catch (err) { 
-        console.error("Transaction error:", err);
-        if (err.code === 'failed-precondition') {
-          setTimeout(() => revealResults(), 1000);
-        }
-      }
-    } else {
-      setResultType('lose');
-      setShowResultAlert(true);
-    }
-
-    try {
-      await updateDoc(doc(db, "timed_games", currentGame.id), { 
-        status: "completed", 
-        processed: true,
-        processedAt: serverTimestamp()
-      });
-    } catch (err) {
-      console.error("Error updating game status:", err);
-    }
-    
-    setTimeout(() => { setShowResultAlert(false); }, 7000);
   };
 
   const placeBet = async () => {

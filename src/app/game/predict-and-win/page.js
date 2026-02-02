@@ -7,7 +7,7 @@ import {
   limit, getDoc, setDoc, Timestamp, runTransaction, where, getDocs 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { Timer, CheckCircle2, Lock, Clock, Trophy, Wallet, XCircle, ArrowLeft } from "lucide-react";
+import { Timer, CheckCircle2, Lock, Clock, Trophy, Wallet, XCircle, ArrowLeft, AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function PredictAndWin() {
@@ -29,6 +29,11 @@ export default function PredictAndWin() {
   // Alert States
   const [showResultAlert, setShowResultAlert] = useState(false);
   const [resultType, setResultType] = useState(null); // 'win' or 'lose'
+
+  // Subscription Confirmation States
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingPlan, setPendingPlan] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const WIN_REWARD = 0.20;
   const ROUND_DURATION = 60; 
@@ -82,7 +87,6 @@ export default function PredictAndWin() {
   // 3. Global Round Listener
   useEffect(() => {
     if (!hasSubscribed || !user) return;
-    // Track by createdAt descending to get the newest round
     const q = query(collection(db, "predict_games"), orderBy("createdAt", "desc"), limit(1));
     return onSnapshot(q, (snap) => {
       if (!snap.empty) {
@@ -134,25 +138,47 @@ export default function PredictAndWin() {
       n1: Math.floor(Math.random() * 50) + 1,
       n2: Math.floor(Math.random() * 50) + 1,
       endTime: Date.now() + (ROUND_DURATION * 1000),
-      createdAt: serverTimestamp(), // Track when round started
+      createdAt: serverTimestamp(),
       status: "active"
     });
   };
 
-  const buySubscription = async (plan) => {
-    if (userData.wallet < plan.price) return alert("Insufficient Balance");
+  const handlePlanClick = (plan) => {
+    setPendingPlan(plan);
+    setShowConfirmModal(true);
+  };
+
+  const buySubscription = async () => {
+    if (!pendingPlan || !user) return;
+    if (userData.wallet < pendingPlan.price) {
+        alert("Insufficient Balance");
+        setShowConfirmModal(false);
+        return;
+    }
+
+    setSubmitting(true);
     try {
         await runTransaction(db, async (transaction) => {
             const userRef = doc(db, "users", user.uid);
             transaction.update(userRef, { 
-              wallet: increment(-plan.price),
-              subscription_expires: Timestamp.fromDate(new Date(Date.now() + plan.duration))
+              wallet: increment(-pendingPlan.price),
+              subscription_expires: Timestamp.fromDate(new Date(Date.now() + pendingPlan.duration))
             });
         });
         await addDoc(collection(db, "users", user.uid, "transactions"), {
-            title: `Predict Stake: ${plan.name}`, amount: plan.price, type: "stake", status: "loss", timestamp: serverTimestamp()
+            title: `Predict Stake: ${pendingPlan.name}`, 
+            amount: pendingPlan.price, 
+            type: "stake", 
+            status: "loss", 
+            timestamp: serverTimestamp()
         });
-    } catch (e) { console.error(e); }
+        setShowConfirmModal(false);
+    } catch (e) { 
+        console.error(e);
+        alert("Transaction failed. Please try again.");
+    } finally {
+        setSubmitting(false);
+    }
   };
 
   const placePrediction = async () => {
@@ -188,7 +214,6 @@ export default function PredictAndWin() {
 
                 if (userChoice === currentGame.condition) {
                     setResultType('win');
-                    // Update user wallet & transaction document
                     await updateDoc(doc(db, "users", user.uid), { wallet: increment(WIN_REWARD) });
                     await updateDoc(doc(db, "users", user.uid, "transactions", transDoc.id), {
                         title: "Predict Win", amount: WIN_REWARD, status: "win", type: "win", timestamp: serverTimestamp()
@@ -212,31 +237,63 @@ export default function PredictAndWin() {
 
   if (!hasSubscribed) {
     return (
-      <div className="min-h-screen bg-[#0f172a] text-white p-6">
+      <div className="min-h-screen bg-[#0f172a] text-white p-6 relative">
         <div className="text-center mt-10 mb-10">
             <Lock size={48} className="mx-auto text-[#613de6] mb-4" />
             <h1 className="text-3xl font-black italic uppercase">Predict & Win</h1>
+            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mt-2">Choose a plan to start betting</p>
         </div>
-        <div className="grid grid-cols-1 gap-3">
+        <div className="grid grid-cols-1 gap-3 max-w-sm mx-auto">
             {PLANS.map(plan => (
-                <button key={plan.id} onClick={() => buySubscription(plan)}
-                    className="w-full bg-[#1e293b] border border-white/5 p-4 rounded-2xl flex justify-between items-center active:scale-95 transition-all">
+                <button key={plan.id} onClick={() => handlePlanClick(plan)}
+                    className="w-full bg-[#1e293b] border border-white/5 p-5 rounded-2xl flex justify-between items-center active:scale-95 transition-all group hover:border-[#613de6]/50">
                     <div className="flex items-center space-x-3">
-                        <Clock size={18} className="text-[#613de6]"/>
-                        <p className="font-black italic uppercase text-sm">{plan.name}</p>
+                        <Clock size={18} className="text-[#613de6] group-hover:animate-pulse"/>
+                        <p className="font-black italic uppercase text-sm tracking-tight">{plan.name}</p>
                     </div>
                     <span className="text-lg font-black italic text-[#fc7952]">${plan.price}</span>
                 </button>
             ))}
         </div>
+
+        {/* Confirmation Modal */}
+        {showConfirmModal && (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#0f172a]/90 backdrop-blur-sm animate-in fade-in duration-300">
+                <div className="bg-[#1e293b] w-full max-w-xs rounded-[2.5rem] border border-white/10 p-8 shadow-2xl space-y-6 text-center">
+                    <div className="w-16 h-16 bg-[#613de6]/20 text-[#613de6] rounded-3xl flex items-center justify-center mx-auto">
+                        <AlertCircle size={32} />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-black uppercase italic tracking-tighter mb-2">Confirm Stake</h2>
+                        <p className="text-[11px] text-gray-400 font-bold leading-relaxed uppercase">
+                            You are about to stake <span className="text-[#fc7952]">${pendingPlan?.price}</span> for the <span className="text-white">{pendingPlan?.name}</span> access plan.
+                        </p>
+                    </div>
+                    <div className="space-y-3">
+                        <button 
+                            onClick={buySubscription} 
+                            disabled={submitting}
+                            className="w-full bg-[#613de6] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
+                        >
+                            {submitting ? "Processing..." : "CONFIRM & PAY"}
+                        </button>
+                        <button 
+                            onClick={() => setShowConfirmModal(false)} 
+                            className="w-full py-4 rounded-2xl bg-white/5 font-black uppercase text-[10px] tracking-widest text-gray-500"
+                        >
+                            CANCEL
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-white flex flex-col relative overflow-hidden pb-24">
-      
-      {/* Result Alert - Matches Flyova styling */}
+      {/* Result Alert */}
       {showResultAlert && (
         <div className="absolute inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in zoom-in duration-300">
           <div className={`w-full max-w-xs p-8 rounded-[2.5rem] border-2 text-center shadow-[0_0_50px_rgba(0,0,0,0.5)] ${resultType === 'win' ? 'bg-[#1e293b] border-green-500' : 'bg-[#1e293b] border-red-500'}`}>
@@ -256,11 +313,9 @@ export default function PredictAndWin() {
         </div>
       )}
 
-    
-
       {/* Progress Bar & Timer */}
       <div className="relative p-8 text-center bg-[#1e293b] border-b border-white/5">
-      <h1 className="text-xl font-black italic uppercase text-[#fc7952] mb-1">Predict and Win</h1>
+        <h1 className="text-xl font-black italic uppercase text-[#fc7952] mb-1">Predict and Win</h1>
         <div className="absolute top-0 left-0 w-full h-1 bg-white/5 overflow-hidden">
             <div className="h-full bg-[#fc7952] transition-all duration-1000 ease-linear" style={{ width: `${(timeLeft / ROUND_DURATION) * 100}%` }} />
         </div>
@@ -278,14 +333,11 @@ export default function PredictAndWin() {
                     <div className="w-20 h-20 bg-[#613de6] rounded-3xl flex items-center justify-center text-4xl font-black border-4 border-white shadow-xl">{lastResult?.n1}</div>
                     <div className="w-20 h-20 bg-[#613de6] rounded-3xl flex items-center justify-center text-4xl font-black border-4 border-white shadow-xl">{lastResult?.n2}</div>
                 </div>
-               
-               
-               
                 <h2 className="text-2xl font-black italic text-[#fc7952] uppercase tracking-tighter">RESULT: {lastResult?.condition}</h2>
             </div>
         ) : (
             <>
-                <p className="text-[#fc7952] font-black italic uppercase text-m mb-8 tracking-tighter font-black">Choose Next Outcome</p>
+                <p className="text-[#fc7952] font-black italic uppercase text-m mb-8 tracking-tighter">Choose Next Outcome</p>
                 <div className="grid grid-cols-3 gap-3 w-full max-w-sm mb-10">
                     {["Odd", "Even", "Both"].map(choice => (
                         <button key={choice} disabled={hasBet} onClick={() => setSelectedChoice(choice)}
