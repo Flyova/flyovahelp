@@ -1,141 +1,134 @@
-import { db } from "@/lib/firebase";
-import { 
-  collection, query, where, getDocs, doc, 
-  runTransaction, serverTimestamp, addDoc, increment, limit, orderBy, updateDoc 
-} from "firebase/firestore";
+import { adminDb, admin } from "@/lib/firebaseAdmin";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   const now = Date.now();
-  console.log(`--- Engine Run at ${new Date(now).toISOString()} ---`);
-
+  
   try {
     const WIN_MULTIPLIER = 1.3;
-    const REF_COMMISSION = 0.005; 
+    const REF_COMMISSION = 0.005; // 0.5% referral bonus
     const RESULT_DISPLAY_TIME = 30000; // 30 seconds
 
-    // 1. PHASE ONE: Handle Expired Active Games
-    const qActive = query(
-      collection(db, "timed_games"),
-      where("status", "==", "active"),
-      where("endTime", "<=", now),
-      limit(1)
-    );
-    
-    const activeSnap = await getDocs(qActive);
+    // --- PHASE 1: PAYOUT EXPIRED GAMES ---
+    const activeSnap = await adminDb.collection("timed_games")
+      .where("status", "==", "active")
+      .where("endTime", "<=", now)
+      .limit(1).get();
 
     if (!activeSnap.empty) {
       const gameDoc = activeSnap.docs[0];
       const gameData = { id: gameDoc.id, ...gameDoc.data() };
-      console.log(`Found expired game: ${gameData.id}. Starting payouts...`);
+      const winners = gameData.winners || [];
 
-      const usersSnap = await getDocs(collection(db, "users"));
+      const usersSnap = await adminDb.collection("users").get();
       
       for (const userDoc of usersSnap.docs) {
         const userId = userDoc.id;
         const userData = userDoc.data();
         
-        const userBetsQ = query(
-          collection(db, "users", userId, "transactions"),
-          where("gameId", "==", gameData.id),
-          where("status", "==", "pending")
-        );
-        const userBetsSnap = await getDocs(userBetsQ);
+        const betsSnap = await adminDb.collection("users").doc(userId)
+          .collection("transactions")
+          .where("gameId", "==", gameData.id)
+          .where("status", "==", "pending")
+          .where("type", "==", "stake").get();
 
-        if (!userBetsSnap.empty) {
-          await runTransaction(db, async (transaction) => {
+        if (!betsSnap.empty) {
+          await adminDb.runTransaction(async (transaction) => {
             let totalPayout = 0;
-            userBetsSnap.forEach((betDoc) => {
-              const bet = betDoc.data();
-              const isWinner = JSON.stringify([...(bet.picks || [])].sort()) === 
-                               JSON.stringify([...(gameData.winners || [])].sort());
 
-              const transRef = doc(db, "users", userId, "transactions", betDoc.id);
+            betsSnap.forEach((betDoc) => {
+              const bet = betDoc.data();
+              const sortedPicks = [...(bet.picks || [])].sort((a, b) => a - b);
+              const sortedWinners = [...winners].sort((a, b) => a - b);
+              
+              const isWinner = JSON.stringify(sortedPicks) === JSON.stringify(sortedWinners);
+
+              const transRef = adminDb.collection("users").doc(userId).collection("transactions").doc(betDoc.id);
+
               if (isWinner) {
                 const payout = parseFloat((bet.amount * WIN_MULTIPLIER).toFixed(2));
                 totalPayout += payout;
-                transaction.update(transRef, { status: "win", amount: payout, type: "win" });
+                transaction.update(transRef, { status: "win", amount: payout });
               } else {
                 transaction.update(transRef, { status: "loss" });
                 if (userData.referredBy) {
-                  transaction.update(doc(db, "users", userData.referredBy), { 
-                    referralBonus: increment(bet.amount * REF_COMMISSION) 
+                  const commission = parseFloat((bet.amount * REF_COMMISSION).toFixed(4));
+                  const referrerRef = adminDb.collection("users").doc(userData.referredBy);
+                  transaction.update(referrerRef, { 
+                    referralBonus: admin.firestore.FieldValue.increment(commission) 
                   });
                 }
               }
             });
 
             if (totalPayout > 0) {
-              transaction.update(doc(db, "users", userId), { wallet: increment(totalPayout) });
+              const userRef = adminDb.collection("users").doc(userId);
+              transaction.update(userRef, { 
+                wallet: admin.firestore.FieldValue.increment(totalPayout) 
+              });
             }
           });
         }
       }
 
-      await updateDoc(doc(db, "timed_games", gameData.id), { 
+      await adminDb.collection("timed_games").doc(gameData.id).update({ 
         status: "completed", 
         completedAt: now 
       });
 
-      return NextResponse.json({ message: `Processed payouts for ${gameData.id}` });
+      return NextResponse.json({ message: "Payouts processed successfully" });
     }
 
-    // 2. PHASE TWO: Start New Game
-    // We check for the most recent completed game
-    const qLast = query(
-      collection(db, "timed_games"), 
-      where("status", "==", "completed"), 
-      orderBy("completedAt", "desc"), 
-      limit(1)
-    );
-    const lastSnap = await getDocs(qLast);
+    // --- PHASE 2: GENERATE NEW GAME ---
+    const runningSnap = await adminDb.collection("timed_games")
+      .where("status", "==", "active")
+      .limit(1).get();
 
-    // Check if there is an active game ALREADY running
-    const qRunning = query(collection(db, "timed_games"), where("status", "==", "active"), limit(1));
-    const runningSnap = await getDocs(qRunning);
+    if (runningSnap.empty) {
+      const lastSnap = await adminDb.collection("timed_games")
+        .where("status", "==", "completed")
+        .orderBy("completedAt", "desc")
+        .limit(1).get();
 
-    if (!runningSnap.empty) {
-        return NextResponse.json({ message: "Game already in progress..." });
-    }
-
-    let shouldStartNew = false;
-    if (lastSnap.empty) {
-      console.log("No previous games found at all. Starting fresh.");
-      shouldStartNew = true;
-    } else {
-      const lastGame = lastSnap.docs[0].data();
-      const waitTimeRemaining = (lastGame.completedAt + RESULT_DISPLAY_TIME) - now;
-      
-      if (waitTimeRemaining <= 0) {
-        shouldStartNew = true;
-      } else {
-        console.log(`Still in result phase. ${Math.round(waitTimeRemaining/1000)}s left.`);
-        return NextResponse.json({ message: "Waiting for 30s result display to finish" });
-      }
-    }
-
-    if (shouldStartNew) {
-      const winners = [];
-      while(winners.length < 2) {
-          const r = Math.floor(Math.random() * 20) + 1;
-          if(!winners.includes(r)) winners.push(r);
+      let ready = true;
+      if (!lastSnap.empty) {
+        const lastGame = lastSnap.docs[0].data();
+        if (now - lastGame.completedAt < RESULT_DISPLAY_TIME) {
+          ready = false;
+        }
       }
 
-      const newGame = {
+      if (ready) {
+        // --- FIXED GENERATION LOGIC: BACK TO 5 NUMBERS TOTAL ---
+        const totalPossibleNumbers = [];
+        while (totalPossibleNumbers.length < 5) {
+          const r = Math.floor(Math.random() * 50) + 1; // Range 1-50 like original
+          if (!totalPossibleNumbers.includes(r)) totalPossibleNumbers.push(r);
+        }
+
+        // Pick 2 winners from those 5 generated numbers
+        const winners = [totalPossibleNumbers[0], totalPossibleNumbers[1]];
+        
+        // Shuffle the 5 numbers so the winners aren't always at the start of the UI list
+        const shuffledGrid = [...totalPossibleNumbers].sort(() => Math.random() - 0.5);
+
+        await adminDb.collection("timed_games").add({
           status: "active",
           startTime: now,
           endTime: now + (120 * 1000), // 2 minutes
-          winners: winners,
-          createdAt: serverTimestamp()
-      };
+          winners: winners, 
+          numbers: shuffledGrid, // Only 5 numbers show in the grid now
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
 
-      await addDoc(collection(db, "timed_games"), newGame);
-      return NextResponse.json({ message: "New game started successfully!" });
+        return NextResponse.json({ message: "New game started with 5 numbers" });
+      }
     }
 
-    return NextResponse.json({ message: "Standby" });
+    return NextResponse.json({ message: "In Result Phase or Game Running..." });
+
   } catch (err) {
-    console.error("ENGINE CRITICAL ERROR:", err);
+    console.error("ADMIN ENGINE ERROR:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
