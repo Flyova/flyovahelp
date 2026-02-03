@@ -6,8 +6,8 @@ export async function GET() {
   
   try {
     const WIN_MULTIPLIER = 1.3;
-    const REF_COMMISSION = 0.005; // 0.5% referral bonus
-    const RESULT_DISPLAY_TIME = 30000; // 30 seconds
+    const REF_COMMISSION = 0.005; 
+    const RESULT_DISPLAY_TIME = 10000; // Reduced to 10 seconds
 
     // --- PHASE 1: PAYOUT EXPIRED GAMES ---
     const activeSnap = await adminDb.collection("timed_games")
@@ -35,14 +35,11 @@ export async function GET() {
         if (!betsSnap.empty) {
           await adminDb.runTransaction(async (transaction) => {
             let totalPayout = 0;
-
             betsSnap.forEach((betDoc) => {
               const bet = betDoc.data();
               const sortedPicks = [...(bet.picks || [])].sort((a, b) => a - b);
               const sortedWinners = [...winners].sort((a, b) => a - b);
-              
               const isWinner = JSON.stringify(sortedPicks) === JSON.stringify(sortedWinners);
-
               const transRef = adminDb.collection("users").doc(userId).collection("transactions").doc(betDoc.id);
 
               if (isWinner) {
@@ -75,8 +72,7 @@ export async function GET() {
         status: "completed", 
         completedAt: now 
       });
-
-      return NextResponse.json({ message: "Payouts processed successfully" });
+      // We don't return here so we can potentially start the next game in Phase 2
     }
 
     // --- PHASE 2: GENERATE NEW GAME ---
@@ -93,23 +89,20 @@ export async function GET() {
       let ready = true;
       if (!lastSnap.empty) {
         const lastGame = lastSnap.docs[0].data();
+        // Check if the 10-second display time has passed
         if (now - lastGame.completedAt < RESULT_DISPLAY_TIME) {
           ready = false;
         }
       }
 
       if (ready) {
-        // --- FIXED GENERATION LOGIC: BACK TO 5 NUMBERS TOTAL ---
         const totalPossibleNumbers = [];
         while (totalPossibleNumbers.length < 5) {
-          const r = Math.floor(Math.random() * 50) + 1; // Range 1-50 like original
+          const r = Math.floor(Math.random() * 50) + 1;
           if (!totalPossibleNumbers.includes(r)) totalPossibleNumbers.push(r);
         }
 
-        // Pick 2 winners from those 5 generated numbers
         const winners = [totalPossibleNumbers[0], totalPossibleNumbers[1]];
-        
-        // Shuffle the 5 numbers so the winners aren't always at the start of the UI list
         const shuffledGrid = [...totalPossibleNumbers].sort(() => Math.random() - 0.5);
 
         await adminDb.collection("timed_games").add({
@@ -117,15 +110,15 @@ export async function GET() {
           startTime: now,
           endTime: now + (120 * 1000), // 2 minutes
           winners: winners, 
-          numbers: shuffledGrid, // Only 5 numbers show in the grid now
+          numbers: shuffledGrid,
           createdAt: admin.firestore.FieldValue.serverTimestamp()
         });
 
-        return NextResponse.json({ message: "New game started with 5 numbers" });
+        return NextResponse.json({ message: "New game started successfully" });
       }
     }
 
-    return NextResponse.json({ message: "In Result Phase or Game Running..." });
+    return NextResponse.json({ message: "Waiting for next 10s check..." });
 
   } catch (err) {
     console.error("ADMIN ENGINE ERROR:", err);
