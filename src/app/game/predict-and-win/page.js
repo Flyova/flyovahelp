@@ -7,7 +7,7 @@ import {
   limit, getDoc, setDoc, Timestamp, runTransaction, where, getDocs 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { Timer, CheckCircle2, Lock, Clock, Trophy, Wallet, XCircle, ArrowLeft, AlertCircle } from "lucide-react";
+import { Timer, CheckCircle2, Lock, Clock, Trophy, Wallet, XCircle, ArrowLeft, AlertCircle, Calendar } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function PredictAndWin() {
@@ -21,6 +21,7 @@ export default function PredictAndWin() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [hasSubscribed, setHasSubscribed] = useState(false);
   const [subTimeLeft, setSubTimeLeft] = useState("");
+  const [expiryFormatted, setExpiryFormatted] = useState(""); // New: Formatted Expiry String
   const [selectedChoice, setSelectedChoice] = useState(""); 
   const [hasBet, setHasBet] = useState(false);
   const [gameStatus, setGameStatus] = useState("betting");
@@ -56,7 +57,23 @@ export default function PredictAndWin() {
           const data = snap.data();
           setUserData(data);
           const expiry = data.subscription_expires;
-          setHasSubscribed(expiry ? expiry.toMillis() > Date.now() : false);
+          
+          if (expiry) {
+            const expiryDate = expiry.toDate();
+            setHasSubscribed(expiry.toMillis() > Date.now());
+            // Format: February 8, 2026 at 12:04 AM
+            setExpiryFormatted(expiryDate.toLocaleString('en-US', {
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true
+            }));
+          } else {
+            setHasSubscribed(false);
+            setExpiryFormatted("");
+          }
         }
         setLoading(false);
       });
@@ -315,7 +332,15 @@ export default function PredictAndWin() {
 
       {/* Progress Bar & Timer */}
       <div className="relative p-8 text-center bg-[#1e293b] border-b border-white/5">
-        <h1 className="text-xl font-black italic uppercase text-[#fc7952] mb-1">Predict and Win</h1>
+        <div className="flex flex-col items-center mb-1">
+            <h1 className="text-xl font-black italic uppercase text-[#fc7952]">Predict and Win</h1>
+            {/* Added: Specific Expiry Date/Time display */}
+            <div className="flex items-center gap-1.5 mt-1 text-white/40">
+                <Calendar size={10} className="text-[#613de6]" />
+                <p className="text-[12px] font-black uppercase tracking-wider">Subscription Ends: <span className="text-white/70 italic">{expiryFormatted}</span></p>
+            </div>
+        </div>
+        
         <div className="absolute top-0 left-0 w-full h-1 bg-white/5 overflow-hidden">
             <div className="h-full bg-[#fc7952] transition-all duration-1000 ease-linear" style={{ width: `${(timeLeft / ROUND_DURATION) * 100}%` }} />
         </div>
@@ -373,4 +398,4 @@ export default function PredictAndWin() {
       </div>
     </div>
   );
-} 
+}
