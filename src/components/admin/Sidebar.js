@@ -12,6 +12,8 @@ import {
   Send, 
   Users, 
   History,
+  Trophy,
+  MessageCircle,
   X,
   LogOut,
   Gamepad2,
@@ -34,6 +36,9 @@ export default function Sidebar({ isOpen, setIsOpen }) {
     { name: "Bet 1 History", icon: History, path: "/admin/bet1" },
     { name: "Bet 2 History", icon: History, path: "/admin/bet2" },
     { name: "Bet 3 History", icon: History, path: "/admin/bet3" },
+    { name: "Settings", icon: UserCheck, path: "/admin/settings" },
+    { name: "Live Chat", icon: MessageCircle, path: "/admin/support" },
+    { name: "Send Jackpot", icon: Trophy, path: "/admin/jackpot" },
   ];
 
   const handleLogout = async () => {

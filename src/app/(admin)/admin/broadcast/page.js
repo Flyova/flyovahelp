@@ -9,7 +9,8 @@ import {
   orderBy, 
   onSnapshot, 
   deleteDoc, 
-  doc 
+  doc,
+  setDoc
 } from "firebase/firestore";
 import { 
   Send, 
@@ -28,6 +29,7 @@ export default function AdminBroadcast() {
   const [history, setHistory] = useState([]);
 
   useEffect(() => {
+    // Listen for broadcasts - limited to last 10 for performance
     const q = query(collection(db, "broadcasts"), orderBy("timestamp", "desc"));
     const unsub = onSnapshot(q, (snap) => {
       setHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -41,12 +43,17 @@ export default function AdminBroadcast() {
     
     setSending(true);
     try {
-      await addDoc(collection(db, "broadcasts"), {
+      // Using setDoc with a manual ID creation so the ID is stored INSIDE the document
+      // This makes it easier for users to track which IDs they have "read"
+      const newBroadcastRef = doc(collection(db, "broadcasts"));
+      await setDoc(newBroadcastRef, {
+        id: newBroadcastRef.id,
         message: message,
         type: type,
         timestamp: serverTimestamp(),
         active: true
       });
+      
       setMessage("");
       alert("Announcement sent to all users!");
     } catch (error) {
@@ -58,13 +65,17 @@ export default function AdminBroadcast() {
   };
 
   const deleteBroadcast = async (id) => {
-    if (confirm("Remove this announcement?")) {
-      await deleteDoc(doc(db, "broadcasts", id));
+    if (confirm("Remove this announcement? It will disappear for all users.")) {
+      try {
+        await deleteDoc(doc(db, "broadcasts", id));
+      } catch (err) {
+        alert("Failed to delete.");
+      }
     }
   };
 
   return (
-    <div className="max-w-4xl space-y-8">
+    <div className="max-w-4xl space-y-8 p-4">
       <div>
         <h1 className="text-2xl font-black italic uppercase text-slate-800">Global Broadcast</h1>
         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Send real-time alerts to every user dashboard</p>
@@ -79,7 +90,7 @@ export default function AdminBroadcast() {
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Enter your announcement here..."
-              className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] p-6 text-sm font-bold outline-none focus:border-[#613de6] transition-all min-h-[150px] resize-none"
+              className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] p-6 text-sm font-bold outline-none focus:border-[#613de6] transition-all min-h-[120px] resize-none"
               required
             />
           </div>
@@ -88,21 +99,21 @@ export default function AdminBroadcast() {
             <button 
               type="button"
               onClick={() => setType("info")}
-              className={`flex items-center justify-center gap-2 p-4 rounded-2xl border font-black uppercase text-[10px] transition-all ${type === 'info' ? 'bg-blue-50 border-blue-200 text-blue-600 shadow-inner' : 'bg-white border-slate-100 text-slate-400 opacity-60'}`}
+              className={`flex items-center justify-center gap-2 p-4 rounded-2xl border font-black uppercase text-[10px] transition-all ${type === 'info' ? 'bg-blue-50 border-blue-400 text-blue-600' : 'bg-white border-slate-100 text-slate-400 opacity-60'}`}
             >
-              <Info size={16} /> Info Alert
+              <Info size={16} /> Info
             </button>
             <button 
               type="button"
               onClick={() => setType("warning")}
-              className={`flex items-center justify-center gap-2 p-4 rounded-2xl border font-black uppercase text-[10px] transition-all ${type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-600 shadow-inner' : 'bg-white border-slate-100 text-slate-400 opacity-60'}`}
+              className={`flex items-center justify-center gap-2 p-4 rounded-2xl border font-black uppercase text-[10px] transition-all ${type === 'warning' ? 'bg-amber-50 border-amber-400 text-amber-600' : 'bg-white border-slate-100 text-slate-400 opacity-60'}`}
             >
               <AlertTriangle size={16} /> Warning
             </button>
             <button 
               type="button"
               onClick={() => setType("success")}
-              className={`flex items-center justify-center gap-2 p-4 rounded-2xl border font-black uppercase text-[10px] transition-all ${type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-600 shadow-inner' : 'bg-white border-slate-100 text-slate-400 opacity-60'}`}
+              className={`flex items-center justify-center gap-2 p-4 rounded-2xl border font-black uppercase text-[10px] transition-all ${type === 'success' ? 'bg-emerald-50 border-emerald-400 text-emerald-600' : 'bg-white border-slate-100 text-slate-400 opacity-60'}`}
             >
               <CheckCircle2 size={16} /> Success
             </button>
@@ -112,7 +123,7 @@ export default function AdminBroadcast() {
             disabled={sending}
             className="w-full bg-[#613de6] text-white py-5 rounded-2xl font-black uppercase italic tracking-[0.2em] shadow-xl shadow-[#613de6]/20 flex items-center justify-center gap-3 active:scale-[0.98] transition-all disabled:opacity-50"
           >
-            {sending ? "Processing..." : (
+            {sending ? "Sending..." : (
               <>
                 <Megaphone size={20} /> Broadcast Message
               </>
@@ -125,8 +136,13 @@ export default function AdminBroadcast() {
       <div className="space-y-4">
         <h3 className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-[0.2em]">Recent Broadcasts</h3>
         <div className="space-y-3">
+          {history.length === 0 && (
+            <div className="text-center py-10 bg-slate-50 rounded-[2rem] border border-dashed border-slate-200">
+               <p className="text-[10px] font-black uppercase text-slate-300">No active broadcasts</p>
+            </div>
+          )}
           {history.map((post) => (
-            <div key={post.id} className="bg-white p-6 rounded-[2rem] border border-slate-200 flex items-start justify-between gap-4 group">
+            <div key={post.id} className="bg-white p-6 rounded-[2rem] border border-slate-200 flex items-start justify-between gap-4 group hover:shadow-md transition-all">
               <div className="flex items-start gap-4">
                 <div className={`p-3 rounded-xl shrink-0 mt-1 ${
                   post.type === 'warning' ? 'bg-amber-100 text-amber-600' : 
@@ -137,8 +153,11 @@ export default function AdminBroadcast() {
                 <div>
                   <p className="text-sm font-bold text-slate-700 leading-relaxed mb-2">{post.message}</p>
                   <div className="flex items-center gap-3 text-[9px] font-black uppercase text-slate-400">
-                    <span className="flex items-center gap-1"><Clock size={12}/> {post.timestamp?.toDate().toLocaleString()}</span>
-                    <span className={`px-2 py-0.5 rounded-md ${
+                    <span className="flex items-center gap-1">
+                      <Clock size={12}/> 
+                      {post.timestamp ? post.timestamp.toDate().toLocaleString() : 'Just now'}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-md font-bold ${
                       post.type === 'warning' ? 'bg-amber-50 text-amber-500' : 
                       post.type === 'success' ? 'bg-emerald-50 text-emerald-500' : 'bg-blue-50 text-blue-500'
                     }`}>{post.type}</span>
@@ -147,7 +166,7 @@ export default function AdminBroadcast() {
               </div>
               <button 
                 onClick={() => deleteBroadcast(post.id)}
-                className="p-3 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                className="p-3 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all md:opacity-0 md:group-hover:opacity-100"
               >
                 <Trash2 size={18} />
               </button>

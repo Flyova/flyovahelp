@@ -33,13 +33,19 @@ export default function AdminDashboard() {
     // 1. Live Stats Listeners
     const unsubUsers = onSnapshot(collection(db, "users"), (s) => setStats(prev => ({ ...prev, totalUsers: s.size })));
     
-    // USDT Pending Withdrawals (Top-level collection)
+    // USDT Pending Withdrawals - Sum of Amounts
     const qW = query(collection(db, "withdrawals"), where("status", "==", "pending"));
-    const unsubW = onSnapshot(qW, (s) => setStats(prev => ({ ...prev, pendingWithdrawals: s.size })));
+    const unsubW = onSnapshot(qW, (s) => {
+      const total = s.docs.reduce((acc, doc) => acc + (Number(doc.data().amount) || 0), 0);
+      setStats(prev => ({ ...prev, pendingWithdrawals: total }));
+    });
 
-    // USDT Pending Deposits (Top-level collection)
+    // USDT Pending Deposits - Sum of Amounts
     const qD = query(collection(db, "deposits"), where("status", "==", "pending"));
-    const unsubD = onSnapshot(qD, (s) => setStats(prev => ({ ...prev, pendingDeposits: s.size })));
+    const unsubD = onSnapshot(qD, (s) => {
+      const total = s.docs.reduce((acc, doc) => acc + (Number(doc.data().amount) || 0), 0);
+      setStats(prev => ({ ...prev, pendingDeposits: total }));
+    });
 
     // Active Agents
     const qA = query(collection(db, "agents"), where("application_status", "==", "approved"));
@@ -50,7 +56,6 @@ export default function AdminDashboard() {
     const unsubFly = onSnapshot(qF, (snap) => {
       if (!snap.empty) {
         const data = snap.docs[0].data();
-        // Uses the winners array as specified: winners[0] and winners[1]
         setFlyovaResult({ 
             n1: data.winners?.[0] ?? "--", 
             n2: data.winners?.[1] ?? "--",
@@ -78,13 +83,35 @@ export default function AdminDashboard() {
 
       {/* STATS GRID */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Registered Users" value={stats.totalUsers} icon={Users} color="bg-indigo-600" />
-        <StatCard label="Pending Payouts" value={stats.pendingWithdrawals} icon={ArrowUpCircle} color="bg-rose-500" />
-        <StatCard label="Deposit Requests" value={stats.pendingDeposits} icon={ArrowDownCircle} color="bg-emerald-500" />
-        <StatCard label="Approved Agents" value={stats.activeAgents} icon={UserCheck} color="bg-amber-500" />
+        <StatCard 
+            label="Registered Users" 
+            value={stats.totalUsers} 
+            icon={Users} 
+            color="bg-indigo-600" 
+        />
+        <StatCard 
+            label="Pending Payouts" 
+            value={stats.pendingWithdrawals} 
+            icon={ArrowUpCircle} 
+            color="bg-rose-500" 
+            isCurrency 
+        />
+        <StatCard 
+            label="Deposit Requests" 
+            value={stats.pendingDeposits} 
+            icon={ArrowDownCircle} 
+            color="bg-emerald-500" 
+            isCurrency
+        />
+        <StatCard 
+            label="Approved Agents" 
+            value={stats.activeAgents} 
+            icon={UserCheck} 
+            color="bg-amber-500" 
+        />
       </div>
 
-      {/* WINNING NUMBERS SECTION (Now Full Width) */}
+      {/* WINNING NUMBERS SECTION */}
       <div className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 p-12 opacity-[0.03] rotate-12">
           <Trophy size={200} />
@@ -134,7 +161,7 @@ export default function AdminDashboard() {
   );
 }
 
-function StatCard({ label, value, icon: Icon, color }) {
+function StatCard({ label, value, icon: Icon, color, isCurrency }) {
   return (
     <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm flex items-center gap-5 transition-transform hover:scale-[1.02]">
       <div className={`${color} p-4 rounded-2xl text-white shadow-lg shadow-current/20`}>
@@ -142,7 +169,9 @@ function StatCard({ label, value, icon: Icon, color }) {
       </div>
       <div>
         <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-1">{label}</p>
-        <p className="text-2xl font-black italic text-slate-800">{value.toLocaleString()}</p>
+        <p className="text-2xl font-black italic text-slate-800">
+            {isCurrency ? `$${value.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : value.toLocaleString()}
+        </p>
       </div>
     </div>
   );

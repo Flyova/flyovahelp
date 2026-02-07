@@ -27,24 +27,40 @@ import {
   Loader2,
   Check,
   AlertCircle,
-  Receipt
+  Receipt,
+  ShieldAlert,
+  Gift,
+  CheckCircle2 // Added for success animation
 } from "lucide-react";
 
 export default function WithdrawalPage() {
   const router = useRouter();
   const [user, setUser] = useState(null);
-  const [userData, setUserData] = useState({ main: 0, country: "", uid: "" });
+  const [userData, setUserData] = useState({ main: 0, country: "", uid: "", bonusClaimed: false, bonusDeducted: false });
   const [method, setMethod] = useState("bank");
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false); // Added for success animation
   const [agentsLoading, setAgentsLoading] = useState(false);
   
+  // NEW: Global System States
+  const [systemSettings, setSystemSettings] = useState(null);
+  const [systemLoading, setSystemLoading] = useState(true);
+
   const [agents, setAgents] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [usdtAddress, setUsdtAddress] = useState("");
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
+    // NEW: Listen to Global Toggle Settings
+    const unsubSettings = onSnapshot(doc(db, "settings", "global"), (snap) => {
+      if (snap.exists()) {
+        setSystemSettings(snap.data());
+      }
+      setSystemLoading(false);
+    });
+
+    const unsubAuth = onAuthStateChanged(auth, (u) => {
       if (u) {
         setUser(u);
         const userRef = doc(db, "users", u.uid);
@@ -55,7 +71,9 @@ export default function WithdrawalPage() {
               main: data.wallet || 0, 
               country: data.country || "",
               uid: u.uid,
-              fullName: data.fullName || data.username || "User"
+              fullName: data.fullName || data.username || "User",
+              bonusClaimed: data.bonusClaimed || false,
+              bonusDeducted: data.bonusDeducted || false
             });
           }
         });
@@ -63,7 +81,10 @@ export default function WithdrawalPage() {
         router.push("/login");
       }
     });
-    return () => unsub();
+    return () => {
+      unsubAuth();
+      unsubSettings();
+    };
   }, [router]);
 
   useEffect(() => {
@@ -92,7 +113,6 @@ export default function WithdrawalPage() {
         const aId = agentDoc.id;
         const businessBalance = Number(aData.agent_balance || 0);
 
-        // Logic Update: Removed balance check so agents with 0 balance are visible for user withdrawals
         if (aId === userData.uid) return null;
 
         return {
@@ -117,9 +137,7 @@ export default function WithdrawalPage() {
   };
 
   const calculateWithdrawalFee = (amt) => {
-    // Only apply fee logic if the method is USDT
     if (method !== "usdt") return 0.00;
-
     const a = parseFloat(amt);
     if (!a || a < 10) return 0;
     if (a >= 10001) return 300.00;
@@ -144,16 +162,19 @@ export default function WithdrawalPage() {
     return 0.00;
   };
 
+  const isEligibleForBonusDeduction = method === "usdt" && userData.bonusClaimed && !userData.bonusDeducted;
+  const bonusDeduction = isEligibleForBonusDeduction ? 3.00 : 0.00;
+  
   const currentFee = calculateWithdrawalFee(amount);
-  const totalDeductible = (parseFloat(amount) || 0) + currentFee;
+  const totalDeductible = (parseFloat(amount) || 0) + currentFee + bonusDeduction;
 
   const handleWithdraw = async () => {
     const withdrawAmount = parseFloat(amount);
     const fee = calculateWithdrawalFee(withdrawAmount);
-    const totalDeduct = withdrawAmount + fee;
+    const totalDeduct = withdrawAmount + fee + bonusDeduction;
 
     if (!withdrawAmount || withdrawAmount <= 0) return alert("Enter a valid amount");
-    if (totalDeduct > userData.main) return alert(`Insufficient balance. You need $${totalDeduct.toFixed(2)} total (including fees).`);
+    if (totalDeduct > userData.main) return alert(`Insufficient balance. You need $${totalDeduct.toFixed(2)} total (including fees/bonus recovery).`);
     if (withdrawAmount < 10) return alert("Minimum withdrawal is $10.00");
     if (method === "usdt" && !usdtAddress) return alert("Please enter USDT address");
     if (method === "bank" && !selectedAgent) return alert("Please select an agent");
@@ -166,6 +187,7 @@ export default function WithdrawalPage() {
           userId: user.uid,
           amount: withdrawAmount,
           fee: fee,
+          bonusRecovered: bonusDeduction,
           totalDeducted: totalDeduct,
           type: "withdrawal",
           status: "pending",
@@ -173,10 +195,36 @@ export default function WithdrawalPage() {
           details: { usdtAddress },
           timestamp: serverTimestamp(),
         };
-        await updateDoc(doc(db, "users", user.uid), { wallet: increment(-totalDeduct) });
+
+        if (isEligibleForBonusDeduction) {
+          await updateDoc(doc(db, "users", user.uid), { 
+            wallet: increment(-totalDeduct),
+            bonusDeducted: true
+          });
+          
+          await addDoc(collection(db, "users", user.uid, "transactions"), {
+            title: "Bonus Recovery",
+            amount: -3.00,
+            type: "adjustment",
+            status: "completed",
+            timestamp: serverTimestamp(),
+            details: "Signup bonus recovery"
+          });
+        } else {
+          await updateDoc(doc(db, "users", user.uid), { wallet: increment(-totalDeduct) });
+        }
+
         await addDoc(collection(db, "withdrawals"), txData);
-        await addDoc(collection(db, "users", user.uid, "transactions"), txData);
-        router.push("/dashboard");
+        await addDoc(collection(db, "users", user.uid, "transactions"), {
+            ...txData,
+            title: "Withdrawal Requested",
+            amount: -withdrawAmount 
+        });
+        
+        setLoading(false);
+        setShowSuccess(true);
+        setTimeout(() => router.push("/dashboard"), 3000);
+
       } else {
         const userTradeQ = query(collection(db, "trades"), where("senderId", "==", auth.currentUser.uid), where("status", "==", "pending"), limit(1));
         const userSnap = await getDocs(userTradeQ);
@@ -186,14 +234,13 @@ export default function WithdrawalPage() {
           return;
         }
 
-        // Logic Fix: For Agent withdrawals, fee is 0, so only deduct the withdrawAmount
         await updateDoc(doc(db, "users", user.uid), { wallet: increment(-withdrawAmount) });
 
         const tradeRef = await addDoc(collection(db, "trades"), {
           senderId: auth.currentUser.uid,
           agentId: selectedAgent.id,
           amount: withdrawAmount,
-          fee: 0, // No fee applied for agent withdrawals
+          fee: 0,
           rate: Number(selectedAgent.exchange_rate),
           type: "withdrawal",
           status: "pending",
@@ -201,7 +248,6 @@ export default function WithdrawalPage() {
           senderName: userData.fullName || "User"
         });
 
-        // Log transaction history without fees for Agent method
         await addDoc(collection(db, "users", user.uid, "transactions"), {
           amount: -withdrawAmount,
           fee: 0,
@@ -213,18 +259,63 @@ export default function WithdrawalPage() {
           timestamp: serverTimestamp()
         });
         
-        router.push(`/trade/${tradeRef.id}`);
+        setLoading(false);
+        setShowSuccess(true);
+        setTimeout(() => router.push(`/trade/${tradeRef.id}`), 3000);
       }
     } catch (err) {
       console.error(err);
       alert("Transaction failed.");
-    } finally {
       setLoading(false);
     }
   };
 
+  if (systemLoading) {
+    return (
+      <div className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center">
+        <Loader2 className="animate-spin text-[#613de6]" size={40} />
+      </div>
+    );
+  }
+
+  if (systemSettings && systemSettings.withdrawalEnabled === false) {
+    return (
+        <div className="min-h-screen bg-[#0f172a] p-6 flex flex-col items-center justify-center text-center">
+            <div className="bg-rose-500/10 p-8 rounded-full mb-8 border border-rose-500/20">
+                <ShieldAlert size={60} className="text-rose-500" />
+            </div>
+            <h2 className="text-3xl font-black italic uppercase text-white mb-3">Payouts Offline</h2>
+            <p className="text-gray-400 text-xs font-bold uppercase tracking-[0.2em] max-w-[280px] leading-relaxed">
+                The withdrawal system is temporarily disabled. Please contact support or check back later.
+            </p>
+            <button 
+              onClick={() => router.push('/dashboard')}
+              className="mt-12 bg-[#1e293b] text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/5 active:scale-95 transition-all"
+            >
+                Back to Dashboard
+            </button>
+        </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white pb-10">
+    <div className="min-h-screen bg-[#0f172a] text-white pb-10 relative">
+      
+      {/* SUCCESS OVERLAY */}
+      {showSuccess && (
+        <div className="fixed inset-0 z-[100] bg-[#0f172a]/95 flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="bg-[#1e293b] border border-white/10 p-10 rounded-[3rem] text-center space-y-6 shadow-2xl scale-up-center">
+            <div className="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center mx-auto shadow-[0_0_40px_rgba(16,185,129,0.3)]">
+              <CheckCircle2 size={40} className="text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-black italic uppercase">Withdrawal Submitted!</h2>
+              <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mt-1">Redirecting to Dashboard...</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="p-6 pt-12 flex items-center justify-between bg-[#613de6] rounded-b-[2.5rem] shadow-xl">
         <button onClick={() => router.back()} className="p-2 bg-white/10 rounded-xl"><ChevronLeft size={20} /></button>
         <h1 className="font-black italic uppercase tracking-wider text-xs text-white">Withdraw Funds</h1>
@@ -259,22 +350,38 @@ export default function WithdrawalPage() {
             className="w-full bg-transparent font-black text-4xl text-white outline-none" />
         </div>
 
-        {/* FEE SUMMARY: Only visible for USDT withdrawals now */}
         {parseFloat(amount) >= 10 && method === "usdt" && (
           <div className="bg-[#613de6]/5 border border-[#613de6]/20 p-5 rounded-3xl space-y-3 animate-in fade-in slide-in-from-top-2">
             <div className="flex items-center gap-2 mb-1">
                <Receipt size={14} className="text-[#613de6]" />
                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Transaction Summary</span>
             </div>
+            
             <div className="flex justify-between items-center">
                <span className="text-[11px] font-bold text-gray-500">Service Fee</span>
                <span className="text-[11px] font-black text-rose-500">+ ${currentFee.toFixed(2)}</span>
             </div>
+
+            {isEligibleForBonusDeduction && (
+              <div className="flex justify-between items-center text-amber-500">
+                <span className="text-[11px] font-bold flex items-center gap-1 uppercase tracking-tight">
+                    <Gift size={12} /> Bonus Recovery
+                </span>
+                <span className="text-[11px] font-black">+ $3.00</span>
+              </div>
+            )}
+
             <div className="h-px bg-white/5 w-full" />
             <div className="flex justify-between items-center">
                <span className="text-[11px] font-bold text-white">Total Deductible</span>
                <span className="text-lg font-black italic text-[#fc7952]">${totalDeductible.toFixed(2)}</span>
             </div>
+            
+            {isEligibleForBonusDeduction && (
+                <p className="text-[9px] font-bold text-amber-500/60 leading-tight uppercase tracking-tighter pt-1">
+                    * The $3.00 signup bonus is deducted from your first USDT withdrawal.
+                </p>
+            )}
           </div>
         )}
 
@@ -328,6 +435,16 @@ export default function WithdrawalPage() {
           {loading ? <Loader2 className="animate-spin" /> : <>PROCEED TO WITHDRAW <ArrowRight size={20} /></>}
         </button>
       </div>
+
+      <style jsx>{`
+        .scale-up-center {
+          animation: scale-up-center 0.4s cubic-bezier(0.390, 0.575, 0.565, 1.000) both;
+        }
+        @keyframes scale-up-center {
+          0% { transform: scale(0.5); opacity: 0; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+      `}</style>
     </div>
   );
 }

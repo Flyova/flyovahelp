@@ -11,7 +11,8 @@ import {
   MapPin,
   Users,
   Clock,
-  ExternalLink
+  ExternalLink,
+  ShieldAlert
 } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import { 
@@ -38,10 +39,22 @@ export default function DepositPage() {
   const [agents, setAgents] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState(null);
   
+  // NEW: Global System States
+  const [systemSettings, setSystemSettings] = useState(null);
+  const [systemLoading, setSystemLoading] = useState(true);
+  
   // State for active USDT session
   const [activeUsdtSession, setActiveUsdtSession] = useState(null);
 
   useEffect(() => {
+    // NEW: Listen to Global Toggle Settings
+    const unsubSettings = onSnapshot(doc(db, "settings", "global"), (snap) => {
+      if (snap.exists()) {
+        setSystemSettings(snap.data());
+      }
+      setSystemLoading(false);
+    });
+
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
         const userRef = doc(db, "users", user.uid);
@@ -60,7 +73,10 @@ export default function DepositPage() {
         checkActiveUsdtSession(user.uid);
       }
     });
-    return () => unsubscribeAuth();
+    return () => {
+        unsubscribeAuth();
+        unsubSettings();
+    };
   }, []);
 
   useEffect(() => {
@@ -212,6 +228,36 @@ export default function DepositPage() {
       setLoading(false);
     }
   };
+
+  // INITIAL LOAD
+  if (systemLoading) {
+    return (
+      <div className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center">
+        <Loader2 className="animate-spin text-[#613de6]" size={40} />
+      </div>
+    );
+  }
+
+  // DISABLED STATE VIEW
+  if (systemSettings && systemSettings.depositEnabled === false) {
+    return (
+        <div className="min-h-screen bg-[#0f172a] p-6 flex flex-col items-center justify-center text-center">
+            <div className="bg-rose-500/10 p-8 rounded-full mb-8 border border-rose-500/20">
+                <ShieldAlert size={60} className="text-rose-500" />
+            </div>
+            <h2 className="text-3xl font-black italic uppercase text-white mb-3">Deposit Inactive</h2>
+            <p className="text-gray-400 text-xs font-bold uppercase tracking-[0.2em] max-w-[280px] leading-relaxed">
+                Deposits are temporarily disabled for system maintenance. Please check back shortly.
+            </p>
+            <button 
+              onClick={() => router.push('/dashboard')}
+              className="mt-12 bg-[#1e293b] text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/5 active:scale-95 transition-all"
+            >
+                Back to Dashboard
+            </button>
+        </div>
+    );
+  }
 
   const quickAmounts = [10, 20, 50, 100, 500];
 
