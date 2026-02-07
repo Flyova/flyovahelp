@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { ArrowRight, Star, ShieldCheck, Zap, Menu } from "lucide-react";
+import { ArrowRight, Star, ShieldCheck, Zap, Menu, Timer, Trophy, Wallet } from "lucide-react";
 
 export default function LandingPage() {
   const router = useRouter();
@@ -52,72 +52,106 @@ export default function LandingPage() {
           </div>
 
           <button 
-            onClick={() => router.push('/register')}
+            onClick={() => router.push('/login')}
             className="group relative inline-flex items-center justify-center px-10 py-5 font-black text-white transition-all duration-200 bg-[#fc7952] rounded-full hover:bg-[#fd8a6a] active:scale-95 shadow-2xl"
           >
             Play Now <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
 
-        {/* Right Column: Mobile UI Preview */}
+        {/* Right Column: Mobile UI Preview (Enhanced) */}
         <div className="flex-1 mt-16 md:mt-0 relative flex justify-center z-10">
-          <div className="w-[300px] h-[600px] bg-white rounded-[3rem] p-3 shadow-[0_50px_100px_rgba(0,0,0,0.4)] border-[8px] border-white/10 relative overflow-hidden">
-            {/* Phone Content Simulation */}
-            <div className="bg-white h-full rounded-[2rem] overflow-hidden flex flex-col text-[#613de6]">
-              {/* Fake Phone Header */}
-              <div className="p-4 flex justify-between items-center border-b">
-                 <div className="flex items-center space-x-1">
-                    <Image src="/logo.svg" alt="logo" width={20} height={20} />
-                    <span className="font-black text-xs">flyovhelp</span>
+          <div className="w-[310px] h-[630px] bg-[#0f172a] rounded-[3.5rem] p-3 shadow-[0_50px_100px_rgba(0,0,0,0.6)] border-[10px] border-white/10 relative overflow-hidden">
+            
+            {/* Real Game Simulation UI */}
+            <div className="bg-[#0f172a] h-full rounded-[2.8rem] overflow-hidden flex flex-col text-white font-sans">
+              
+              {/* Status Bar */}
+              <div className="pt-6 px-8 flex justify-between items-center opacity-40">
+                <span className="text-[10px] font-bold">9:41</span>
+                <div className="flex gap-1">
+                  <div className="w-3 h-3 bg-white rounded-full scale-75" />
+                  <div className="w-3 h-3 bg-white rounded-full scale-75" />
+                </div>
+              </div>
+
+              {/* Game Header */}
+              <div className="p-5 flex justify-between items-center">
+                 <div className="bg-white/5 p-2 rounded-xl">
+                    <Menu size={18} className="text-[#613de6]" />
                  </div>
-                 <div className="flex space-x-2">
-                    <Zap size={14} />
-                    <Menu size={14} />
+                 <div className="flex flex-col items-center">
+                    <span className="text-[8px] font-black uppercase tracking-[0.2em] text-gray-500 italic">Arena Live</span>
+                    <span className="text-xs font-black italic">FLYODOLS</span>
+                 </div>
+                 <div className="bg-[#613de6]/20 p-2 rounded-xl border border-[#613de6]/30 text-[#613de6]">
+                    <Wallet size={16} />
                  </div>
               </div>
 
-              {/* Fake Game Interface */}
-              <div className="p-4 flex-1 flex flex-col space-y-4">
-                 <h3 className="font-black text-sm uppercase text-center mt-2">Live Betting</h3>
-                 <div className="bg-orange-100 p-3 rounded-lg text-[10px] text-orange-700 font-bold text-center">
-                    Pick 2 random numbers, enter stake amount, click on place bet and wait for results.
+              {/* Game Interface */}
+              <div className="px-5 flex-1 flex flex-col space-y-5">
+                 
+                 {/* Live Result Card */}
+                 <div className="bg-gradient-to-br from-[#1e293b] to-[#0f172a] p-5 rounded-3xl border border-white/5 shadow-inner">
+                    <div className="flex justify-between items-center mb-4">
+                      <span className="text-[9px] font-black uppercase text-[#fc7952] flex items-center gap-1">
+                        <Trophy size={10} /> Winning Numbers
+                      </span>
+                      <span className="text-[8px] bg-white/5 px-2 py-1 rounded-lg text-gray-400 font-bold uppercase">ID: 88241</span>
+                    </div>
+                    <div className="flex justify-around gap-2">
+                       <div className="w-14 h-14 rounded-2xl bg-[#613de6] flex items-center justify-center text-2xl font-black italic shadow-lg shadow-[#613de6]/40 border border-white/20 animate-pulse">42</div>
+                       <div className="w-14 h-14 rounded-2xl bg-[#fc7952] flex items-center justify-center text-2xl font-black italic shadow-lg shadow-[#fc7952]/40 border border-white/20 animate-pulse">17</div>
+                    </div>
                  </div>
 
-                 <div className="text-center">
-                    <p className="text-[10px] font-bold opacity-60">Current Round: 1574</p>
-                    <p className="text-red-500 font-black text-lg">Time remaining: 27 seconds</p>
+                 {/* Timer Section */}
+                 <div className="text-center space-y-1 py-2">
+                    <div className="flex items-center justify-center gap-2 text-rose-500">
+                      <Timer size={14} className="animate-spin-slow" />
+                      <p className="font-black text-xl italic tracking-tighter">00:27</p>
+                    </div>
+                    <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Next Draw Closing</p>
                  </div>
 
-                 {/* Number Grid */}
-                 <div className="grid grid-cols-2 gap-2">
-                    {[29, 42, 8, 26].map((n, i) => (
-                      <div key={i} className={`h-10 rounded flex items-center justify-center font-bold border-2 ${i === 1 || i === 2 ? 'bg-[#613de6] text-white border-[#613de6]' : 'border-gray-200 text-gray-400'}`}>
-                        {n}
-                      </div>
-                    ))}
-                 </div>
-                 <div className="flex justify-center">
-                    <div className="w-1/2 h-10 border-2 border-gray-200 rounded flex items-center justify-center text-gray-400 font-bold">16</div>
-                 </div>
+                 {/* Betting Input Simulation */}
+                 <div className="space-y-3 pt-2">
+                    <div className="grid grid-cols-2 gap-3">
+                       <div className="bg-black/40 border border-white/5 p-3 rounded-2xl text-center">
+                          <p className="text-[8px] font-black text-gray-500 uppercase mb-1">Your Pick 1</p>
+                          <p className="font-black text-lg">08</p>
+                       </div>
+                       <div className="bg-black/40 border border-white/5 p-3 rounded-2xl text-center">
+                          <p className="text-[8px] font-black text-gray-500 uppercase mb-1">Your Pick 2</p>
+                          <p className="font-black text-lg">26</p>
+                       </div>
+                    </div>
+                    
+                    <div className="bg-black/40 border border-white/5 p-4 rounded-2xl flex justify-between items-center">
+                       <span className="text-[10px] font-black text-gray-400 uppercase">Stake Amount</span>
+                       <span className="text-sm font-black text-emerald-500">$10.00</span>
+                    </div>
 
-                 <button className="w-full bg-[#613de6] text-white py-3 rounded-xl font-black text-xs uppercase shadow-lg">
-                    Place Bet
-                 </button>
+                    <button className="w-full bg-[#613de6] hover:bg-[#7251ed] text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-[#613de6]/20 transition-all active:scale-95">
+                       Place Stake Now
+                    </button>
+                 </div>
               </div>
 
               {/* Fake Phone Nav */}
-              <div className="p-4 flex justify-around border-t opacity-40">
-                 <div className="w-4 h-4 bg-gray-300 rounded" />
-                 <div className="w-4 h-4 bg-gray-300 rounded" />
-                 <div className="w-4 h-4 bg-gray-300 rounded" />
-                 <div className="w-4 h-4 bg-gray-300 rounded" />
+              <div className="p-6 pb-10 flex justify-around border-t border-white/5 bg-black/20">
+                 <div className="w-2 h-2 bg-[#613de6] rounded-full" />
+                 <div className="w-2 h-2 bg-gray-700 rounded-full" />
+                 <div className="w-2 h-2 bg-gray-700 rounded-full" />
+                 <div className="w-2 h-2 bg-gray-700 rounded-full" />
               </div>
             </div>
           </div>
           
-          {/* Decorative floating 3D balls like your screenshot */}
-          <div className="absolute -top-10 -right-4 w-16 h-16 bg-cyan-400 rounded-full shadow-inner animate-bounce" />
-          <div className="absolute bottom-10 -left-10 w-24 h-24 bg-[#fc7952] rounded-full shadow-inner" />
+          {/* Decorative floating 3D balls */}
+          <div className="absolute -top-10 -right-4 w-16 h-16 bg-cyan-400 rounded-full shadow-inner animate-bounce pointer-events-none" />
+          <div className="absolute bottom-10 -left-10 w-24 h-24 bg-[#fc7952] rounded-full shadow-inner animate-pulse pointer-events-none" />
         </div>
       </main>
 

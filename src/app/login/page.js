@@ -31,8 +31,9 @@ export default function LoginPage() {
       const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
       const userRef = doc(db, "users", userCredential.user.uid);
       
-      // Fetch user data to check for existing PIN
+      // Fetch user data to check for existing PIN and Role
       const userSnap = await getDoc(userRef);
+      const userData = userSnap.data();
       
       let updateData = {
         status: "online",
@@ -40,13 +41,19 @@ export default function LoginPage() {
       };
 
       // logic: If user doesn't have a PIN, assign one now
-      if (userSnap.exists() && !userSnap.data().pin) {
+      if (userSnap.exists() && !userData?.pin) {
         updateData.pin = generateUserPin();
       }
 
       await updateDoc(userRef, updateData);
 
-      router.push("/dashboard");
+      // REDIRECT LOGIC: Check for admin role
+      if (userData?.role === "admin") {
+        router.push("/admin");
+      } else {
+        router.push("/dashboard");
+      }
+
     } catch (err) {
       setError("Invalid email or password.");
       setLoading(false);
