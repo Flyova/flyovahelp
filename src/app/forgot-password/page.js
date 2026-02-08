@@ -9,7 +9,8 @@ import {
   ArrowRight, 
   Loader2, 
   CheckCircle2, 
-  AlertCircle 
+  AlertCircle,
+  Inbox
 } from "lucide-react";
 
 export default function ForgotPassword() {
@@ -27,33 +28,8 @@ export default function ForgotPassword() {
     setError("");
 
     try {
-      // 1. Send the standard Firebase Reset Link
+      // 1. Send only the standard Firebase Reset Link
       await sendPasswordResetEmail(auth, email);
-
-      // 2. Trigger our Custom Branded Notification
-      await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: email,
-          subject: "Password Reset Request",
-          html: `
-            <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 12px;">
-              <h2 style="color: #613de6; border-bottom: 1px solid #eee; padding-bottom: 10px;">Security Alert</h2>
-              <p>Hello,</p>
-              <p>A password reset request was initiated for your Flyova Global Network account.</p>
-              <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #eee;">
-                <p style="margin: 5px 0;">If you made this request, please follow the instructions in the official Firebase security email sent to this address.</p>
-                <p style="margin: 5px 0; color: #fc7952; font-weight: bold;">If you did not request this, please secure your account immediately.</p>
-              </div>
-              <p>For your safety, password reset links expire after a short period.</p>
-              <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
-                Flyova Security Systems
-              </div>
-            </div>
-          `
-        })
-      });
 
       setSubmitted(true);
     } catch (err) {
@@ -124,6 +100,15 @@ export default function ForgotPassword() {
                 If an account exists for <span className="text-white">{email}</span>, <br /> you will receive a reset link shortly.
               </p>
             </div>
+
+            {/* Spam/Junk Notification */}
+            <div className="bg-white/5 border border-white/5 p-4 rounded-2xl flex items-start gap-3 text-left">
+                <Inbox size={18} className="text-[#613de6] shrink-0 mt-1" />
+                <p className="text-[10px] font-bold text-gray-400 uppercase leading-normal">
+                    Don't see it? Please check your <span className="text-white">Spam or Junk</span> folders. Sometimes recovery emails are filtered by mistake.
+                </p>
+            </div>
+
             <button 
               onClick={() => router.push('/login')}
               className="w-full bg-white/5 border border-white/5 py-5 rounded-2xl font-black uppercase text-xs tracking-widest"
