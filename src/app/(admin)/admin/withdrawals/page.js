@@ -16,7 +16,6 @@ import {
 } from "firebase/firestore";
 import { 
   Search, 
-  Wallet, 
   Loader2, 
   Check, 
   X,
@@ -90,7 +89,18 @@ export default function AdminWithdrawalList() {
         processedAt: serverTimestamp() 
       });
 
-      if (newStatus === "declined") {
+      if (newStatus === "approved") {
+        const txRef = doc(collection(db, "users", withdrawal.userId, "transactions"));
+        batch.set(txRef, {
+          title: "Withdrawal Approved",
+          amount: Number(withdrawal.amount),
+          type: "withdrawal",
+          status: "completed",
+          timestamp: serverTimestamp(),
+          details: `Payout to ${withdrawal.details?.usdtAddress} confirmed.`
+        });
+
+      } else if (newStatus === "declined") {
         const refundAmt = withdrawal.totalDeducted || (withdrawal.amount + (withdrawal.fee || 0));
         
         batch.update(userRef, { 
@@ -110,6 +120,7 @@ export default function AdminWithdrawalList() {
       }
 
       await batch.commit();
+      alert(`Withdrawal ${newStatus} successfully!`);
     } catch (error) {
       console.error("Error updating withdrawal:", error);
       alert("Action failed: " + error.message);
@@ -127,11 +138,11 @@ export default function AdminWithdrawalList() {
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-6 pb-24 md:pb-0">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black italic uppercase text-slate-800">Pending Payouts</h1>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">USDT TRC20 Withdrawals</p>
+          <h1 className="text-2xl font-black italic uppercase text-slate-800 tracking-tighter">Withdrawal Center</h1>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">USDT TRC20 Queue</p>
         </div>
         <div className="bg-[#fc7952] text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg shadow-[#fc7952]/20">
             <Clock size={16} />
@@ -139,19 +150,19 @@ export default function AdminWithdrawalList() {
         </div>
       </div>
 
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm relative">
-        <Search className="absolute left-8 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+      <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200 shadow-sm relative">
+        <Search className="absolute left-6 md:left-8 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
         <input 
           type="text" 
-          placeholder="Search by name, ID, or wallet address..." 
+          placeholder="Search Player or Wallet Address..." 
           className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:border-[#fc7952] font-bold"
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
 
-      <div className="bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm">
+      <div className="bg-white rounded-[2rem] md:rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm">
         <table className="w-full text-left border-collapse">
-          <thead className="bg-slate-50 border-b border-slate-100">
+          <thead className="hidden md:table-header-group bg-slate-50 border-b border-slate-100">
             <tr>
               <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">User</th>
               <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Payout Detail</th>
@@ -160,16 +171,18 @@ export default function AdminWithdrawalList() {
               <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Date</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-50">
+          <tbody className="divide-y divide-slate-100 block md:table-row-group">
             {loading ? (
-                <tr><td colSpan="5" className="p-12 text-center"><Loader2 className="animate-spin mx-auto text-[#613de6]" /></td></tr>
+                <tr className="block md:table-row"><td colSpan="5" className="p-12 text-center"><Loader2 className="animate-spin mx-auto text-[#613de6]" /></td></tr>
             ) : filtered.length === 0 ? (
-                <tr><td colSpan="5" className="p-12 text-center text-slate-300 font-black italic uppercase text-xs">No pending withdrawals found</td></tr>
+                <tr className="block md:table-row"><td colSpan="5" className="p-12 text-center text-slate-300 font-black italic uppercase text-xs tracking-widest">Queue Clear</td></tr>
             ) : filtered.map((item) => (
-              <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                <td className="p-6">
+              <tr key={item.id} className="block md:table-row hover:bg-slate-50/50 transition-colors p-4 md:p-0">
+                
+                {/* USER INFO */}
+                <td className="block md:table-cell p-2 md:p-6">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-slate-100 text-[#fc7952] rounded-xl flex items-center justify-center font-black italic text-sm">
+                    <div className="w-10 h-10 bg-[#fc7952]/10 text-[#fc7952] rounded-xl flex items-center justify-center font-black italic text-sm">
                         {(userCache[item.userId] || "U").charAt(0).toUpperCase()}
                     </div>
                     <div>
@@ -180,56 +193,68 @@ export default function AdminWithdrawalList() {
                     </div>
                   </div>
                 </td>
-                <td className="p-6">
-                    <div className="flex items-center gap-1 mb-1">
-                        <p className="text-base font-black italic text-rose-500 leading-none">${item.amount}</p>
-                        <ArrowUpRight size={12} className="text-rose-300" />
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Fee: ${item.fee || 0}</p>
-                        {item.bonusRecovered > 0 && (
-                            <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1">
-                                <Gift size={10} /> Bonus Recov: $3.00
-                            </p>
-                        )}
-                    </div>
-                </td>
-                <td className="p-6">
-                    <button 
-                      onClick={() => copyToClipboard(item.details?.usdtAddress, item.id)}
-                      className="group flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-100 max-w-[160px] text-left transition-all hover:border-[#613de6]/30 active:scale-95"
-                    >
-                        <Coins size={14} className={`${copiedId === item.id ? 'text-emerald-500' : 'text-blue-400'} shrink-0`} />
-                        <p className="text-[10px] font-mono font-bold text-slate-600 truncate">
-                            {item.details?.usdtAddress || "MISSING ADDRESS"}
-                        </p>
-                        <div className="shrink-0 ml-auto">
-                           {copiedId === item.id ? <CheckCheck size={12} className="text-emerald-500" /> : <Copy size={12} className="text-slate-300 group-hover:text-[#613de6]" />}
+
+                {/* PAYOUT DETAIL */}
+                <td className="block md:table-cell p-2 md:p-6">
+                    <div className="flex md:flex-col items-center md:items-start justify-between md:justify-start">
+                        <div className="flex items-center gap-1 mb-1">
+                            <p className="text-xl md:text-base font-black italic text-rose-500 leading-none">${item.amount}</p>
+                            <ArrowUpRight size={14} className="text-rose-300" />
                         </div>
-                    </button>
-                    {copiedId === item.id && <p className="text-[8px] font-black text-emerald-500 uppercase mt-1 ml-1 animate-pulse">Copied!</p>}
+                        <div className="flex gap-2">
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-0.5 rounded-md">Fee: ${item.fee || 0}</p>
+                            {item.bonusRecovered > 0 && (
+                                <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-md">
+                                    <Gift size={10} /> Recov: $3.00
+                                </p>
+                            )}
+                        </div>
+                    </div>
                 </td>
-                <td className="p-6">
-                    <div className="flex justify-center gap-3">
+
+                {/* WALLET ADDRESS (Full width on mobile) */}
+                <td className="block md:table-cell p-2 md:p-6">
+                    <div className="mt-3 md:mt-0">
+                        <button 
+                          onClick={() => copyToClipboard(item.details?.usdtAddress, item.id)}
+                          className="group flex items-center gap-3 bg-slate-50 p-4 md:p-2 rounded-xl border border-slate-100 w-full md:max-w-[160px] text-left transition-all hover:border-[#613de6]/30 active:scale-[0.98]"
+                        >
+                            <Coins size={16} className={`${copiedId === item.id ? 'text-emerald-500' : 'text-blue-400'} shrink-0`} />
+                            <p className="text-xs md:text-[10px] font-mono font-black text-slate-600 truncate flex-1">
+                                {item.details?.usdtAddress || "MISSING ADDRESS"}
+                            </p>
+                            <div className="shrink-0 ml-auto bg-white p-1 rounded-md border border-slate-100">
+                               {copiedId === item.id ? <CheckCheck size={14} className="text-emerald-500" /> : <Copy size={14} className="text-slate-300 group-hover:text-[#613de6]" />}
+                            </div>
+                        </button>
+                        {copiedId === item.id && <p className="text-[8px] font-black text-emerald-500 uppercase mt-2 ml-1 animate-pulse">Address copied to clipboard</p>}
+                    </div>
+                </td>
+
+                {/* ACTION BUTTONS */}
+                <td className="block md:table-cell p-2 md:p-6">
+                    <div className="flex md:justify-center gap-3 mt-4 md:mt-0">
                         <button 
                           onClick={() => handleStatusUpdate(item, 'approved')}
                           disabled={processingId === item.id}
-                          className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-all font-black uppercase text-[9px] italic shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                          className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 md:py-2 bg-emerald-500 text-white rounded-2xl hover:bg-emerald-600 transition-all font-black uppercase text-[10px] md:text-[9px] italic shadow-lg shadow-emerald-500/20 disabled:opacity-50"
                         >
-                          {processingId === item.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                          {processingId === item.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={14} />}
                           Approve
                         </button>
                         <button 
                           onClick={() => handleStatusUpdate(item, 'declined')}
                           disabled={processingId === item.id}
-                          className="flex items-center gap-2 px-4 py-2 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-100 transition-all font-black uppercase text-[9px] italic disabled:opacity-50"
+                          className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 md:py-2 bg-rose-50 text-rose-500 rounded-2xl hover:bg-rose-100 transition-all font-black uppercase text-[10px] md:text-[9px] italic"
                         >
-                          <X size={12} />
+                          <X size={14} />
                           Decline
                         </button>
                     </div>
                 </td>
-                <td className="p-6 text-right">
+
+                {/* DATE */}
+                <td className="block md:table-cell p-2 md:p-6 text-left md:text-right border-t md:border-t-0 mt-4 md:mt-0 border-slate-50 pt-4 md:pt-6">
                     <p className="text-[10px] font-black text-slate-700 uppercase leading-tight">
                         {item.timestamp?.toDate().toLocaleDateString()}
                     </p>
@@ -237,6 +262,7 @@ export default function AdminWithdrawalList() {
                         {item.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                 </td>
+
               </tr>
             ))}
           </tbody>

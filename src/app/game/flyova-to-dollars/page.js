@@ -6,7 +6,7 @@ import {
   serverTimestamp, orderBy, limit, getDocs, runTransaction
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { Timer, CheckCircle2, Trophy, History, XCircle, Plus, Loader2 } from "lucide-react";
+import { Timer, CheckCircle2, Trophy, History, XCircle, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function FlyovaToDollars() {
@@ -23,6 +23,7 @@ export default function FlyovaToDollars() {
   const [stake, setStake] = useState(1);
   const [activeBets, setActiveBets] = useState([]); 
   const [gameStatus, setGameStatus] = useState("betting"); 
+  const [lastWinningNumbers, setLastWinningNumbers] = useState([]);
   
   // Alert States
   const [showResultAlert, setShowResultAlert] = useState(false);
@@ -30,6 +31,7 @@ export default function FlyovaToDollars() {
   const [winAmount, setWinAmount] = useState(0);
 
   const GAME_DURATION = 120;
+  const WIN_MULTIPLIER = 1.3; // Multiplier for display
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -44,7 +46,6 @@ export default function FlyovaToDollars() {
     return () => unsub();
   }, [router]);
 
-  // Handle showing the result modal
   const checkGameResult = async (userId, gameId) => {
     const q = query(
       collection(db, "users", userId, "transactions"),
@@ -73,8 +74,8 @@ export default function FlyovaToDollars() {
         const isExpired = Date.now() > gameData.endTime;
 
         if (gameData.status === "completed" || isExpired) {
-          // If we were just betting, check if we won before moving to waiting
           if (gameStatus === "betting" && user) {
+            setLastWinningNumbers(gameData.winners || []);
             await checkGameResult(user.uid, gameData.id);
           }
           setGameStatus("waiting");
@@ -89,7 +90,8 @@ export default function FlyovaToDollars() {
             setGameStatus("betting");
             setSelectedNumbers([]);
             setActiveBets([]);
-            setShowResultAlert(false); // Reset modal for new round
+            setLastWinningNumbers([]);
+            setShowResultAlert(false);
           }
         }
       }
@@ -186,24 +188,35 @@ export default function FlyovaToDollars() {
 
       <div className="flex-1 p-6 flex flex-col items-center justify-center">
         {gameStatus === "waiting" ? (
-            <div className="flex flex-col items-center justify-center space-y-4">
-                <Loader2 size={48} className="text-[#fc7952] animate-spin" />
-                <div className="text-center">
-                    <h2 className="text-2xl font-black italic uppercase">Starting Soon</h2>
-                    <p className="text-sm opacity-50 font-bold uppercase">Preparing next draw...</p>
+            <div className="flex flex-col items-center justify-center w-full max-w-sm">
+                <div className="grid grid-cols-5 gap-3 w-full mb-8">
+                    {currentGame?.numbers?.map((num) => (
+                        <div key={num} className={`aspect-square rounded-2xl text-xl font-black italic flex items-center justify-center border-2 transition-all duration-500
+                            ${lastWinningNumbers.includes(num) ? 'bg-green-500/20 border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.4)] scale-110' : 'bg-[#1e293b] border-white/5 opacity-20'}`}>
+                            {num}
+                        </div>
+                    ))}
+                </div>
+                <div className="flex flex-col items-center space-y-2 animate-pulse">
+                    <Loader2 size={32} className="text-[#fc7952] animate-spin" />
+                    <h2 className="text-xl font-black italic uppercase">Next Round Starting Soon</h2>
                 </div>
             </div>
         ) : (
             <>
+                {/* A. Red Marked Change: Added Potential Win Display */}
                 <div className="flex flex-wrap gap-2 mb-4 justify-center">
                     {activeBets.map((b) => (
                         <div key={b.id} className="bg-green-500/10 border border-green-500/30 px-3 py-1 rounded-full flex items-center space-x-2">
                             <CheckCircle2 size={10} className="text-green-500" />
-                            <span className="text-[10px] font-black italic">{b.picks?.join(", ")} (${b.amount})</span>
+                            <span className="text-[10px] font-black italic">
+                                {b.picks?.join(", ")} (${b.amount} = ${ (b.amount * WIN_MULTIPLIER).toFixed(1) })
+                            </span>
                         </div>
                     ))}
                 </div>
 
+                {/* B. Green Marked Change: Standard betting view */}
                 <div className="grid grid-cols-5 gap-3 w-full max-w-sm mb-12">
                     {currentGame?.numbers?.map((num) => (
                         <button key={num} onClick={() => {

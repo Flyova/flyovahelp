@@ -68,14 +68,13 @@ export default function AdminAgentManagement() {
       const agentRef = doc(db, "agents", agentId);
       const userRef = doc(db, "users", agentId);
 
-      // Initialize mandatory fields for approved agents
       const approvalData = newStatus === "approved" ? {
         application_status: "approved",
         reviewed_at: serverTimestamp(),
         active: true,
-        agent_balance: 0,        // Separate wallet balance for agents
-        deposit_rate: 0,        // Rate set by agent for deposits
-        withdrawal_rate: 0,     // Rate set by agent for withdrawals
+        agent_balance: 0,
+        deposit_rate: 0,
+        withdrawal_rate: 0,
         total_trades: 0
       } : {
         application_status: newStatus,
@@ -98,20 +97,24 @@ export default function AdminAgentManagement() {
     }
   };
 
+  // UPDATED: Now toggles 'active' status between true/false when banning
   const toggleBan = async (agentId, currentBanStatus) => {
     const action = currentBanStatus ? "Unban" : "Ban";
     if (!confirm(`Are you sure you want to ${action} this agent?`)) return;
 
     try {
+      // In agents collection: banned: true means active: false
       await updateDoc(doc(db, "agents", agentId), {
         banned: !currentBanStatus,
-        active: !!currentBanStatus 
+        active: !!currentBanStatus // If unbanning, set active to true. If banning, set active to false.
       });
+
+      // Synchronize with users collection
       await updateDoc(doc(db, "users", agentId), {
         banned: !currentBanStatus
       });
     } catch (error) {
-      alert("Error updating ban status");
+      alert("Error updating ban status: " + error.message);
     }
   };
 
@@ -174,7 +177,7 @@ export default function AdminAgentManagement() {
                                 </>
                             ) : (
                                 <button onClick={() => toggleBan(selectedAgent.id, selectedAgent.banned)} className={`flex-1 px-8 py-4 rounded-2xl font-black uppercase text-[11px] flex items-center justify-center gap-2 transition-all shadow-lg ${selectedAgent.banned ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
-                                    <Ban size={14}/> {selectedAgent.banned ? "Unban Agent" : "Restrict Agent"}
+                                    <Ban size={14}/> {selectedAgent.banned ? "Unban Agent" : "Ban Agent"}
                                 </button>
                             )}
                         </div>
@@ -206,7 +209,6 @@ export default function AdminAgentManagement() {
   );
 }
 
-// Helper components (TabButton, InfoBadge, StatBox, DocumentCard) remain as provided in original code.
 function TabButton({ active, onClick, icon: Icon, label, count }) {
     return (
         <button onClick={onClick} className={`px-6 py-3.5 rounded-xl text-[10px] font-black uppercase transition-all flex items-center gap-2 ${active ? "bg-[#613de6] text-white" : "text-slate-400"}`}>
