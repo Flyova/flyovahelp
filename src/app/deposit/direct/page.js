@@ -84,7 +84,7 @@ function DirectDepositContent() {
     }
   };
 
-  const handleSubmitDeposit = async (e) => {
+ const handleSubmitDeposit = async (e) => {
     e.preventDefault();
     if (!hashId.trim()) return alert("Please enter the Transaction Hash/ID");
     if (!image) return alert("Please upload a payment screenshot");
@@ -113,12 +113,45 @@ function DirectDepositContent() {
       const imageUrl = uploadData.secure_url;
 
       // 2. UPDATE THE EXISTING FIRESTORE RECORD
-      // We use updateDoc because the record was created when they hit "Proceed"
       await updateDoc(doc(db, "deposits", depositId), {
         transactionHash: hashId.trim(),
         proofImage: imageUrl,
-        submittedAt: serverTimestamp(), // Record when they actually finished
+        submittedAt: serverTimestamp(),
+        status: "pending" 
       });
+
+      // --- ADMIN NOTIFICATION ---
+      try {
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: "arbie1877@gmail.com",
+            subject: "New Deposit Proof Submitted",
+            html: `
+              <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
+                <h2 style="color: #000; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">Deposit Verification Required</h2>
+                <p style="margin: 10px 0;"><strong>User ID:</strong> ${auth.currentUser.uid}</p>
+                <p style="margin: 10px 0;"><strong>Amount:</strong> $${amount} USDT</p>
+                <p style="margin: 10px 0;"><strong>Transaction Hash:</strong> <code style="background: #f4f4f5; padding: 3px 6px; border-radius: 4px;">${hashId.trim()}</code></p>
+                
+                <div style="margin-top: 30px;">
+                   <p><strong>Proof Attachment:</strong></p>
+                   <a href="${imageUrl}" target="_blank">
+                    <img src="${imageUrl}" style="width: 100%; max-width: 400px; border: 1px solid #ccc; border-radius: 4px;" />
+                   </a>
+                </div>
+                
+                <div style="margin-top: 30px; font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
+                  This is a system notification for the Flyova Admin Panel.
+                </div>
+              </div>
+            `
+          })
+        });
+      } catch (emailErr) {
+        console.error("Admin notification failed:", emailErr);
+      }
 
       alert("Deposit Submitted! Please wait for admin confirmation.");
       router.push("/dashboard"); 

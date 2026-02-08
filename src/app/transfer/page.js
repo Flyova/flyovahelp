@@ -113,6 +113,11 @@ export default function TransferPage() {
 
     setLoading(true);
     try {
+      // 1. Fetch Recipient Email for the trigger
+      const recipientRef = doc(db, "users", recipientData.id);
+      const recipientSnap = await getDoc(recipientRef);
+      const recipientEmail = recipientSnap.exists() ? recipientSnap.data().email : null;
+
       const batch = writeBatch(db);
       const senderRef = doc(db, "users", user.uid);
       const receiverRef = doc(db, "users", recipientData.id);
@@ -141,6 +146,37 @@ export default function TransferPage() {
       batch.set(receiverLogRef, { ...logData, direction: "in" });
 
       await batch.commit();
+
+      // --- TRIGGER: NOTIFY RECIPIENT OF RECEIVED FUNDS ---
+      if (recipientEmail) {
+        try {
+          await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: recipientEmail,
+              subject: "Funds Received - P2P Transfer",
+              html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 12px;">
+                  <h2 style="color: #613de6; border-bottom: 1px solid #eee; padding-bottom: 10px;">Payment Received</h2>
+                  <p>Hello ${recipientData.name},</p>
+                  <p>You have received a P2P transfer from another user on the Flyova Network.</p>
+                  <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #eee;">
+                    <p style="margin: 5px 0;"><strong>Sender:</strong> ${userData.fullName}</p>
+                    <p style="margin: 5px 0;"><strong>Amount:</strong> $${val.toFixed(2)}</p>
+                    <p style="margin: 5px 0; font-size: 11px; color: #666;"><strong>Transaction ID:</strong> ${txId}</p>
+                  </div>
+                  <p>The funds are now available in your Flyova wallet for immediate use or withdrawal.</p>
+                  <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
+                    Flyova Global Liquidity Control
+                  </div>
+                </div>
+              `
+            })
+          });
+        } catch (e) { console.error("Recipient notification failed", e); }
+      }
+
       setTransferRecord(logData);
       setSuccess(true);
     } catch (e) {

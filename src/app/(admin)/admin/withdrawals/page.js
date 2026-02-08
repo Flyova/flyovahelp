@@ -74,7 +74,7 @@ export default function AdminWithdrawalList() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleStatusUpdate = async (withdrawal, newStatus) => {
+ const handleStatusUpdate = async (withdrawal, newStatus) => {
     const actionText = newStatus === "approved" ? "Approve" : "Decline & Refund";
     if (!confirm(`${actionText} this $${withdrawal.amount} withdrawal?`)) return;
     
@@ -120,6 +120,43 @@ export default function AdminWithdrawalList() {
       }
 
       await batch.commit();
+
+      // --- TRIGGER: NOTIFY USER OF WITHDRAWAL STATUS ---
+      try {
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: userData.email,
+              subject: `Withdrawal Request ${newStatus === "approved" ? "Approved" : "Declined"}`,
+              html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 12px;">
+                  <h2 style="color: ${newStatus === "approved" ? "#10b981" : "#e11d48"}; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                    Withdrawal ${newStatus === "approved" ? "Processed" : "Declined"}
+                  </h2>
+                  <p>Hello ${userData.fullName || 'User'},</p>
+                  <p>Your request to withdraw funds via USDT (TRC20) has been reviewed.</p>
+                  <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #eee;">
+                    <p style="margin: 5px 0;"><strong>Amount:</strong> $${withdrawal.amount}</p>
+                    <p style="margin: 5px 0;"><strong>Status:</strong> ${newStatus.toUpperCase()}</p>
+                    <p style="margin: 5px 0;"><strong>Destination:</strong> <code style="font-size: 11px;">${withdrawal.details?.usdtAddress}</code></p>
+                  </div>
+                  <p>${newStatus === "approved" 
+                    ? "Your payout has been confirmed on the blockchain. Please check your external wallet." 
+                    : `Your withdrawal was declined. A total of $${withdrawal.totalDeducted || (withdrawal.amount + (withdrawal.fee || 0))} has been refunded to your Flyova wallet.`}</p>
+                  <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
+                    Flyova Administration Team
+                  </div>
+                </div>
+              `
+            })
+          });
+        }
+      } catch (e) { console.error("Admin withdrawal notification failed", e); }
+
       alert(`Withdrawal ${newStatus} successfully!`);
     } catch (error) {
       console.error("Error updating withdrawal:", error);

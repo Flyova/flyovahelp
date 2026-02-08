@@ -165,7 +165,7 @@ export default function PredictAndWin() {
     setShowConfirmModal(true);
   };
 
-  const buySubscription = async () => {
+const buySubscription = async () => {
     if (!pendingPlan || !user) return;
     if (userData.wallet < pendingPlan.price) {
         alert("Insufficient Balance");
@@ -175,13 +175,16 @@ export default function PredictAndWin() {
 
     setSubmitting(true);
     try {
+        const expiryDate = new Date(Date.now() + pendingPlan.duration);
+        
         await runTransaction(db, async (transaction) => {
             const userRef = doc(db, "users", user.uid);
             transaction.update(userRef, { 
               wallet: increment(-pendingPlan.price),
-              subscription_expires: Timestamp.fromDate(new Date(Date.now() + pendingPlan.duration))
+              subscription_expires: Timestamp.fromDate(expiryDate)
             });
         });
+
         await addDoc(collection(db, "users", user.uid, "transactions"), {
             title: `Predict Stake: ${pendingPlan.name}`, 
             amount: pendingPlan.price, 
@@ -189,6 +192,35 @@ export default function PredictAndWin() {
             status: "loss", 
             timestamp: serverTimestamp()
         });
+
+        // --- TRIGGER: NOTIFY USER OF PLAN ACTIVATION ---
+        try {
+          await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: userData.email,
+              subject: "Predict & Win Plan Activated",
+              html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 12px;">
+                  <h2 style="color: #613de6; border-bottom: 1px solid #eee; padding-bottom: 10px;">Access Granted</h2>
+                  <p>Hello ${userData.fullName || 'User'},</p>
+                  <p>Your stake for the <strong>${pendingPlan.name}</strong> Predict & Win plan was successful.</p>
+                  <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #eee;">
+                    <p style="margin: 5px 0;"><strong>Plan Type:</strong> ${pendingPlan.name}</p>
+                    <p style="margin: 5px 0;"><strong>Stake Amount:</strong> $${pendingPlan.price.toFixed(2)}</p>
+                    <p style="margin: 5px 0; color: #fc7952;"><strong>Expires:</strong> ${expiryDate.toLocaleString()}</p>
+                  </div>
+                  <p>You can now place predictions and win rewards for every correct outcome during your session.</p>
+                  <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
+                    Flyova Gaming & Rewards
+                  </div>
+                </div>
+              `
+            })
+          });
+        } catch (e) { console.error("Activation notification failed", e); }
+
         setShowConfirmModal(false);
     } catch (e) { 
         console.error(e);

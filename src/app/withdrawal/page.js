@@ -168,7 +168,7 @@ export default function WithdrawalPage() {
   const currentFee = calculateWithdrawalFee(amount);
   const totalDeductible = (parseFloat(amount) || 0) + currentFee + bonusDeduction;
 
- const handleWithdraw = async () => {
+const handleWithdraw = async () => {
     const withdrawAmount = parseFloat(amount);
     const fee = calculateWithdrawalFee(withdrawAmount);
     const totalDeduct = withdrawAmount + fee + bonusDeduction;
@@ -183,6 +183,7 @@ export default function WithdrawalPage() {
 
     try {
       if (method === "usdt") {
+        // ... (Existing USDT logic remains the same)
         const txData = {
           userId: user.uid,
           amount: withdrawAmount,
@@ -221,31 +222,37 @@ export default function WithdrawalPage() {
             amount: -withdrawAmount 
         });
 
-        // --- NEW: SEND EMAIL NOTIFICATION TO ADMIN ---
-        await fetch('/api/send-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: "arbie1877@gmail.com",
-            subject: "🚨 New USDT Withdrawal Request",
-            html: `
-              <div style="font-family: sans-serif; padding: 20px; color: #333;">
-                <h2 style="color: #fc7952;">Withdrawal Alert</h2>
-                <p><strong>User:</strong> ${userData.fullName} (${user.uid})</p>
-                <p><strong>Amount:</strong> $${withdrawAmount}</p>
-                <p><strong>Fee Deducted:</strong> $${fee}</p>
-                <p><strong>USDT Address:</strong> <code style="background: #eee; padding: 2px 5px;">${usdtAddress}</code></p>
-                <p style="margin-top: 20px; font-size: 12px; color: #888;">Log in to the admin panel to process this payout.</p>
-              </div>
-            `
-          })
-        });
+        // --- EMAIL NOTIFICATION ONLY FOR USDT ---
+        try {
+          await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: "arbie1877@gmail.com",
+              subject: "New USDT Withdrawal Request",
+              html: `
+                <div style="font-family: sans-serif; padding: 20px; color: #333; border: 1px solid #eee; border-radius: 20px;">
+                  <h2 style="color: #fc7952;">Withdrawal Alert</h2>
+                  <p><strong>User:</strong> ${userData.fullName} (${user.uid})</p>
+                  <p><strong>Amount:</strong> $${withdrawAmount}</p>
+                  <p><strong>Network Fee:</strong> $${fee}</p>
+                  <p><strong>Address:</strong> <code style="background: #f4f4f5; padding: 4px 8px; border-radius: 5px;">${usdtAddress}</code></p>
+                  <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                  <p style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 1px;">Action required in Admin Panel</p>
+                </div>
+              `
+            })
+          });
+        } catch (emailErr) {
+          console.error("Email notification failed:", emailErr);
+        }
         
         setLoading(false);
         setShowSuccess(true);
         setTimeout(() => router.push("/dashboard"), 3000);
 
       } else {
+        // --- AGENT WITHDRAWAL TRIGGER ---
         const userTradeQ = query(collection(db, "trades"), where("senderId", "==", auth.currentUser.uid), where("status", "==", "pending"), limit(1));
         const userSnap = await getDocs(userTradeQ);
         if (!userSnap.empty) {
@@ -253,6 +260,10 @@ export default function WithdrawalPage() {
           setLoading(false);
           return;
         }
+
+        // Fetch Agent's email for notification
+        const agentDoc = await getDoc(doc(db, "agents", selectedAgent.id));
+        const agentEmail = agentDoc.exists() ? agentDoc.data().email : null;
 
         await updateDoc(doc(db, "users", user.uid), { wallet: increment(-withdrawAmount) });
 
@@ -279,24 +290,37 @@ export default function WithdrawalPage() {
           timestamp: serverTimestamp()
         });
 
-        // --- NEW: SEND EMAIL NOTIFICATION TO ADMIN FOR AGENT WITHDRAWAL ---
-        await fetch('/api/send-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: "jupiterdigitalagency01@gmail.com",
-            subject: "🏦 New Agent Withdrawal Request",
-            html: `
-              <div style="font-family: sans-serif; padding: 20px; color: #333;">
-                <h2 style="color: #613de6;">Agent Trade Initiated</h2>
-                <p><strong>User:</strong> ${userData.fullName}</p>
-                <p><strong>Amount:</strong> $${withdrawAmount}</p>
-                <p><strong>Assigned Agent:</strong> ${selectedAgent.full_name}</p>
-                <p><strong>Trade ID:</strong> ${tradeRef.id}</p>
-              </div>
-            `
-          })
-        });
+        // NOTIFY AGENT OF NEW WITHDRAWAL ASSIGNMENT
+        if (agentEmail) {
+            try {
+              await fetch('/api/send-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  to: agentEmail,
+                  subject: "New Withdrawal Assignment Received",
+                  html: `
+                    <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
+                      <h2 style="color: #000; border-bottom: 1px solid #eee; padding-bottom: 10px;">New Payout Request</h2>
+                      <p>Hello ${selectedAgent.full_name},</p>
+                      <p>A user has initiated a withdrawal through your agency.</p>
+                      <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                        <p style="margin: 5px 0;"><strong>Sender:</strong> ${userData.fullName}</p>
+                        <p style="margin: 5px 0;"><strong>Amount:</strong> $${withdrawAmount}</p>
+                        <p style="margin: 5px 0;"><strong>Trade ID:</strong> ${tradeRef.id}</p>
+                      </div>
+                      <p>Please log in to your agent panel to view the user's bank details and complete the transfer.</p>
+                      <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
+                        Flyova Agent Network
+                      </div>
+                    </div>
+                  `
+                })
+              });
+            } catch (e) {
+              console.error("Agent notification failed:", e);
+            }
+        }
         
         setLoading(false);
         setShowSuccess(true);

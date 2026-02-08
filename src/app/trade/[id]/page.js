@@ -148,6 +148,33 @@ export default function TradeRoom() {
       });
 
       await batch.commit();
+
+      // TRIGGER: NOTIFY USER OF ACCEPTANCE
+      try {
+        const userSnap = await getDoc(doc(db, "users", trade.senderId));
+        if (userSnap.exists()) {
+          await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: userSnap.data().email,
+              subject: "Trade Request Accepted",
+              html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
+                  <h2 style="color: #613de6; border-bottom: 1px solid #eee; padding-bottom: 10px;">Agent Accepted Trade</h2>
+                  <p>Hello,</p>
+                  <p>The agent has accepted your ${trade.type} request for $${trade.amount}.</p>
+                  <p>${trade.type === 'deposit' 
+                    ? "Please return to the Trade Room to view the agent's bank details and make your payment." 
+                    : "The agent is now processing your payout. Please check the trade chat for payment confirmation."}</p>
+                  <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">Flyova Global Network</div>
+                </div>
+              `
+            })
+          });
+        }
+      } catch (emailErr) { console.error("Acceptance email failed:", emailErr); }
+
     } catch (e) { alert(e.message); } finally { setLoading(false); }
   };
 
@@ -162,24 +189,14 @@ export default function TradeRoom() {
       const feeAmount = Number(trade.fee || 0);
 
       if (trade.type === "deposit") {
-        // 1. Credit the user's wallet
         batch.update(userRef, { wallet: increment(amount) });
-
-        // 2. REFERRAL REWARD LOGIC (1.5%)
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
           const userData = userSnap.data();
-          // Check if this user was referred by someone
           if (userData.referredBy) {
-            const rewardAmount = amount * 0.015; // Calculate 1.5%
+            const rewardAmount = amount * 0.015; 
             const referrerRef = doc(db, "users", userData.referredBy);
-            
-            // Add the reward to the referrer's referralBonus
-            batch.update(referrerRef, { 
-              referralBonus: increment(rewardAmount) 
-            });
-
-            // Optional: Log the referral transaction for transparency
+            batch.update(referrerRef, { referralBonus: increment(rewardAmount) });
             const rewardLogRef = collection(db, "users", userData.referredBy, "transactions");
             await addDoc(rewardLogRef, {
               amount: rewardAmount,
@@ -191,12 +208,9 @@ export default function TradeRoom() {
             });
           }
         }
-
       } else {
-        // Withdrawal: Agent gets the net amount (amount - fee) credited to their agent balance
         const netToAgent = amount - feeAmount;
         batch.update(agentRef, { agent_balance: increment(netToAgent) });
-
         const transQ = query(
           collection(db, "users", trade.senderId, "transactions"), 
           where("tradeId", "==", id),
@@ -214,6 +228,33 @@ export default function TradeRoom() {
       });
       
       await batch.commit();
+
+      // TRIGGER: NOTIFY USER OF COMPLETION
+      try {
+        const userSnap = await getDoc(doc(db, "users", trade.senderId));
+        if (userSnap.exists()) {
+          await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: userSnap.data().email,
+              subject: "Trade Successfully Completed",
+              html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
+                  <h2 style="color: #10b981; border-bottom: 1px solid #eee; padding-bottom: 10px;">Transaction Success</h2>
+                  <p>Hello,</p>
+                  <p>Your ${trade.type} of $${trade.amount} has been successfully verified and completed.</p>
+                  <p>${trade.type === 'deposit' 
+                    ? "The funds have been credited to your Flyova wallet." 
+                    : "The funds have been sent to your provided account details."}</p>
+                  <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">Flyova Global Network</div>
+                </div>
+              `
+            })
+          });
+        }
+      } catch (e) { console.error("Completion email failed", e); }
+
     } catch (e) { 
       console.error(e);
       alert("Error completing trade: " + e.message); 
@@ -319,7 +360,38 @@ export default function TradeRoom() {
       <div className="fixed bottom-0 left-0 right-0 p-6 bg-[#0f172a]/95 backdrop-blur-md border-t border-white/5 z-50 pb-20">
         {trade.status === 'pending' && isAgent && (
           <div className="flex gap-3 mb-4 max-w-md mx-auto">
-            <button onClick={() => updateDoc(doc(db, "trades", id), { status: "cancelled" })} className="flex-1 bg-rose-500/10 text-rose-500 py-4 rounded-2xl font-black uppercase text-[10px] border border-rose-500/20">Decline</button>
+            <button 
+              onClick={async () => {
+                if(window.confirm("Decline this trade?")) {
+                  await updateDoc(doc(db, "trades", id), { status: "cancelled" });
+                  try {
+                    const userSnap = await getDoc(doc(db, "users", trade.senderId));
+                    if (userSnap.exists()) {
+                      await fetch('/api/send-email', {
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          to: userSnap.data().email,
+                          subject: "Trade Request Declined",
+                          html: `
+                            <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
+                              <h2 style="color: #e11d48; border-bottom: 1px solid #eee; padding-bottom: 10px;">Request Not Accepted</h2>
+                              <p>Hello,</p>
+                              <p>Your ${trade.type} request for $${trade.amount} was not accepted by the agent and has been cancelled.</p>
+                              <p>If any funds were deducted, they have been returned to your balance. You may try again with a different agent.</p>
+                              <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">Flyova Global Network</div>
+                            </div>
+                          `
+                        })
+                      });
+                    }
+                  } catch (e) { console.error("Decline email failed", e); }
+                }
+              }} 
+              className="flex-1 bg-rose-500/10 text-rose-500 py-4 rounded-2xl font-black uppercase text-[10px] border border-rose-500/20"
+            >
+              Decline
+            </button>
             <button onClick={handleAcceptTrade} disabled={loading} className="flex-[2] bg-emerald-500 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 shadow-lg">
                 {loading ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />} Accept Trade
             </button>

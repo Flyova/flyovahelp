@@ -61,7 +61,7 @@ export default function AdminAgentManagement() {
     setFilteredAgents(results);
   }, [searchTerm, agents]);
 
-  const updateStatus = async (agentId, newStatus) => {
+ const updateStatus = async (agentId, newStatus) => {
     if (!confirm(`Are you sure you want to ${newStatus} this application?`)) return;
 
     try {
@@ -84,12 +84,36 @@ export default function AdminAgentManagement() {
       };
 
       await updateDoc(agentRef, approvalData);
-
       await updateDoc(userRef, {
         isAgent: newStatus === "approved",
         agentStatus: newStatus,
         agentBalance: newStatus === "approved" ? 0 : null
       });
+
+      // --- TRIGGER: AGENT NOTIFICATION ---
+      try {
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: selectedAgent.email,
+            subject: `Agent Application ${newStatus === "approved" ? "Approved" : "Declined"}`,
+            html: `
+              <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
+                <h2 style="color: #000; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">Application Status Update</h2>
+                <p>Hello ${selectedAgent.full_name},</p>
+                <p>${newStatus === "approved" 
+                  ? "Your application to join the Flyova Agent Network has been approved. You may now log in to access your agent dashboard." 
+                  : "We regret to inform you that your application to join the Flyova Agent Network has been declined at this time."
+                }</p>
+                <div style="margin-top: 30px; font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
+                  Flyova Global Liquidity Control
+                </div>
+              </div>
+            `
+          })
+        });
+      } catch (e) { console.error("Email failed", e); }
 
       setSelectedAgent(null);
     } catch (error) {

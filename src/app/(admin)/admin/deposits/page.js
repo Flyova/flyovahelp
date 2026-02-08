@@ -73,6 +73,7 @@ export default function AdminDepositList() {
     alert("Hash ID Copied!");
   };
 
+
   const handleStatusUpdate = async (deposit, newStatus) => {
     if (!confirm(`Confirm ${newStatus} for this $${deposit.amount} deposit?`)) return;
     
@@ -104,6 +105,43 @@ export default function AdminDepositList() {
       }
 
       await batch.commit();
+
+      // --- TRIGGER: NOTIFY USER OF ADMIN DECISION ---
+      try {
+        const userSnap = await getDoc(doc(db, "users", deposit.userId));
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: userData.email,
+              subject: `Deposit Request ${newStatus === "completed" ? "Approved" : "Declined"}`,
+              html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 12px;">
+                  <h2 style="color: ${newStatus === "completed" ? "#10b981" : "#e11d48"}; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                    Deposit ${newStatus === "completed" ? "Successful" : "Declined"}
+                  </h2>
+                  <p>Hello ${userData.fullName || 'User'},</p>
+                  <p>Your direct USDT deposit request has been reviewed by our administration team.</p>
+                  <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #eee;">
+                    <p style="margin: 5px 0;"><strong>Amount:</strong> $${deposit.amount}</p>
+                    <p style="margin: 5px 0;"><strong>Status:</strong> ${newStatus.toUpperCase()}</p>
+                    <p style="margin: 5px 0; font-size: 11px; color: #666;"><strong>TXID:</strong> ${deposit.transactionHash || 'N/A'}</p>
+                  </div>
+                  <p>${newStatus === "completed" 
+                    ? "The funds have been added to your wallet and are ready for use." 
+                    : "Unfortunately, your deposit could not be verified. Please contact support if you believe this is an error."}</p>
+                  <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
+                    Flyova Administration Team
+                  </div>
+                </div>
+              `
+            })
+          });
+        }
+      } catch (e) { console.error("Admin deposit notification failed", e); }
+
     } catch (error) {
       console.error("Error updating deposit:", error);
       alert("Action failed: " + error.message);

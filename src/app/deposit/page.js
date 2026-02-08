@@ -155,7 +155,7 @@ export default function DepositPage() {
     setLoading(true);
     try {
       if (method === "usdt") {
-        // 1. Final check for active sessions before proceeding
+        // ... (Existing USDT logic remains the same)
         const q = query(
           collection(db, "deposits"),
           where("userId", "==", auth.currentUser.uid),
@@ -173,12 +173,10 @@ export default function DepositPage() {
           if (lastTime && (now - lastTime) < 1800000) {
             const minutesLeft = Math.ceil((1800000 - (now - lastTime)) / 60000);
             alert(`You have an active deposit session. Please wait ${minutesLeft} minutes or complete your current payment.`);
-            // Redirect to the EXISTING deposit ID
             return router.push(`/deposit/direct?id=${snap.docs[0].id}&amount=${lastDeposit.amount}`);
           }
         }
 
-        // 2. CREATE THE INITIAL RECORD IMMEDIATELY
         const docRef = await addDoc(collection(db, "deposits"), {
           userId: auth.currentUser.uid,
           amount: amountNum,
@@ -189,10 +187,10 @@ export default function DepositPage() {
           createdAt: serverTimestamp(),
         });
         
-        // 3. PASS THE NEW DOC ID TO THE NEXT PAGE
         router.push(`/deposit/direct?id=${docRef.id}&amount=${amountNum}`);
 
       } else {
+        // --- AGENT DEPOSIT TRIGGER ---
         if (!selectedAgent) return alert("Please select an agent");
         
         const userTradeQ = query(
@@ -208,6 +206,11 @@ export default function DepositPage() {
           return;
         }
 
+        // Fetch Agent's email for notification
+        const { getDoc, doc } = await import("firebase/firestore");
+        const agentDoc = await getDoc(doc(db, "agents", selectedAgent.id));
+        const agentEmail = agentDoc.exists() ? agentDoc.data().email : null;
+
         const tradeRef = await addDoc(collection(db, "trades"), {
           senderId: auth.currentUser.uid,
           agentId: selectedAgent.id,
@@ -218,6 +221,38 @@ export default function DepositPage() {
           createdAt: serverTimestamp(),
           senderName: userData.fullName || "User"
         });
+
+        // NOTIFY AGENT OF NEW DEPOSIT REQUEST
+        if (agentEmail) {
+          try {
+            await fetch('/api/send-email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                to: agentEmail,
+                subject: "New Deposit Assignment Received",
+                html: `
+                  <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
+                    <h2 style="color: #000; border-bottom: 1px solid #eee; padding-bottom: 10px;">New Deposit Request</h2>
+                    <p>Hello ${selectedAgent.full_name},</p>
+                    <p>A user has initiated a deposit request to your account.</p>
+                    <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                      <p style="margin: 5px 0;"><strong>User:</strong> ${userData.fullName}</p>
+                      <p style="margin: 5px 0;"><strong>Proposed Amount:</strong> $${amountNum}</p>
+                      <p style="margin: 5px 0;"><strong>Trade ID:</strong> ${tradeRef.id}</p>
+                    </div>
+                    <p>Please log in to your agent panel to confirm the transaction once funds are received.</p>
+                    <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
+                      Flyova Agent Network
+                    </div>
+                  </div>
+                `
+              })
+            });
+          } catch (e) {
+            console.error("Agent notification failed:", e);
+          }
+        }
         
         router.push(`/trade/${tradeRef.id}`);
       }

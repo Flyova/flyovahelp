@@ -81,12 +81,11 @@ function RegisterForm() {
     if (country) setSelectedCountry(country);
   };
 
-  const handleRegister = async (e) => {
+ const handleRegister = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
-    // Password Match Validation
     if (formData.password !== formData.confirmPassword) {
         setError("Passwords do not match.");
         setLoading(false);
@@ -97,26 +96,23 @@ function RegisterForm() {
     const birthDate = new Date(formData.dob);
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-
     if (age < 18) {
-      setError("Access Denied. You must be 18 years or older to use this website.");
+      setError("Access Denied. You must be 18 years or older.");
       setLoading(false);
       return;
     }
 
     try {
+      // 1. Generate a 6-digit OTP
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+      // 2. Register the user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       const user = userCredential.user;
       await updateProfile(user, { displayName: formData.username });
 
-      const initialWallet = claimBonus ? 3.00 : 0.00;
-      const userPin = generateUserPin(); // Generate hidden PIN
-
+      // 3. Save User Data
+      const userPin = generateUserPin();
       await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
         fullName: formData.fullName,
@@ -125,28 +121,44 @@ function RegisterForm() {
         country: selectedCountry.name,
         phone: `${selectedCountry.code}${formData.phone}`,
         dob: formData.dob,
-        pin: userPin, // Saved in background
+        pin: userPin,
         status: "online",
-        wallet: initialWallet,
-        winRate: 0,
-        referredBy: referralCode || null, 
-        referrerName: referrerName || null, 
+        wallet: claimBonus ? 3.00 : 0.00,
         createdAt: serverTimestamp(),
-        lastSeen: serverTimestamp(),
-        bonusClaimed: claimBonus
+        verified: false, // User starts as unverified
+        otp: otpCode // Temporary storage for verification
       });
 
-      if (claimBonus) {
-        await addDoc(collection(db, "users", user.uid, "transactions"), {
-          title: "Sign-up Bonus",
-          amount: 3.00,
-          type: "bonus",
-          status: "win",
-          timestamp: serverTimestamp(),
-          note: "Non-withdrawable until play-through"
+      // 4. TRIGGER: Send Verification & Welcome Emails
+      try {
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: formData.email,
+            subject: "Welcome to Flyova - Verify Your Account",
+            html: `
+              <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #eee; border-radius: 12px;">
+                <h2 style="color: #613de6; border-bottom: 2px solid #613de6; padding-bottom: 10px;">Welcome to FlyovaHelp</h2>
+                <p>Hello ${formData.fullName},</p>
+                <p>Thank you for joining our global network. To finalize your account and access your dashboard, please use the verification code below:</p>
+                
+                <div style="background: #f4f4f5; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
+                  <span style="font-size: 32px; font-weight: 900; letter-spacing: 5px; color: #000;">${otpCode}</span>
+                </div>
+                
+                <p style="font-size: 14px;">If you claimed the sign-up bonus, your $3.00 credit will be available immediately after verification.</p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                <p style="font-size: 11px; color: #999;">If you did not create this account, please ignore this email.</p>
+              </div>
+            `
+          })
         });
-      }
-      router.push("/dashboard");
+      } catch (e) { console.error("Email failed", e); }
+
+      // 5. Redirect to an OTP verification page (you'll need to create this)
+      router.push(`/verify?email=${formData.email}`);
+      
     } catch (err) {
       setError(err.message);
       setLoading(false);
