@@ -168,7 +168,7 @@ export default function WithdrawalPage() {
   const currentFee = calculateWithdrawalFee(amount);
   const totalDeductible = (parseFloat(amount) || 0) + currentFee + bonusDeduction;
 
-  const handleWithdraw = async () => {
+ const handleWithdraw = async () => {
     const withdrawAmount = parseFloat(amount);
     const fee = calculateWithdrawalFee(withdrawAmount);
     const totalDeduct = withdrawAmount + fee + bonusDeduction;
@@ -220,6 +220,26 @@ export default function WithdrawalPage() {
             title: "Withdrawal Requested",
             amount: -withdrawAmount 
         });
+
+        // --- NEW: SEND EMAIL NOTIFICATION TO ADMIN ---
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: "arbie1877@gmail.com",
+            subject: "🚨 New USDT Withdrawal Request",
+            html: `
+              <div style="font-family: sans-serif; padding: 20px; color: #333;">
+                <h2 style="color: #fc7952;">Withdrawal Alert</h2>
+                <p><strong>User:</strong> ${userData.fullName} (${user.uid})</p>
+                <p><strong>Amount:</strong> $${withdrawAmount}</p>
+                <p><strong>Fee Deducted:</strong> $${fee}</p>
+                <p><strong>USDT Address:</strong> <code style="background: #eee; padding: 2px 5px;">${usdtAddress}</code></p>
+                <p style="margin-top: 20px; font-size: 12px; color: #888;">Log in to the admin panel to process this payout.</p>
+              </div>
+            `
+          })
+        });
         
         setLoading(false);
         setShowSuccess(true);
@@ -257,6 +277,25 @@ export default function WithdrawalPage() {
           tradeId: tradeRef.id,
           status: "pending",
           timestamp: serverTimestamp()
+        });
+
+        // --- NEW: SEND EMAIL NOTIFICATION TO ADMIN FOR AGENT WITHDRAWAL ---
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: "jupiterdigitalagency01@gmail.com",
+            subject: "🏦 New Agent Withdrawal Request",
+            html: `
+              <div style="font-family: sans-serif; padding: 20px; color: #333;">
+                <h2 style="color: #613de6;">Agent Trade Initiated</h2>
+                <p><strong>User:</strong> ${userData.fullName}</p>
+                <p><strong>Amount:</strong> $${withdrawAmount}</p>
+                <p><strong>Assigned Agent:</strong> ${selectedAgent.full_name}</p>
+                <p><strong>Trade ID:</strong> ${tradeRef.id}</p>
+              </div>
+            `
+          })
         });
         
         setLoading(false);
