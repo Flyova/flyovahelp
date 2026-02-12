@@ -10,6 +10,7 @@ import {
   query, 
   where, 
   getDocs, 
+  getDoc, // <--- ADDED THIS TO FIX THE "GETDOC IS NOT DEFINED" ERROR
   writeBatch,
   increment,
   limit

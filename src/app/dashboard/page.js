@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { 
   Search, Play, Loader2, ShieldCheck, ArrowRight, Clock, 
   ArrowUpRight, Megaphone, X, Info, AlertTriangle, 
-  CheckCircle2, Heart, Send, Star, Trophy 
+  CheckCircle2, Heart, Send, Star, MessageCircle, Trophy 
 } from "lucide-react";
 // FIREBASE IMPORTS
 import { auth, db } from "@/lib/firebase";
@@ -314,15 +314,45 @@ export default function Dashboard() {
 
       {/* Top Banner */}
       <div className="p-4 pt-2"> 
-        <div onClick={() => handleNavigation('/game/1')} className="relative w-full h-44 rounded-3xl overflow-hidden bg-[#613de6] group cursor-pointer shadow-2xl border border-white/5">
-          <div className="absolute inset-0 opacity-40 group-hover:opacity-60 transition-opacity"><img src="/play_friends.svg" alt="Background" className="w-full h-full object-cover" /></div>
+        <div onClick={() => handleNavigation('/game/flyova-to-dollars')} className="relative w-full h-44 rounded-3xl overflow-hidden bg-[#613de6] group cursor-pointer shadow-2xl border border-white/5">
+          <div className="absolute inset-0 opacity-40 group-hover:opacity-60 transition-opacity"><img src="/flytodols.svg" alt="Background" className="w-full h-full object-cover" /></div>
           <div className="absolute inset-0 bg-gradient-to-r from-black/60 to-transparent" />
           <div className="absolute bottom-6 left-6 z-10">
-            <h2 className="text-2xl font-black text-white italic leading-tight tracking-tighter">CHALLENGE FRIENDS<br/><span className="text-[#fc7952]">WIN INSTANTLY</span></h2>
+            <h2 className="text-2xl font-black text-white italic leading-tight tracking-tighter">FLYOVA TO<br/><span className="text-[#fc7952]">DOLLARS</span></h2>
             <button className="mt-3 bg-[#fc7952] text-white px-6 py-2 rounded-full text-xs font-black uppercase shadow-lg group-hover:scale-105 transition-all">Play Now</button>
           </div>
         </div>
       </div>
+
+
+
+{/* Social & Community Grid */}
+      <div className="px-4 mb-8">
+        <p className="text-[10px] font-black uppercase text-gray-500 tracking-[0.2em] mb-4 px-1">Join our community</p>
+        <div className="grid grid-cols-2 gap-3">
+          
+          {/* Telegram */}
+          <a href="https://t.me/+DEVm-vaEvIRiNzQ0" className="flex items-center gap-3 bg-[#229ED9] p-4 rounded-2xl hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-[#229ED9]/10">
+            <div className="bg-white/20 p-2 rounded-xl">
+              <svg size={20} className="text-white fill-current w-5 h-5" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.02-1.96 1.25-5.54 3.69-.52.36-1 .53-1.42.52-.47-.01-1.37-.26-2.03-.48-.82-.27-1.47-.42-1.42-.88.03-.24.35-.49.96-.75 3.78-1.65 6.31-2.74 7.58-3.27 3.61-1.51 4.35-1.77 4.84-1.78.11 0 .35.03.5.16.12.1.16.23.18.33.02.09.02.24.01.35z"/></svg>
+            </div>
+            <span className="text-xs font-black italic uppercase text-white">Telegram</span>
+          </a>
+
+          
+
+          {/* Custom Chatroom */}
+          <a href="http://chat.flyovahelp.com/" className="flex items-center gap-3 bg-[#613de6] p-4 rounded-2xl hover:opacity-100 active:scale-95 transition-all shadow-xl shadow-[#613de6]/20 col-span-1">
+            <div className="bg-white/20 p-2 rounded-xl">
+              <MessageCircle size={20} className="text-white" />
+            </div>
+            <span className="text-xs font-black italic uppercase text-white">Chatroom</span>
+          </a>
+
+        </div>
+      </div>
+
+
 
       <div className="px-4 mb-6">
         <div className="relative">

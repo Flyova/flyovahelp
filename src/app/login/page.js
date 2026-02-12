@@ -31,7 +31,7 @@ export default function LoginPage() {
       const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
       const userRef = doc(db, "users", userCredential.user.uid);
       
-      // Fetch user data to check for existing PIN and Role
+      // Fetch user data to check for existing PIN
       const userSnap = await getDoc(userRef);
       const userData = userSnap.data();
       
@@ -47,12 +47,8 @@ export default function LoginPage() {
 
       await updateDoc(userRef, updateData);
 
-      // REDIRECT LOGIC: Check for admin role
-      if (userData?.role === "admin") {
-        router.push("/admin");
-      } else {
-        router.push("/dashboard");
-      }
+      // REDIRECT LOGIC: All standard logins go to dashboard
+      router.push("/dashboard");
 
     } catch (err) {
       setError("Invalid email or password.");
