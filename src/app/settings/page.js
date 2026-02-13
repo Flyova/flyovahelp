@@ -24,6 +24,7 @@ import {
   X
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
 
 export default function Settings() {
   const router = useRouter();
@@ -69,6 +70,7 @@ export default function Settings() {
     });
     return () => unsub();
   }, [router]);
+  
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
@@ -129,10 +131,17 @@ export default function Settings() {
     setDeleteLoading(true);
     try {
       const userToAuthDelete = auth.currentUser;
-      await deleteDoc(doc(db, "users", user.uid));
+      if (!userToAuthDelete) return;
+
+      // 1. Delete the Firestore Document first while user is still logged in
+      await deleteDoc(doc(db, "users", userToAuthDelete.uid));
+
+      // 2. Delete the Authentication user
       await deleteUser(userToAuthDelete);
+
       router.push("/login");
     } catch (err) {
+      console.error(err);
       if (err.code === "auth/requires-recent-login") {
         alert("Security Rule: Please logout and login again before deleting your account.");
       } else {
