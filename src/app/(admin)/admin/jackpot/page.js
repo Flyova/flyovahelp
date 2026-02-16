@@ -84,7 +84,7 @@ export default function AdminJackpot() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Step 1: Find User */}
         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
-          <h3 className="text-sm font-black uppercase mb-6 flex items-center gap-2">
+          <h3 className="text-sm font-black text-blue-600 uppercase mb-6 flex items-center gap-2">
             <User size={16} className="text-blue-600" /> 1. Select Recipient
           </h3>
           
@@ -95,7 +95,7 @@ export default function AdminJackpot() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search user email..."
-                className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-3 pl-10 pr-4 text-sm outline-none focus:border-blue-500 transition-all"
+                className="w-full bg-slate-50 border text-black border-slate-100 rounded-2xl py-3 pl-10 pr-4 text-sm outline-none focus:border-blue-500 transition-all"
               />
             </div>
             <button 
@@ -135,7 +135,7 @@ export default function AdminJackpot() {
             </div>
           )}
 
-          <h3 className="text-sm font-black uppercase mb-6 flex items-center gap-2">
+          <h3 className="text-sm font-black uppercase mb-6 text-blue-600 flex items-center gap-2">
             <Send size={16} className="text-amber-600" /> 2. Set Amount
           </h3>
 

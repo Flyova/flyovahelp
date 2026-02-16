@@ -2,26 +2,56 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { db } from "@/lib/firebase"; // Added Firebase import
+import { collection, query, orderBy, limit, onSnapshot } from "firebase/firestore"; // Added Firestore imports
 import { 
   ArrowRight, Star, ShieldCheck, Zap, Menu, Timer, Trophy, Wallet, 
-  Instagram, Facebook, Twitter 
+  Instagram, Facebook, Twitter, Loader2 
 } from "lucide-react";
 
 export default function LandingPage() {
   const router = useRouter();
   const [activeTestimonial, setActiveTestimonial] = useState(0);
+  const [testimonials, setTestimonials] = useState([]); // State for live data
+  const [loading, setLoading] = useState(true);
 
-  const testimonials = [
-    { name: "John D.", text: "Turned my lucky $10 into $500 in one afternoon. The withdrawals are instant!", rating: 5 },
-    { name: "Sarah K.", text: "Finally a platform that is transparent and fun. Flyova is the real deal.", rating: 5 },
-    { name: "Mike R.", text: "The interface is beautiful and the community is amazing. Highly recommended!", rating: 4 },
-    { name: "Elena V.", text: "I love the Jackpots! Every draw feels like an event. Best gaming site out there.", rating: 5 },
-  ];
-
+  // FETCH LIVE TESTIMONIALS FROM FIRESTORE
   useEffect(() => {
+    const q = query(
+      collection(db, "withdrawal_testimonials"), 
+      orderBy("createdAt", "desc"), 
+      limit(10)
+    );
+
+    const unsub = onSnapshot(q, (snap) => {
+      const liveData = snap.docs.map(doc => ({
+        id: doc.id,
+        name: doc.data().userName || "Anonymous Player",
+        text: doc.data().text || doc.data().message,
+        rating: doc.data().rating || 5
+      }));
+
+      // Fallback if collection is empty
+      if (liveData.length === 0) {
+        setTestimonials([
+          { name: "John D.", text: "Turned my lucky $10 into $500 in one afternoon. The withdrawals are instant!", rating: 5 },
+          { name: "Sarah K.", text: "Finally a platform that is transparent and fun. Flyova is the real deal.", rating: 5 },
+        ]);
+      } else {
+        setTestimonials(liveData);
+      }
+      setLoading(false);
+    });
+
+    return () => unsub();
+  }, []);
+
+  // AUTO-ROTATE LOGIC
+  useEffect(() => {
+    if (testimonials.length === 0) return;
     const interval = setInterval(() => {
       setActiveTestimonial((prev) => (prev + 1) % testimonials.length);
-    }, 4000);
+    }, 5000);
     return () => clearInterval(interval);
   }, [testimonials.length]);
 
@@ -52,11 +82,9 @@ export default function LandingPage() {
       {/* Hero Section */}
       <main className="relative max-w-7xl mx-auto px-6 pt-12 pb-24 flex flex-col md:flex-row items-center">
         
-        {/* Floating Background Shapes (THE BUBBLES) */}
         <div className="absolute top-20 right-1/4 w-32 h-32 bg-cyan-400 rounded-full blur-[80px] opacity-30 animate-pulse" />
         <div className="absolute bottom-10 left-10 w-48 h-48 bg-[#fc7952] rounded-full blur-[100px] opacity-20" />
 
-        {/* Left Column: Text Content */}
         <div className="flex-1 text-center md:text-left z-10 space-y-8">
           <div className="space-y-4">
             <h1 className="text-5xl md:text-8xl font-black italic leading-[0.9] tracking-tighter">
@@ -77,21 +105,27 @@ export default function LandingPage() {
             Play Now <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
           </button>
 
-          {/* Testimonials - Responsive & Integrated */}
+          {/* DYNAMIC TESTIMONIALS SECTION */}
           <div className="mt-12 max-w-sm mx-auto md:mx-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-cyan-400 mb-4 text-center md:text-left">Player Testimonials</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-cyan-400 mb-4 text-center md:text-left"> Player Reviews</p>
             <div className="bg-black/20 backdrop-blur-md border border-white/5 p-6 rounded-[2rem] min-h-[140px] flex flex-col justify-center relative overflow-hidden text-left shadow-2xl">
-              <div className="flex gap-1 mb-2">
-                {[...Array(testimonials[activeTestimonial].rating)].map((_, i) => (
-                  <Star key={i} size={12} className="fill-yellow-400 text-yellow-400" />
-                ))}
-              </div>
-              <p className="text-sm font-bold italic text-white/90 leading-relaxed mb-3">
-                "{testimonials[activeTestimonial].text}"
-              </p>
-              <p className="text-[10px] font-black uppercase text-[#fc7952] tracking-widest">
-                — {testimonials[activeTestimonial].name}
-              </p>
+              {loading ? (
+                <div className="flex justify-center"><Loader2 className="animate-spin text-white/20" /></div>
+              ) : testimonials.length > 0 ? (
+                <div className="animate-in fade-in slide-in-from-right-4 duration-500" key={activeTestimonial}>
+                  <div className="flex gap-1 mb-2">
+                    {[...Array(testimonials[activeTestimonial]?.rating || 5)].map((_, i) => (
+                      <Star key={i} size={12} className="fill-yellow-400 text-yellow-400" />
+                    ))}
+                  </div>
+                  <p className="text-sm font-bold italic text-white/90 leading-relaxed mb-3">
+                    "{testimonials[activeTestimonial]?.text}"
+                  </p>
+                  <p className="text-[10px] font-black uppercase text-[#fc7952] tracking-widest">
+                    — {testimonials[activeTestimonial]?.name}
+                  </p>
+                </div>
+              ) : null}
               
               <div className="absolute right-6 bottom-6 flex gap-1">
                 {testimonials.map((_, i) => (
@@ -178,7 +212,6 @@ export default function LandingPage() {
             </div>
           </div>
           
-          {/* Decorative floating 3D balls */}
           <div className="absolute -top-10 -right-4 w-16 h-16 bg-cyan-400 rounded-full shadow-inner animate-bounce pointer-events-none" />
           <div className="absolute bottom-10 -left-10 w-24 h-24 bg-[#fc7952] rounded-full shadow-inner animate-pulse pointer-events-none" />
         </div>
@@ -190,7 +223,6 @@ export default function LandingPage() {
           <p className="text-[10px] font-black tracking-widest opacity-60">© 2026 FLYOVHELP ARENA. ALL RIGHTS RESERVED.</p>
         </div>
         
-        {/* Social Icons with Brand Colors */}
         <div className="flex items-center space-x-4 mt-8 md:mt-0">
           <a href="https://www.facebook.com/share/1D5ScZvv82/" className="w-10 h-10 rounded-full bg-[#1877F2] flex items-center justify-center hover:scale-110 transition-transform shadow-lg shadow-[#1877F2]/20">
             <Facebook size={18} fill="currentColor" />
@@ -198,13 +230,12 @@ export default function LandingPage() {
           <a href="https://www.instagram.com/flyovahelp" className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#f9ce34] via-[#ee2a7b] to-[#6228d7] flex items-center justify-center hover:scale-110 transition-transform shadow-lg shadow-[#ee2a7b]/20">
             <Instagram size={18} />
           </a>
-          <a href="https://www.instagram.com/flyovahelp" className="w-10 h-10 rounded-full bg-[#1DA1F2] flex items-center justify-center hover:scale-110 transition-transform shadow-lg shadow-[#1DA1F2]/20">
+          <a href="https://x.com/flyovahelp" className="w-10 h-10 rounded-full bg-[#1DA1F2] flex items-center justify-center hover:scale-110 transition-transform shadow-lg shadow-[#1DA1F2]/20">
             <Twitter size={18} fill="currentColor" />
           </a>
           <a href="https://x.com/Flyovahelp" className="w-10 h-10 rounded-full bg-black border border-white/10 flex items-center justify-center hover:scale-110 transition-transform shadow-lg shadow-black/20">
             <svg size={18} className="fill-current w-4.5 h-4.5" viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1.04-.1z"/></svg>
           </a>
-          
         </div>
       </footer>
     </div>

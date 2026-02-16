@@ -8,7 +8,7 @@ export default function BottomNav() {
 
   const navs = [
     { name: "Home", icon: <Home size={20} />, path: "/dashboard" },
-    { name: "Bet History", icon: <History size={20} />, path: "/history" },
+    { name: "History", icon: <History size={20} />, path: "/history" },
     { name: "Deposit", icon: <Wallet size={20} />, path: "/deposit" },
     { name: "Settings", icon: <Settings size={20} />, path: "/settings" },
   ];

@@ -8,7 +8,11 @@ import {
   orderBy, 
   limit, 
   startAfter, 
-  getDocs 
+  getDocs,
+  doc,
+  getDoc,
+  documentId,
+  where
 } from "firebase/firestore";
 import { 
   ArrowUpRight, 
@@ -23,6 +27,7 @@ import {
 
 export default function AgentTransactions() {
   const [trades, setTrades] = useState([]);
+  const [agentNames, setAgentNames] = useState({}); // Stores { agentId: "Name" }
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -31,16 +36,43 @@ export default function AgentTransactions() {
 
   const PAGE_SIZE = 20;
 
+  // Helper to fetch names for a list of agent IDs
+  const fetchAgentNames = async (agentIds) => {
+    const uniqueIds = [...new Set(agentIds)].filter(id => id && !agentNames[id]);
+    if (uniqueIds.length === 0) return;
+
+    // Firebase 'in' query limit is 10, so we chunk if necessary
+    const newNames = { ...agentNames };
+    const chunks = [];
+    for (let i = 0; i < uniqueIds.length; i += 10) {
+      chunks.push(uniqueIds.slice(i, i + 10));
+    }
+
+    for (const chunk of chunks) {
+      const q = query(collection(db, "agents"), where(documentId(), "in", chunk));
+      const snap = await getDocs(q);
+      snap.forEach(doc => {
+        const data = doc.data();
+        newNames[doc.id] = data.full_name || data.fullName || data.username || "Agent";
+      });
+    }
+    setAgentNames(newNames);
+  };
+
   useEffect(() => {
-    // We query the "trades" collection which handles both Agent Deposits and Withdrawals
     const q = query(
       collection(db, "trades"),
-      orderBy("createdAt", "desc"), // TradeRoom uses serverTimestamp() as createdAt
+      orderBy("createdAt", "desc"),
       limit(PAGE_SIZE)
     );
     
-    const unsub = onSnapshot(q, (snap) => {
+    const unsub = onSnapshot(q, async (snap) => {
       const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      
+      // Collect agent IDs and fetch names
+      const agentIds = docs.map(t => t.agentId);
+      await fetchAgentNames(agentIds);
+
       setTrades(docs);
       setLastDoc(snap.docs[snap.docs.length - 1]);
       setHasMore(snap.docs.length === PAGE_SIZE);
@@ -68,6 +100,10 @@ export default function AgentTransactions() {
       const snap = await getDocs(q);
       if (!snap.empty) {
         const newDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        
+        const agentIds = newDocs.map(t => t.agentId);
+        await fetchAgentNames(agentIds);
+
         setTrades(prev => [...prev, ...newDocs]);
         setLastDoc(snap.docs[snap.docs.length - 1]);
         setHasMore(snap.docs.length === PAGE_SIZE);
@@ -81,11 +117,14 @@ export default function AgentTransactions() {
     }
   };
 
-  const filtered = trades.filter(t => 
-    t.agentName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    t.senderName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    t.type?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filtered = trades.filter(t => {
+    const name = agentNames[t.agentId] || t.agentName || "";
+    return (
+      name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      t.senderName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      t.type?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
 
   return (
     <div className="space-y-6">
@@ -144,7 +183,9 @@ export default function AgentTransactions() {
                     <td className="p-6">
                       <div className="flex items-center gap-2">
                         <ShieldCheck size={14} className="text-indigo-600" />
-                        <p className="text-sm font-black text-slate-800 italic">{trade.agentName || "Agent"}</p>
+                        <p className="text-sm font-black text-slate-800 italic">
+                          {agentNames[trade.agentId] || trade.agentName || "Unknown Agent"}
+                        </p>
                       </div>
                     </td>
                     <td className="p-6">

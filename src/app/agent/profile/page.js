@@ -135,7 +135,7 @@ export default function AgentProfile() {
               <input 
                 type="text"
                 required
-                placeholder="e.g. OPay, Kuda, Zenith"
+                placeholder="e.g. Barclays, NatWest, Citibank"
                 value={profile.bankName}
                 onChange={(e) => setProfile({...profile, bankName: e.target.value})}
                 className="w-full bg-[#0f172a] p-4 rounded-2xl border border-white/5 outline-none focus:border-[#fc7952] transition-all font-bold text-sm"

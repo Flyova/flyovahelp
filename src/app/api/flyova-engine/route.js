@@ -6,8 +6,9 @@ export async function GET() {
   
   try {
     const WIN_MULTIPLIER = 1.3;
+    const REFUND_MULTIPLIER = 0.8; // 80% refund for 1 correct number
     const REF_COMMISSION = 0.005; 
-    const RESULT_DISPLAY_TIME = 10000; // Reduced to 10 seconds
+    const RESULT_DISPLAY_TIME = 10000; 
 
     // --- PHASE 1: PAYOUT EXPIRED GAMES ---
     const activeSnap = await adminDb.collection("timed_games")
@@ -18,7 +19,7 @@ export async function GET() {
     if (!activeSnap.empty) {
       const gameDoc = activeSnap.docs[0];
       const gameData = { id: gameDoc.id, ...gameDoc.data() };
-      const winners = gameData.winners || [];
+      const winners = gameData.winners || []; // These are the 2 winning numbers
 
       const usersSnap = await adminDb.collection("users").get();
       
@@ -35,18 +36,30 @@ export async function GET() {
         if (!betsSnap.empty) {
           await adminDb.runTransaction(async (transaction) => {
             let totalPayout = 0;
+
             betsSnap.forEach((betDoc) => {
               const bet = betDoc.data();
-              const sortedPicks = [...(bet.picks || [])].sort((a, b) => a - b);
-              const sortedWinners = [...winners].sort((a, b) => a - b);
-              const isWinner = JSON.stringify(sortedPicks) === JSON.stringify(sortedWinners);
+              const userPicks = bet.picks || [];
+              
+              // Count how many numbers match the winners
+              const matchCount = userPicks.filter(num => winners.includes(num)).length;
+              
               const transRef = adminDb.collection("users").doc(userId).collection("transactions").doc(betDoc.id);
 
-              if (isWinner) {
+              if (matchCount === 2) {
+                // WON BOTH: 1.3x Payout
                 const payout = parseFloat((bet.amount * WIN_MULTIPLIER).toFixed(2));
                 totalPayout += payout;
                 transaction.update(transRef, { status: "win", amount: payout });
-              } else {
+              } 
+              else if (matchCount === 1) {
+                // PARTIAL: 80% Refund
+                const refundAmount = parseFloat((bet.amount * REFUND_MULTIPLIER).toFixed(2));
+                totalPayout += refundAmount;
+                transaction.update(transRef, { status: "partial", amount: refundAmount, note: "1/2 Correct Match" });
+              } 
+              else {
+                // LOSS: 0 Correct
                 transaction.update(transRef, { status: "loss" });
                 if (userData.referredBy) {
                   const commission = parseFloat((bet.amount * REF_COMMISSION).toFixed(4));
@@ -72,7 +85,6 @@ export async function GET() {
         status: "completed", 
         completedAt: now 
       });
-      // We don't return here so we can potentially start the next game in Phase 2
     }
 
     // --- PHASE 2: GENERATE NEW GAME ---
@@ -89,7 +101,6 @@ export async function GET() {
       let ready = true;
       if (!lastSnap.empty) {
         const lastGame = lastSnap.docs[0].data();
-        // Check if the 10-second display time has passed
         if (now - lastGame.completedAt < RESULT_DISPLAY_TIME) {
           ready = false;
         }
@@ -108,7 +119,7 @@ export async function GET() {
         await adminDb.collection("timed_games").add({
           status: "active",
           startTime: now,
-          endTime: now + (120 * 1000), // 2 minutes
+          endTime: now + (120 * 1000), 
           winners: winners, 
           numbers: shuffledGrid,
           createdAt: admin.firestore.FieldValue.serverTimestamp()
