@@ -1,132 +1,93 @@
-import { adminDb, admin, rtdb } from "@/lib/firebaseAdmin";
+import { adminDb, admin, getRtdb } from "@/lib/firebaseAdmin";
 import { NextResponse } from "next/server";
 
-export const dynamic = 'force-dynamic';
-
 export async function GET() {
+  const rtdb = getRtdb();
   const now = Date.now();
+  const WIN_MULTIPLIER = 1.3;
   
   try {
-    const WIN_MULTIPLIER = 1.3;
-    const REFUND_MULTIPLIER = 0.8; 
-    const RESULT_DISPLAY_TIME = 10000; 
+    const gameRef = rtdb.ref("active_game_flyova");
 
-    // --- PHASE 1: SETTLE EXPIRED GAMES ---
+    // 1. SETTLE EXPIRED GAMES & PAY OUT WINNERS
     const activeSnap = await adminDb.collection("timed_games")
       .where("status", "==", "active")
-      .where("endTime", "<=", now)
-      .limit(1).get();
+      .where("endTime", "<=", now).limit(1).get();
 
     if (!activeSnap.empty) {
       const gameDoc = activeSnap.docs[0];
-      const gameData = { id: gameDoc.id, ...gameDoc.data() };
-      const winners = gameData.winners || [];
+      const gameId = gameDoc.id;
+      const winningNums = gameDoc.data().winners.sort((a, b) => a - b);
 
-      // Only fetch bets for THIS game to save quota
-      const pendingBetsSnap = await adminDb.collectionGroup("transactions")
-        .where("gameId", "==", gameData.id)
+      // PAYOUT LOGIC: Find all users who bet on this game
+      const usersSnap = await adminDb.collectionGroup("transactions")
+        .where("gameId", "==", gameId)
         .where("status", "==", "pending")
         .get();
 
       const batch = adminDb.batch();
-      const walletUpdates = new Map();
 
-      pendingBetsSnap.forEach((betDoc) => {
-        const bet = betDoc.data();
-        const userPicks = bet.picks || [];
-        const matchCount = userPicks.filter(num => winners.includes(num)).length;
+      usersSnap.forEach((betDoc) => {
+        const betData = betDoc.data();
+        const userPicks = betData.picks.sort((a, b) => a - b);
         
-        let payout = 0;
-        let status = "loss";
+        // Check if user picks match winners exactly
+        const isWinner = JSON.stringify(userPicks) === JSON.stringify(winningNums);
 
-        if (matchCount === 2) {
-          payout = parseFloat((bet.amount * WIN_MULTIPLIER).toFixed(2));
-          status = "win";
-        } else if (matchCount === 1) {
-          payout = parseFloat((bet.amount * REFUND_MULTIPLIER).toFixed(2));
-          status = "partial";
-        }
-
-        batch.update(betDoc.ref, { status, amount: payout, settledAt: now });
-        
-        if (payout > 0) {
-          // Path: users/{uid}/transactions/{betId} -> parent.parent gets the UID
-          const uid = betDoc.ref.parent.parent.id;
-          walletUpdates.set(uid, (walletUpdates.get(uid) || 0) + payout);
+        if (isWinner) {
+          const payout = betData.amount * WIN_MULTIPLIER;
+          // 1. Update Transaction to win
+          batch.update(betDoc.ref, { status: "win", payout: payout });
+          // 2. Credit the User Wallet (BetDoc is inside user subcollection)
+          const userRef = betDoc.ref.parent.parent; 
+          batch.update(userRef, { wallet: admin.firestore.FieldValue.increment(payout) });
+        } else {
+          batch.update(betDoc.ref, { status: "loss" });
         }
       });
 
-      // Apply wallet increases
-      walletUpdates.forEach((amount, uid) => {
-        batch.update(adminDb.collection("users").doc(uid), { 
-          wallet: admin.firestore.FieldValue.increment(amount) 
-        });
-      });
-
-      batch.update(gameDoc.ref, { status: "completed", completedAt: now });
       await batch.commit();
-
-      // BROADCAST SETTLEMENT: Tell RTD the game is over
-      await rtdb.ref("active_game_flyova").update({
-        status: "settled",
-        winners: winners,
-        lastGameId: gameData.id,
-        timestamp: now
-      });
+      await gameDoc.ref.update({ status: "completed", completedAt: now });
+      await gameRef.update({ status: "settled", winners: winningNums });
+      
+      return NextResponse.json({ message: "Game Settled and Paid Out" });
     }
 
-    // --- PHASE 2: START NEW GAME ---
+    // 2. START NEW GAME (Your existing logic)
     const runningSnap = await adminDb.collection("timed_games")
       .where("status", "==", "active").limit(1).get();
 
     if (runningSnap.empty) {
-      const lastSnap = await adminDb.collection("timed_games")
-        .where("status", "==", "completed")
-        .orderBy("completedAt", "desc").limit(1).get();
-
-      let ready = true;
-      if (!lastSnap.empty) {
-        if (now - lastSnap.docs[0].data().completedAt < RESULT_DISPLAY_TIME) ready = false;
+      const pool = [];
+      while (pool.length < 4) {
+        const r = Math.floor(Math.random() * 90) + 1;
+        if (!pool.includes(r)) pool.push(r);
       }
+      
+      const winners = [pool[0], pool[1]].sort((a,b) => a-b);
+      const endTime = now + 120000; 
 
-      if (ready) {
-        // Generate 5 random numbers (1-4 as requested)
-        const numbers = [];
-        while (numbers.length < 5) {
-          const r = Math.floor(Math.random() * 4) + 1;
-          if (!numbers.includes(r)) numbers.push(r);
-        }
-        const winners = [numbers[0], numbers[1]];
-        const endTime = now + (120 * 1000);
+      const newGameRef = await adminDb.collection("timed_games").add({
+        status: "active",
+        endTime: endTime,
+        winners: winners,
+        allGenerated: pool,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
 
-        // Save to Firestore (Permanent History)
-        const newGameRef = await adminDb.collection("timed_games").add({
-          status: "active",
-          startTime: now,
-          endTime: endTime,
-          winners: winners,
-          numbers: numbers,
-          createdAt: admin.firestore.FieldValue.serverTimestamp()
-        });
+      await gameRef.set({
+        gameId: newGameRef.id,
+        status: "active",
+        endTime: endTime,
+        winners: winners,
+        displayNumbers: pool 
+      });
 
-        // Broadcast to RTD (Live Display)
-        await rtdb.ref("active_game_flyova").set({
-          gameId: newGameRef.id,
-          status: "active",
-          endTime: endTime,
-          numbers: numbers,
-          winners: winners,
-          timestamp: now
-        });
-
-        return NextResponse.json({ message: "Game broadcasted" });
-      }
+      return NextResponse.json({ message: "1-90 Game Started" });
     }
 
-    return NextResponse.json({ message: "Waiting" });
-
+    return NextResponse.json({ message: "Running" });
   } catch (err) {
-    console.error("Critical Engine Error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
