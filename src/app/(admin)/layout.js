@@ -7,7 +7,7 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { 
   LayoutDashboard, ArrowDownCircle, UserCheck, Wallet, 
-  ArrowUpCircle, Send, Users, History, Trophy, 
+  ArrowUpCircle, Send, Delete, Users, History, Trophy, 
   MessageCircle, X, LogOut, Gamepad2, Menu, Loader2 
 } from "lucide-react";
 
@@ -82,6 +82,7 @@ export default function AdminLayout({ children }) {
     { name: "Settings", icon: UserCheck, path: "/admin/settings" },
     { name: "Live Chat", icon: MessageCircle, path: "/admin/support" },
     { name: "Send Jackpot", icon: Trophy, path: "/admin/jackpot" },
+     { name: "Account Deletioin", icon: Delete, path: "/admin/deletions" },
   ];
 
   return (

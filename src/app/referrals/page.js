@@ -47,9 +47,10 @@ export default function ReferralsPage() {
 
       const fetchReferrals = async () => {
         try {
+          // FIXED: Query updated to match 'referrerUid' saved during registration
           const q = query(
             collection(db, "users"), 
-            where("referredBy", "==", u.uid)
+            where("referrerUid", "==", u.uid)
           );
           const snap = await getDocs(q);
           const list = snap.docs.map(doc => ({
@@ -147,7 +148,6 @@ export default function ReferralsPage() {
                         ${userData?.referralBonus?.toFixed(2) || "0.00"}
                     </h2>
                 </div>
-                {/* Updated Button with Label */}
                 <button 
                   onClick={() => setShowWithdrawModal(true)}
                   className="bg-white/10 px-4 py-2.5 rounded-2xl border border-white/20 hover:bg-white/20 transition-all flex items-center gap-2"
@@ -205,9 +205,12 @@ export default function ReferralsPage() {
                                     {ref.username?.charAt(0).toUpperCase()}
                                 </div>
                                 <div>
-                                    <h4 className="font-black italic uppercase text-[#fc7952] leading-none mb-1">
+                                    <h4 className="font-black italic uppercase text-[#fc7952] leading-none">
                                         @{ref.username}
                                     </h4>
+                                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-tighter mb-1">
+                                        {ref.fullName}
+                                    </p>
                                     <div className="flex items-center gap-1.5 opacity-40">
                                         <Fingerprint size={10} />
                                         <span className="text-[10px] font-mono font-bold tracking-wider">

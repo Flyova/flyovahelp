@@ -2,13 +2,15 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { X, Gift, CheckCircle2, Globe, Calendar, Lock, UserCheck } from "lucide-react";
+import { X, Gift, CheckCircle2, Globe, Calendar, Lock, UserCheck, Loader2 } from "lucide-react";
 // FIREBASE IMPORTS
 import { auth, db } from "@/lib/firebase";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { doc, setDoc, serverTimestamp, addDoc, collection, getDoc } from "firebase/firestore";
+import { 
+  doc, setDoc, serverTimestamp, getDoc, 
+  collection, query, where, getDocs 
+} from "firebase/firestore";
 
-// SEPARATE COMPONENT TO HANDLE SEARCH PARAMS (Prevents Vercel Build Error)
 function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -19,7 +21,6 @@ function RegisterForm() {
   const [claimBonus, setClaimBonus] = useState(true);
   const [referrerName, setReferrerName] = useState("");
   
-  // Country API States
   const [countries, setCountries] = useState([]);
   const [selectedCountry, setSelectedCountry] = useState({
     name: "United Kingdom",
@@ -34,15 +35,13 @@ function RegisterForm() {
     phone: "",
     dob: "",
     password: "",
-    confirmPassword: "", // Added confirm password to state
+    confirmPassword: "",
   });
 
-  // LOGIC: Generate 8-digit identity PIN for transfers (Hidden)
   const generateUserPin = () => {
     return Math.floor(10000000 + Math.random() * 90000000).toString();
   };
 
-  // Fetch Countries on Load
   useEffect(() => {
     fetch("https://restcountries.com/v3.1/all?fields=name,flags,idd,flag")
       .then(res => res.json())
@@ -57,19 +56,22 @@ function RegisterForm() {
       .catch(err => console.error("Country API Error:", err));
   }, []);
 
-  // Fetch Referrer Name if Code exists
+  // FIXED: Specific lookup for the referrer using referralCode as Document ID
   useEffect(() => {
     const fetchReferrer = async () => {
         if (referralCode) {
             try {
                 const refSnap = await getDoc(doc(db, "users", referralCode));
                 if (refSnap.exists()) {
-                    setReferrerName(refSnap.data().fullName || refSnap.data().username);
+                    const data = refSnap.data();
+                    // Explicitly use fullName field
+                    setReferrerName(data.fullName || data.username || "Flyova Member");
                 } else {
-                    setReferrerName("Unknown Referrer");
+                    setReferrerName("Flyova Member");
                 }
             } catch (e) {
                 console.error("Error fetching referrer:", e);
+                setReferrerName("Flyova Member");
             }
         }
     };
@@ -81,7 +83,7 @@ function RegisterForm() {
     if (country) setSelectedCountry(country);
   };
 
- const handleRegister = async (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
@@ -92,7 +94,6 @@ function RegisterForm() {
         return;
     }
 
-    // Age Verification Logic
     const birthDate = new Date(formData.dob);
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
@@ -103,16 +104,27 @@ function RegisterForm() {
     }
 
     try {
-      // 1. Generate a 6-digit OTP
+      const usernameQuery = query(
+        collection(db, "users"), 
+        where("username", "==", formData.username)
+      );
+      const querySnapshot = await getDocs(usernameQuery);
+      
+      if (!querySnapshot.empty) {
+        setError("This username is already taken. Please choose another.");
+        setLoading(false);
+        return;
+      }
+
       const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-      // 2. Register the user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       const user = userCredential.user;
       await updateProfile(user, { displayName: formData.username });
 
-      // 3. Save User Data
       const userPin = generateUserPin();
+      
+      // SAVING: Capture both Referrer Name and Referrer UID for tracking
       await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
         fullName: formData.fullName,
@@ -125,11 +137,12 @@ function RegisterForm() {
         status: "online",
         wallet: claimBonus ? 3.00 : 0.00,
         createdAt: serverTimestamp(),
-        verified: false, // User starts as unverified
-        otp: otpCode // Temporary storage for verification
+        verified: false,
+        otp: otpCode,
+        referredBy: referralCode ? referrerName : null,
+        referrerUid: referralCode || null 
       });
 
-      // 4. TRIGGER: Send Verification & Welcome Emails
       try {
         await fetch('/api/send-email', {
           method: 'POST',
@@ -137,26 +150,11 @@ function RegisterForm() {
           body: JSON.stringify({
             to: formData.email,
             subject: "Welcome to Flyova - Verify Your Account",
-            html: `
-              <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #eee; border-radius: 12px;">
-                <h2 style="color: #613de6; border-bottom: 2px solid #613de6; padding-bottom: 10px;">Welcome to FlyovaHelp</h2>
-                <p>Hello ${formData.fullName},</p>
-                <p>Thank you for joining our global network. To finalize your account and access your dashboard, please use the verification code below:</p>
-                
-                <div style="background: #f4f4f5; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
-                  <span style="font-size: 32px; font-weight: 900; letter-spacing: 5px; color: #000;">${otpCode}</span>
-                </div>
-                
-                <p style="font-size: 14px;">If you claimed the sign-up bonus, your $3.00 credit will be available immediately after verification.</p>
-                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-                <p style="font-size: 11px; color: #999;">If you did not create this account, please ignore this email.</p>
-              </div>
-            `
+            html: `<p>Hello ${formData.fullName}, your code is ${otpCode}</p>`
           })
         });
       } catch (e) { console.error("Email failed", e); }
 
-      // 5. Redirect to an OTP verification page (you'll need to create this)
       router.push(`/verify?email=${formData.email}`);
       
     } catch (err) {
@@ -171,22 +169,21 @@ function RegisterForm() {
         <h2 className="text-3xl font-black italic tracking-tighter uppercase leading-tight">
           Create <span className="text-[#fc7952]">Account</span>
         </h2>
-        <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.2em] mt-1">Join the Flyova Help</p>
+        <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.2em] mt-1 text-white">Join the Flyova Help</p>
       </div>
 
       {error && <p className="bg-red-500/10 border border-red-500/50 text-red-500 p-3 rounded-xl text-xs font-bold mb-4">{error}</p>}
 
       <form onSubmit={handleRegister} className="space-y-4">
-        {/* Referral Field - Read Only */}
         {referralCode && (
-          <div className="relative group">
+          <div className="relative group animate-in slide-in-from-top duration-500">
             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#fc7952]">
               <UserCheck size={18} />
             </div>
             <input 
               type="text" 
               readOnly 
-              value={`Referred by: ${referrerName}`}
+              value={referrerName ? `Referred by: ${referrerName}` : "Identifying Referrer..."}
               className="w-full bg-[#fc7952]/5 border-2 border-[#fc7952]/20 p-4 pl-12 rounded-xl font-black text-[11px] uppercase tracking-wider text-[#fc7952] cursor-not-allowed outline-none"
             />
           </div>
@@ -211,7 +208,6 @@ function RegisterForm() {
         />
 
         <div className="grid grid-cols-2 gap-4">
-            {/* Dynamic Country Selector */}
             <div className="relative group">
             <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center space-x-2">
                 <span className="text-lg">{selectedCountry.flag}</span>
@@ -227,7 +223,6 @@ function RegisterForm() {
             </select>
             </div>
 
-            {/* Dynamic Phone Input */}
             <div className="relative group">
             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-gray-500 border-r border-gray-700 pr-2">
                 {selectedCountry.code}
@@ -257,7 +252,7 @@ function RegisterForm() {
                 <Lock size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" />
                 <input 
                     type="password" placeholder="Password" required
-                    className="w-full bg-[#1e293b] border-2 border-transparent focus:border-[#613de6] p-4 pl-12 rounded-xl outline-none transition-all font-bold text-white placeholder:text-gray-600 text-sm"
+                    className="w-full bg-[#1e293b] border-2 border-transparent focus:border-[#613de6] p-4 pl-12 rounded-xl outline-none transition-all font-bold text-white text-sm"
                     onChange={(e) => setFormData({...formData, password: e.target.value})}
                 />
             </div>
@@ -265,13 +260,12 @@ function RegisterForm() {
                 <CheckCircle2 size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" />
                 <input 
                     type="password" placeholder="Confirm" required
-                    className="w-full bg-[#1e293b] border-2 border-transparent focus:border-[#613de6] p-4 pl-12 rounded-xl outline-none transition-all font-bold text-white placeholder:text-gray-600 text-sm"
+                    className="w-full bg-[#1e293b] border-2 border-transparent focus:border-[#613de6] p-4 pl-12 rounded-xl outline-none transition-all font-bold text-white text-sm"
                     onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
                 />
             </div>
         </div>
 
-        {/* BONUS CHECKBOX */}
         <div 
           onClick={() => setClaimBonus(!claimBonus)}
           className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between ${
@@ -283,7 +277,7 @@ function RegisterForm() {
               <Gift size={20} />
             </div>
             <div>
-              <p className="text-[11px] font-black uppercase italic leading-none">Claim $3.00 Bonus</p>
+              <p className="text-[11px] font-black uppercase italic leading-none text-white">Claim $3.00 Bonus</p>
               <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase">Start betting for free!</p>
             </div>
           </div>
@@ -297,16 +291,15 @@ function RegisterForm() {
         <button 
           type="submit"
           disabled={loading}
-          className="w-full py-5 bg-[#613de6] text-white rounded-2xl font-black transition-all active:scale-[0.98] shadow-lg shadow-[#613de6]/20 mt-4 uppercase tracking-widest disabled:opacity-50"
+          className="w-full py-5 bg-[#613de6] text-white rounded-2xl font-black transition-all active:scale-[0.98] shadow-lg shadow-[#613de6]/20 mt-4 uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-2"
         >
-          {loading ? "Creating Profile..." : "Create Account"}
+          {loading ? <><Loader2 className="animate-spin" size={18}/> Creating Profile...</> : "Create Account"}
         </button>
       </form>
     </div>
   );
 }
 
-// MAIN EXPORT
 export default function RegisterPage() {
   const router = useRouter();
 
@@ -318,12 +311,12 @@ export default function RegisterPage() {
         </button>
       </div>
 
-      <Suspense fallback={<div className="flex-1 flex items-center justify-center font-black italic opacity-20">INITIALIZING...</div>}>
+      <Suspense fallback={<div className="flex-1 flex items-center justify-center font-black italic opacity-20 text-white">INITIALIZING...</div>}>
         <RegisterForm />
       </Suspense>
 
       <div className="mt-8 text-center">
-        <p className="text-gray-500 text-xs font-bold uppercase tracking-tight">
+        <p className="text-gray-500 text-xs font-bold uppercase tracking-tight text-white">
           Already a player? <Link href="/login" className="text-[#fc7952] hover:underline ml-1 italic font-black">Log In</Link>
         </p>
       </div>

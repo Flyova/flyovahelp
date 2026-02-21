@@ -10,7 +10,7 @@ import {
   query, 
   where, 
   getDocs, 
-  getDoc, // <--- ADDED THIS TO FIX THE "GETDOC IS NOT DEFINED" ERROR
+  getDoc,
   writeBatch,
   increment,
   limit
@@ -30,7 +30,12 @@ import {
 export default function TransferPage() {
   const router = useRouter();
   const [user, setUser] = useState(null);
-  const [userData, setUserData] = useState({ wallet: 0, pin: "", fullName: "" });
+  const [userData, setUserData] = useState({ 
+    wallet: 0, 
+    pin: "", 
+    fullName: "",
+    bonusClaimed: false // Track bonus status
+  });
   
   const [recipientPin, setRecipientPin] = useState("");
   const [recipientData, setRecipientData] = useState(null);
@@ -41,7 +46,6 @@ export default function TransferPage() {
   const [success, setSuccess] = useState(false);
   const [transferRecord, setTransferRecord] = useState(null);
 
-  // LOGIC FIX: Fee structure updated to match transfer.php
   const calculateTransferFee = (amt) => {
     const a = parseFloat(amt);
     if (!a || a <= 0) return 0;
@@ -69,7 +73,8 @@ export default function TransferPage() {
             setUserData({ 
               wallet: data.wallet || 0, 
               pin: data.pin || "",
-              fullName: data.fullName || data.username || "User"
+              fullName: data.fullName || data.username || "User",
+              bonusClaimed: data.bonusClaimed || false // Sync bonus status from DB
             });
           }
         });
@@ -106,15 +111,22 @@ export default function TransferPage() {
   const handleTransfer = async () => {
     const val = parseFloat(amount);
     const fee = calculateTransferFee(val);
-    const totalDeduct = val + fee;
+    
+    // Check if we need to repay the $3.00 bonus
+    const bonusRepayment = userData.bonusClaimed ? 3.00 : 0.00;
+    const totalDeduct = val + fee + bonusRepayment;
 
     if (!val || val < 1) return alert("Minimum transfer is $1.00");
     if (!recipientData) return alert("Please enter a valid recipient PIN");
-    if (totalDeduct > userData.wallet) return alert(`Insufficient balance. You need $${totalDeduct.toFixed(2)} (Amount + Fee)`);
+    
+    const balanceError = userData.bonusClaimed 
+        ? `Insufficient balance. You need $${totalDeduct.toFixed(2)} ($${val.toFixed(2)} + $${fee.toFixed(2)} fee + $3.00 Bonus Repayment)`
+        : `Insufficient balance. You need $${totalDeduct.toFixed(2)} (Amount + Fee)`;
+
+    if (totalDeduct > userData.wallet) return alert(balanceError);
 
     setLoading(true);
     try {
-      // 1. Fetch Recipient Email for the trigger
       const recipientRef = doc(db, "users", recipientData.id);
       const recipientSnap = await getDoc(recipientRef);
       const recipientEmail = recipientSnap.exists() ? recipientSnap.data().email : null;
@@ -123,13 +135,21 @@ export default function TransferPage() {
       const senderRef = doc(db, "users", user.uid);
       const receiverRef = doc(db, "users", recipientData.id);
       
-      batch.update(senderRef, { wallet: increment(-totalDeduct) });
+      // 1. Deduct total amount (Value + Fee + Bonus if applicable)
+      batch.update(senderRef, { 
+        wallet: increment(-totalDeduct),
+        // If they had a bonus, set it to false now so they aren't charged again
+        ...(userData.bonusClaimed && { bonusClaimed: false })
+      });
+
+      // 2. Credit only the base value to the receiver
       batch.update(receiverRef, { wallet: increment(val) });
 
       const txId = `TX-${Date.now()}`;
       const logData = {
         amount: val,
         fee: fee,
+        bonusRepaid: bonusRepayment, // Log the repayment for transparency
         senderId: user.uid,
         senderName: userData.fullName,
         receiverId: recipientData.id,
@@ -148,7 +168,6 @@ export default function TransferPage() {
 
       await batch.commit();
 
-      // --- TRIGGER: NOTIFY RECIPIENT OF RECEIVED FUNDS ---
       if (recipientEmail) {
         try {
           await fetch('/api/send-email', {
@@ -212,6 +231,12 @@ export default function TransferPage() {
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Service Fee</span>
                 <span className="text-sm font-black text-rose-500 italic">${transferRecord?.fee.toFixed(2)}</span>
              </div>
+             {transferRecord?.bonusRepaid > 0 && (
+               <div className="flex justify-between items-center animate-pulse">
+                  <span className="text-[10px] font-bold text-[#613de6] uppercase tracking-widest">Bonus Repaid</span>
+                  <span className="text-sm font-black text-[#613de6] italic">-$3.00</span>
+               </div>
+             )}
              <div className="h-px bg-white/5 w-full" />
              <p className="text-[9px] font-bold text-gray-600 uppercase text-center tracking-tighter">Transaction ID: {transferRecord?.txId}</p>
           </div>
@@ -237,7 +262,8 @@ export default function TransferPage() {
   }
 
   const currentFee = calculateTransferFee(amount);
-  const totalWithFee = (parseFloat(amount) || 0) + currentFee;
+  const bonusRepaymentAmount = userData.bonusClaimed ? 3.00 : 0.00;
+  const totalWithFee = (parseFloat(amount) || 0) + currentFee + bonusRepaymentAmount;
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-white">
@@ -294,12 +320,20 @@ export default function TransferPage() {
             </div>
           </div>
 
-          {parseFloat(amount) > 0 && (
+          {(parseFloat(amount) > 0 || userData.bonusClaimed) && (
             <div className="bg-black/20 border border-white/5 p-5 rounded-3xl space-y-2 animate-in fade-in slide-in-from-top-2">
                <div className="flex justify-between items-center">
                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Service Fee</span>
                   <span className="text-[10px] font-black text-rose-500">+ ${currentFee.toFixed(2)}</span>
                </div>
+               
+               {userData.bonusClaimed && (
+                 <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-[#613de6] uppercase tracking-widest">Bonus Repayment</span>
+                    <span className="text-[10px] font-black text-[#613de6] tracking-widest">+ $3.00</span>
+                 </div>
+               )}
+
                <div className="h-px bg-white/5 w-full" />
                <div className="flex justify-between items-center">
                   <span className="text-[11px] font-black text-white uppercase tracking-widest">Total Deductible</span>

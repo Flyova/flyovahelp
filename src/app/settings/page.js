@@ -2,9 +2,9 @@
 import { useState, useEffect } from "react";
 import { db, auth } from "@/lib/firebase";
 import { 
-  doc, onSnapshot, updateDoc, collection, query, where, getDocs, deleteDoc 
+  doc, onSnapshot, updateDoc, collection, query, where, getDocs, setDoc, serverTimestamp 
 } from "firebase/firestore";
-import { onAuthStateChanged, updatePassword, deleteUser } from "firebase/auth";
+import { onAuthStateChanged, updatePassword } from "firebase/auth";
 import { 
   User, 
   Mail, 
@@ -21,10 +21,10 @@ import {
   Phone,
   Globe,
   Fingerprint,
-  X
+  X,
+  Clock
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
 
 export default function Settings() {
   const router = useRouter();
@@ -32,22 +32,18 @@ export default function Settings() {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   
-  // Update States
   const [newUsername, setNewUsername] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [newDob, setNewDob] = useState("");
   const [updateLoading, setUpdateLoading] = useState(false);
 
-  // Password State
   const [newPassword, setNewPassword] = useState("");
   const [passLoading, setPassLoading] = useState(false);
   const [passMessage, setPassMessage] = useState({ type: "", msg: "" });
 
-  // Delete Modal State
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // Copy States
   const [copied, setCopied] = useState(false);
   const [pinCopied, setPinCopied] = useState(false);
 
@@ -127,27 +123,29 @@ export default function Settings() {
     setTimeout(() => setPassMessage({ type: "", msg: "" }), 5000);
   };
 
-  const handleDeleteAccount = async () => {
+  const requestAccountDeletion = async () => {
     setDeleteLoading(true);
     try {
-      const userToAuthDelete = auth.currentUser;
-      if (!userToAuthDelete) return;
+      // 1. Create a request in the deletion_requests collection for Admin visibility
+      await setDoc(doc(db, "deletion_requests", user.uid), {
+        uid: user.uid,
+        username: userData.username,
+        email: userData.email,
+        walletBalance: userData.wallet || 0,
+        requestDate: serverTimestamp(),
+        status: "pending"
+      });
 
-      // 1. Delete the Firestore Document first while user is still logged in
-      await deleteDoc(doc(db, "users", userToAuthDelete.uid));
+      // 2. Mark the user profile as pending deletion
+      await updateDoc(doc(db, "users", user.uid), {
+        deletionRequested: true,
+        deletionRequestDate: serverTimestamp()
+      });
 
-      // 2. Delete the Authentication user
-      await deleteUser(userToAuthDelete);
-
-      router.push("/login");
-    } catch (err) {
-      console.error(err);
-      if (err.code === "auth/requires-recent-login") {
-        alert("Security Rule: Please logout and login again before deleting your account.");
-      } else {
-        alert("Error deleting account: " + err.message);
-      }
       setShowDeleteModal(false);
+      alert("Your deletion request has been submitted. An administrator will review and process it within 24-48 hours.");
+    } catch (err) {
+      alert("Error submitting request: " + err.message);
     }
     setDeleteLoading(false);
   };
@@ -189,6 +187,19 @@ export default function Settings() {
       </div>
      
       <div className="p-6 space-y-6 max-w-md mx-auto w-full">
+
+        {/* Pending Deletion Warning */}
+        {userData?.deletionRequested && (
+          <div className="bg-amber-500/10 border border-amber-500/30 p-5 rounded-[2rem] flex items-start gap-4 animate-pulse">
+            <Clock className="text-amber-500 shrink-0" size={20} />
+            <div>
+              <p className="text-[11px] font-black uppercase italic text-amber-500 leading-tight">Account Deletion Pending</p>
+              <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase tracking-tighter">
+                An administrator is reviewing your request. Access may be restricted soon.
+              </p>
+            </div>
+          </div>
+        )}
         
         {/* Profile Card */}
         <div className="bg-[#1e293b] rounded-[2.5rem] p-6 border border-white/5 relative overflow-hidden shadow-2xl">
@@ -220,8 +231,6 @@ export default function Settings() {
           </div>
 
           <form onSubmit={handleUpdateProfile} className="space-y-4 relative z-10">
-            
-            {/* ACCOUNT PIN WITH COPY BUTTON */}
             <div className="bg-black/20 p-4 rounded-2xl border border-white/5 flex items-center justify-between">
               <div>
                 <p className="text-[9px] font-black uppercase text-white/40 mb-1">Account PIN</p>
@@ -241,7 +250,6 @@ export default function Settings() {
               </button>
             </div>
 
-            {/* Username Field */}
             <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
               <p className="text-[9px] font-black uppercase text-white/40 mb-2">Unique Username</p>
               <div className="flex items-center gap-2">
@@ -254,7 +262,6 @@ export default function Settings() {
               </div>
             </div>
 
-            {/* Email Field (Read Only) */}
             <div className="bg-black/20 p-4 rounded-2xl border border-white/5 opacity-60">
               <p className="text-[9px] font-black uppercase text-white/40 mb-2">Email Address</p>
               <div className="flex items-center gap-2">
@@ -267,7 +274,6 @@ export default function Settings() {
               </div>
             </div>
 
-             {/* Country Field (Read Only) */}
              <div className="bg-black/20 p-4 rounded-2xl border border-white/5 opacity-60">
               <p className="text-[9px] font-black uppercase text-white/40 mb-2">Registered Country</p>
               <div className="flex items-center gap-2">
@@ -280,7 +286,6 @@ export default function Settings() {
               </div>
             </div>
 
-            {/* Phone Number Field */}
             <div className={`bg-black/20 p-4 rounded-2xl border border-white/5 ${userData?.phone ? 'opacity-60' : ''}`}>
               <p className="text-[9px] font-black uppercase text-white/40 mb-2">Phone Number</p>
               <div className="flex items-center gap-2">
@@ -295,7 +300,6 @@ export default function Settings() {
               </div>
             </div>
 
-            {/* Date of Birth Field */}
             <div className={`bg-black/20 p-4 rounded-2xl border border-white/5 ${userData?.dob ? 'opacity-60' : ''}`}>
               <p className="text-[9px] font-black uppercase text-white/40 mb-2">Date of Birth</p>
               <div className="flex items-center gap-2">
@@ -318,7 +322,6 @@ export default function Settings() {
           </form>
         </div>
 
-        {/* Global Message Feedback */}
         {passMessage.msg && (
           <div className={`flex items-center p-4 rounded-2xl text-[10px] font-black uppercase tracking-tight ${
             passMessage.type === 'success' ? 'bg-green-500/10 text-green-500 border border-green-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20'
@@ -328,7 +331,6 @@ export default function Settings() {
           </div>
         )}
 
-        {/* Referral System */}
         <div className="bg-[#1e293b] rounded-[2rem] p-6 border border-white/5 shadow-xl">
           <div className="flex items-center space-x-2 mb-4">
             <Share2 size={18} className="text-[#fc7952]" />
@@ -345,7 +347,6 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* Update Password */}
         <div className="bg-[#1e293b] rounded-[2rem] p-6 border border-white/5 shadow-xl">
           <div className="flex items-center space-x-2 mb-4">
             <Lock size={18} className="text-[#fc7952]" />
@@ -363,18 +364,20 @@ export default function Settings() {
           </form>
         </div>
 
-        {/* Dangerous Actions */}
         <div className="pt-4 space-y-3">
           <button onClick={() => auth.signOut()} className="w-full py-5 rounded-2xl bg-white/5 text-white/40 font-black uppercase text-xs hover:bg-white/10 transition-all">
             Log Out of Session
           </button>
-          <button onClick={() => setShowDeleteModal(true)} className="w-full py-5 rounded-2xl border-2 border-red-500/10 text-red-500 font-black uppercase text-xs flex items-center justify-center gap-2 hover:bg-red-500/5 transition-all">
-            <Trash2 size={14} /> Delete Account Permanently
+          <button 
+            disabled={userData?.deletionRequested}
+            onClick={() => setShowDeleteModal(true)} 
+            className="w-full py-5 rounded-2xl border-2 border-red-500/10 text-red-500 font-black uppercase text-xs flex items-center justify-center gap-2 hover:bg-red-500/5 transition-all disabled:opacity-30 disabled:grayscale"
+          >
+            <Trash2 size={14} /> {userData?.deletionRequested ? "Deletion Request Submitted" : "Delete Account Permanently"}
           </button>
         </div>
       </div>
 
-      {/* Delete Confirmation Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#0f172a]/90 backdrop-blur-sm animate-in fade-in duration-300">
            <div className="bg-[#1e293b] w-full max-w-sm rounded-[2.5rem] border border-white/10 p-8 shadow-2xl space-y-6">
@@ -382,17 +385,17 @@ export default function Settings() {
                 <AlertCircle size={32} />
               </div>
               <div className="text-center">
-                <h2 className="text-xl font-black uppercase italic tracking-tighter mb-2">Delete Account?</h2>
+                <h2 className="text-xl font-black uppercase italic tracking-tighter mb-2">Request Deletion?</h2>
                 <p className="text-sm text-gray-400 font-bold leading-relaxed">
-                  This action is permanent. All your wallet data, referral history, and profile will be erased forever.
+                  This sends a request to our admin team. Once approved, your wallet, history, and profile will be erased forever.
                 </p>
               </div>
               <div className="space-y-3">
-                <button onClick={handleDeleteAccount} disabled={deleteLoading} className="w-full bg-red-500 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2">
-                   {deleteLoading ? "Erasing Data..." : "YES, DELETE EVERYTHING"}
+                <button onClick={requestAccountDeletion} disabled={deleteLoading} className="w-full bg-red-500 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2">
+                   {deleteLoading ? "Submitting..." : "CONFIRM DELETION REQUEST"}
                 </button>
                 <button onClick={() => setShowDeleteModal(false)} className="w-full py-4 rounded-2xl bg-white/5 font-black uppercase text-[10px] tracking-widest">
-                   No, Keep My Account
+                   Cancel Request
                 </button>
               </div>
            </div>

@@ -363,7 +363,31 @@ export default function TradeRoom() {
             <button 
               onClick={async () => {
                 if(window.confirm("Decline this trade?")) {
-                  await updateDoc(doc(db, "trades", id), { status: "cancelled" });
+                  const batch = writeBatch(db);
+
+                  // REFUND LOGIC: If it's a withdrawal, give user their money + fee back
+                  if (trade.type === "withdrawal") {
+                    const refundAmount = Number(trade.amount) + Number(trade.fee || 0);
+                    const userRef = doc(db, "users", trade.senderId);
+                    batch.update(userRef, { wallet: increment(refundAmount) });
+
+                    // Find and cancel the user's transaction history log
+                    const transQ = query(
+                      collection(db, "users", trade.senderId, "transactions"), 
+                      where("tradeId", "==", id),
+                      limit(1)
+                    );
+                    const transSnap = await getDocs(transQ);
+                    if (!transSnap.empty) {
+                      batch.update(transSnap.docs[0].ref, { status: "cancelled", description: "Withdrawal Declined - Refunded" });
+                    }
+                  }
+
+                  // Update trade status to cancelled
+                  batch.update(doc(db, "trades", id), { status: "cancelled", cancelledAt: serverTimestamp() });
+                  
+                  await batch.commit();
+
                   try {
                     const userSnap = await getDoc(doc(db, "users", trade.senderId));
                     if (userSnap.exists()) {
