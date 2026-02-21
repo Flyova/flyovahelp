@@ -253,10 +253,13 @@ export default function FlyovaToDollars() {
                         </div>
                         <button onClick={() => setStake(stake + 1)} className="w-10 h-10 bg-[#613de6] rounded-xl font-bold">+</button>
                     </div>
-                    <button onClick={placeBet} disabled={selectedNumbers.length !== 2}
-                        className="w-full bg-[#fc7952] py-4 rounded-2xl font-black uppercase italic shadow-lg active:scale-95 disabled:opacity-50">
-                        PLACE BET
-                    </button>
+                   <button 
+    onClick={placeBet} 
+    disabled={selectedNumbers.length !== 2 || timeLeft <= 0 || gameStatus === "waiting"}
+    className="w-full bg-[#fc7952] py-4 rounded-2xl font-black uppercase italic shadow-lg active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+>
+    {timeLeft <= 0 ? "BETTING CLOSED" : "PLACE BET"}
+</button>
                 </div>
             </>
         )}

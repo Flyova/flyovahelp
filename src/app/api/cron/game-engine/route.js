@@ -1,6 +1,15 @@
 import { adminDb, admin, getRtdb } from "@/lib/firebaseAdmin";
 import { NextResponse } from "next/server";
 
+// Helper to shuffle array correctly
+const shuffle = (array) => {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+};
+
 export async function GET() {
   const rtdb = getRtdb();
   const now = Date.now();
@@ -9,7 +18,7 @@ export async function GET() {
   try {
     const gameRef = rtdb.ref("active_game_flyova");
 
-    // 1. SETTLE EXPIRED GAMES & PAY OUT WINNERS
+    // 1. SETTLE EXPIRED GAMES
     const activeSnap = await adminDb.collection("timed_games")
       .where("status", "==", "active")
       .where("endTime", "<=", now).limit(1).get();
@@ -25,17 +34,15 @@ export async function GET() {
         .get();
 
       const batch = adminDb.batch();
-
       usersSnap.forEach((betDoc) => {
         const betData = betDoc.data();
-        const userPicks = betData.picks.sort((a, b) => a - b);
+        const userPicks = [...(betData.picks || [])].sort((a, b) => a - b);
         const isWinner = JSON.stringify(userPicks) === JSON.stringify(winningNums);
 
         if (isWinner) {
           const payout = betData.amount * WIN_MULTIPLIER;
           batch.update(betDoc.ref, { status: "win", payout: payout });
-          const userRef = betDoc.ref.parent.parent; 
-          batch.update(userRef, { wallet: admin.firestore.FieldValue.increment(payout) });
+          batch.update(betDoc.ref.parent.parent, { wallet: admin.firestore.FieldValue.increment(payout) });
         } else {
           batch.update(betDoc.ref, { status: "loss" });
         }
@@ -43,9 +50,10 @@ export async function GET() {
 
       await batch.commit();
       await gameDoc.ref.update({ status: "completed", completedAt: now });
+      // Update RTDB to 'settled' so frontend shows the winners and "Waiting" screen
       await gameRef.update({ status: "settled", winners: winningNums });
       
-      return NextResponse.json({ message: "Game Settled and Paid Out" });
+      return NextResponse.json({ message: "Game Settled" });
     }
 
     // 2. START NEW GAME
@@ -59,19 +67,16 @@ export async function GET() {
         if (!pool.includes(r)) pool.push(r);
       }
       
-      // Select winners first (e.g., first two generated)
       const winners = [pool[0], pool[1]].sort((a,b) => a-b);
+      // SHUFFLE the display order so winners are randomized across the 4 slots
+      const displayNumbers = shuffle([...pool]);
       const endTime = now + 120000; 
-
-      // RANDOMIZE DISPLAY: Shuffle the pool array so winners aren't always on the left
-      const shuffledDisplay = [...pool].sort(() => Math.random() - 0.5);
 
       const newGameRef = await adminDb.collection("timed_games").add({
         status: "active",
         endTime: endTime,
         winners: winners,
-        allGenerated: pool,
-        displayNumbers: shuffledDisplay, // Store the shuffled version for the UI
+        displayNumbers: displayNumbers, 
         createdAt: admin.firestore.FieldValue.serverTimestamp()
       });
 
@@ -80,10 +85,10 @@ export async function GET() {
         status: "active",
         endTime: endTime,
         winners: winners,
-        displayNumbers: shuffledDisplay // Send shuffled version to RTDB
+        displayNumbers: displayNumbers 
       });
 
-      return NextResponse.json({ message: "1-90 Game Started (Shuffled)" });
+      return NextResponse.json({ message: "New Game Started" });
     }
 
     return NextResponse.json({ message: "Running" });
