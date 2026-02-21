@@ -34,6 +34,8 @@ export default function FlyovaToDollars() {
   const GAME_DURATION = 120;
   const WIN_MULTIPLIER = 1.3; 
 
+
+    
   // 1. AUTH & WALLET SYNC
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -122,6 +124,16 @@ export default function FlyovaToDollars() {
       }
     }
   };
+
+
+    useEffect(() => {
+  if (showResultAlert) {
+    const timer = setTimeout(() => {
+      setShowResultAlert(false);
+    }, 5000); // 5 seconds
+    return () => clearTimeout(timer);
+  }
+}, [showResultAlert]);
 
   const fetchUserBets = async (gameId) => {
     if (!user) return;
