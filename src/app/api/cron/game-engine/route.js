@@ -19,7 +19,6 @@ export async function GET() {
       const gameId = gameDoc.id;
       const winningNums = gameDoc.data().winners.sort((a, b) => a - b);
 
-      // PAYOUT LOGIC: Find all users who bet on this game
       const usersSnap = await adminDb.collectionGroup("transactions")
         .where("gameId", "==", gameId)
         .where("status", "==", "pending")
@@ -30,15 +29,11 @@ export async function GET() {
       usersSnap.forEach((betDoc) => {
         const betData = betDoc.data();
         const userPicks = betData.picks.sort((a, b) => a - b);
-        
-        // Check if user picks match winners exactly
         const isWinner = JSON.stringify(userPicks) === JSON.stringify(winningNums);
 
         if (isWinner) {
           const payout = betData.amount * WIN_MULTIPLIER;
-          // 1. Update Transaction to win
           batch.update(betDoc.ref, { status: "win", payout: payout });
-          // 2. Credit the User Wallet (BetDoc is inside user subcollection)
           const userRef = betDoc.ref.parent.parent; 
           batch.update(userRef, { wallet: admin.firestore.FieldValue.increment(payout) });
         } else {
@@ -53,7 +48,7 @@ export async function GET() {
       return NextResponse.json({ message: "Game Settled and Paid Out" });
     }
 
-    // 2. START NEW GAME (Your existing logic)
+    // 2. START NEW GAME
     const runningSnap = await adminDb.collection("timed_games")
       .where("status", "==", "active").limit(1).get();
 
@@ -64,14 +59,19 @@ export async function GET() {
         if (!pool.includes(r)) pool.push(r);
       }
       
+      // Select winners first (e.g., first two generated)
       const winners = [pool[0], pool[1]].sort((a,b) => a-b);
       const endTime = now + 120000; 
+
+      // RANDOMIZE DISPLAY: Shuffle the pool array so winners aren't always on the left
+      const shuffledDisplay = [...pool].sort(() => Math.random() - 0.5);
 
       const newGameRef = await adminDb.collection("timed_games").add({
         status: "active",
         endTime: endTime,
         winners: winners,
         allGenerated: pool,
+        displayNumbers: shuffledDisplay, // Store the shuffled version for the UI
         createdAt: admin.firestore.FieldValue.serverTimestamp()
       });
 
@@ -80,10 +80,10 @@ export async function GET() {
         status: "active",
         endTime: endTime,
         winners: winners,
-        displayNumbers: pool 
+        displayNumbers: shuffledDisplay // Send shuffled version to RTDB
       });
 
-      return NextResponse.json({ message: "1-90 Game Started" });
+      return NextResponse.json({ message: "1-90 Game Started (Shuffled)" });
     }
 
     return NextResponse.json({ message: "Running" });
