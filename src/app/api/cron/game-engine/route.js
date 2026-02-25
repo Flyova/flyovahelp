@@ -14,6 +14,7 @@ export async function GET() {
   const rtdb = getRtdb();
   const now = Date.now();
   const WIN_MULTIPLIER = 1.3;
+  const REFUND_PERCENTAGE = 0.8; // 80% refund for 1 correct number
   
   try {
     const gameRef = rtdb.ref("active_game_flyova");
@@ -26,7 +27,7 @@ export async function GET() {
     if (!activeSnap.empty) {
       const gameDoc = activeSnap.docs[0];
       const gameId = gameDoc.id;
-      const winningNums = gameDoc.data().winners.sort((a, b) => a - b);
+      const winningNums = gameDoc.data().winners; // Array of 2 numbers
 
       const usersSnap = await adminDb.collectionGroup("transactions")
         .where("gameId", "==", gameId)
@@ -37,16 +38,27 @@ export async function GET() {
 
       usersSnap.forEach((betDoc) => {
         const betData = betDoc.data();
-        const userPicks = betData.picks.sort((a, b) => a - b);
-        const isWinner = JSON.stringify(userPicks) === JSON.stringify(winningNums);
+        const userPicks = betData.picks; // Array of numbers picked
+        const userRef = betDoc.ref.parent.parent; 
 
-        if (isWinner) {
+        // Count how many numbers match the winners
+        const matches = userPicks.filter(num => winningNums.includes(num)).length;
+
+        if (matches === 2) {
+          // JACKPOT: User got both numbers correct
           const payout = betData.amount * WIN_MULTIPLIER;
-          batch.update(betDoc.ref, { status: "win", payout: payout });
-          const userRef = betDoc.ref.parent.parent; 
+          batch.update(betDoc.ref, { status: "win", payout: payout, matches: 2 });
           batch.update(userRef, { wallet: admin.firestore.FieldValue.increment(payout) });
-        } else {
-          batch.update(betDoc.ref, { status: "loss" });
+        } 
+        else if (matches === 1) {
+          // PARTIAL REFUND: User got only 1 number correct
+          const refundAmount = betData.amount * REFUND_PERCENTAGE;
+          batch.update(betDoc.ref, { status: "refunded", payout: refundAmount, matches: 1 });
+          batch.update(userRef, { wallet: admin.firestore.FieldValue.increment(refundAmount) });
+        } 
+        else {
+          // LOSS: 0 numbers correct
+          batch.update(betDoc.ref, { status: "loss", matches: 0 });
         }
       });
 
@@ -54,7 +66,7 @@ export async function GET() {
       await gameDoc.ref.update({ status: "completed", completedAt: now });
       await gameRef.update({ status: "settled", winners: winningNums });
       
-      return NextResponse.json({ message: "Game Settled and Paid Out" });
+      return NextResponse.json({ message: "Game Settled (Winners Paid & Partial Refunds Processed)" });
     }
 
     // 2. START NEW GAME

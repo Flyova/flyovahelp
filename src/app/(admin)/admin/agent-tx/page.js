@@ -12,7 +12,11 @@ import {
   doc,
   getDoc,
   documentId,
-  where
+  where,
+  writeBatch,
+  increment,
+  serverTimestamp,
+  deleteDoc
 } from "firebase/firestore";
 import { 
   ArrowUpRight, 
@@ -22,7 +26,9 @@ import {
   ShieldCheck,
   Loader2,
   ChevronDown,
-  Calendar
+  Calendar,
+  Trash2,
+  RotateCcw
 } from "lucide-react";
 
 export default function AgentTransactions() {
@@ -33,6 +39,7 @@ export default function AgentTransactions() {
   const [searchTerm, setSearchTerm] = useState("");
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(true);
+  const [actionLoading, setActionLoading] = useState(null); 
 
   const PAGE_SIZE = 20;
 
@@ -41,7 +48,6 @@ export default function AgentTransactions() {
     const uniqueIds = [...new Set(agentIds)].filter(id => id && !agentNames[id]);
     if (uniqueIds.length === 0) return;
 
-    // Firebase 'in' query limit is 10, so we chunk if necessary
     const newNames = { ...agentNames };
     const chunks = [];
     for (let i = 0; i < uniqueIds.length; i += 10) {
@@ -68,11 +74,8 @@ export default function AgentTransactions() {
     
     const unsub = onSnapshot(q, async (snap) => {
       const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      
-      // Collect agent IDs and fetch names
       const agentIds = docs.map(t => t.agentId);
       await fetchAgentNames(agentIds);
-
       setTrades(docs);
       setLastDoc(snap.docs[snap.docs.length - 1]);
       setHasMore(snap.docs.length === PAGE_SIZE);
@@ -88,7 +91,6 @@ export default function AgentTransactions() {
   const loadMore = async () => {
     if (!lastDoc || loadingMore) return;
     setLoadingMore(true);
-
     try {
       const q = query(
         collection(db, "trades"),
@@ -96,14 +98,11 @@ export default function AgentTransactions() {
         startAfter(lastDoc),
         limit(PAGE_SIZE)
       );
-
       const snap = await getDocs(q);
       if (!snap.empty) {
         const newDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        
         const agentIds = newDocs.map(t => t.agentId);
         await fetchAgentNames(agentIds);
-
         setTrades(prev => [...prev, ...newDocs]);
         setLastDoc(snap.docs[snap.docs.length - 1]);
         setHasMore(snap.docs.length === PAGE_SIZE);
@@ -114,6 +113,53 @@ export default function AgentTransactions() {
       console.error(e);
     } finally {
       setLoadingMore(false);
+    }
+  };
+
+  // 1. DELETE ONLY
+  const handleDeleteOnly = async (id) => {
+    if (!window.confirm("Delete this trade record? This action cannot be undone and will NOT refund the user.")) return;
+    setActionLoading(id);
+    try {
+      await deleteDoc(doc(db, "trades", id));
+      alert("Trade record deleted.");
+    } catch (err) {
+      alert("Delete failed: " + err.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // 2. REFUND ONLY
+  const handleRefundOnly = async (trade) => {
+    if (!window.confirm(`Refund $${(Number(trade.amount) + Number(trade.fee || 0)).toFixed(2)} to ${trade.senderName || 'user'}?`)) return;
+    setActionLoading(trade.id + "_ref");
+    const batch = writeBatch(db);
+    try {
+      const totalRefund = Number(trade.amount) + Number(trade.fee || 0);
+      const userRef = doc(db, "users", trade.senderId);
+      batch.update(userRef, { wallet: increment(totalRefund) });
+
+      // Update the user's transaction history log
+      const transQ = query(
+        collection(db, "users", trade.senderId, "transactions"), 
+        where("tradeId", "==", trade.id),
+        limit(1)
+      );
+      const transSnap = await getDocs(transQ);
+      if (!transSnap.empty) {
+        batch.update(transSnap.docs[0].ref, { 
+          status: "refunded", 
+          description: "Admin Manual Refund Processed" 
+        });
+      }
+
+      await batch.commit();
+      alert("Refund successful!");
+    } catch (err) {
+      alert("Refund failed: " + err.message);
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -155,19 +201,20 @@ export default function AgentTransactions() {
                 <th className="p-6 text-[10px] font-black uppercase text-slate-400">Agent</th>
                 <th className="p-6 text-[10px] font-black uppercase text-slate-400">Client</th>
                 <th className="p-6 text-[10px] font-black uppercase text-slate-400">Value</th>
-                <th className="p-6 text-right text-[10px] font-black uppercase text-slate-400">Date & Status</th>
+                <th className="p-6 text-[10px] font-black uppercase text-slate-400">Date & Status</th>
+                <th className="p-6 text-right text-[10px] font-black uppercase text-slate-400">Manage</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {loading ? (
                 <tr>
-                  <td colSpan="5" className="p-20 text-center">
+                  <td colSpan="6" className="p-20 text-center">
                     <Loader2 className="animate-spin text-indigo-600 mx-auto" size={32} />
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="p-20 text-center text-slate-300 font-bold italic uppercase text-[10px] tracking-widest">No trade records found.</td>
+                  <td colSpan="6" className="p-20 text-center text-slate-300 font-bold italic uppercase text-[10px] tracking-widest">No trade records found.</td>
                 </tr>
               ) : (
                 filtered.map((trade) => (
@@ -200,16 +247,39 @@ export default function AgentTransactions() {
                       </p>
                       <p className="text-[9px] font-bold text-slate-400 uppercase">Rate: {trade.rate || '---'}</p>
                     </td>
-                    <td className="p-6 text-right">
+                    <td className="p-6">
                        <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
                          trade.status === 'completed' ? 'bg-emerald-100 text-emerald-600' : 
                          trade.status === 'pending' ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-400'
                        }`}>
                          {trade.status || 'unknown'}
                        </span>
-                       <p className="text-[10px] font-bold text-slate-400 mt-2 flex items-center justify-end gap-1 uppercase">
+                       <p className="text-[10px] font-bold text-slate-400 mt-2 flex items-center gap-1 uppercase">
                          <Calendar size={10} /> {trade.createdAt?.toDate ? trade.createdAt.toDate().toLocaleDateString() : '---'}
                        </p>
+                    </td>
+                    <td className="p-6">
+                        <div className="flex items-center justify-end gap-2">
+                            {/* YELLOW REFUND BUTTON */}
+                            <button 
+                                onClick={() => handleRefundOnly(trade)}
+                                disabled={actionLoading === trade.id + "_ref"}
+                                className="flex items-center gap-1 px-3 py-2 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-500 hover:text-white transition-all border border-amber-100"
+                            >
+                                {actionLoading === trade.id + "_ref" ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+                                <span className="text-[8px] font-black uppercase tracking-tighter">Refund</span>
+                            </button>
+
+                            {/* RED DELETE BUTTON */}
+                            <button 
+                                onClick={() => handleDeleteOnly(trade.id)}
+                                disabled={actionLoading === trade.id}
+                                className="flex items-center gap-1 px-3 py-2 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all border border-rose-100"
+                            >
+                                {actionLoading === trade.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                                <span className="text-[8px] font-black uppercase tracking-tighter">Delete</span>
+                            </button>
+                        </div>
                     </td>
                   </tr>
                 ))

@@ -116,12 +116,14 @@ export default function TradeRoom() {
 
   const handleAcceptTrade = async () => {
     const amount = Number(trade.amount);
-    const feeAmount = Number(trade.fee || 0);
+    // Apply Fix: 3% for Deposit, 5% for Withdrawal
+    const feePercent = trade.type === "deposit" ? 0.03 : 0.05;
+    const feeAmount = amount * feePercent;
     const totalRequired = amount + feeAmount;
 
     const confirmMsg = trade.type === "deposit" 
-      ? `Accept trade? You'll be charged $${amount} + $${feeAmount.toFixed(2)} admin fee.`
-      : `Accept this withdrawal request for $${amount}?`;
+      ? `Accept trade? You'll be charged $${amount} + $${feeAmount.toFixed(2)} (3% admin fee).`
+      : `Accept this withdrawal request for $${amount}? A 5% admin fee ($${feeAmount.toFixed(2)}) applies.`;
 
     if (!window.confirm(confirmMsg)) return;
     
@@ -143,6 +145,7 @@ export default function TradeRoom() {
       batch.update(doc(db, "trades", id), { 
         status: "acknowledged", 
         acceptedAt: serverTimestamp(),
+        fee: feeAmount, // Update actual fee in trade doc
         feeCharged: feeAmount,
         agentImpact: trade.type === "deposit" ? -totalRequired : 0 
       });
@@ -186,7 +189,10 @@ export default function TradeRoom() {
       const userRef = doc(db, "users", trade.senderId);
       const agentRef = doc(db, "agents", trade.agentId);
       const amount = Number(trade.amount);
-      const feeAmount = Number(trade.fee || 0);
+      
+      // Re-calculate fee based on type for final transaction
+      const feePercent = trade.type === "deposit" ? 0.03 : 0.05;
+      const feeAmount = amount * feePercent;
 
       if (trade.type === "deposit") {
         batch.update(userRef, { wallet: increment(amount) });
@@ -209,6 +215,7 @@ export default function TradeRoom() {
           }
         }
       } else {
+        // Withdrawal: Agent gets Amount MINUS 5% fee
         const netToAgent = amount - feeAmount;
         batch.update(agentRef, { agent_balance: increment(netToAgent) });
         const transQ = query(
@@ -224,7 +231,8 @@ export default function TradeRoom() {
 
       batch.update(doc(db, "trades", id), { 
         status: "completed", 
-        completedAt: serverTimestamp() 
+        completedAt: serverTimestamp(),
+        finalFee: feeAmount
       });
       
       await batch.commit();
@@ -267,7 +275,10 @@ export default function TradeRoom() {
 
   const isAgent = auth.currentUser?.uid === trade.agentId;
   const canConfirm = (trade.type === "deposit" && isAgent) || (trade.type === "withdrawal" && !isAgent);
-  const calculatedFee = Number(trade.fee || 0);
+  
+  // Update Display Fee for Agent Summary
+  const currentFeePercent = trade.type === "deposit" ? 0.03 : 0.05;
+  const calculatedFee = Number(trade.amount) * currentFeePercent;
 
   return (
     <div className="min-h-screen bg-[#0f172a] flex flex-col text-white pb-48"> 
@@ -289,7 +300,7 @@ export default function TradeRoom() {
             <div className="flex items-center gap-2 mb-1">
               <Receipt size={14} className="text-[#613de6]" />
               <span className="text-[10px] font-black uppercase tracking-widest text-[#613de6]">
-                Agent {trade.type === "deposit" ? "Deduction" : "Earnings"} Summary
+                Agent {trade.type === "deposit" ? "Deduction" : "Earnings"} Summary ({currentFeePercent * 100}%)
               </span>
             </div>
             <div className="grid grid-cols-2 gap-y-2">
@@ -363,58 +374,73 @@ export default function TradeRoom() {
             <button 
               onClick={async () => {
                 if(window.confirm("Decline this trade?")) {
-                  const batch = writeBatch(db);
-
-                  // REFUND LOGIC: If it's a withdrawal, give user their money + fee back
-                  if (trade.type === "withdrawal") {
-                    const refundAmount = Number(trade.amount) + Number(trade.fee || 0);
-                    const userRef = doc(db, "users", trade.senderId);
-                    batch.update(userRef, { wallet: increment(refundAmount) });
-
-                    // Find and cancel the user's transaction history log
-                    const transQ = query(
-                      collection(db, "users", trade.senderId, "transactions"), 
-                      where("tradeId", "==", id),
-                      limit(1)
-                    );
-                    const transSnap = await getDocs(transQ);
-                    if (!transSnap.empty) {
-                      batch.update(transSnap.docs[0].ref, { status: "cancelled", description: "Withdrawal Declined - Refunded" });
-                    }
-                  }
-
-                  // Update trade status to cancelled
-                  batch.update(doc(db, "trades", id), { status: "cancelled", cancelledAt: serverTimestamp() });
-                  
-                  await batch.commit();
-
+                  setLoading(true);
                   try {
-                    const userSnap = await getDoc(doc(db, "users", trade.senderId));
-                    if (userSnap.exists()) {
-                      await fetch('/api/send-email', {
-                        method: 'POST', 
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          to: userSnap.data().email,
-                          subject: "Trade Request Declined",
-                          html: `
-                            <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
-                              <h2 style="color: #e11d48; border-bottom: 1px solid #eee; padding-bottom: 10px;">Request Not Accepted</h2>
-                              <p>Hello,</p>
-                              <p>Your ${trade.type} request for $${trade.amount} was not accepted by the agent and has been cancelled.</p>
-                              <p>If any funds were deducted, they have been returned to your balance. You may try again with a different agent.</p>
-                              <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">Flyova Global Network</div>
-                            </div>
-                          `
-                        })
-                      });
+                    const batch = writeBatch(db);
+
+                    // REFUND LOGIC: If it's a withdrawal, return Trade Amount + 5% Fee to User Wallet
+                    if (trade.type === "withdrawal") {
+                      const refundTotal = Number(trade.amount) + (Number(trade.amount) * 0.05);
+                      const userRef = doc(db, "users", trade.senderId);
+                      batch.update(userRef, { wallet: increment(refundTotal) });
+
+                      const transQ = query(
+                        collection(db, "users", trade.senderId, "transactions"), 
+                        where("tradeId", "==", id),
+                        limit(1)
+                      );
+                      const transSnap = await getDocs(transQ);
+                      if (!transSnap.empty) {
+                        batch.update(transSnap.docs[0].ref, { 
+                          status: "cancelled", 
+                          description: "Withdrawal Declined - Balance Refunded" 
+                        });
+                      }
                     }
-                  } catch (e) { console.error("Decline email failed", e); }
+
+                    batch.update(doc(db, "trades", id), { 
+                      status: "cancelled", 
+                      cancelledAt: serverTimestamp(),
+                      declineReason: "Agent Declined" 
+                    });
+                    
+                    await batch.commit();
+
+                    try {
+                      const userSnap = await getDoc(doc(db, "users", trade.senderId));
+                      if (userSnap.exists()) {
+                        await fetch('/api/send-email', {
+                          method: 'POST', 
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            to: userSnap.data().email,
+                            subject: "Trade Request Declined",
+                            html: `
+                              <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
+                                <h2 style="color: #e11d48; border-bottom: 1px solid #eee; padding-bottom: 10px;">Request Declined</h2>
+                                <p>Hello,</p>
+                                <p>Your ${trade.type} request for $${trade.amount} has been declined by the agent.</p>
+                                <p>${trade.type === 'withdrawal' 
+                                  ? "The full amount including fees has been refunded to your wallet balance." 
+                                  : "This transaction has been cancelled. No funds were charged."}</p>
+                                <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">Flyova Global Network</div>
+                              </div>
+                            `
+                          })
+                        });
+                      }
+                    } catch (e) { console.error("Decline email failed", e); }
+                  } catch (err) {
+                    alert("Failed to decline trade: " + err.message);
+                  } finally {
+                    setLoading(false);
+                  }
                 }
               }} 
-              className="flex-1 bg-rose-500/10 text-rose-500 py-4 rounded-2xl font-black uppercase text-[10px] border border-rose-500/20"
+              disabled={loading}
+              className="flex-1 bg-rose-500/10 text-rose-500 py-4 rounded-2xl font-black uppercase text-[10px] border border-rose-500/20 flex items-center justify-center gap-2"
             >
-              Decline
+              {loading ? <Loader2 className="animate-spin" size={14} /> : "Decline"}
             </button>
             <button onClick={handleAcceptTrade} disabled={loading} className="flex-[2] bg-emerald-500 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 shadow-lg">
                 {loading ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />} Accept Trade

@@ -44,7 +44,6 @@ export default function AdminBroadcast() {
     setSending(true);
     try {
       // Using setDoc with a manual ID creation so the ID is stored INSIDE the document
-      // This makes it easier for users to track which IDs they have "read"
       const newBroadcastRef = doc(collection(db, "broadcasts"));
       await setDoc(newBroadcastRef, {
         id: newBroadcastRef.id,
@@ -90,7 +89,7 @@ export default function AdminBroadcast() {
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Enter your announcement here..."
-              className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] p-6 text-sm font-bold outline-none focus:border-[#613de6] transition-all min-h-[120px] resize-none"
+              className="w-full bg-slate-50 border text-stone-900 border-slate-100 rounded-[2rem] p-6 text-sm font-bold outline-none focus:border-[#613de6] transition-all min-h-[120px] resize-none"
               required
             />
           </div>
@@ -164,11 +163,15 @@ export default function AdminBroadcast() {
                   </div>
                 </div>
               </div>
-              <button 
+              
+              {/* DELETE BUTTON */}
+            <button 
                 onClick={() => deleteBroadcast(post.id)}
-                className="p-3 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all md:opacity-0 md:group-hover:opacity-100"
+                className="flex items-center gap-2 px-4 py-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all border border-transparent hover:border-rose-100"
+                title="Delete Broadcast"
               >
-                <Trash2 size={18} />
+                <Trash2 size={16} />
+                <span className="text-[10px] font-black uppercase tracking-widest">Delete</span>
               </button>
             </div>
           ))}
