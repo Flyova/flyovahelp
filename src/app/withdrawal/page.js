@@ -428,7 +428,7 @@ const handleWithdraw = async () => {
             {isEligibleForBonusDeduction && (
               <div className="flex justify-between items-center text-amber-500">
                 <span className="text-[11px] font-bold flex items-center gap-1 uppercase tracking-tight">
-                    <Gift size={12} /> Bonus Recovery
+                    <Gift size={12} /> Bonus Deductible
                 </span>
                 <span className="text-[11px] font-black">+ $3.00</span>
               </div>

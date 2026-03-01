@@ -5,7 +5,7 @@ import Link from "next/link";
 import { X } from "lucide-react";
 // FIREBASE IMPORTS
 import { auth, db } from "@/lib/firebase";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, updateDoc, getDoc, serverTimestamp } from "firebase/firestore";
 
 export default function LoginPage() {
@@ -31,9 +31,17 @@ export default function LoginPage() {
       const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
       const userRef = doc(db, "users", userCredential.user.uid);
       
-      // Fetch user data to check for existing PIN
+      // Fetch user data to check for existing PIN and Ban status
       const userSnap = await getDoc(userRef);
       const userData = userSnap.data();
+
+      // NEW: BAN CHECK LOGIC
+      if (userSnap.exists() && userData?.isban === true) {
+        await signOut(auth);
+        setError("This account is disabled. Please contact support for assistance.");
+        setLoading(false);
+        return;
+      }
       
       let updateData = {
         status: "online",

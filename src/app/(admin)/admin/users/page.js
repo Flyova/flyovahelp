@@ -2,11 +2,11 @@
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { 
-  collection, onSnapshot, doc, query, where, getDocs, orderBy 
+  collection, onSnapshot, doc, query, where, getDocs, orderBy, updateDoc 
 } from "firebase/firestore";
 import { 
   Users, Search, Wallet, Edit2, X, User, Mail, Phone, 
-  Globe, Loader2, Save, Calendar, ShieldCheck 
+  Globe, Loader2, Save, Calendar, ShieldCheck, Ban, CheckCircle 
 } from "lucide-react";
 
 export default function UserManagement() {
@@ -41,9 +41,24 @@ export default function UserManagement() {
       country: user.country || "",
       wallet: user.wallet || 0,
       role: user.role || "user",
-      status: user.status || "active"
+      status: user.status || "active",
+      isban: user.isban || false
     });
     setIsModalOpen(true);
+  };
+
+  const handleToggleBan = async (user) => {
+    const newBanStatus = !user.isban;
+    if (!window.confirm(`Are you sure you want to ${newBanStatus ? 'BAN' : 'UNBAN'} ${user.username}?`)) return;
+    
+    try {
+      await updateDoc(doc(db, "users", user.id), {
+        isban: newBanStatus,
+        status: newBanStatus ? "banned" : "active"
+      });
+    } catch (err) {
+      alert("Failed to update ban status: " + err.message);
+    }
   };
 
   const handleUpdateUser = async () => {
@@ -126,17 +141,26 @@ export default function UserManagement() {
             </thead>
             <tbody className="divide-y divide-slate-50">
               {filteredUsers.map((u) => (
-                <tr key={u.id} className="hover:bg-slate-50/30 transition-colors">
+                <tr key={u.id} className={`hover:bg-slate-50/30 transition-colors ${u.isban ? 'bg-red-50/50' : ''}`}>
                   <td className="p-6 flex items-center gap-4">
-                    <div className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center font-black italic">{u.username?.charAt(0)}</div>
+                    <div className={`w-10 h-10 ${u.isban ? 'bg-red-500' : 'bg-slate-900'} text-white rounded-xl flex items-center justify-center font-black italic`}>{u.username?.charAt(0)}</div>
                     <div>
-                      <p className="text-sm font-black uppercase italic">{u.username}</p>
+                      <p className="text-sm font-black uppercase italic flex items-center gap-2">
+                        {u.username}
+                        {u.isban && <span className="text-[8px] bg-red-500 text-white px-2 py-0.5 rounded-full not-italic">BANNED</span>}
+                      </p>
                       <p className="text-[10px] font-bold text-slate-400">{u.email}</p>
                     </div>
                   </td>
                   <td className="p-6 font-black text-emerald-600">${u.wallet?.toFixed(2)}</td>
                   <td className="p-6 text-[10px] font-bold uppercase text-slate-400">{u.country || "N/A"}</td>
-                  <td className="p-6 text-right">
+                  <td className="p-6 text-right space-x-2">
+                    <button 
+                        onClick={() => handleToggleBan(u)} 
+                        className={`px-4 py-3 rounded-xl transition-all font-black uppercase text-[10px] flex items-center gap-2 inline-flex ${u.isban ? 'bg-emerald-100 text-emerald-600 hover:bg-emerald-600 hover:text-white' : 'bg-red-100 text-red-600 hover:bg-red-600 hover:text-white'}`}
+                    >
+                        {u.isban ? <><CheckCircle size={14} /> Unban</> : <><Ban size={14} /> Ban</>}
+                    </button>
                     <button onClick={() => openEditModal(u)} className="p-3 bg-slate-100 rounded-xl hover:bg-[#613de6] hover:text-white transition-all"><Edit2 size={16} /></button>
                   </td>
                 </tr>
@@ -185,11 +209,13 @@ export default function UserManagement() {
                         <input type="number" value={editForm.wallet} onChange={(e)=>setEditForm({...editForm, wallet: e.target.value})} className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-black text-emerald-600 outline-none focus:border-[#613de6]" />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase text-slate-400">Account Status</label>
-                        <select value={editForm.status} onChange={(e)=>setEditForm({...editForm, status: e.target.value})} className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none cursor-pointer">
-                            <option value="active">ACTIVE</option>
-                            <option value="banned">BANNED</option>
-                        </select>
+                        <label className="text-[10px] font-black uppercase text-slate-400">Ban Status</label>
+                        <button 
+                            onClick={() => setEditForm({...editForm, isban: !editForm.isban, status: !editForm.isban ? 'banned' : 'active'})}
+                            className={`w-full p-4 rounded-2xl text-[10px] font-black uppercase border transition-all flex items-center justify-center gap-2 ${editForm.isban ? 'bg-red-50 border-red-200 text-red-600' : 'bg-emerald-50 border-emerald-200 text-emerald-600'}`}
+                        >
+                            {editForm.isban ? <><Ban size={14}/> BANNED</> : <><CheckCircle size={14}/> ACTIVE</>}
+                        </button>
                     </div>
                 </div>
 

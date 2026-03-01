@@ -136,7 +136,7 @@ function RegisterForm() {
         pin: userPin,
         status: "online",
         wallet: claimBonus ? 3.00 : 0.00,
-        bonusClaimed: claimBonus,
+        bonusClaimed: claimBonus, // MODIFIED: Saves true if bonus was selected, false otherwise
         createdAt: serverTimestamp(),
         verified: false,
         otp: otpCode,

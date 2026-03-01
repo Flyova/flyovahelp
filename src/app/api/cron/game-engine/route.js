@@ -15,6 +15,7 @@ export async function GET() {
   const now = Date.now();
   const WIN_MULTIPLIER = 1.3;
   const REFUND_PERCENTAGE = 0.8; // 80% refund for 1 correct number
+  let settlementLog = "";
   
   try {
     const gameRef = rtdb.ref("active_game_flyova");
@@ -66,7 +67,8 @@ export async function GET() {
       await gameDoc.ref.update({ status: "completed", completedAt: now });
       await gameRef.update({ status: "settled", winners: winningNums });
       
-      return NextResponse.json({ message: "Game Settled (Winners Paid & Partial Refunds Processed)" });
+      settlementLog = "Game Settled. ";
+      // REMOVED RETURN: Logic now continues immediately to START NEW GAME
     }
 
     // 2. START NEW GAME
@@ -104,10 +106,10 @@ export async function GET() {
         displayNumbers: randomizedDisplay // Pushed to RTDB for the frontend
       });
 
-      return NextResponse.json({ message: "1-90 Game Started" });
+      return NextResponse.json({ message: settlementLog + "1-90 Game Started" });
     }
 
-    return NextResponse.json({ message: "Running" });
+    return NextResponse.json({ message: settlementLog || "Running" });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
