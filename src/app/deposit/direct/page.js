@@ -25,7 +25,7 @@ function DirectDepositContent() {
   const [preview, setPreview] = useState(null);
   const fileInputRef = useRef(null);
 
-  const USDT_ADDRESS = "TVatYHhNgVriJQwvyzUvo2jYbNqxVKqk1Q";
+  const USDT_ADDRESS = "TNxbh5oFmPgGxXiJ44k3tXGP6zvLGhUCxQ";
 
   // Cloudinary Config (Based on your TradeRoom setup)
   const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dq9o866sc/image/upload";
