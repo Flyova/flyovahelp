@@ -378,11 +378,11 @@ export default function TradeRoom() {
                   try {
                     const batch = writeBatch(db);
 
-                    // REFUND LOGIC: If it's a withdrawal, return Trade Amount + 5% Fee to User Wallet
+                    // REFUND LOGIC: Only refund the Trade Amount (exclude fee)
                     if (trade.type === "withdrawal") {
-                      const refundTotal = Number(trade.amount) + (Number(trade.amount) * 0.05);
+                      const refundAmount = Number(trade.amount);
                       const userRef = doc(db, "users", trade.senderId);
-                      batch.update(userRef, { wallet: increment(refundTotal) });
+                      batch.update(userRef, { wallet: increment(refundAmount) });
 
                       const transQ = query(
                         collection(db, "users", trade.senderId, "transactions"), 
@@ -393,7 +393,7 @@ export default function TradeRoom() {
                       if (!transSnap.empty) {
                         batch.update(transSnap.docs[0].ref, { 
                           status: "cancelled", 
-                          description: "Withdrawal Declined - Balance Refunded" 
+                          description: "Withdrawal Declined - Trade Amount Refunded" 
                         });
                       }
                     }
@@ -421,7 +421,7 @@ export default function TradeRoom() {
                                 <p>Hello,</p>
                                 <p>Your ${trade.type} request for $${trade.amount} has been declined by the agent.</p>
                                 <p>${trade.type === 'withdrawal' 
-                                  ? "The full amount including fees has been refunded to your wallet balance." 
+                                  ? "The original trade amount has been refunded to your wallet balance." 
                                   : "This transaction has been cancelled. No funds were charged."}</p>
                                 <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">Flyova Global Network</div>
                               </div>

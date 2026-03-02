@@ -66,18 +66,19 @@ export default function FlyovaToDollars() {
         setTimeLeft(diff);
 
         if (data.status === "settled") {
-          if (gameStatus === "betting" && user) {
+          // Check results immediately upon settlement
+          if (user) {
             setLastWinningNumbers(data.winners || []);
             checkGameResult(user.uid, data.gameId);
           }
           setGameStatus("waiting");
         } else {
+          // If a new game is active, reset UI but keep result alert if it was triggered
           if (gameStatus === "waiting" || !currentGame) {
             setGameStatus("betting");
             setSelectedNumbers([]);
             setActiveBets([]);
             setLastWinningNumbers([]);
-            setShowResultAlert(false);
             if (user) fetchUserBets(data.gameId);
           }
         }
@@ -115,7 +116,7 @@ export default function FlyovaToDollars() {
     if (!snap.empty) {
       const betData = snap.docs[0].data();
       if (betData.status === "win") {
-        setWinAmount(betData.amount * WIN_MULTIPLIER);
+        setWinAmount(betData.payout || betData.amount * WIN_MULTIPLIER);
         setResultType("win");
         setShowResultAlert(true);
       } else if (betData.status === "loss") {
@@ -128,9 +129,10 @@ export default function FlyovaToDollars() {
 
     useEffect(() => {
   if (showResultAlert) {
+    // Modified: Result shows for 3.5 seconds then auto-closes to let user play next round
     const timer = setTimeout(() => {
       setShowResultAlert(false);
-    }, 5000); // 5 seconds
+    }, 3500); 
     return () => clearTimeout(timer);
   }
 }, [showResultAlert]);
@@ -181,7 +183,7 @@ export default function FlyovaToDollars() {
       {/* RESULT MODAL */}
       {showResultAlert && (
         <div className="absolute inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className={`w-full max-w-xs p-8 rounded-[2.5rem] border-2 text-center shadow-2xl ${resultType === 'win' ? 'bg-[#1e293b] border-green-500' : 'bg-[#1e293b] border-red-500'}`}>
+          <div className={`w-full max-w-xs p-8 rounded-[2.5rem] border-2 text-center shadow-2xl ${resultType === 'win' ? 'bg-[#1e293b] border-green-500 shadow-green-500/30' : 'bg-[#1e293b] border-red-500 shadow-red-500/30'}`}>
             {resultType === 'win' ? (
               <>
                 <Trophy size={60} className="mx-auto text-green-400 mb-4 animate-bounce" />
