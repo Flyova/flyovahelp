@@ -42,7 +42,8 @@ export async function GET(request) {
       const tradeData = tradeDoc.data();
       const tradeId = tradeDoc.id;
       const userId = tradeData.senderId;
-      const refundAmount = tradeData.amount + (tradeData.fee || 0);
+      // Modified: Refund ONLY the trade amount, ignoring the fee.
+      const refundAmount = tradeData.amount;
 
       const userRef = doc(db, "users", userId);
       const tradeDocRef = doc(db, "trades", tradeId);
