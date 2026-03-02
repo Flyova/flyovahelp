@@ -60,14 +60,12 @@ export default function GamePage() {
     const myId = user.uid;
     const userRef = doc(db, "users", myId);
     
-    // Track that user is specifically on the challenge screen
     setDoc(userRef, { 
       status: "online", 
       currentPage: "challenge_friends",
       lastSeen: serverTimestamp() 
     }, { merge: true });
 
-    // UPDATED: Filter by status "online" AND currentPage "challenge_friends"
     const unsubPlayers = onSnapshot(
       query(
         collection(db, "users"), 
@@ -81,7 +79,6 @@ export default function GamePage() {
       );
     });
 
-    // Cleanup expired challenges (3 minutes)
     const threeMinsAgo = Date.now() - (3 * 60 * 1000);
     const unsubIncoming = onSnapshot(query(collection(db, "challenges"), where("to", "==", myId), where("status", "==", "pending")), (snap) => {
       const activeChal = snap.docs.find(d => d.data().timestamp > threeMinsAgo);
@@ -96,7 +93,7 @@ export default function GamePage() {
         if (data.numberPool && (numbers.length === 0 || data.round !== activeGame?.round)) {
           setNumbers(data.numberPool);
           setSelectedNumber(null);
-          setGameTimer(60); // Reset timer on new round/turn
+          setGameTimer(60); 
         }
       } else {
         setActiveGame(null);
@@ -107,19 +104,18 @@ export default function GamePage() {
         unsubPlayers(); 
         unsubIncoming(); 
         unsubGame(); 
-        // Remove page tracking on unmount
         updateDoc(userRef, { status: "offline", currentPage: null }).catch(() => {}); 
     };
   }, [user, activeGame?.round]);
 
-  // 3. Game Timer Logic (60s Move Limit)
+  // 3. Game Timer Logic
   useEffect(() => {
     if (!activeGame || activeGame.status !== "active") return;
     
     const interval = setInterval(() => {
       setGameTimer((prev) => {
         if (prev <= 1) {
-          handleForfeit(); // Timer ran out
+          handleForfeit(); 
           return 60;
         }
         return prev - 1;
@@ -132,20 +128,42 @@ export default function GamePage() {
   const handleForfeit = async () => {
     if (!activeGame || activeGame.turn !== user.uid) return;
     
-    // If I miss my turn, opponent gets my stake for this round
-    const opponentId = user.uid === activeGame.player1 ? activeGame.player2 : activeGame.player1;
+    const isP1 = user.uid === activeGame.player1;
+    const opponentId = isP1 ? activeGame.player2 : activeGame.player1;
     const winAmount = activeGame.stakePerRound;
+    
+    // Determine which score and pool to update based on who is the picker vs who missed the turn
+    const scoreKey = isP1 ? "scores.p2" : "scores.p1"; // Opponent gets the score point
     const pickerPoolKey = activeGame.picker === activeGame.player1 ? "wagerPool.p1" : "wagerPool.p2";
 
-    await updateDoc(doc(db, "users", opponentId), { wallet: increment(winAmount) });
-    await updateDoc(doc(db, "games", activeGame.id), { 
-        [pickerPoolKey]: increment(-winAmount),
-        round: increment(1),
-        turn: opponentId,
-        picker: opponentId,
-        gameState: "picking",
-        numberPool: [Math.floor(Math.random() * 100), Math.floor(Math.random() * 100)]
-    });
+    try {
+        // 1. Pay the opponent their win from the current picker's pool
+        await updateDoc(doc(db, "users", opponentId), { wallet: increment(winAmount) });
+        
+        // 2. Log the transaction for the winner
+        await addDoc(collection(db, "users", opponentId, "transactions"), {
+            title: "Round Win (Opponent Timeout)", 
+            amount: winAmount, 
+            type: "win", 
+            status: "win", 
+            timestamp: serverTimestamp()
+        });
+
+        // 3. Update game state: Deduct from pool, increase score, next round, swap picker
+        const nextPicker = activeGame.picker === activeGame.player1 ? activeGame.player2 : activeGame.player1;
+        const isGameOver = activeGame.round >= 30;
+
+        await updateDoc(doc(db, "games", activeGame.id), { 
+            [pickerPoolKey]: increment(-winAmount),
+            [scoreKey]: increment(1),
+            round: increment(1),
+            turn: nextPicker,
+            picker: nextPicker,
+            gameState: "picking",
+            numberPool: [Math.floor(Math.random() * 100), Math.floor(Math.random() * 100)],
+            status: isGameOver ? "completed" : "active"
+        });
+    } catch (e) { console.error("Forfeit error:", e); }
   };
 
   const handleManualRefresh = async () => {
@@ -186,7 +204,7 @@ export default function GamePage() {
 
   const initiateChallenge = async () => {
     const totalWager = (stakeAmount * 15);
-    const calculatedFee = stakeAmount; // Fee = Stake per round
+    const calculatedFee = stakeAmount; 
     const totalCost = totalWager + calculatedFee;
 
     if (myWallet < totalCost) return alert("Insufficient Balance!");
