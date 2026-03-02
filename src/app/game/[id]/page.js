@@ -8,7 +8,7 @@ import {
   serverTimestamp, or, orderBy, limit, runTransaction 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { User, Zap, Wallet, ShieldCheck, Trophy, Ghost, MessageSquare, Send, X as CloseIcon, Search, Users, Timer as TimerIcon } from "lucide-react";
+import { User, Zap, Wallet, ShieldCheck, Trophy, Ghost, MessageSquare, Send, X as CloseIcon, Search, Users, Timer as TimerIcon, RefreshCw } from "lucide-react";
 
 export default function GamePage() {
   const { id } = useParams();
@@ -35,6 +35,7 @@ export default function GamePage() {
 
   const [showStakeModal, setShowStakeModal] = useState(null);
   const [stakeAmount, setStakeAmount] = useState(1);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // 1. Auth & Wallet Listener
   useEffect(() => {
@@ -58,14 +59,25 @@ export default function GamePage() {
     if (!user) return;
     const myId = user.uid;
     const userRef = doc(db, "users", myId);
-    setDoc(userRef, { status: "online", lastSeen: serverTimestamp() }, { merge: true });
+    
+    // Track that user is specifically on the challenge screen
+    setDoc(userRef, { 
+      status: "online", 
+      currentPage: "challenge_friends",
+      lastSeen: serverTimestamp() 
+    }, { merge: true });
 
-    // UPDATED: Only show users with status "online", excluding self and admins
-    const unsubPlayers = onSnapshot(query(collection(db, "users"), where("status", "==", "online")), (snap) => {
+    // UPDATED: Filter by status "online" AND currentPage "challenge_friends"
+    const unsubPlayers = onSnapshot(
+      query(
+        collection(db, "users"), 
+        where("status", "==", "online"),
+        where("currentPage", "==", "challenge_friends")
+      ), (snap) => {
       setOnlinePlayers(
         snap.docs
           .map(d => ({ id: d.id, ...d.data() }))
-          .filter(u => u.id !== myId && u.role !== "admin" && u.status === "online") 
+          .filter(u => u.id !== myId && u.role !== "admin") 
       );
     });
 
@@ -95,7 +107,8 @@ export default function GamePage() {
         unsubPlayers(); 
         unsubIncoming(); 
         unsubGame(); 
-        updateDoc(userRef, { status: "offline" }).catch(() => {}); 
+        // Remove page tracking on unmount
+        updateDoc(userRef, { status: "offline", currentPage: null }).catch(() => {}); 
     };
   }, [user, activeGame?.round]);
 
@@ -133,6 +146,15 @@ export default function GamePage() {
         gameState: "picking",
         numberPool: [Math.floor(Math.random() * 100), Math.floor(Math.random() * 100)]
     });
+  };
+
+  const handleManualRefresh = async () => {
+    if (!user || isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await updateDoc(doc(db, "users", user.uid), { lastSeen: serverTimestamp() });
+      setTimeout(() => setIsRefreshing(false), 1000);
+    } catch (e) { setIsRefreshing(false); }
   };
 
   // 4. Chat Logic
@@ -292,9 +314,14 @@ export default function GamePage() {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-xl font-black italic uppercase">Challenge Friends</h1>
-            <div className="flex items-center gap-2 mt-1">
-                <Users size={12} className="text-[#fc7952]" />
-                <span className="text-[10px] font-black text-white/40 uppercase">{onlinePlayers.length} Players Online</span>
+            <div className="flex items-center gap-3 mt-1">
+                <div className="flex items-center gap-2">
+                  <Users size={12} className="text-[#fc7952]" />
+                  <span className="text-[10px] font-black text-white/40 uppercase">{onlinePlayers.length} Ready To Play</span>
+                </div>
+                <button onClick={handleManualRefresh} className={`p-1 rounded-full bg-white/5 hover:bg-white/10 transition-all ${isRefreshing ? 'animate-spin' : ''}`}>
+                  <RefreshCw size={12} className="text-[#fc7952]" />
+                </button>
             </div>
           </div>
         </div>
