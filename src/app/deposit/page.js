@@ -119,6 +119,7 @@ export default function DepositPage() {
           collection(db, "agents"),
           where("application_status", "==", "approved"),
           where("country", "==", country),
+          where("banned", "==", false),
           limit(30)
         );
         

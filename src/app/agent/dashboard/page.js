@@ -31,7 +31,9 @@ import {
   ArrowRightLeft,
   History,
   Clock,
-  ArrowDownLeft
+  ArrowDownLeft,
+  ShieldAlert,
+  MessageCircle
 } from "lucide-react";
 
 export default function AgentDashboard() {
@@ -214,6 +216,40 @@ export default function AgentDashboard() {
       setActionLoading(null);
     }
   };
+
+  if (agent?.banned) {
+    return (
+      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-6 text-center">
+        <div className="max-w-md w-full bg-[#1e293b] p-10 rounded-[3rem] border border-white/10 shadow-2xl space-y-8 animate-in zoom-in duration-300">
+          <div className="w-24 h-24 bg-rose-500/20 rounded-[2rem] flex items-center justify-center mx-auto border border-rose-500/20">
+            <ShieldAlert size={48} className="text-rose-500 animate-pulse" />
+          </div>
+          <div className="space-y-3">
+            <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">Account Banned</h2>
+            <p className="text-gray-400 text-xs font-black uppercase tracking-widest leading-loose">
+              Your agent access has been suspended due to a violation of our terms of service. 
+              All trading activities have been disabled.
+            </p>
+          </div>
+          <div className="pt-4">
+            <button 
+              onClick={() => router.push('/support')}
+              className="w-full bg-[#613de6] py-6 rounded-2xl font-black uppercase italic text-xs tracking-widest shadow-xl shadow-[#613de6]/30 active:scale-95 transition-all flex items-center justify-center gap-2"
+            >
+              <MessageCircle size={18} />
+              Contact Support
+            </button>
+            <button 
+              onClick={() => auth.signOut()}
+              className="w-full mt-4 bg-white/5 py-4 rounded-2xl text-[10px] font-black uppercase text-gray-400 hover:bg-white/10 transition-all"
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-white pb-20">
