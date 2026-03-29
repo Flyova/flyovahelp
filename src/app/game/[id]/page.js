@@ -431,7 +431,7 @@ export default function GamePage() {
                 <div className="bg-black/20 px-8 py-3 rounded-2xl">
                     <span className="text-4xl font-mono font-black text-white">{outgoingTimer}s</span>
                 </div>
-                <p className="mt-4 text-[8px] font-black uppercase text-white/40">Do nt close this page. Please wait</p>
+                <p className="mt-4 text-[8px] font-black uppercase text-white/40">Do not close this page. Please wait</p>
             </div>
         )}
 
