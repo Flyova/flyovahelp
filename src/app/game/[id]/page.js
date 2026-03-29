@@ -152,27 +152,20 @@ export default function GamePage() {
     if (!activeGame || activeGame.turn !== user.uid) return;
     
     const isP1 = user.uid === activeGame.player1;
-    const opponentId = isP1 ? activeGame.player2 : activeGame.player1;
     const winAmount = activeGame.stakePerRound;
     
+    // If the GUESSER (turn holder) timeouts, the PICKER (opponent) wins that round's stake
     const scoreKey = isP1 ? "scores.p2" : "scores.p1"; 
-    const pickerPoolKey = activeGame.picker === activeGame.player1 ? "wagerPool.p1" : "wagerPool.p2";
+    const loserPoolKey = isP1 ? "wagerPool.p1" : "wagerPool.p2";
+    const winnerPoolKey = isP1 ? "wagerPool.p2" : "wagerPool.p1";
 
     try {
-        await updateDoc(doc(db, "users", opponentId), { wallet: increment(winAmount) });
-        await addDoc(collection(db, "users", opponentId, "transactions"), {
-            title: "Round Win (Opponent Timeout)", 
-            amount: winAmount, 
-            type: "win", 
-            status: "win", 
-            timestamp: serverTimestamp()
-        });
-
         const nextPicker = activeGame.picker === activeGame.player1 ? activeGame.player2 : activeGame.player1;
         const isGameOver = activeGame.round >= 30;
 
         await updateDoc(doc(db, "games", activeGame.id), { 
-            [pickerPoolKey]: increment(-winAmount),
+            [loserPoolKey]: increment(-winAmount),
+            [winnerPoolKey]: increment(winAmount),
             [scoreKey]: increment(1),
             round: increment(1),
             turn: nextPicker,
@@ -277,26 +270,28 @@ export default function GamePage() {
       } else if (activeGame?.gameState === "guessing") {
         const wasCorrect = num === activeGame.hiddenPick;
         const scoreKey = isP1 ? "scores.p1" : "scores.p2";
-        const pickerPoolKey = activeGame.picker === activeGame.player1 ? "wagerPool.p1" : "wagerPool.p2";
+        
+        // Winning logic: Take stake from the PICKER'S side of the pool and give to the GUESSER
+        const winnerPoolKey = isP1 ? "wagerPool.p1" : "wagerPool.p2";
+        const loserPoolKey = activeGame.picker === activeGame.player1 ? "wagerPool.p1" : "wagerPool.p2";
 
-        if (wasCorrect) {
-          const winAmount = activeGame.stakePerRound;
-          await updateDoc(doc(db, "users", user.uid), { wallet: increment(winAmount) });
-          await updateDoc(doc(db, "games", activeGame.id), { [pickerPoolKey]: increment(-winAmount) });
-          await addDoc(collection(db, "users", user.uid, "transactions"), {
-            title: "Round Win", amount: winAmount, type: "win", status: "win", timestamp: serverTimestamp()
-          });
-        }
-
+        const winAmount = activeGame.stakePerRound;
         const nextPicker = activeGame.picker === activeGame.player1 ? activeGame.player2 : activeGame.player1;
         const isGameOver = activeGame.round >= 30;
 
-        await updateDoc(doc(db, "games", activeGame.id), {
+        const updatePayload = {
           gameState: "picking", turn: nextPicker, picker: nextPicker, round: increment(1),
           [scoreKey]: wasCorrect ? increment(1) : increment(0),
           numberPool: [Math.floor(Math.random() * 100), Math.floor(Math.random() * 100)],
           status: isGameOver ? "completed" : "active"
-        });
+        };
+
+        if (wasCorrect) {
+          updatePayload[loserPoolKey] = increment(-winAmount);
+          updatePayload[winnerPoolKey] = increment(winAmount);
+        }
+
+        await updateDoc(doc(db, "games", activeGame.id), updatePayload);
       }
     }, 800);
   };
@@ -308,7 +303,7 @@ export default function GamePage() {
       if (amt > 0) {
         await updateDoc(doc(db, "users", uid), { wallet: increment(amt) });
         await addDoc(collection(db, "users", uid, "transactions"), {
-          title: "Pool Refund", amount: amt, type: "finance", status: "win", timestamp: serverTimestamp()
+          title: "Match Settlement", amount: amt, type: "finance", status: "win", timestamp: serverTimestamp()
         });
       }
     };
@@ -328,6 +323,7 @@ export default function GamePage() {
   if (activeGame?.status === "completed") {
     const isP1 = user.uid === activeGame.player1;
     const myScore = isP1 ? activeGame.scores?.p1 : activeGame.scores?.p2;
+    const myRefund = isP1 ? activeGame.wagerPool?.p1 : activeGame.wagerPool?.p2;
     return (
       <div className="min-h-screen bg-[#0f172a] text-white flex flex-col items-center justify-center p-6 text-center">
         <Trophy size={64} className="text-[#fc7952] mb-4" />
@@ -337,7 +333,11 @@ export default function GamePage() {
                 <span className="text-xs font-bold opacity-50 uppercase tracking-widest">Successful Guesses</span>
                 <span className="text-2xl font-black italic">{myScore}</span>
             </div>
-            <p className="text-[10px] text-green-500 font-black uppercase border-t border-white/10 pt-4">Returning remaining stakes to wallet...</p>
+            <div className="flex justify-between items-center mb-4 border-t border-white/10 pt-4">
+                <span className="text-xs font-bold opacity-50 uppercase tracking-widest">Settlement Amount</span>
+                <span className="text-2xl font-black italic text-green-400">${myRefund?.toFixed(2)}</span>
+            </div>
+            <p className="text-[10px] text-gray-500 font-black uppercase mt-4">Crediting final balance to wallet...</p>
         </div>
         <button onClick={finalizeAndRefund} className="w-full max-w-sm bg-[#613de6] py-5 rounded-2xl font-black uppercase italic shadow-lg">Claim & Exit</button>
       </div>
