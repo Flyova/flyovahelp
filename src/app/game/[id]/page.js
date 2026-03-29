@@ -8,7 +8,7 @@ import {
   serverTimestamp, or, orderBy, limit, runTransaction 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { User, Zap, Wallet, ShieldCheck, Trophy, Ghost, MessageSquare, Send, X as CloseIcon, Search, Users, Timer as TimerIcon, RefreshCw } from "lucide-react";
+import { User, Zap, Wallet, ShieldCheck, Trophy, Ghost, MessageSquare, Send, X as CloseIcon, Search, Users, Timer as TimerIcon, RefreshCw, Loader2 } from "lucide-react";
 
 export default function GamePage() {
   const { id } = useParams();
@@ -24,6 +24,8 @@ export default function GamePage() {
   const [onlinePlayers, setOnlinePlayers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [incomingChallenge, setIncomingChallenge] = useState(null);
+  const [outgoingChallenge, setOutgoingChallenge] = useState(null);
+  const [outgoingTimer, setOutgoingTimer] = useState(180);
   
   // Game States
   const [gameTimer, setGameTimer] = useState(60);
@@ -63,7 +65,8 @@ export default function GamePage() {
     setDoc(userRef, { 
       status: "online", 
       currentPage: "challenge_friends",
-      lastSeen: serverTimestamp() 
+      lastSeen: serverTimestamp(),
+      isBusy: !!activeGame 
     }, { merge: true });
 
     const unsubPlayers = onSnapshot(
@@ -80,9 +83,15 @@ export default function GamePage() {
     });
 
     const threeMinsAgo = Date.now() - (3 * 60 * 1000);
+    
     const unsubIncoming = onSnapshot(query(collection(db, "challenges"), where("to", "==", myId), where("status", "==", "pending")), (snap) => {
       const activeChal = snap.docs.find(d => d.data().timestamp > threeMinsAgo);
       setIncomingChallenge(activeChal ? { id: activeChal.id, ...activeChal.data() } : null);
+    });
+
+    const unsubOutgoing = onSnapshot(query(collection(db, "challenges"), where("from", "==", myId), where("status", "==", "pending")), (snap) => {
+      const activeChal = snap.docs.find(d => d.data().timestamp > threeMinsAgo);
+      setOutgoingChallenge(activeChal ? { id: activeChal.id, ...activeChal.data() } : null);
     });
 
     const gameQuery = query(collection(db, "games"), or(where("player1", "==", myId), where("player2", "==", myId)));
@@ -90,7 +99,7 @@ export default function GamePage() {
       if (!snap.empty) {
         const data = snap.docs[0].data();
         setActiveGame({ id: snap.docs[0].id, ...data });
-        if (data.numberPool && (numbers.length === 0 || data.round !== activeGame?.round)) {
+        if (data.numberPool && (numbers.length === 0 || data.round !== activeGame?.round || data.turn !== activeGame?.turn)) {
           setNumbers(data.numberPool);
           setSelectedNumber(null);
           setGameTimer(60); 
@@ -102,13 +111,27 @@ export default function GamePage() {
 
     return () => { 
         unsubPlayers(); 
-        unsubIncoming(); 
+        unsubIncoming();
+        unsubOutgoing();
         unsubGame(); 
-        updateDoc(userRef, { status: "offline", currentPage: null }).catch(() => {}); 
+        updateDoc(userRef, { status: "offline", currentPage: null, isBusy: false }).catch(() => {}); 
     };
-  }, [user, activeGame?.round]);
+  }, [user, activeGame?.round, activeGame?.turn, !!activeGame]);
 
-  // 3. Game Timer Logic
+  // 3. Outgoing Challenge Ticker
+  useEffect(() => {
+    if (!outgoingChallenge) return;
+    const interval = setInterval(() => {
+        const remaining = Math.max(0, Math.floor((180000 - (Date.now() - outgoingChallenge.timestamp)) / 1000));
+        setOutgoingTimer(remaining);
+        if (remaining <= 0) {
+            deleteDoc(doc(db, "challenges", outgoingChallenge.id)).catch(() => {});
+        }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [outgoingChallenge]);
+
+  // 4. Game Timer Logic
   useEffect(() => {
     if (!activeGame || activeGame.status !== "active") return;
     
@@ -123,7 +146,7 @@ export default function GamePage() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [activeGame?.turn, activeGame?.id]);
+  }, [activeGame?.turn, activeGame?.id, activeGame?.status]);
 
   const handleForfeit = async () => {
     if (!activeGame || activeGame.turn !== user.uid) return;
@@ -132,15 +155,11 @@ export default function GamePage() {
     const opponentId = isP1 ? activeGame.player2 : activeGame.player1;
     const winAmount = activeGame.stakePerRound;
     
-    // Determine which score and pool to update based on who is the picker vs who missed the turn
-    const scoreKey = isP1 ? "scores.p2" : "scores.p1"; // Opponent gets the score point
+    const scoreKey = isP1 ? "scores.p2" : "scores.p1"; 
     const pickerPoolKey = activeGame.picker === activeGame.player1 ? "wagerPool.p1" : "wagerPool.p2";
 
     try {
-        // 1. Pay the opponent their win from the current picker's pool
         await updateDoc(doc(db, "users", opponentId), { wallet: increment(winAmount) });
-        
-        // 2. Log the transaction for the winner
         await addDoc(collection(db, "users", opponentId, "transactions"), {
             title: "Round Win (Opponent Timeout)", 
             amount: winAmount, 
@@ -149,7 +168,6 @@ export default function GamePage() {
             timestamp: serverTimestamp()
         });
 
-        // 3. Update game state: Deduct from pool, increase score, next round, swap picker
         const nextPicker = activeGame.picker === activeGame.player1 ? activeGame.player2 : activeGame.player1;
         const isGameOver = activeGame.round >= 30;
 
@@ -175,7 +193,7 @@ export default function GamePage() {
     } catch (e) { setIsRefreshing(false); }
   };
 
-  // 4. Chat Logic
+  // 5. Chat Logic
   useEffect(() => {
     if (!activeGame?.id) return;
     const q = query(collection(db, "games", activeGame.id, "messages"), orderBy("timestamp", "asc"), limit(50));
@@ -210,7 +228,7 @@ export default function GamePage() {
     if (myWallet < totalCost) return alert("Insufficient Balance!");
     
     await addDoc(collection(db, "challenges"), {
-      from: user.uid, fromName: user.displayName || "Player", to: showStakeModal.id, status: "pending",
+      from: user.uid, fromName: user.displayName || "Player", to: showStakeModal.id, toName: showStakeModal.username, status: "pending",
       stakePerRound: stakeAmount, totalWager, fee: calculatedFee, timestamp: Date.now()
     });
     setShowStakeModal(null);
@@ -383,13 +401,39 @@ export default function GamePage() {
           ) : filteredPlayers.map(p => (
             <div key={p.id} className="bg-[#1e293b] p-5 rounded-[2rem] flex justify-between items-center border border-white/5">
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-[#613de6] rounded-xl flex items-center justify-center font-black italic text-[#fc7952]">{p.username?.[0] || 'P'}</div>
-                <span className="font-bold italic uppercase text-sm">{p.username}</span>
+                <div className="w-10 h-10 bg-[#613de6] rounded-xl flex items-center justify-center font-black italic text-[#fc7952] relative">
+                    {p.username?.[0] || 'P'}
+                    {p.isBusy && (
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-orange-500 rounded-full border-2 border-[#1e293b]"></div>
+                    )}
+                </div>
+                <div className="flex flex-col">
+                    <span className="font-bold italic uppercase text-sm">{p.username}</span>
+                    {p.isBusy && <span className="text-[8px] font-black text-orange-500 uppercase tracking-tighter">Busy in-game</span>}
+                </div>
               </div>
-              <button onClick={() => setShowStakeModal(p)} className="bg-[#fc7952] px-6 py-2 rounded-xl text-[10px] font-black uppercase">Challenge</button>
+              <button 
+                disabled={p.isBusy}
+                onClick={() => setShowStakeModal(p)} 
+                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase ${p.isBusy ? 'bg-gray-700 text-gray-500 opacity-50' : 'bg-[#fc7952] text-white'}`}
+              >
+                {p.isBusy ? 'Busy' : 'Challenge'}
+              </button>
             </div>
           ))}
         </div>
+
+        {outgoingChallenge && (
+            <div className="fixed bottom-24 left-6 right-6 bg-[#613de6] p-8 rounded-[2.5rem] shadow-2xl z-50 border-4 border-[#fc7952] flex flex-col items-center text-center animate-pulse-slow">
+                <Loader2 size={32} className="text-white animate-spin mb-4" />
+                <p className="text-[10px] font-black uppercase text-white/60 tracking-widest mb-1">Awaiting Response From</p>
+                <h3 className="text-2xl font-black italic uppercase text-white mb-4">{outgoingChallenge.toName}</h3>
+                <div className="bg-black/20 px-8 py-3 rounded-2xl">
+                    <span className="text-4xl font-mono font-black text-white">{outgoingTimer}s</span>
+                </div>
+                <p className="mt-4 text-[8px] font-black uppercase text-white/40">Do nt close this page. Please wait</p>
+            </div>
+        )}
 
         {incomingChallenge && (
           <div className="fixed bottom-24 left-6 right-6 bg-[#613de6] p-6 rounded-[2.5rem] shadow-2xl z-50 border-t-4 border-[#fc7952] animate-bounce-short">
