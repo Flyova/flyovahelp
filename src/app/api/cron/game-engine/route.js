@@ -8,13 +8,14 @@ const shuffleArray = (array) => {
     [array[i], array[j]] = [array[j], array[i]];
   }
   return array;
-};
+}
 
 export async function GET() {
   const rtdb = getRtdb();
   const now = Date.now();
   const WIN_MULTIPLIER = 1.3;
   const REFUND_PERCENTAGE = 0.8; // 80% refund for 1 correct number
+  const REFERRAL_COMMISSION_RATE = 0.003; // 0.3%
   let settlementLog = "";
   
   try {
@@ -28,7 +29,7 @@ export async function GET() {
     if (!activeSnap.empty) {
       const gameDoc = activeSnap.docs[0];
       const gameId = gameDoc.id;
-      const winningNums = gameDoc.data().winners; // Array of 2 numbers
+      const winningNums = gameDoc.data().winners; 
 
       const usersSnap = await adminDb.collectionGroup("transactions")
         .where("gameId", "==", gameId)
@@ -37,38 +38,56 @@ export async function GET() {
 
       const batch = adminDb.batch();
 
-      usersSnap.forEach((betDoc) => {
+      for (const betDoc of usersSnap.docs) {
         const betData = betDoc.data();
-        const userPicks = betData.picks; // Array of numbers picked
+        const userPicks = betData.picks; 
         const userRef = betDoc.ref.parent.parent; 
+        
+        const userSnap = await userRef.get();
+        const userData = userSnap.data();
 
-        // Count how many numbers match the winners
         const matches = userPicks.filter(num => winningNums.includes(num)).length;
 
         if (matches === 2) {
-          // JACKPOT: User got both numbers correct
           const payout = betData.amount * WIN_MULTIPLIER;
           batch.update(betDoc.ref, { status: "win", payout: payout, matches: 2 });
           batch.update(userRef, { wallet: admin.firestore.FieldValue.increment(payout) });
         } 
         else if (matches === 1) {
-          // PARTIAL REFUND: User got only 1 number correct
           const refundAmount = betData.amount * REFUND_PERCENTAGE;
           batch.update(betDoc.ref, { status: "refunded", payout: refundAmount, matches: 1 });
           batch.update(userRef, { wallet: admin.firestore.FieldValue.increment(refundAmount) });
         } 
         else {
-          // LOSS: 0 numbers correct
           batch.update(betDoc.ref, { status: "loss", matches: 0 });
+
+          // REFERRAL LOGIC: Using referrerUid as the primary key
+          if (userData?.referrerUid) {
+            const referrerRef = adminDb.collection("users").doc(userData.referrerUid);
+            const commission = betData.amount * REFERRAL_COMMISSION_RATE;
+            
+            batch.update(referrerRef, { 
+              wallet: admin.firestore.FieldValue.increment(commission) 
+            });
+            
+            const refLogRef = referrerRef.collection("transactions").doc();
+            batch.set(refLogRef, {
+              title: "Referral Commission (Downline Loss)",
+              amount: commission,
+              type: "referral",
+              status: "win",
+              fromUser: userData.username || userData.referredBy || "Player",
+              timestamp: admin.firestore.FieldValue.serverTimestamp()
+            });
+          }
         }
-      });
+      }
 
       await batch.commit();
       await gameDoc.ref.update({ status: "completed", completedAt: now });
       await gameRef.update({ status: "settled", winners: winningNums });
       
       settlementLog = "Game Settled. ";
-      // REMOVED RETURN: Logic now continues immediately to START NEW GAME
     }
 
     // 2. START NEW GAME
@@ -82,11 +101,9 @@ export async function GET() {
         if (!pool.includes(r)) pool.push(r);
       }
       
-      // Store the winners (first two generated)
       const winners = [pool[0], pool[1]].sort((a,b) => a-b);
       const endTime = now + 120000; 
 
-      // NEW: Randomize the display positions of the winners and losers
       const randomizedDisplay = shuffleArray([...pool]);
 
       const newGameRef = await adminDb.collection("timed_games").add({
@@ -94,7 +111,7 @@ export async function GET() {
         endTime: endTime,
         winners: winners,
         allGenerated: pool,
-        displayNumbers: randomizedDisplay, // Saved to Firestore
+        displayNumbers: randomizedDisplay, 
         createdAt: admin.firestore.FieldValue.serverTimestamp()
       });
 
@@ -103,7 +120,7 @@ export async function GET() {
         status: "active",
         endTime: endTime,
         winners: winners,
-        displayNumbers: randomizedDisplay // Pushed to RTDB for the frontend
+        displayNumbers: randomizedDisplay 
       });
 
       return NextResponse.json({ message: settlementLog + "1-90 Game Started" });

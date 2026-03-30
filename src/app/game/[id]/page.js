@@ -154,7 +154,6 @@ export default function GamePage() {
     const isP1 = user.uid === activeGame.player1;
     const winAmount = activeGame.stakePerRound;
     
-    // If the GUESSER (turn holder) timeouts, the PICKER (opponent) wins that round's stake
     const scoreKey = isP1 ? "scores.p2" : "scores.p1"; 
     const loserPoolKey = isP1 ? "wagerPool.p1" : "wagerPool.p2";
     const winnerPoolKey = isP1 ? "wagerPool.p2" : "wagerPool.p1";
@@ -215,7 +214,7 @@ export default function GamePage() {
 
   const initiateChallenge = async () => {
     const totalWager = (stakeAmount * 15);
-    const calculatedFee = stakeAmount; 
+    const calculatedFee = stakeAmount / 2; 
     const totalCost = totalWager + calculatedFee;
 
     if (myWallet < totalCost) return alert("Insufficient Balance!");
@@ -271,7 +270,6 @@ export default function GamePage() {
         const wasCorrect = num === activeGame.hiddenPick;
         const scoreKey = isP1 ? "scores.p1" : "scores.p2";
         
-        // Winning logic: Take stake from the PICKER'S side of the pool and give to the GUESSER
         const winnerPoolKey = isP1 ? "wagerPool.p1" : "wagerPool.p2";
         const loserPoolKey = activeGame.picker === activeGame.player1 ? "wagerPool.p1" : "wagerPool.p2";
 
@@ -384,7 +382,7 @@ export default function GamePage() {
               </div>
               <div className="space-y-2 mb-8 px-2">
                 <div className="flex justify-between text-[10px] font-black uppercase"><span className="opacity-40">Entry Wager (15x)</span><span>${stakeAmount * 15}</span></div>
-                <div className="flex justify-between text-[10px] font-black uppercase text-emerald-400"><span>Match Admin Fee</span><span>${stakeAmount.toFixed(2)}</span></div>
+                <div className="flex justify-between text-[10px] font-black uppercase text-emerald-400"><span>Match Admin Fee</span><span>${(stakeAmount / 2).toFixed(2)}</span></div>
               </div>
               <button onClick={initiateChallenge} className="w-full bg-[#fc7952] py-4 rounded-2xl font-black uppercase text-xs mb-3 shadow-lg">Send Challenge</button>
               <button onClick={() => setShowStakeModal(null)} className="w-full text-gray-500 font-black uppercase text-[10px]">Cancel</button>
