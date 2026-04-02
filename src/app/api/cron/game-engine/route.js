@@ -66,8 +66,9 @@ export async function GET() {
             const referrerRef = adminDb.collection("users").doc(userData.referrerUid);
             const commission = betData.amount * REFERRAL_COMMISSION_RATE;
             
+            // Modified to update referralBonus balance
             batch.update(referrerRef, { 
-              wallet: admin.firestore.FieldValue.increment(commission) 
+              referralBonus: admin.firestore.FieldValue.increment(commission) 
             });
             
             const refLogRef = referrerRef.collection("transactions").doc();

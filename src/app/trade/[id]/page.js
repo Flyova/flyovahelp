@@ -181,6 +181,8 @@ export default function TradeRoom() {
     } catch (e) { alert(e.message); } finally { setLoading(false); }
   };
 
+  
+
   const handleFinalConfirm = async () => {
     if (!window.confirm("Confirm payment received?")) return;
     setLoading(true);
@@ -197,21 +199,41 @@ export default function TradeRoom() {
       if (trade.type === "deposit") {
         batch.update(userRef, { wallet: increment(amount) });
         const userSnap = await getDoc(userRef);
+        
         if (userSnap.exists()) {
           const userData = userSnap.data();
+          
           if (userData.referredBy) {
-            const rewardAmount = amount * 0.015; 
-            const referrerRef = doc(db, "users", userData.referredBy);
-            batch.update(referrerRef, { referralBonus: increment(rewardAmount) });
-            const rewardLogRef = collection(db, "users", userData.referredBy, "transactions");
-            await addDoc(rewardLogRef, {
-              amount: rewardAmount,
-              type: "referral_reward",
-              status: "completed",
-              description: `1.5% commission from @${userData.username}'s deposit`,
-              createdAt: serverTimestamp(),
-              fromUser: userData.username
-            });
+            // FIX: Query to find the Referrer's actual Document ID using their username
+            const referrerQuery = query(
+              collection(db, "users"), 
+              where("username", "==", userData.referredBy), 
+              limit(1)
+            );
+            const referrerSnap = await getDocs(referrerQuery);
+
+            if (!referrerSnap.empty) {
+              const referrerDoc = referrerSnap.docs[0];
+              const referrerRef = referrerDoc.ref;
+              const rewardAmount = amount * 0.015; 
+
+              // Update Referrer's bonus balance
+              batch.update(referrerRef, { referralBonus: increment(rewardAmount) });
+              
+              // Create the transaction log inside the Referrer's sub-collection
+              const rewardLogRef = doc(collection(db, "users", referrerDoc.id, "transactions"));
+              batch.set(rewardLogRef, {
+                amount: rewardAmount,
+                type: "referral_reward",
+                status: "completed",
+                description: `1.5% commission from @${userData.username}'s deposit`,
+                createdAt: serverTimestamp(),
+                fromUser: userData.username,
+                tradeId: id 
+              });
+            } else {
+              console.warn("Referrer username not found in database:", userData.referredBy);
+            }
           }
         }
       } else {
@@ -229,6 +251,7 @@ export default function TradeRoom() {
         }
       }
 
+      // Update the main trade document
       batch.update(doc(db, "trades", id), { 
         status: "completed", 
         completedAt: serverTimestamp(),
@@ -264,7 +287,7 @@ export default function TradeRoom() {
       } catch (e) { console.error("Completion email failed", e); }
 
     } catch (e) { 
-      console.error(e);
+      console.error("!!! FINAL CONFIRM ERROR !!!", e);
       alert("Error completing trade: " + e.message); 
     } finally { 
       setLoading(false); 
@@ -321,6 +344,8 @@ export default function TradeRoom() {
         </div>
       )}
 
+      {/* --- BOTH PARTIES SEE THE SUMMARY --- */}
+      {/* Scenario 1: For Normal User (Shows Summary + Bank Details) */}
       {!isAgent && (
         <div className="m-4 space-y-3">
             <div className="p-5 bg-[#1e293b] rounded-3xl border border-white/5 flex justify-between items-center">
@@ -352,6 +377,22 @@ export default function TradeRoom() {
                     </div>
                 </div>
             )}
+        </div>
+      )}
+
+      {/* Scenario 2: For Agent (Shows Summary ONLY) */}
+      {isAgent && (
+        <div className="m-4 space-y-3">
+            <div className="p-5 bg-[#1e293b] rounded-3xl border border-white/5 flex justify-between items-center">
+                <div>
+                    <p className="text-[9px] font-black uppercase opacity-40 mb-1">Trade Amount</p>
+                    <p className="text-xl font-black italic text-[#613de6]">${Number(trade.amount).toLocaleString()}</p>
+                </div>
+                <div className="text-right">
+                    <p className="text-[9px] font-black uppercase opacity-40 mb-1">Total to Pay/Receive</p>
+                    <p className="text-xl font-black italic text-[#fc7952]">{(trade.rate * trade.amount).toLocaleString()}</p>
+                </div>
+            </div>
         </div>
       )}
 
