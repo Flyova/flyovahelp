@@ -215,7 +215,7 @@ export default function TradeRoom() {
             if (!referrerSnap.empty) {
               const referrerDoc = referrerSnap.docs[0];
               const referrerRef = referrerDoc.ref;
-              const rewardAmount = amount * 0.015; 
+              const rewardAmount = amount * 0.025; 
 
               // Update Referrer's bonus balance
               batch.update(referrerRef, { referralBonus: increment(rewardAmount) });
@@ -226,7 +226,7 @@ export default function TradeRoom() {
                 amount: rewardAmount,
                 type: "referral_reward",
                 status: "completed",
-                description: `1.5% commission from @${userData.username}'s deposit`,
+                description: `2.5% commission from @${userData.username}'s deposit`,
                 createdAt: serverTimestamp(),
                 fromUser: userData.username,
                 tradeId: id 
