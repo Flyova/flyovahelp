@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   X, Gift, CheckCircle2, Calendar, Lock, UserCheck,
-  Loader2, Mail, User, Phone, AlertCircle, Eye, EyeOff
+  Loader2, Mail, User, Phone, AlertCircle, Eye, EyeOff, ArrowRight
 } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";

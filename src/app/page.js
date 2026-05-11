@@ -8,7 +8,7 @@ import {
   ArrowRight, ArrowLeft, X, Star, ShieldCheck, Zap, Menu, Timer, Trophy, Wallet,
   Instagram, Facebook, Twitter, Loader2, Users, CheckCircle2,
   TrendingUp, MessageCircle, ChevronDown, ChevronUp, Target,
-  DollarSign, Clock, Gift, Hash, Swords, FileText, Calendar
+  DollarSign, Clock, Gift, Hash, FileText, Calendar
 } from "lucide-react";
 
 // Animated counter hook
@@ -129,6 +129,7 @@ function TutorialTip({ step, total, accent = "#a78bfa", children }) {
 }
 
 function FlyovaDemo({ onBack, onRegister }) {
+  const DEMO_NUMBERS = [1, 2, 3, 4];
   const [phase, setPhase] = useState("intro"); // intro | numbers | stake | countdown | result
   const [picks, setPicks] = useState([]);
   const [stake, setStake] = useState(null);
@@ -139,9 +140,9 @@ function FlyovaDemo({ onBack, onRegister }) {
   useEffect(() => {
     if (phase !== "countdown") return;
     if (timeLeft <= 0) {
-      const w1 = Math.floor(Math.random() * 20) + 1;
+      const w1 = DEMO_NUMBERS[Math.floor(Math.random() * DEMO_NUMBERS.length)];
       let w2;
-      do { w2 = Math.floor(Math.random() * 20) + 1; } while (w2 === w1);
+      do { w2 = DEMO_NUMBERS[Math.floor(Math.random() * DEMO_NUMBERS.length)]; } while (w2 === w1);
       setWinningNums([w1, w2]);
       setResult(picks.includes(w1) || picks.includes(w2) ? "win" : "lose");
       setPhase("result");
@@ -219,8 +220,8 @@ function FlyovaDemo({ onBack, onRegister }) {
           <TutorialTip step={1} total={3} accent="#fc7952">
             Pick any 2 numbers from the grid below. The game will draw 2 winning numbers at random — if either of your picks matches, you win. There's no correct answer; it's your lucky guess.
           </TutorialTip>
-          <div className="grid grid-cols-5 gap-2">
-            {Array.from({ length: 20 }, (_, i) => i + 1).map(n => (
+          <div className="grid grid-cols-4 gap-2">
+            {DEMO_NUMBERS.map(n => (
               <button key={n} onClick={() => togglePick(n)}
                 className={`aspect-square rounded-xl font-black text-sm transition-all active:scale-90 ${
                   picks.includes(n)
@@ -642,42 +643,6 @@ export default function LandingPage() {
     return () => clearInterval(interval);
   }, [testimonials.length]);
 
-  const games = [
-    {
-      name: "Flyova to Dollars",
-      tag: "Most Popular",
-      tagColor: "bg-[#fc7952]",
-      img: "/flytodols.svg",
-      path: "/game/flyova-to-dollars",
-      description: "Pick your lucky numbers before the timer hits zero. Match the winning draw and take home 1.3× your stake.",
-      highlights: ["120-second rounds", "1.3× payout multiplier", "Live draws"],
-      accent: "#fc7952",
-      icon: <Hash size={20} />,
-    },
-    {
-      name: "Play with Friends",
-      tag: "Challenge Mode",
-      tagColor: "bg-cyan-500",
-      img: "/play_friends.svg",
-      path: "/game/1",
-      description: "Go head-to-head with any online player. Pick your number, lock in your stake, and see who walks away richer.",
-      highlights: ["Real-time matchmaking", "Any stake amount", "In-game chat"],
-      accent: "#22d3ee",
-      icon: <Swords size={20} />,
-    },
-    {
-      name: "Predict and Win",
-      tag: "Subscription",
-      tagColor: "bg-emerald-500",
-      img: "/predictwin.svg",
-      path: "/game/predict-and-win",
-      description: "Subscribe to a time plan, predict the outcome each round, and earn $0.20 for every correct call.",
-      highlights: ["Plans from $10", "Win $0.20 per round", "Up to 1-week access"],
-      accent: "#10b981",
-      icon: <Target size={20} />,
-    },
-  ];
-
   const features = [
     {
       icon: <Wallet size={24} />,
@@ -733,7 +698,6 @@ export default function LandingPage() {
         </div>
 
         <div className="hidden md:flex items-center space-x-8 text-sm font-bold uppercase tracking-wider">
-          <a href="#games" className="hover:text-[#fc7952] transition">Games</a>
           <a href="#how-it-works" className="hover:text-[#fc7952] transition">How It Works</a>
           <a href="#features" className="hover:text-[#fc7952] transition">Features</a>
           <a href="#reviews" className="hover:text-[#fc7952] transition">Reviews</a>
@@ -765,7 +729,7 @@ export default function LandingPage() {
       {/* Mobile menu */}
       {menuOpen && (
         <div className="md:hidden bg-[#4d2ec9] border-t border-white/10 px-6 py-6 space-y-4 z-40 relative">
-          {["#games", "#how-it-works", "#features", "#reviews"].map((href) => (
+          {["#how-it-works", "#features", "#reviews"].map((href) => (
             <a key={href} href={href} onClick={() => setMenuOpen(false)}
               className="block text-sm font-black uppercase tracking-wider hover:text-[#fc7952] transition py-1">
               {href.replace("#", "").replace(/-/g, " ")}
@@ -924,62 +888,6 @@ export default function LandingPage() {
 
       {/* ── TRANSITION TO DARK ───────────────────────── */}
       <div className="h-16 bg-gradient-to-b from-[#613de6] to-[#0f172a]" />
-
-      {/* ── GAMES SECTION ────────────────────────────── */}
-      <section id="games" className="bg-[#0f172a] py-20 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-14">
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#fc7952] mb-3">Arena</p>
-            <h2 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter text-white leading-tight">
-              Choose Your Game
-            </h2>
-            <p className="text-white/50 font-bold mt-4 max-w-xl mx-auto text-sm">
-              Three ways to win. Pick the one that matches your style and start playing in seconds.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {games.map((game) => (
-              <div
-                key={game.name}
-                onClick={() => router.push('/login')}
-                className="relative bg-[#1e293b] border border-white/5 rounded-[2rem] overflow-hidden group cursor-pointer hover:border-white/20 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl"
-              >
-                {/* Game image */}
-                <div className="relative h-48 overflow-hidden bg-[#0f172a]">
-                  <img src={game.img} alt={game.name} className="w-full h-full object-cover opacity-60 group-hover:opacity-90 group-hover:scale-105 transition-all duration-500" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#1e293b] via-transparent to-transparent" />
-                  <div className={`absolute top-4 left-4 ${game.tagColor} text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg`}>
-                    {game.tag}
-                  </div>
-                </div>
-
-                <div className="p-6 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-xl bg-white/5" style={{ color: game.accent }}>{game.icon}</div>
-                    <h3 className="text-lg font-black italic uppercase tracking-tighter text-white">{game.name}</h3>
-                  </div>
-                  <p className="text-sm text-gray-400 font-bold leading-relaxed">{game.description}</p>
-                  <ul className="space-y-2">
-                    {game.highlights.map((h) => (
-                      <li key={h} className="flex items-center gap-2 text-[11px] font-black text-white/60 uppercase tracking-wider">
-                        <CheckCircle2 size={12} style={{ color: game.accent }} className="flex-shrink-0" />
-                        {h}
-                      </li>
-                    ))}
-                  </ul>
-                  <button
-                    className="w-full py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 text-white"
-                    style={{ backgroundColor: game.accent + "22", border: `1px solid ${game.accent}44`, color: game.accent }}
-                  >
-                    Play {game.name} <ArrowRight size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* ── HOW IT WORKS ─────────────────────────────── */}
       <section id="how-it-works" className="bg-[#0a0f1e] py-20 px-6">
@@ -1167,18 +1075,8 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 max-w-5xl mx-auto">
             {[
-              {
-                href: "https://t.me/+DEVm-vaEvIRiNzQ0",
-                bg: "bg-[#229ED9]",
-                shadow: "shadow-[#229ED9]/20",
-                icon: (
-                  <svg className="fill-current w-6 h-6" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.02-1.96 1.25-5.54 3.69-.52.36-1 .53-1.42.52-.47-.01-1.37-.26-2.03-.48-.82-.27-1.47-.42-1.42-.88.03-.24.35-.49.96-.75 3.78-1.65 6.31-2.74 7.58-3.27 3.61-1.51 4.35-1.77 4.84-1.78.11 0 .35.03.5.16.12.1.16.23.18.33.02.09.02.24.01.35z" /></svg>
-                ),
-                name: "Telegram",
-                desc: "Join our official Telegram group for live updates and announcements.",
-              },
               {
                 href: "http://chat.flyovahelp.com/",
                 bg: "bg-[#613de6]",
@@ -1207,7 +1105,7 @@ export default function LandingPage() {
               <a
                 key={channel.name}
                 href={channel.href}
-                className={`${channel.bg} p-6 rounded-[2rem] flex flex-col gap-4 hover:opacity-90 active:scale-95 transition-all shadow-lg ${channel.shadow}`}
+                className={`${channel.bg} w-full p-6 rounded-[2rem] flex flex-col gap-4 hover:opacity-90 active:scale-95 transition-all shadow-lg ${channel.shadow}`}
               >
                 <div className="bg-white/20 w-12 h-12 rounded-2xl flex items-center justify-center text-white">
                   {channel.icon}
@@ -1382,7 +1280,6 @@ export default function LandingPage() {
           {/* Nav links */}
           <nav className="flex flex-wrap justify-center gap-x-8 gap-y-3">
             {[
-              { label: "Games", href: "#games" },
               { label: "How It Works", href: "#how-it-works" },
               { label: "Features", href: "#features" },
               { label: "Reviews", href: "#reviews" },
@@ -1424,10 +1321,6 @@ export default function LandingPage() {
             <a href="https://x.com/flyovahelp"
               className="w-11 h-11 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center hover:bg-[#1DA1F2] hover:border-[#1DA1F2] transition-all hover:scale-110">
               <Twitter size={17} fill="currentColor" />
-            </a>
-            <a href="https://t.me/+DEVm-vaEvIRiNzQ0"
-              className="w-11 h-11 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center hover:bg-[#229ED9] hover:border-[#229ED9] transition-all hover:scale-110">
-              <svg className="fill-current w-4 h-4" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.02-1.96 1.25-5.54 3.69-.52.36-1 .53-1.42.52-.47-.01-1.37-.26-2.03-.48-.82-.27-1.47-.42-1.42-.88.03-.24.35-.49.96-.75 3.78-1.65 6.31-2.74 7.58-3.27 3.61-1.51 4.35-1.77 4.84-1.78.11 0 .35.03.5.16.12.1.16.23.18.33.02.09.02.24.01.35z"/></svg>
             </a>
             <a href="https://www.tiktok.com/@flyovahelp0"
               className="w-11 h-11 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center hover:bg-black hover:border-black transition-all hover:scale-110">

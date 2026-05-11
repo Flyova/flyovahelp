@@ -96,7 +96,7 @@ export default function AdvertisePage() {
             <span className="text-[#fc7952]">Where They Play</span>
           </h1>
           <p className="text-gray-400 text-sm md:text-base font-bold max-w-lg mx-auto leading-relaxed">
-            Put your brand in front of thousands of active, high-intent gaming enthusiasts across Nigeria. Every session. Every game.
+            Put your brand in front of thousands of active, high-intent gaming enthusiasts across the world. Every session. Every game.
           </p>
           <button
             onClick={() => document.getElementById("contact-form")?.scrollIntoView({ behavior: "smooth" })}
@@ -199,7 +199,7 @@ export default function AdvertisePage() {
               type="text"
               value={form.budget}
               onChange={(e) => setForm((f) => ({ ...f, budget: e.target.value }))}
-              placeholder="e.g. ₦50,000 – ₦200,000/month"
+              placeholder="e.g. $500 – $2,000/month"
               className="w-full bg-[#1e293b] border border-white/5 focus:border-[#fc7952]/50 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none transition-colors placeholder:text-gray-600"
             />
           </div>
