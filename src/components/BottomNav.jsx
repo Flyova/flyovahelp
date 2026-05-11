@@ -14,7 +14,7 @@ export default function BottomNav() {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 h-16 bg-[#1e293b] border-t border-gray-800 flex items-center justify-around z-[100] px-2">
+    <nav className="fixed bottom-0 left-0 right-0 h-16 bg-[#1e293b] border-t border-gray-800 flex items-center justify-around z-[100] px-2 md:hidden">
       {navs.map((nav) => {
         const isActive = pathname === nav.path;
         return (

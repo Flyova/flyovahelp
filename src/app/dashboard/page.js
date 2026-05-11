@@ -1,10 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { 
-  Search, Play, Loader2, ShieldCheck, ArrowRight, Clock, 
-  ArrowUpRight, Megaphone, X, Info, AlertTriangle, 
-  CheckCircle2, Heart, Send, Star, MessageCircle, Trophy 
+import {
+  Search, Loader2, ShieldCheck, ArrowRight, Clock,
+  ArrowUpRight, Megaphone, X, AlertTriangle,
+  CheckCircle2, Heart, Star, MessageCircle, Trophy,
+  FlaskConical, RefreshCw, ToggleLeft, ToggleRight
 } from "lucide-react";
 // FIREBASE IMPORTS
 import { auth, db } from "@/lib/firebase";
@@ -26,6 +27,9 @@ export default function Dashboard() {
   const [pendingJackpots, setPendingJackpots] = useState([]);
   const [claimingId, setClaimingId] = useState(null);
   
+  // Demo mode
+  const [isDemoMode, setIsDemoMode] = useState(false);
+
   // Testimonial States
   const [showModal, setShowModal] = useState(false);
   const [testimonialText, setTestimonialText] = useState("");
@@ -35,6 +39,11 @@ export default function Dashboard() {
   // Announcement States
   const [announcements, setAnnouncements] = useState([]);
   const [readMessages, setReadMessages] = useState([]);
+
+  useEffect(() => {
+    const demoSaved = localStorage.getItem("flyova_demo_mode");
+    if (demoSaved === "true") setIsDemoMode(true);
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem("read_announcements");
@@ -172,10 +181,29 @@ export default function Dashboard() {
 
   const handleNavigation = (path) => { if (path !== "#") router.push(path); };
 
+  const toggleDemoMode = () => {
+    const next = !isDemoMode;
+    setIsDemoMode(next);
+    localStorage.setItem("flyova_demo_mode", String(next));
+    if (next && user && userData?.demoWallet == null) {
+      updateDoc(doc(db, "users", user.uid), { demoWallet: 50 });
+    }
+  };
+
+  const resetDemoWallet = async () => {
+    if (!user) return;
+    await updateDoc(doc(db, "users", user.uid), { demoWallet: 50 });
+  };
+
+  const handleGameClick = (game) => {
+    if (isDemoMode && game.demoPath) router.push(game.demoPath);
+    else handleNavigation(game.path);
+  };
+
   const topGames = [
-    { id: 1, name: "Play with Friends", img: "/play_friends.svg", tag: "Hot", path: "/game/1" },
-    { id: 2, name: "Flyova To Dollars", img: "/flytodols.svg", tag: "Cash", path: "/game/flyova-to-dollars" },
-    { id: 3, name: "Predict and Win", img: "/predictwin.svg", tag: "New", path: "/game/predict-and-win" }
+    { id: 1, name: "Play with Friends", img: "/play_friends.svg", tag: "Hot", path: "/game/1", demoPath: null },
+    { id: 2, name: "Flyova To Dollars", img: "/flytodols.svg", tag: "Cash", path: "/game/flyova-to-dollars", demoPath: "/game/demo/flyova" },
+    { id: 3, name: "Predict and Win", img: "/predictwin.svg", tag: "New", path: "/game/predict-and-win", demoPath: "/game/demo/predict" }
   ];
 
   if (loading) {
@@ -188,7 +216,7 @@ export default function Dashboard() {
   }
 
   return (
-    <main className="pb-24 bg-[#0f172a] min-h-screen animate-in fade-in duration-500">
+    <main className="bg-[#0f172a] min-h-screen animate-in fade-in duration-500 pb-24 md:pb-10">
       
       {/* TESTIMONIAL MODAL */}
       {showModal && (
@@ -222,34 +250,35 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* JACKPOT ALERTS */}
-      <div className="px-4 pt-10 space-y-2 relative z-50">
-        {pendingJackpots.map((jackpot) => (
-          <div key={jackpot.id} className="p-5 rounded-[2rem] border bg-amber-500 border-amber-400 flex items-center justify-between gap-4 shadow-2xl animate-bounce-subtle">
-             <div className="flex items-start gap-3">
-               <div className="bg-white/20 p-2.5 rounded-xl">
-                 <Trophy size={20} className="text-white fill-current" />
-               </div>
-               <div>
-                 <p className="text-[10px] font-black text-white/60 uppercase tracking-widest mb-1">BONUS DROPPED!</p>
-                 <p className="text-sm font-black text-white leading-tight">You received a ${jackpot.amount} Jackpot!</p>
-               </div>
-             </div>
-             <button 
-               onClick={() => handleClaimJackpot(jackpot)}
-               disabled={claimingId === jackpot.id}
-               className="bg-white text-amber-600 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase whitespace-nowrap shadow-lg active:scale-90 transition-all flex items-center gap-2"
-             >
-               {claimingId === jackpot.id ? <Loader2 size={12} className="animate-spin" /> : "Claim Now"}
-             </button>
-          </div>
-        ))}
-      </div>
+      <div className="mx-auto max-w-7xl px-4 md:px-6 lg:px-8 pt-6 md:pt-8">
+        {/* JACKPOT ALERTS */}
+        <div className="space-y-2 relative z-50">
+          {pendingJackpots.map((jackpot) => (
+            <div key={jackpot.id} className="p-5 rounded-[2rem] border bg-amber-500 border-amber-400 flex items-center justify-between gap-4 shadow-2xl animate-bounce-subtle">
+              <div className="flex items-start gap-3">
+                <div className="bg-white/20 p-2.5 rounded-xl">
+                  <Trophy size={20} className="text-white fill-current" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-white/60 uppercase tracking-widest mb-1">BONUS DROPPED!</p>
+                  <p className="text-sm font-black text-white leading-tight">You received a ${jackpot.amount} Jackpot!</p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleClaimJackpot(jackpot)}
+                disabled={claimingId === jackpot.id}
+                className="bg-white text-amber-600 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase whitespace-nowrap shadow-lg active:scale-90 transition-all flex items-center gap-2"
+              >
+                {claimingId === jackpot.id ? <Loader2 size={12} className="animate-spin" /> : "Claim Now"}
+              </button>
+            </div>
+          ))}
+        </div>
 
-      {/* WITHDRAWAL BANNER */}
-      {hasApprovedWithdrawal && userData?.testimonialSubmitted !== true && (
-        <div className="px-4 pt-4 relative z-50">
-           <div className="p-5 rounded-[2rem] border bg-emerald-600 border-emerald-500 flex items-center justify-between gap-4 shadow-2xl animate-in slide-in-from-top duration-500">
+        {/* WITHDRAWAL BANNER */}
+        {hasApprovedWithdrawal && userData?.testimonialSubmitted !== true && (
+          <div className="pt-4 relative z-50">
+            <div className="p-5 rounded-[2rem] border bg-emerald-600 border-emerald-500 flex items-center justify-between gap-4 shadow-2xl animate-in slide-in-from-top duration-500">
               <div className="flex items-start gap-3">
                 <div className="bg-white/10 p-2.5 rounded-xl">
                   <Heart size={18} className="text-white fill-current" />
@@ -259,141 +288,206 @@ export default function Dashboard() {
                   <p className="text-sm font-bold text-white leading-tight">Tell us about your recent withdrawal? Share the love!</p>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={() => setShowModal(true)}
                 className="bg-white text-emerald-600 px-4 py-2 rounded-xl text-[9px] font-black uppercase whitespace-nowrap shadow-lg active:scale-90 transition-all"
               >
                 Leave a Review
               </button>
-           </div>
-        </div>
-      )}
-
-      {/* ANNOUNCEMENT OVERLAY */}
-      <div className="px-4 pt-4 space-y-2 relative z-50">
-        {announcements
-          .filter(msg => !readMessages.includes(msg.id))
-          .map((msg) => (
-            <div key={msg.id} className={`p-5 rounded-[2rem] border flex items-start justify-between gap-4 shadow-2xl ${msg.type === 'warning' ? 'bg-amber-500 border-amber-400' : msg.type === 'success' ? 'bg-emerald-600 border-emerald-500' : 'bg-[#1e293b] border-white/10'}`}>
-              <div className="flex items-start gap-3">
-                <div className="bg-white/10 p-2.5 rounded-xl mt-1">
-                  {msg.type === 'warning' ? <AlertTriangle size={18} className="text-white" /> : 
-                   msg.type === 'success' ? <CheckCircle2 size={18} className="text-white" /> : 
-                   <Megaphone size={18} className="text-[#613de6]" />}
-                </div>
-                <div>
-                  <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-1">Announcement</p>
-                  <p className="text-sm font-bold text-white leading-tight">{msg.message}</p>
-                </div>
-              </div>
-              <button onClick={() => markAsRead(msg.id)} className="bg-white/10 p-2 rounded-full transition-colors"><X size={16} className="text-white" /></button>
             </div>
-          ))}
-      </div>
+          </div>
+        )}
 
-      {/* TRADE MONITOR OVERLAY */}
-      {activeTrades.length > 0 && (
-        <div className="px-4 pt-4 space-y-2 relative z-40">
-          {activeTrades.map((trade) => (
-            <div key={trade.id} onClick={() => router.push(`/trade/${trade.id}`)} className="bg-[#613de6] p-4 rounded-2xl flex items-center justify-between border border-white/20 shadow-2xl cursor-pointer hover:brightness-110 transition-all">
-              <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-lg animate-pulse"><Clock size={18} className="text-white" /></div>
-                <div>
-                  <p className="text-[10px] font-black text-white/70 uppercase mb-1">{trade.agentId === user?.uid ? "Action Required" : "Ongoing Trade"}</p>
-                  <p className="text-xs font-bold text-white uppercase italic tracking-tighter">{trade.type}: <span className="text-orange-300">{trade.status}</span> (${trade.amount})</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 bg-black/20 px-3 py-2 rounded-xl">
-                 <span className="text-[9px] font-black text-white uppercase">Enter Room</span>
-                 <ArrowUpRight size={14} className="text-white" />
-              </div>
+        {/* WALLET / MODE CARD */}
+        <div className={`mt-4 rounded-3xl border p-5 transition-all duration-500 ${
+          isDemoMode
+            ? "bg-gradient-to-br from-amber-500/15 to-amber-600/5 border-amber-500/30"
+            : "bg-gradient-to-br from-[#1e293b] to-[#0f172a] border-white/5"
+        }`}>
+          <div className="flex items-center justify-between gap-4">
+            {/* Balance */}
+            <div className="space-y-0.5">
+              <p className={`text-[10px] font-black uppercase tracking-widest ${isDemoMode ? "text-amber-400/60" : "text-gray-500"}`}>
+                {isDemoMode ? "Demo Balance" : "Wallet Balance"}
+              </p>
+              <p className={`text-3xl font-black tracking-tighter ${isDemoMode ? "text-amber-400" : "text-white"}`}>
+                ${isDemoMode
+                  ? (userData?.demoWallet ?? 50).toFixed(2)
+                  : (userData?.wallet ?? 0).toFixed(2)}
+              </p>
+              {isDemoMode && (
+                <p className="text-[10px] font-bold text-amber-400/50 uppercase tracking-wider">
+                  Fake money · no real winnings
+                </p>
+              )}
             </div>
-          ))}
-        </div>
-      )}
 
-      {/* Top Banner */}
-      <div className="p-4 pt-2"> 
-        <div onClick={() => handleNavigation('/game/flyova-to-dollars')} className="relative w-full h-44 rounded-3xl overflow-hidden bg-[#613de6] group cursor-pointer shadow-2xl border border-white/5">
+            {/* Mode switcher */}
+            <div className="flex flex-col items-end gap-2 shrink-0">
+              <div className="flex items-center gap-1.5 bg-black/30 border border-white/5 rounded-2xl p-1">
+                <button
+                  onClick={() => isDemoMode && toggleDemoMode()}
+                  className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                    !isDemoMode
+                      ? "bg-[#613de6] text-white shadow-lg shadow-[#613de6]/30"
+                      : "text-gray-500 hover:text-gray-300"
+                  }`}
+                >
+                  Live
+                </button>
+                <button
+                  onClick={() => !isDemoMode && toggleDemoMode()}
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                    isDemoMode
+                      ? "bg-amber-500 text-white shadow-lg shadow-amber-500/30"
+                      : "text-gray-500 hover:text-gray-300"
+                  }`}
+                >
+                  <FlaskConical size={12} /> Demo
+                </button>
+              </div>
+
+              {isDemoMode && (
+                <button
+                  onClick={resetDemoWallet}
+                  className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-amber-400/60 hover:text-amber-400 transition-colors"
+                >
+                  <RefreshCw size={11} /> Reset to $50
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 md:mt-6 grid grid-cols-1 xl:grid-cols-12 gap-6">
+          <section className="xl:col-span-8 space-y-6">
+            {/* Top Banner */}
+            <div>
+              <div onClick={() => handleNavigation('/game/flyova-to-dollars')} className="relative w-full h-52 md:h-64 rounded-3xl overflow-hidden bg-[#613de6] group cursor-pointer shadow-2xl border border-white/5">
           <div className="absolute inset-0 opacity-40 group-hover:opacity-60 transition-opacity"><img src="/flytodols.svg" alt="Background" className="w-full h-full object-cover" /></div>
           <div className="absolute inset-0 bg-gradient-to-r from-black/60 to-transparent" />
           <div className="absolute bottom-6 left-6 z-10">
             <h2 className="text-2xl font-black text-white italic leading-tight tracking-tighter">FLYOVA TO<br/><span className="text-[#fc7952]">DOLLARS</span></h2>
             <button className="mt-3 bg-[#fc7952] text-white px-6 py-2 rounded-full text-xs font-black uppercase shadow-lg group-hover:scale-105 transition-all">Play Now</button>
           </div>
-        </div>
-      </div>
-
-
-
-{/* Social & Community Grid */}
-      <div className="px-4 mb-8">
-        <p className="text-[10px] font-black uppercase text-gray-500 tracking-[0.2em] mb-4 px-1">Join our community</p>
-        <div className="grid grid-cols-2 gap-3">
-          
-          {/* Telegram */}
-          <a href="https://t.me/+DEVm-vaEvIRiNzQ0" className="flex items-center gap-3 bg-[#229ED9] p-4 rounded-2xl hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-[#229ED9]/10">
-            <div className="bg-white/20 p-2 rounded-xl">
-              <svg size={20} className="text-white fill-current w-5 h-5" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.02-1.96 1.25-5.54 3.69-.52.36-1 .53-1.42.52-.47-.01-1.37-.26-2.03-.48-.82-.27-1.47-.42-1.42-.88.03-.24.35-.49.96-.75 3.78-1.65 6.31-2.74 7.58-3.27 3.61-1.51 4.35-1.77 4.84-1.78.11 0 .35.03.5.16.12.1.16.23.18.33.02.09.02.24.01.35z"/></svg>
-            </div>
-            <span className="text-xs font-black italic uppercase text-white">Telegram</span>
-          </a>
-
-          
-
-          {/* Custom Chatroom */}
-          <a href="http://chat.flyovahelp.com/" className="flex items-center gap-3 bg-[#613de6] p-4 rounded-2xl hover:opacity-100 active:scale-95 transition-all shadow-xl shadow-[#613de6]/20 col-span-1">
-            <div className="bg-white/20 p-2 rounded-xl">
-              <MessageCircle size={20} className="text-white" />
-            </div>
-            <span className="text-xs font-black italic uppercase text-white">Chatroom</span>
-          </a>
-
-        </div>
-      </div>
-
-
-
-      <div className="px-4 mb-6">
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-          <input className="w-full bg-[#1e293b] border border-gray-800 p-4 pl-12 rounded-2xl text-sm focus:border-[#613de6] outline-none text-white font-bold" placeholder="Search for games..." />
-        </div>
-      </div>
-
-      <div className="px-4">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="font-black text-white text-lg uppercase tracking-tighter italic">Featured Games</h3>
-          <button className="text-[#fc7952] text-xs font-black uppercase tracking-widest hover:underline">View All</button>
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          {topGames.map((game, index) => (
-            <div key={game.id} onClick={() => handleNavigation(game.path)} className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-[#1e293b] border border-gray-800 group cursor-pointer shadow-lg">
-              <div className="absolute top-0 left-0 bg-red-600 text-white font-black px-2.5 py-1 text-[10px] rounded-br-xl z-30 shadow-md italic">{index + 1}</div>
-              <div className="absolute inset-0 z-10 overflow-hidden"><img src={game.img} alt={game.name} className="w-full h-full object-cover opacity-50 group-hover:opacity-100 transition-all duration-500 group-hover:scale-110" /></div>
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent z-20" />
-              <div className="absolute bottom-3 left-0 right-0 px-2 text-center z-30">
-                <p className="text-[9px] font-black text-white uppercase truncate tracking-tighter mb-1">{game.name}</p>
-                <div className="text-[7px] inline-block px-2 py-0.5 rounded-full font-black uppercase shadow-sm bg-[#fc7952] text-white">{game.tag}</div>
               </div>
             </div>
-          ))}
+
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+              <input className="w-full bg-[#1e293b] border border-gray-800 p-4 pl-12 rounded-2xl text-sm focus:border-[#613de6] outline-none text-white font-bold" placeholder="Search for games..." />
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-black text-white text-lg uppercase tracking-tighter italic">Featured Games</h3>
+                <button className="text-[#fc7952] text-xs font-black uppercase tracking-widest hover:underline">View All</button>
+              </div>
+              <div className="grid grid-cols-3 gap-3 md:gap-4">
+                {topGames.map((game, index) => (
+                  <div
+                    key={game.id}
+                    onClick={() => handleGameClick(game)}
+                    className="relative aspect-4/5 rounded-2xl overflow-hidden bg-[#1e293b] border border-gray-800 group cursor-pointer shadow-lg"
+                  >
+                    <div className="absolute top-0 left-0 bg-red-600 text-white font-black px-2.5 py-1 text-[10px] rounded-br-xl z-30 shadow-md italic">{index + 1}</div>
+                    {isDemoMode && game.demoPath && (
+                      <div className="absolute top-0 right-0 bg-amber-500 text-white font-black px-2 py-1 text-[8px] rounded-bl-xl z-30 uppercase tracking-wide">Demo</div>
+                    )}
+                    <div className="absolute inset-0 z-10 overflow-hidden"><img src={game.img} alt={game.name} className="w-full h-full object-cover opacity-50 group-hover:opacity-100 transition-all duration-500 group-hover:scale-110" /></div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent z-20" />
+                    <div className="absolute bottom-3 left-0 right-0 px-2 text-center z-30">
+                      <p className="text-[9px] font-black text-white uppercase truncate tracking-tighter mb-1">{game.name}</p>
+                      <div className="text-[7px] inline-block px-2 py-0.5 rounded-full font-black uppercase shadow-sm bg-[#fc7952] text-white">{game.tag}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Social & Community Grid */}
+            <div className="mb-8">
+              <p className="text-[10px] font-black uppercase text-gray-500 tracking-[0.2em] mb-4 px-1">Join our community</p>
+              <div className="grid grid-cols-2 gap-3">
+                {/* Telegram */}
+                <a href="https://t.me/+DEVm-vaEvIRiNzQ0" className="flex items-center gap-3 bg-[#229ED9] p-4 rounded-2xl hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-[#229ED9]/10">
+                  <div className="bg-white/20 p-2 rounded-xl">
+                    <svg size={20} className="text-white fill-current w-5 h-5" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.02-1.96 1.25-5.54 3.69-.52.36-1 .53-1.42.52-.47-.01-1.37-.26-2.03-.48-.82-.27-1.47-.42-1.42-.88.03-.24.35-.49.96-.75 3.78-1.65 6.31-2.74 7.58-3.27 3.61-1.51 4.35-1.77 4.84-1.78.11 0 .35.03.5.16.12.1.16.23.18.33.02.09.02.24.01.35z"/></svg>
+                  </div>
+                  <span className="text-xs font-black italic uppercase text-white">Telegram</span>
+                </a>
+
+                {/* Custom Chatroom */}
+                <a href="http://chat.flyovahelp.com/" className="flex items-center gap-3 bg-[#613de6] p-4 rounded-2xl hover:opacity-100 active:scale-95 transition-all shadow-xl shadow-[#613de6]/20 col-span-1">
+                  <div className="bg-white/20 p-2 rounded-xl">
+                    <MessageCircle size={20} className="text-white" />
+                  </div>
+                  <span className="text-xs font-black italic uppercase text-white">Chatroom</span>
+                </a>
+              </div>
+            </div>
+          </section>
+
+          <aside className="xl:col-span-4 space-y-4 xl:sticky xl:top-24 h-fit">
+            {/* ANNOUNCEMENT OVERLAY */}
+            <div className="space-y-2 relative z-50">
+              {announcements
+                .filter(msg => !readMessages.includes(msg.id))
+                .map((msg) => (
+                  <div key={msg.id} className={`p-5 rounded-[2rem] border flex items-start justify-between gap-4 shadow-2xl ${msg.type === 'warning' ? 'bg-amber-500 border-amber-400' : msg.type === 'success' ? 'bg-emerald-600 border-emerald-500' : 'bg-[#1e293b] border-white/10'}`}>
+                    <div className="flex items-start gap-3">
+                      <div className="bg-white/10 p-2.5 rounded-xl mt-1">
+                        {msg.type === 'warning' ? <AlertTriangle size={18} className="text-white" /> :
+                         msg.type === 'success' ? <CheckCircle2 size={18} className="text-white" /> :
+                         <Megaphone size={18} className="text-[#613de6]" />}
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-1">Announcement</p>
+                        <p className="text-sm font-bold text-white leading-tight">{msg.message}</p>
+                      </div>
+                    </div>
+                    <button onClick={() => markAsRead(msg.id)} className="bg-white/10 p-2 rounded-full transition-colors"><X size={16} className="text-white" /></button>
+                  </div>
+                ))}
+            </div>
+
+            {/* TRADE MONITOR OVERLAY */}
+            {activeTrades.length > 0 && (
+              <div className="space-y-2 relative z-40">
+                {activeTrades.map((trade) => (
+                  <div key={trade.id} onClick={() => router.push(`/trade/${trade.id}`)} className="bg-[#613de6] p-4 rounded-2xl flex items-center justify-between border border-white/20 shadow-2xl cursor-pointer hover:brightness-110 transition-all">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-white/20 p-2 rounded-lg animate-pulse"><Clock size={18} className="text-white" /></div>
+                      <div>
+                        <p className="text-[10px] font-black text-white/70 uppercase mb-1">{trade.agentId === user?.uid ? "Action Required" : "Ongoing Trade"}</p>
+                        <p className="text-xs font-bold text-white uppercase italic tracking-tighter">{trade.type}: <span className="text-orange-300">{trade.status}</span> (${trade.amount})</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 bg-black/20 px-3 py-2 rounded-xl">
+                      <span className="text-[9px] font-black text-white uppercase">Enter Room</span>
+                      <ArrowUpRight size={14} className="text-white" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {userData && userData.isAgent !== true && (
+              <div className="mt-2">
+                <div className="relative bg-gradient-to-br from-[#1e293b] to-[#0f172a] p-6 rounded-[2rem] border border-[#613de6]/30 overflow-hidden group shadow-2xl">
+                  <div className="relative z-10 space-y-4">
+                    <div className="flex items-center gap-2 text-[#fc7952]"><ShieldCheck size={20} /><span className="text-[10px] font-black uppercase tracking-widest">Revenue Opportunity</span></div>
+                    <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white">Become a <br/><span className="text-[#613de6]">Flyova Agent</span></h2>
+                    <p className="text-[11px] text-gray-400 font-bold leading-relaxed max-w-[240px]">Process user withdrawals in your region and earn commissions.</p>
+                    <button onClick={() => router.push('/agent/apply')} className="bg-[#613de6] hover:bg-[#7251ed] text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase transition-all flex items-center shadow-lg">Apply Now <ArrowRight size={14} /></button>
+                  </div>
+                  <ShieldCheck size={180} className="absolute -right-12 -bottom-12 opacity-[0.05] text-white" />
+                </div>
+              </div>
+            )}
+          </aside>
         </div>
       </div>
-
-      {userData && userData.isAgent !== true && (
-        <div className="px-4 mt-8">
-          <div className="relative bg-gradient-to-br from-[#1e293b] to-[#0f172a] p-6 rounded-[2rem] border border-[#613de6]/30 overflow-hidden group shadow-2xl">
-            <div className="relative z-10 space-y-4">
-              <div className="flex items-center gap-2 text-[#fc7952]"><ShieldCheck size={20} /><span className="text-[10px] font-black uppercase tracking-widest">Revenue Opportunity</span></div>
-              <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white">Become a <br/><span className="text-[#613de6]">Flyova Agent</span></h2>
-              <p className="text-[11px] text-gray-400 font-bold leading-relaxed max-w-[200px]">Process user withdrawals in your region and earn commissions.</p>
-              <button onClick={() => router.push('/agent/apply')} className="bg-[#613de6] hover:bg-[#7251ed] text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase transition-all flex items-center shadow-lg">Apply Now <ArrowRight size={14} /></button>
-            </div>
-            <ShieldCheck size={180} className="absolute -right-12 -bottom-12 opacity-[0.05] text-white" />
-          </div>
-        </div>
-      )}
     </main>
   );
 }

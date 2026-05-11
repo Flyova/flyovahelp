@@ -1,8 +1,9 @@
-import { admin, adminDb } from "@/lib/firebaseAdmin";
+import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { NextResponse } from "next/server";
 
 export async function POST(req) {
   try {
+    const adminDb = getAdminDb();
     const { uid } = await req.json();
 
     if (!uid) {

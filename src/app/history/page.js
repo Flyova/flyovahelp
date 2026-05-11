@@ -150,9 +150,9 @@ export default function HistoryPage() {
         <p className="relative z-10 text-white/60 text-[10px] font-black uppercase mt-2 tracking-[0.3em]">Ledger & Performance</p>
       </div>
 
-      <div className="p-4 max-w-2xl mx-auto -mt-6">
+      <div className="p-4 max-w-2xl lg:max-w-4xl mx-auto mt-4">
         {/* Filters */}
-        <div className="flex space-x-2 mb-8 overflow-x-auto pb-2 no-scrollbar px-2 relative z-20">
+        <div className="flex space-x-2 mb-8 overflow-x-auto pb-2 no-scrollbar px-2 md:px-0 relative z-20 md:justify-center">
           {["all", "games", "finance"].map((f) => (
             <button
               key={f}

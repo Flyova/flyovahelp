@@ -24,3 +24,49 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@keyframes flicker {
+  0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% { opacity: 1; }
+  20%, 24%, 55% { opacity: 0.15; }
+  22% { opacity: 0.6; }
+  52%, 57% { opacity: 0.35; }
+}
+
+.animate-flicker {
+  animation: flicker 4s infinite;
+}
+
+/* ── TIPTAP / BLOG PROSE ─────────────────────────────────────────────── */
+.tiptap-prose { color: #e2e8f0; }
+.tiptap-prose h1 { font-size: 1.9rem; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: -0.03em; margin: 1.5rem 0 0.6rem; line-height: 1.15; color: #fff; }
+.tiptap-prose h2 { font-size: 1.45rem; font-weight: 800; letter-spacing: -0.02em; margin: 1.4rem 0 0.5rem; line-height: 1.25; color: #fff; }
+.tiptap-prose h3 { font-size: 1.15rem; font-weight: 800; margin: 1.2rem 0 0.4rem; color: #fff; }
+.tiptap-prose p { margin: 0.85rem 0; line-height: 1.8; font-size: 0.95rem; }
+.tiptap-prose p:first-child { margin-top: 0; }
+.tiptap-prose ul { list-style: disc; padding-left: 1.5rem; margin: 0.75rem 0; }
+.tiptap-prose ol { list-style: decimal; padding-left: 1.5rem; margin: 0.75rem 0; }
+.tiptap-prose li { margin: 0.3rem 0; line-height: 1.75; }
+.tiptap-prose blockquote { border-left: 3px solid #613de6; padding-left: 1.1rem; margin: 1.25rem 0; color: #94a3b8; font-style: italic; }
+.tiptap-prose a { color: #fc7952; text-decoration: underline; }
+.tiptap-prose a:hover { color: #ff9a7a; }
+.tiptap-prose img { max-width: 100%; border-radius: 12px; margin: 1.25rem 0; display: block; }
+.tiptap-prose strong { font-weight: 800; color: #fff; }
+.tiptap-prose em { font-style: italic; }
+.tiptap-prose u { text-decoration: underline; }
+.tiptap-prose s { text-decoration: line-through; }
+.tiptap-prose code { background: rgba(255,255,255,0.08); padding: 0.1em 0.45em; border-radius: 5px; font-family: monospace; font-size: 0.85em; color: #a78bfa; }
+.tiptap-prose pre { background: #020617; padding: 1rem 1.25rem; border-radius: 12px; overflow-x: auto; margin: 1.25rem 0; border: 1px solid rgba(255,255,255,0.06); }
+.tiptap-prose pre code { background: none; padding: 0; color: #e2e8f0; }
+.tiptap-prose hr { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 2rem 0; }
+.tiptap-prose .text-left { text-align: left; }
+.tiptap-prose .text-center { text-align: center; }
+.tiptap-prose .text-right { text-align: right; }
+
+/* Editor placeholder */
+.tiptap-prose p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: rgba(255,255,255,0.18);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}

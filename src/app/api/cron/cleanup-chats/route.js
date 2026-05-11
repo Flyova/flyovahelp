@@ -1,8 +1,9 @@
-import { adminDb } from "@/lib/firebaseAdmin";
+import { getAdminDb } from "@/lib/firebaseAdmin";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
+    const adminDb = getAdminDb();
     const batch = adminDb.batch();
     let totalDeleted = 0;
 
