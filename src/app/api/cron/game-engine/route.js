@@ -1,4 +1,4 @@
-import { adminDb, admin, getRtdb } from "@/lib/firebaseAdmin";
+import { getAdminDb, admin, getRtdb } from "@/lib/firebaseAdmin";
 import { NextResponse } from "next/server";
 
 // Fisher-Yates Shuffle Algorithm for true randomization
@@ -11,14 +11,15 @@ const shuffleArray = (array) => {
 }
 
 export async function GET() {
-  const rtdb = getRtdb();
-  const now = Date.now();
-  const WIN_MULTIPLIER = 1.3;
-  const REFUND_PERCENTAGE = 0.8; // 80% refund for 1 correct number
-  const REFERRAL_COMMISSION_RATE = 0.003; // 0.3%
-  let settlementLog = "";
-  
   try {
+    const adminDb = getAdminDb();
+    const rtdb = getRtdb();
+    const now = Date.now();
+    const WIN_MULTIPLIER = 1.3;
+    const REFUND_PERCENTAGE = 0.8; // 80% refund for 1 correct number
+    const REFERRAL_COMMISSION_RATE = 0.003; // 0.3%
+    let settlementLog = "";
+
     const gameRef = rtdb.ref("active_game_flyova");
 
     // 1. SETTLE EXPIRED GAMES & PAY OUT WINNERS

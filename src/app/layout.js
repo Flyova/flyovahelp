@@ -1,30 +1,54 @@
-// src/app/layout.js
-"use client";
-import { usePathname } from 'next/navigation';
-import Header from "@/components/Header";
-import BottomNav from "@/components/BottomNav";
 import "./globals.css";
+import ClientLayoutShell from "./ClientLayoutShell";
+
+const SITE_URL = "https://flyovahelp.com";
+
+export const metadata = {
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "Flyovahelp | Online Gaming, Predictions, and Real-Money Challenges",
+    template: "%s | Flyovahelp",
+  },
+  description:
+    "Flyovahelp is a mobile-first gaming platform where you can play prediction games, compete in multiplayer challenges, and withdraw winnings quickly.",
+  keywords: [
+    "Flyovahelp",
+    "online gaming platform",
+    "predict and win",
+    "real money games",
+    "multiplayer betting",
+    "Nigeria gaming app",
+    "play and earn",
+    "instant withdrawals",
+    "mobile gaming",
+    "online game challenges",
+  ],
+  openGraph: {
+    title: "Flyovahelp | Online Gaming, Predictions, and Real-Money Challenges",
+    description:
+      "Play prediction games, join live challenges, and withdraw winnings on Flyovahelp.",
+    url: SITE_URL,
+    siteName: "Flyovahelp",
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Flyovahelp | Online Gaming, Predictions, and Real-Money Challenges",
+    description:
+      "Play prediction games, join live challenges, and withdraw winnings on Flyovahelp.",
+  },
+  alternates: {
+    canonical: SITE_URL,
+  },
+  category: "gaming",
+};
 
 export default function RootLayout({ children }) {
-  const pathname = usePathname();
-
- 
-  // Define pages where we DON'T want the header/nav
-  // Added a check for any path starting with /admin
-  const isAuthPage = 
-    pathname === "/" || 
-    pathname === "/login" || 
-    pathname === "/register" ||
-    pathname === "/verify" ||  
-    pathname === "/forgot-password" ||  
-    pathname.startsWith("/admin");
-
   return (
     <html lang="en">
       <body className="bg-[#0f172a] antialiased">
-        {!isAuthPage && <Header />}
-        <main>{children}</main>
-        {!isAuthPage && <BottomNav />}
+        <ClientLayoutShell>{children}</ClientLayoutShell>
       </body>
     </html>
   );

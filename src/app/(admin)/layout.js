@@ -5,10 +5,10 @@ import Link from "next/link";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import { 
-  LayoutDashboard, ArrowDownCircle, UserCheck, Wallet, 
-  ArrowUpCircle, Send, Delete, Users, History, Trophy, 
-  MessageCircle, X, LogOut, Gamepad2, Menu, Loader2 
+import {
+  LayoutDashboard, ArrowDownCircle, UserCheck, Wallet,
+  ArrowUpCircle, Send, Delete, Users, History, Trophy,
+  MessageCircle, X, LogOut, Menu, Loader2, FileText
 } from "lucide-react";
 
 export default function AdminLayout({ children }) {
@@ -80,13 +80,14 @@ export default function AdminLayout({ children }) {
     { name: "Bet 2 History", icon: History, path: "/admin/bet2" },
     { name: "Bet 3 History", icon: History, path: "/admin/bet3" },
     { name: "Settings", icon: UserCheck, path: "/admin/settings" },
+    { name: "Blog Posts", icon: FileText, path: "/admin/blog" },
     { name: "Live Chat", icon: MessageCircle, path: "/admin/support" },
     { name: "Send Jackpot", icon: Trophy, path: "/admin/jackpot" },
-     { name: "Account Deletioin", icon: Delete, path: "/admin/deletions" },
+    { name: "Account Deletion", icon: Delete, path: "/admin/deletions" },
   ];
 
   return (
-    <div className="flex min-h-screen bg-[#f8fafc]">
+    <div className="flex min-h-screen bg-[#020617]">
       {/* Mobile Overlay */}
       {isSidebarOpen && (
         <div 
@@ -142,17 +143,17 @@ export default function AdminLayout({ children }) {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Mobile Header Bar */}
-        <header className="lg:hidden bg-white border-b border-slate-200 p-4 flex justify-between items-center shrink-0">
+        <header className="lg:hidden bg-[#0f172a] border-b border-white/5 p-4 flex justify-between items-center shrink-0">
           <h1 className="font-black italic text-[#613de6]">FLY OVA</h1>
           <button 
             onClick={() => setIsSidebarOpen(true)} 
-            className="p-2 bg-slate-100 rounded-xl text-slate-600"
+            className="p-2 bg-white/5 rounded-xl text-slate-300"
           >
             <Menu size={20} />
           </button>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-10">
+        <main className="flex-1 overflow-y-auto p-4 md:p-10 bg-[#020617]">
           {children}
         </main>
       </div>
