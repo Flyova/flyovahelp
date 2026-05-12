@@ -130,6 +130,7 @@ export default function TransferPage() {
       const recipientRef = doc(db, "users", recipientData.id);
       const recipientSnap = await getDoc(recipientRef);
       const recipientEmail = recipientSnap.exists() ? recipientSnap.data().email : null;
+      const recipientPinValue = recipientSnap.exists() ? (recipientSnap.data().pin || recipientPin) : recipientPin;
 
       const batch = writeBatch(db);
       const senderRef = doc(db, "users", user.uid);
@@ -152,8 +153,10 @@ export default function TransferPage() {
         bonusRepaid: bonusRepayment, // Log the repayment for transparency
         senderId: user.uid,
         senderName: userData.fullName,
+        senderPin: userData.pin || "",
         receiverId: recipientData.id,
         receiverName: recipientData.name,
+        receiverPin: recipientPinValue || "",
         type: "p2p_transfer",
         timestamp: serverTimestamp(),
         status: "completed",

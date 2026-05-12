@@ -137,7 +137,8 @@ export default function UserManagement() {
 
         {/* Table */}
         <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-          <table className="w-full text-left">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[980px] text-left">
             <thead className="bg-slate-50/50">
               <tr>
                 <th className="p-6 text-[10px] font-black uppercase text-slate-400">Merchant</th>
@@ -167,7 +168,7 @@ export default function UserManagement() {
                   <td className="p-6 text-[10px] font-bold uppercase text-slate-400">
                     {u.createdAt?.toDate ? u.createdAt.toDate().toLocaleDateString() : "N/A"}
                   </td>
-                  <td className="p-6 text-right space-x-2">
+                  <td className="p-6 text-right whitespace-nowrap space-x-2">
                     <Link
                       href={`/admin/users/${u.id}`}
                       className="px-4 py-3 rounded-xl transition-all font-black uppercase text-[10px] inline-flex items-center gap-2 bg-indigo-100 text-indigo-600 hover:bg-indigo-600 hover:text-white"
@@ -186,6 +187,7 @@ export default function UserManagement() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
 
         {/* Modal with ALL Fields restored */}

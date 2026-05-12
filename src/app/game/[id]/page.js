@@ -5,7 +5,7 @@ import { db, auth } from "@/lib/firebase";
 import { 
   doc, onSnapshot, updateDoc, increment, collection, 
   query, where, setDoc, addDoc, deleteDoc, 
-  serverTimestamp, or, orderBy, limit, runTransaction 
+  serverTimestamp, or, orderBy, limit, runTransaction, getDoc
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { User, Zap, Wallet, ShieldCheck, Trophy, Ghost, MessageSquare, Send, X as CloseIcon, Search, Users, Timer as TimerIcon, RefreshCw, Loader2 } from "lucide-react";
@@ -305,6 +305,39 @@ export default function GamePage() {
         });
       }
     };
+
+    // Persist completed match history for admin bet history table
+    try {
+      const [p1Snap, p2Snap] = await Promise.all([
+        getDoc(doc(db, "users", player1)),
+        getDoc(doc(db, "users", player2)),
+      ]);
+      const p1 = p1Snap.exists() ? p1Snap.data() : {};
+      const p2 = p2Snap.exists() ? p2Snap.data() : {};
+
+      await setDoc(doc(db, "completed_games", id), {
+        gameId: id,
+        amount: Number(activeGame.stakePerRound || 0),
+        player1Id: player1,
+        player1Name: p1.fullName || p1.username || "Player 1",
+        player1Email: p1.email || "",
+        player1Pin: p1.pin || "",
+        player1Country: p1.country || "",
+        player2Id: player2,
+        player2Name: p2.fullName || p2.username || "Player 2",
+        player2Email: p2.email || "",
+        player2Pin: p2.pin || "",
+        player2Country: p2.country || "",
+        p1RoundsPlayed: Number(activeGame?.scores?.p1 || 0),
+        p2RoundsPlayed: Number(activeGame?.scores?.p2 || 0),
+        totalRounds: Number(activeGame?.round || 0),
+        createdAt: typeof activeGame?.createdAt === "number" ? activeGame.createdAt : null,
+        finishedAt: serverTimestamp(),
+      }, { merge: true });
+    } catch (e) {
+      console.error("Failed to persist completed game history", e);
+    }
+
     await refund(player1, wagerPool.p1);
     await refund(player2, wagerPool.p2);
     await deleteDoc(doc(db, "games", id));

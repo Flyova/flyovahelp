@@ -2,13 +2,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { db } from "@/lib/firebase";
-import { collection, doc, getDoc, limit, onSnapshot, orderBy, query } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, where } from "firebase/firestore";
 import { Loader2 } from "lucide-react";
 
 export default function UserActivityPage() {
   const { id } = useParams();
   const [user, setUser] = useState(null);
   const [txs, setTxs] = useState([]);
+  const [downline, setDownline] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -17,7 +18,25 @@ export default function UserActivityPage() {
 
     (async () => {
       const snap = await getDoc(doc(db, "users", id));
-      if (snap.exists()) setUser({ id: snap.id, ...snap.data() });
+      if (snap.exists()) {
+        const selfData = { id: snap.id, ...snap.data() };
+        setUser(selfData);
+
+        const referralMap = new Map();
+
+        const qPrimary = query(collection(db, "users"), where("referrerUid", "==", id));
+        const primarySnap = await getDocs(qPrimary);
+        primarySnap.forEach((d) => referralMap.set(d.id, { id: d.id, ...d.data() }));
+
+        const candidates = [selfData.username, selfData.fullName].filter(Boolean);
+        for (const label of candidates) {
+          const qLegacy = query(collection(db, "users"), where("referredBy", "==", label));
+          const legacySnap = await getDocs(qLegacy);
+          legacySnap.forEach((d) => referralMap.set(d.id, { id: d.id, ...d.data() }));
+        }
+
+        setDownline(Array.from(referralMap.values()));
+      }
       const q = query(collection(db, "users", id, "transactions"), orderBy("timestamp", "desc"), limit(300));
       unsubTx = onSnapshot(q, (txSnap) => {
         setTxs(txSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
@@ -47,8 +66,26 @@ export default function UserActivityPage() {
           <div>PIN: <span className="font-mono text-indigo-600">{user?.pin || "--------"}</span></div>
           <div>Referred By: {user?.referredBy || "N/A"}</div>
           <div>Referrer UID: {user?.referrerUid || "N/A"}</div>
+          <div>Total Referrals: {downline.length}</div>
           <div className="md:col-span-3">Referral Link: <span className="font-mono break-all">{referralLink}</span></div>
         </div>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-3xl p-6">
+        <h2 className="text-lg font-black italic uppercase text-slate-800">Referral List</h2>
+        {downline.length === 0 ? (
+          <p className="text-xs font-bold text-slate-400 mt-3">No referrals found.</p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {downline.map((r) => (
+              <div key={r.id} className="p-4 rounded-2xl border border-slate-100 bg-slate-50">
+                <p className="text-sm font-black text-slate-800">{r.fullName || r.username || "User"}</p>
+                <p className="text-[11px] font-mono text-slate-500">{r.id}</p>
+                <p className="text-[11px] font-bold text-slate-500">{r.email || "No email"} · PIN: {r.pin || "--------"}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden">

@@ -38,26 +38,25 @@ export default function ReferralsPage() {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
       if (!u) return router.push("/login");
       setUser(u);
-      
-      const unsubUser = onSnapshot(doc(db, "users", u.uid), (snap) => {
-        if (snap.exists()) {
-          setUserData(snap.data());
-        }
-      });
 
-      const fetchReferrals = async () => {
+      const fetchReferrals = async (selfData = {}) => {
         try {
-          // FIXED: Query updated to match 'referrerUid' saved during registration
-          const q = query(
-            collection(db, "users"), 
-            where("referrerUid", "==", u.uid)
-          );
-          const snap = await getDocs(q);
-          const list = snap.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
-          setReferrals(list);
+          const map = new Map();
+
+          // Primary referral mapping (new schema)
+          const qPrimary = query(collection(db, "users"), where("referrerUid", "==", u.uid));
+          const primarySnap = await getDocs(qPrimary);
+          primarySnap.forEach((d) => map.set(d.id, { id: d.id, ...d.data() }));
+
+          // Legacy fallback mapping (old schema)
+          const candidates = [selfData.username, selfData.fullName].filter(Boolean);
+          for (const label of candidates) {
+            const qLegacy = query(collection(db, "users"), where("referredBy", "==", label));
+            const legacySnap = await getDocs(qLegacy);
+            legacySnap.forEach((d) => map.set(d.id, { id: d.id, ...d.data() }));
+          }
+
+          setReferrals(Array.from(map.values()));
         } catch (err) {
           console.error("Error fetching referrals:", err);
         } finally {
@@ -65,7 +64,16 @@ export default function ReferralsPage() {
         }
       };
 
-      fetchReferrals();
+      const unsubUser = onSnapshot(doc(db, "users", u.uid), (snap) => {
+        if (snap.exists()) {
+          const selfData = snap.data();
+          setUserData(selfData);
+          fetchReferrals(selfData);
+        } else {
+          setLoading(false);
+        }
+      });
+
       return () => unsubUser();
     });
 
