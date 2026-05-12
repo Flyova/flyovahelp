@@ -38,6 +38,7 @@ export default function GamePage() {
   const [showStakeModal, setShowStakeModal] = useState(null);
   const [stakeAmount, setStakeAmount] = useState(1);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const WIN_TARGET = 15;
 
   // 1. Auth & Wallet Listener
   useEffect(() => {
@@ -160,7 +161,11 @@ export default function GamePage() {
 
     try {
         const nextPicker = activeGame.picker === activeGame.player1 ? activeGame.player2 : activeGame.player1;
-        const isGameOver = activeGame.round >= 30;
+        const currentP1 = Number(activeGame?.scores?.p1 || 0);
+        const currentP2 = Number(activeGame?.scores?.p2 || 0);
+        const nextP1 = currentP1 + (!isP1 ? 1 : 0);
+        const nextP2 = currentP2 + (isP1 ? 1 : 0);
+        const isGameOver = nextP1 >= WIN_TARGET || nextP2 >= WIN_TARGET;
 
         await updateDoc(doc(db, "games", activeGame.id), { 
             [loserPoolKey]: increment(-winAmount),
@@ -213,7 +218,7 @@ export default function GamePage() {
   };
 
   const initiateChallenge = async () => {
-    const totalWager = (stakeAmount * 15);
+    const totalWager = (stakeAmount * WIN_TARGET);
     const calculatedFee = stakeAmount / 2; 
     const totalCost = totalWager + calculatedFee;
 
@@ -275,7 +280,11 @@ export default function GamePage() {
 
         const winAmount = activeGame.stakePerRound;
         const nextPicker = activeGame.picker === activeGame.player1 ? activeGame.player2 : activeGame.player1;
-        const isGameOver = activeGame.round >= 30;
+        const currentP1 = Number(activeGame?.scores?.p1 || 0);
+        const currentP2 = Number(activeGame?.scores?.p2 || 0);
+        const nextP1 = currentP1 + (wasCorrect && isP1 ? 1 : 0);
+        const nextP2 = currentP2 + (wasCorrect && !isP1 ? 1 : 0);
+        const isGameOver = nextP1 >= WIN_TARGET || nextP2 >= WIN_TARGET;
 
         const updatePayload = {
           gameState: "picking", turn: nextPicker, picker: nextPicker, round: increment(1),
@@ -414,7 +423,7 @@ export default function GamePage() {
                 <button onClick={() => setStakeAmount(stakeAmount + 1)} className="w-10 h-10 bg-[#613de6] rounded-xl font-bold">+</button>
               </div>
               <div className="space-y-2 mb-8 px-2">
-                <div className="flex justify-between text-[10px] font-black uppercase"><span className="opacity-40">Entry Wager (15x)</span><span>${stakeAmount * 15}</span></div>
+                <div className="flex justify-between text-[10px] font-black uppercase"><span className="opacity-40">Entry Wager ({WIN_TARGET}x)</span><span>${stakeAmount * WIN_TARGET}</span></div>
                 <div className="flex justify-between text-[10px] font-black uppercase text-emerald-400"><span>Match Admin Fee</span><span>${(stakeAmount / 2).toFixed(2)}</span></div>
               </div>
               <button onClick={initiateChallenge} className="w-full bg-[#fc7952] py-4 rounded-2xl font-black uppercase text-xs mb-3 shadow-lg">Send Challenge</button>
@@ -487,7 +496,7 @@ export default function GamePage() {
     <div className="min-h-screen bg-[#0f172a] text-white flex flex-col relative overflow-hidden pb-[80px]">
       <div className="bg-[#613de6] p-4 flex justify-between items-center shadow-lg relative z-20">
         <div className="flex flex-col">
-            <span className="font-black italic text-[10px] uppercase">ROUND {activeGame?.round}/30</span>
+            <span className="font-black italic text-[10px] uppercase">ROUND {activeGame?.round} · FIRST TO {WIN_TARGET}</span>
             <div className={`flex items-center gap-1 mt-0.5 ${gameTimer < 10 ? 'text-red-400 animate-pulse' : 'text-white/60'}`}>
                 <TimerIcon size={10} />
                 <span className="text-[10px] font-black font-mono">{gameTimer}S LEFT</span>

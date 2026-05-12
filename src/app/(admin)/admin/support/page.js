@@ -12,12 +12,24 @@ import {
 
 export default function AdminSupport() {
   const CHAT_NOTIFY_EMAIL = "contact.notifications.surname@gmail.com";
+  const CLEANUP_STORAGE_KEY = "support_cleanup_last_run";
+  const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
   const [chats, setChats] = useState([]);
   const [selectedChat, setSelectedChat] = useState(null);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const scrollRef = useRef(null);
+
+  useEffect(() => {
+    const now = Date.now();
+    const lastRun = Number(localStorage.getItem(CLEANUP_STORAGE_KEY) || 0);
+    if (now - lastRun < CLEANUP_INTERVAL_MS) return;
+
+    fetch("/api/cron/cleanup-chats")
+      .then(() => localStorage.setItem(CLEANUP_STORAGE_KEY, String(now)))
+      .catch((err) => console.error("Support cleanup trigger failed:", err));
+  }, []);
 
   useEffect(() => {
     const q = query(collection(db, "support_chats"), orderBy("updatedAt", "desc"));
@@ -99,7 +111,7 @@ export default function AdminSupport() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               to: CHAT_NOTIFY_EMAIL,
-              subject: "Live Chat Notification: Admin Reply Sent",
+              subject: "Support Notification: Admin Reply Sent",
               html: `<p><strong>Sender:</strong> Admin</p><p><strong>User:</strong> ${selectedChat.userEmail}</p><p><strong>Message:</strong> ${text}</p>`,
             }),
           });

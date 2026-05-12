@@ -81,7 +81,7 @@ export default function AdminLayout({ children }) {
     { name: "Bet 3 History", icon: History, path: "/admin/bet3" },
     { name: "Settings", icon: UserCheck, path: "/admin/settings" },
     { name: "Blog Posts", icon: FileText, path: "/admin/blog" },
-    { name: "Live Chat", icon: MessageCircle, path: "/admin/support" },
+    { name: "Support", icon: MessageCircle, path: "/admin/support" },
     { name: "Send Jackpot", icon: Trophy, path: "/admin/jackpot" },
     { name: "Account Deletion", icon: Delete, path: "/admin/deletions" },
   ];

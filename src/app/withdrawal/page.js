@@ -201,7 +201,9 @@ const handleWithdraw = async () => {
         if (isEligibleForBonusDeduction) {
           await updateDoc(doc(db, "users", user.uid), { 
             wallet: increment(-totalDeduct),
-            bonusDeducted: true
+            bonusDeducted: true,
+            welcomeBonusStatus: "recovered",
+            welcomeBonusRecoveredAt: serverTimestamp()
           });
           
           await addDoc(collection(db, "users", user.uid, "transactions"), {

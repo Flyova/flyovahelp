@@ -184,7 +184,7 @@ export default function Header() {
               )}
             </div>
             <span className="text-[9px] font-black uppercase tracking-[0.1em] text-white/90">
-              Live Chat
+              Support
             </span>
           </div>
 

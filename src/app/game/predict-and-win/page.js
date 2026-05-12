@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db, auth } from "@/lib/firebase";
 import { 
   doc, onSnapshot, updateDoc, increment, collection, 
@@ -35,6 +35,8 @@ export default function PredictAndWin() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingPlan, setPendingPlan] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [placingPrediction, setPlacingPrediction] = useState(false);
+  const predictionLockRef = useRef(false);
 
   const WIN_REWARD = 0.20;
   const ROUND_DURATION = 60; 
@@ -231,17 +233,24 @@ const buySubscription = async () => {
   };
 
   const placePrediction = async () => {
-    if (!selectedChoice || hasBet || !currentGame) return;
-    await addDoc(collection(db, "users", user.uid, "transactions"), {
-        title: "Predict and Win",
-        gameId: currentGame.id,
-        prediction: selectedChoice,
-        amount: 0, 
-        type: "prediction",
-        status: "pending",
-        timestamp: serverTimestamp()
-    });
-    setHasBet(true);
+    if (!selectedChoice || hasBet || !currentGame || placingPrediction || predictionLockRef.current) return;
+    predictionLockRef.current = true;
+    setPlacingPrediction(true);
+    try {
+      await addDoc(collection(db, "users", user.uid, "transactions"), {
+          title: "Predict and Win",
+          gameId: currentGame.id,
+          prediction: selectedChoice,
+          amount: 0, 
+          type: "prediction",
+          status: "pending",
+          timestamp: serverTimestamp()
+      });
+      setHasBet(true);
+    } finally {
+      setPlacingPrediction(false);
+      predictionLockRef.current = false;
+    }
   };
 
   const processResults = async () => {
@@ -406,9 +415,9 @@ const buySubscription = async () => {
                     ))}
                 </div>
                 {!hasBet ? (
-                    <button onClick={placePrediction} disabled={!selectedChoice}
+                    <button onClick={placePrediction} disabled={!selectedChoice || placingPrediction}
                         className="w-full max-w-xs bg-[#fc7952] py-4 rounded-2xl font-black italic uppercase shadow-xl disabled:opacity-20">
-                        Place bet
+                        {placingPrediction ? "Placing..." : "Place bet"}
                     </button>
                 ) : (
                     <div className="text-center bg-black/20 px-8 py-4 rounded-2xl border border-white/5 flex items-center space-x-3">

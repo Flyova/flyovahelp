@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db, auth, rtdb } from "@/lib/firebase"; // Using rtdb for high-speed sync
 import { 
   doc, onSnapshot, increment, collection, query, where, 
@@ -22,6 +22,8 @@ export default function FlyovaToDollars() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [selectedNumbers, setSelectedNumbers] = useState([]);
   const [stake, setStake] = useState(1);
+  const [placingBet, setPlacingBet] = useState(false);
+  const placeBetLockRef = useRef(false);
   const [activeBets, setActiveBets] = useState([]); 
   const [gameStatus, setGameStatus] = useState("betting"); 
   const [lastWinningNumbers, setLastWinningNumbers] = useState([]);
@@ -149,7 +151,9 @@ export default function FlyovaToDollars() {
   };
 
   const placeBet = async () => {
-    if (selectedNumbers.length !== 2 || myWallet < stake || !currentGame) return;
+    if (selectedNumbers.length !== 2 || myWallet < stake || !currentGame || placingBet || placeBetLockRef.current) return;
+    placeBetLockRef.current = true;
+    setPlacingBet(true);
     try {
       await runTransaction(db, async (transaction) => {
         const userRef = doc(db, "users", user.uid);
@@ -165,9 +169,13 @@ export default function FlyovaToDollars() {
             timestamp: serverTimestamp()
         });
       });
-      fetchUserBets(currentGame.id);
-      setSelectedNumbers([]); 
-    } catch (e) { alert("Error placing bet"); }
+      await fetchUserBets(currentGame.id);
+    } catch (e) {
+      alert("Error placing bet");
+    } finally {
+      setPlacingBet(false);
+      placeBetLockRef.current = false;
+    }
   };
 
   if (loading) return (
@@ -269,10 +277,10 @@ export default function FlyovaToDollars() {
                     </div>
                    <button 
     onClick={placeBet} 
-    disabled={selectedNumbers.length !== 2 || timeLeft <= 0 || gameStatus === "waiting"}
+    disabled={selectedNumbers.length !== 2 || timeLeft <= 0 || gameStatus === "waiting" || placingBet}
     className="w-full bg-[#fc7952] py-4 rounded-2xl font-black uppercase italic shadow-lg active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
 >
-    {timeLeft <= 0 ? "BETTING CLOSED" : "PLACE BET"}
+    {timeLeft <= 0 ? "BETTING CLOSED" : placingBet ? "PLACING..." : "PLACE BET"}
 </button>
                 </div>
             </>

@@ -4,41 +4,37 @@ import { NextResponse } from "next/server";
 export async function GET() {
   try {
     const adminDb = getAdminDb();
-    const batch = adminDb.batch();
+    const BATCH_LIMIT = 400;
     let totalDeleted = 0;
+    let opsInBatch = 0;
+    let batch = adminDb.batch();
     const cutoffMs = Date.now() - (7 * 24 * 60 * 60 * 1000);
-
-    // 1. Fetch top-level support_chats
-    const mainChatsSnap = await adminDb.collection("support_chats").get();
-    mainChatsSnap.forEach((chatDoc) => {
+    
+    // collectionGroup("support_chats") covers top-level + nested support chats.
+    const chatsSnap = await adminDb.collectionGroup("support_chats").get();
+    for (const chatDoc of chatsSnap.docs) {
       const data = chatDoc.data() || {};
       const updatedAtMs = data.updatedAt?.toMillis?.() || 0;
       if (updatedAtMs > 0 && updatedAtMs < cutoffMs) {
         batch.delete(chatDoc.ref);
+        opsInBatch++;
         totalDeleted++;
-      }
-    });
 
-    // 2. Fetch nested support_chats inside users (collectionGroup)
-    // This targets /users/{userId}/support_chats/{chatId}
-    const nestedChatsSnap = await adminDb.collectionGroup("support_chats").get();
-    nestedChatsSnap.forEach((chatDoc) => {
-      const data = chatDoc.data() || {};
-      const updatedAtMs = data.updatedAt?.toMillis?.() || 0;
-      if (updatedAtMs > 0 && updatedAtMs < cutoffMs) {
-        batch.delete(chatDoc.ref);
-        totalDeleted++;
+        if (opsInBatch >= BATCH_LIMIT) {
+          await batch.commit();
+          batch = adminDb.batch();
+          opsInBatch = 0;
+        }
       }
-    });
+    }
 
-    // 3. Commit the deletions
-    if (totalDeleted > 0) {
+    if (opsInBatch > 0) {
       await batch.commit();
     }
 
     return NextResponse.json({ 
       success: true, 
-      message: `Support cleanup successful. Deleted ${totalDeleted} documents.`,
+      message: `Support cleanup successful. Deleted ${totalDeleted} stale chat documents.`,
       timestamp: new Date().toISOString()
     });
 

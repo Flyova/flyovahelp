@@ -16,6 +16,8 @@ import {
 
 export default function SupportChat() {
   const CHAT_NOTIFY_EMAIL = "contact.notifications.surname@gmail.com";
+  const CLEANUP_STORAGE_KEY = "support_cleanup_last_run";
+  const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -23,6 +25,16 @@ export default function SupportChat() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const scrollRef = useRef(null);
+
+  useEffect(() => {
+    const now = Date.now();
+    const lastRun = Number(localStorage.getItem(CLEANUP_STORAGE_KEY) || 0);
+    if (now - lastRun < CLEANUP_INTERVAL_MS) return;
+
+    fetch("/api/cron/cleanup-chats")
+      .then(() => localStorage.setItem(CLEANUP_STORAGE_KEY, String(now)))
+      .catch((err) => console.error("Support cleanup trigger failed:", err));
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -101,7 +113,7 @@ export default function SupportChat() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             to: CHAT_NOTIFY_EMAIL,
-            subject: "Live Chat Notification: New User Message",
+            subject: "Support Notification: New User Message",
             html: `<p><strong>Sender:</strong> User (${user.email})</p><p><strong>Message:</strong> ${textToSend}</p>`,
           }),
         });
