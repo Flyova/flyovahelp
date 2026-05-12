@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 
 export default function AdminSupport() {
+  const CHAT_NOTIFY_EMAIL = "contact.notifications.surname@gmail.com";
   const [chats, setChats] = useState([]);
   const [selectedChat, setSelectedChat] = useState(null);
   const [replyText, setReplyText] = useState("");
@@ -91,6 +92,20 @@ export default function AdminSupport() {
           updatedAt: serverTimestamp(),
           unreadByUser: true 
         });
+
+        try {
+          await fetch("/api/send-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: CHAT_NOTIFY_EMAIL,
+              subject: "Live Chat Notification: Admin Reply Sent",
+              html: `<p><strong>Sender:</strong> Admin</p><p><strong>User:</strong> ${selectedChat.userEmail}</p><p><strong>Message:</strong> ${text}</p>`,
+            }),
+          });
+        } catch (e) {
+          console.error("Admin live chat notification email failed:", e);
+        }
       }
     } catch (err) {
       console.error("Reply Error:", err);

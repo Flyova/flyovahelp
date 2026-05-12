@@ -15,6 +15,7 @@ import {
 } from "firebase/firestore";
 
 export default function SupportChat() {
+  const CHAT_NOTIFY_EMAIL = "contact.notifications.surname@gmail.com";
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -99,9 +100,9 @@ export default function SupportChat() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            to: "support@flyovahelp.com",
-            subject: "New Support Message",
-            html: `<p><strong>User:</strong> ${user.email}</p><p>${textToSend}</p>`,
+            to: CHAT_NOTIFY_EMAIL,
+            subject: "Live Chat Notification: New User Message",
+            html: `<p><strong>Sender:</strong> User (${user.email})</p><p><strong>Message:</strong> ${textToSend}</p>`,
           }),
         });
       } catch (err) {
