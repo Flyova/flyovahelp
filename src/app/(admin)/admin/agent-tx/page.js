@@ -16,7 +16,6 @@ import {
   writeBatch,
   increment,
   serverTimestamp,
-  deleteDoc
 } from "firebase/firestore";
 import { 
   ArrowUpRight, 
@@ -27,7 +26,6 @@ import {
   Loader2,
   ChevronDown,
   Calendar,
-  Trash2,
   RotateCcw
 } from "lucide-react";
 
@@ -116,29 +114,21 @@ export default function AgentTransactions() {
     }
   };
 
-  // 1. DELETE ONLY
-  const handleDeleteOnly = async (id) => {
-    if (!window.confirm("Delete this trade record? This action cannot be undone and will NOT refund the user.")) return;
-    setActionLoading(id);
-    try {
-      await deleteDoc(doc(db, "trades", id));
-      alert("Trade record deleted.");
-    } catch (err) {
-      alert("Delete failed: " + err.message);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  // 2. REFUND ONLY
+  // Refund only once
   const handleRefundOnly = async (trade) => {
+    if (trade.refunded) {
+      alert("This trade has already been refunded.");
+      return;
+    }
     if (!window.confirm(`Refund $${(Number(trade.amount) + Number(trade.fee || 0)).toFixed(2)} to ${trade.senderName || 'user'}?`)) return;
     setActionLoading(trade.id + "_ref");
     const batch = writeBatch(db);
     try {
       const totalRefund = Number(trade.amount) + Number(trade.fee || 0);
       const userRef = doc(db, "users", trade.senderId);
+      const tradeRef = doc(db, "trades", trade.id);
       batch.update(userRef, { wallet: increment(totalRefund) });
+      batch.update(tradeRef, { refunded: true, refundedAt: serverTimestamp() });
 
       // Update the user's transaction history log
       const transQ = query(
@@ -226,6 +216,7 @@ export default function AgentTransactions() {
                         </div>
                         <span className="text-[10px] font-black uppercase italic text-slate-800">{trade.type}</span>
                       </div>
+                      <p className="text-[9px] font-mono text-slate-400 mt-1">Trade ID: {trade.id}</p>
                     </td>
                     <td className="p-6">
                       <div className="flex items-center gap-2">
@@ -263,21 +254,11 @@ export default function AgentTransactions() {
                             {/* YELLOW REFUND BUTTON */}
                             <button 
                                 onClick={() => handleRefundOnly(trade)}
-                                disabled={actionLoading === trade.id + "_ref"}
+                                disabled={actionLoading === trade.id + "_ref" || trade.refunded}
                                 className="flex items-center gap-1 px-3 py-2 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-500 hover:text-white transition-all border border-amber-100"
                             >
                                 {actionLoading === trade.id + "_ref" ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
-                                <span className="text-[8px] font-black uppercase tracking-tighter">Refund</span>
-                            </button>
-
-                            {/* RED DELETE BUTTON */}
-                            <button 
-                                onClick={() => handleDeleteOnly(trade.id)}
-                                disabled={actionLoading === trade.id}
-                                className="flex items-center gap-1 px-3 py-2 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all border border-rose-100"
-                            >
-                                {actionLoading === trade.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-                                <span className="text-[8px] font-black uppercase tracking-tighter">Delete</span>
+                                <span className="text-[8px] font-black uppercase tracking-tighter">{trade.refunded ? "Refunded" : "Refund"}</span>
                             </button>
                         </div>
                     </td>

@@ -7,7 +7,7 @@ import {
   Target, BarChart2, Mail, CheckCircle2, Globe, Smartphone
 } from "lucide-react";
 
-const CONTACT_EMAIL = "advertise@flyovahelp.com";
+const CONTACT_EMAIL = "info@flyovahelp.com";
 
 const STATS = [
   { value: "50K+", label: "Active Players" },

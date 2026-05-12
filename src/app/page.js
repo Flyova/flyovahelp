@@ -411,7 +411,7 @@ function PredictDemo({ onBack, onRegister }) {
             <p className="text-sm font-black italic uppercase tracking-tighter text-white">How the game works</p>
             <ul className="space-y-3">
               {[
-                { n: "1", text: "Buy a time-based subscription — from 3 hours ($10) up to 1 week ($220)." },
+                { n: "1", text: "Buy a time-based subscription — from 3 hours ($12) up to 1 week ($650)." },
                 { n: "2", text: "Each round (60 seconds), the game randomly lands on one of two outcomes." },
                 { n: "3", text: "Before the round closes, predict which outcome it will be." },
                 { n: "4", text: "Correct prediction = $0.20 credited to your wallet. Play as many rounds as your subscription allows." },
@@ -426,7 +426,7 @@ function PredictDemo({ onBack, onRegister }) {
           <div className="bg-[#1e293b] border border-white/5 rounded-2xl p-4 space-y-2">
             <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Subscription plans</p>
             <div className="grid grid-cols-2 gap-2">
-              {[["3 Hours", "$10"], ["12 Hours", "$20"], ["1 Day", "$35"], ["1 Week", "$220"]].map(([label, price]) => (
+              {[["3 Hours", "$12"], ["5 Hours", "$20"], ["12 Hours", "$48"], ["1 Day", "$95"], ["1 Week", "$650"]].map(([label, price]) => (
                 <div key={label} className="bg-black/20 rounded-xl px-3 py-2 flex justify-between items-center">
                   <span className="text-[10px] font-black text-gray-400 uppercase">{label}</span>
                   <span className="text-[10px] font-black text-emerald-400">{price}</span>
@@ -598,7 +598,8 @@ export default function LandingPage() {
   useEffect(() => {
     const q = query(
       collection(db, "withdrawal_testimonials"),
-      orderBy("createdAt", "desc"),
+      where("approved", "==", true),
+      orderBy("timestamp", "desc"),
       limit(10)
     );
     const unsub = onSnapshot(q, (snap) => {
@@ -1086,7 +1087,7 @@ export default function LandingPage() {
                 desc: "Hang out in our dedicated player chatroom. Talk strategy and wins.",
               },
               {
-                href: "https://www.instagram.com/flyovahelp",
+                href: "https://www.instagram.com/flyovahelp1?igsh=MW5ubDB1Z2tueHhuaQ==",
                 bg: "bg-gradient-to-tr from-[#f9ce34] via-[#ee2a7b] to-[#6228d7]",
                 shadow: "shadow-[#ee2a7b]/20",
                 icon: <Instagram size={24} />,
@@ -1094,7 +1095,7 @@ export default function LandingPage() {
                 desc: "Follow us for winner highlights and behind-the-scenes content.",
               },
               {
-                href: "https://www.facebook.com/share/1D5ScZvv82/",
+                href: "https://www.facebook.com/share/18nRMrs7P5/",
                 bg: "bg-[#1877F2]",
                 shadow: "shadow-[#1877F2]/20",
                 icon: <Facebook size={24} />,
@@ -1310,11 +1311,11 @@ export default function LandingPage() {
 
           {/* Social icons */}
           <div className="flex items-center gap-3">
-            <a href="https://www.facebook.com/share/1D5ScZvv82/"
+            <a href="https://www.facebook.com/share/18nRMrs7P5/"
               className="w-11 h-11 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center hover:bg-[#1877F2] hover:border-[#1877F2] transition-all hover:scale-110">
               <Facebook size={17} fill="currentColor" />
             </a>
-            <a href="https://www.instagram.com/flyovahelp"
+            <a href="https://www.instagram.com/flyovahelp1?igsh=MW5ubDB1Z2tueHhuaQ=="
               className="w-11 h-11 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center hover:bg-gradient-to-tr hover:from-[#f9ce34] hover:via-[#ee2a7b] hover:to-[#6228d7] hover:border-transparent transition-all hover:scale-110">
               <Instagram size={17} />
             </a>
@@ -1322,7 +1323,7 @@ export default function LandingPage() {
               className="w-11 h-11 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center hover:bg-[#1DA1F2] hover:border-[#1DA1F2] transition-all hover:scale-110">
               <Twitter size={17} fill="currentColor" />
             </a>
-            <a href="https://www.tiktok.com/@flyovahelp0"
+            <a href="https://www.tiktok.com/@flyovahelp1?_r=1&_t=ZN-96IBVFFEsp4"
               className="w-11 h-11 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center hover:bg-black hover:border-black transition-all hover:scale-110">
               <svg className="fill-current w-4 h-4" viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1.04-.1z"/></svg>
             </a>
@@ -1336,6 +1337,12 @@ export default function LandingPage() {
             <p className="text-[10px] font-black tracking-widest text-white/30 uppercase">© 2026 Flyovhelp Arena. All rights reserved.</p>
             <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Play responsibly · 18+ only</p>
           </div>
+          <a
+            href="mailto:support@flyovahelp.com"
+            className="text-[11px] font-black tracking-widest text-white/70 uppercase hover:text-white transition-colors"
+          >
+            support@flyovahelp.com
+          </a>
         </div>
       </footer>
 

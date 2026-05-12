@@ -97,6 +97,37 @@ export default function Header() {
     };
   }, []);
 
+  useEffect(() => {
+    let hiddenAt = null;
+
+    const handleVisibility = async () => {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
+
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now();
+        return;
+      }
+
+      if (document.visibilityState === "visible" && hiddenAt) {
+        const hiddenMs = Date.now() - hiddenAt;
+        hiddenAt = null;
+        if (hiddenMs >= 15 * 60 * 1000) {
+          try {
+            await updateDoc(doc(db, "users", currentUser.uid), { status: "offline" });
+          } catch (e) {
+            console.error("Status update failed before forced relogin", e);
+          }
+          await signOut(auth);
+          router.push("/login");
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [router]);
+
   const handleCopyPin = (e) => {
     e.stopPropagation();
     navigator.clipboard.writeText(userData.pin);

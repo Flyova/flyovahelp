@@ -6,20 +6,29 @@ export async function GET() {
     const adminDb = getAdminDb();
     const batch = adminDb.batch();
     let totalDeleted = 0;
+    const cutoffMs = Date.now() - (7 * 24 * 60 * 60 * 1000);
 
     // 1. Fetch top-level support_chats
     const mainChatsSnap = await adminDb.collection("support_chats").get();
-    mainChatsSnap.forEach((doc) => {
-      batch.delete(doc.ref);
-      totalDeleted++;
+    mainChatsSnap.forEach((chatDoc) => {
+      const data = chatDoc.data() || {};
+      const updatedAtMs = data.updatedAt?.toMillis?.() || 0;
+      if (updatedAtMs > 0 && updatedAtMs < cutoffMs) {
+        batch.delete(chatDoc.ref);
+        totalDeleted++;
+      }
     });
 
     // 2. Fetch nested support_chats inside users (collectionGroup)
     // This targets /users/{userId}/support_chats/{chatId}
     const nestedChatsSnap = await adminDb.collectionGroup("support_chats").get();
-    nestedChatsSnap.forEach((doc) => {
-      batch.delete(doc.ref);
-      totalDeleted++;
+    nestedChatsSnap.forEach((chatDoc) => {
+      const data = chatDoc.data() || {};
+      const updatedAtMs = data.updatedAt?.toMillis?.() || 0;
+      if (updatedAtMs > 0 && updatedAtMs < cutoffMs) {
+        batch.delete(chatDoc.ref);
+        totalDeleted++;
+      }
     });
 
     // 3. Commit the deletions

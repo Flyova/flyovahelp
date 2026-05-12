@@ -40,14 +40,13 @@ export default function PlayWithFriendsHistory() {
       if (uniqueUserIds.length > 0) {
         const results = await Promise.all(uniqueUserIds.map(async (uid) => {
           const userSnap = await getDoc(doc(db, "users", uid));
-          if (userSnap.exists()) {
-            return { uid, name: userSnap.data().fullName || "No Name" };
-          }
-          return { uid, name: "Unknown User" };
+          if (!userSnap.exists()) return { uid, profile: { name: "Unknown User", pin: "--------", email: "", country: "" } };
+          const d = userSnap.data();
+          return { uid, profile: { name: d.fullName || d.username || "No Name", pin: d.pin || "--------", email: d.email || "", country: d.country || "" } };
         }));
 
         const newNames = {};
-        results.forEach(res => { if(res) newNames[res.uid] = res.name });
+        results.forEach(res => { if(res) newNames[res.uid] = res.profile });
         setUserCache(prev => ({ ...prev, ...newNames }));
       }
 
@@ -59,9 +58,13 @@ export default function PlayWithFriendsHistory() {
   }, [userCache]);
 
   const filteredMatches = matches.filter(m => {
-    const fullName = userCache[m.userId] || "";
+    const profile = userCache[m.userId] || {};
+    const fullName = profile.name || "";
     return fullName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-           m.userId.toLowerCase().includes(searchTerm.toLowerCase());
+           m.userId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           profile.pin?.toLowerCase?.().includes(searchTerm.toLowerCase()) ||
+           profile.email?.toLowerCase?.().includes(searchTerm.toLowerCase()) ||
+           profile.country?.toLowerCase?.().includes(searchTerm.toLowerCase());
   });
 
   return (
@@ -112,13 +115,13 @@ export default function PlayWithFriendsHistory() {
                 <td className="p-6">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 bg-slate-100 text-[#fc7952] rounded-xl flex items-center justify-center font-black italic text-xs border border-slate-200">
-                        {(userCache[item.userId] || "U").charAt(0).toUpperCase()}
+                        {(userCache[item.userId]?.name || "U").charAt(0).toUpperCase()}
                     </div>
                     <div>
                         <p className="text-sm font-black italic text-slate-800 uppercase leading-none mb-1">
-                            {userCache[item.userId] || "Resolving Name..."}
+                            {userCache[item.userId]?.name || "Resolving Name..."}
                         </p>
-                        <p className="text-[9px] font-mono text-slate-400 uppercase tracking-tighter">{item.userId}</p>
+                        <p className="text-[9px] font-mono text-slate-400 uppercase tracking-tighter">PIN: {userCache[item.userId]?.pin || "--------"}</p>
                     </div>
                   </div>
                 </td>

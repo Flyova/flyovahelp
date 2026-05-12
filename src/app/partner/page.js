@@ -7,7 +7,7 @@ import {
   Users, DollarSign, Layers, Mail, CheckCircle2, Link2, Megaphone
 } from "lucide-react";
 
-const CONTACT_EMAIL = "partners@flyovahelp.com";
+const CONTACT_EMAIL = "info@flyovahelp.com";
 
 const MODELS = [
   {

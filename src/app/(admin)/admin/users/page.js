@@ -6,8 +6,9 @@ import {
 } from "firebase/firestore";
 import { 
   Users, Search, Wallet, Edit2, X, User, Mail, Phone, 
-  Globe, Loader2, Save, Calendar, ShieldCheck, Ban, CheckCircle 
+  Globe, Loader2, Save, Calendar, ShieldCheck, Ban, CheckCircle, Activity
 } from "lucide-react";
+import Link from "next/link";
 
 export default function UserManagement() {
   const [users, setUsers] = useState([]);
@@ -39,6 +40,10 @@ export default function UserManagement() {
       phone: user.phone || "",
       dob: user.dob || "",
       country: user.country || "",
+      pin: user.pin || "",
+      createdAt: user.createdAt || null,
+      referredBy: user.referredBy || "",
+      referrerUid: user.referrerUid || "",
       wallet: user.wallet || 0,
       role: user.role || "user",
       status: user.status || "active",
@@ -99,7 +104,9 @@ export default function UserManagement() {
 
   const filteredUsers = users.filter(u => 
     u.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.email?.toLowerCase().includes(searchTerm.toLowerCase())
+    u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    u.country?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    u.pin?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-black italic">LOADING DIRECTORY...</div>;
@@ -134,9 +141,11 @@ export default function UserManagement() {
             <thead className="bg-slate-50/50">
               <tr>
                 <th className="p-6 text-[10px] font-black uppercase text-slate-400">Merchant</th>
-                <th className="p-6 text-[10px] font-black uppercase text-slate-400">Wallet</th>
-                <th className="p-6 text-[10px] font-black uppercase text-slate-400">Country</th>
-                <th className="p-6 text-right text-[10px] font-black uppercase text-slate-400">Action</th>
+              <th className="p-6 text-[10px] font-black uppercase text-slate-400">Wallet</th>
+              <th className="p-6 text-[10px] font-black uppercase text-slate-400">PIN</th>
+              <th className="p-6 text-[10px] font-black uppercase text-slate-400">Country</th>
+              <th className="p-6 text-[10px] font-black uppercase text-slate-400">Joined</th>
+              <th className="p-6 text-right text-[10px] font-black uppercase text-slate-400">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -153,8 +162,18 @@ export default function UserManagement() {
                     </div>
                   </td>
                   <td className="p-6 font-black text-emerald-600">${u.wallet?.toFixed(2)}</td>
+                  <td className="p-6 text-[10px] font-mono font-black text-indigo-600">{u.pin || "--------"}</td>
                   <td className="p-6 text-[10px] font-bold uppercase text-slate-400">{u.country || "N/A"}</td>
+                  <td className="p-6 text-[10px] font-bold uppercase text-slate-400">
+                    {u.createdAt?.toDate ? u.createdAt.toDate().toLocaleDateString() : "N/A"}
+                  </td>
                   <td className="p-6 text-right space-x-2">
+                    <Link
+                      href={`/admin/users/${u.id}`}
+                      className="px-4 py-3 rounded-xl transition-all font-black uppercase text-[10px] inline-flex items-center gap-2 bg-indigo-100 text-indigo-600 hover:bg-indigo-600 hover:text-white"
+                    >
+                      <Activity size={14} /> Activity
+                    </Link>
                     <button 
                         onClick={() => handleToggleBan(u)} 
                         className={`px-4 py-3 rounded-xl transition-all font-black uppercase text-[10px] flex items-center gap-2 inline-flex ${u.isban ? 'bg-emerald-100 text-emerald-600 hover:bg-emerald-600 hover:text-white' : 'bg-red-100 text-red-600 hover:bg-red-600 hover:text-white'}`}
@@ -203,6 +222,10 @@ export default function UserManagement() {
                     <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase text-slate-400">Country</label>
                         <input value={editForm.country} onChange={(e)=>setEditForm({...editForm, country: e.target.value})} className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:border-[#613de6]" />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase text-slate-400">Account PIN</label>
+                        <input value={editForm.pin} onChange={(e)=>setEditForm({...editForm, pin: e.target.value})} className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:border-[#613de6]" />
                     </div>
                     <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase text-slate-400">Wallet Balance</label>

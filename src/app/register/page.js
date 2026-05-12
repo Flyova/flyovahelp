@@ -101,6 +101,16 @@ function RegisterForm() {
         return;
       }
 
+      const normalizedPhone = `${selectedCountry.code}${formData.phone}`;
+      const phoneSnap = await getDocs(
+        query(collection(db, "users"), where("phone", "==", normalizedPhone))
+      );
+      if (!phoneSnap.empty) {
+        setError("This phone number is already linked to another account.");
+        setLoading(false);
+        return;
+      }
+
       const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
       const cred = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       await updateProfile(cred.user, { displayName: formData.username });
@@ -112,7 +122,7 @@ function RegisterForm() {
         username: formData.username,
         email: formData.email,
         country: selectedCountry.name,
-        phone: `${selectedCountry.code}${formData.phone}`,
+        phone: normalizedPhone,
         dob: formData.dob,
         pin: userPin,
         status: "online",

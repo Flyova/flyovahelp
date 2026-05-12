@@ -51,6 +51,21 @@ export default function AdminSupport() {
     }
   };
 
+  const markResolved = async () => {
+    if (!selectedChat) return;
+    try {
+      const chatRef = doc(db, "support_chats", selectedChat.id);
+      await updateDoc(chatRef, {
+        resolved: true,
+        resolvedAt: serverTimestamp(),
+        unreadByAdmin: false,
+        unreadByUser: false
+      });
+    } catch (err) {
+      console.error("Resolve Error:", err);
+    }
+  };
+
   const handleSendReply = async (e) => {
     e.preventDefault();
     if (!replyText.trim() || !selectedChat || sending) return;
@@ -162,11 +177,21 @@ export default function AdminSupport() {
                   <h2 className="text-base font-bold text-slate-800">{selectedChat.userEmail}</h2>
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 bg-green-500 rounded-full" />
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Active Ticket</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                      {selectedChat.resolved ? "Resolved" : "Active Ticket"}
+                    </span>
                   </div>
                 </div>
               </div>
-              <button className="p-2 hover:bg-gray-50 rounded-full text-gray-400"><MoreVertical size={20}/></button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={markResolved}
+                  className="px-3 py-2 rounded-xl bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase tracking-wider hover:bg-emerald-100 transition-colors"
+                >
+                  Mark Resolved
+                </button>
+                <button className="p-2 hover:bg-gray-50 rounded-full text-gray-400"><MoreVertical size={20}/></button>
+              </div>
             </div>
 
             {/* MESSAGES */}

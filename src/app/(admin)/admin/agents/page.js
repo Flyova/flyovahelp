@@ -191,6 +191,7 @@ export default function AdminAgentManagement() {
                             <div className="flex flex-wrap gap-4">
                                 <InfoBadge icon={Globe} label={selectedAgent.country} />
                                 <InfoBadge icon={Mail} label={selectedAgent.email} />
+                                <InfoBadge icon={Clock} label={`Joined: ${selectedAgent.createdAt?.toDate ? selectedAgent.createdAt.toDate().toLocaleDateString() : "N/A"}`} />
                             </div>
                         </div>
                         <div className="flex gap-3 w-full md:w-auto">

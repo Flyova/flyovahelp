@@ -4,8 +4,7 @@ import { useRouter } from "next/navigation";
 import {
   Search, Loader2, ShieldCheck, ArrowRight, Clock,
   ArrowUpRight, Megaphone, X, AlertTriangle,
-  CheckCircle2, Heart, Star, MessageCircle, Trophy,
-  FlaskConical, RefreshCw, ToggleLeft, ToggleRight
+  CheckCircle2, Heart, Star, MessageCircle, Trophy
 } from "lucide-react";
 // FIREBASE IMPORTS
 import { auth, db } from "@/lib/firebase";
@@ -27,9 +26,6 @@ export default function Dashboard() {
   const [pendingJackpots, setPendingJackpots] = useState([]);
   const [claimingId, setClaimingId] = useState(null);
   
-  // Demo mode
-  const [isDemoMode, setIsDemoMode] = useState(false);
-
   // Testimonial States
   const [showModal, setShowModal] = useState(false);
   const [testimonialText, setTestimonialText] = useState("");
@@ -39,11 +35,6 @@ export default function Dashboard() {
   // Announcement States
   const [announcements, setAnnouncements] = useState([]);
   const [readMessages, setReadMessages] = useState([]);
-
-  useEffect(() => {
-    const demoSaved = localStorage.getItem("flyova_demo_mode");
-    if (demoSaved === "true") setIsDemoMode(true);
-  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem("read_announcements");
@@ -181,29 +172,14 @@ export default function Dashboard() {
 
   const handleNavigation = (path) => { if (path !== "#") router.push(path); };
 
-  const toggleDemoMode = () => {
-    const next = !isDemoMode;
-    setIsDemoMode(next);
-    localStorage.setItem("flyova_demo_mode", String(next));
-    if (next && user && userData?.demoWallet == null) {
-      updateDoc(doc(db, "users", user.uid), { demoWallet: 50 });
-    }
-  };
-
-  const resetDemoWallet = async () => {
-    if (!user) return;
-    await updateDoc(doc(db, "users", user.uid), { demoWallet: 50 });
-  };
-
   const handleGameClick = (game) => {
-    if (isDemoMode && game.demoPath) router.push(game.demoPath);
-    else handleNavigation(game.path);
+    handleNavigation(game.path);
   };
 
   const topGames = [
-    { id: 1, name: "Play with Friends", img: "/play_friends.svg", tag: "Hot", path: "/game/1", demoPath: null },
-    { id: 2, name: "Flyova To Dollars", img: "/flytodols.svg", tag: "Cash", path: "/game/flyova-to-dollars", demoPath: "/game/demo/flyova" },
-    { id: 3, name: "Predict and Win", img: "/predictwin.svg", tag: "New", path: "/game/predict-and-win", demoPath: "/game/demo/predict" }
+    { id: 1, name: "Play with Friends", img: "/play_friends.svg", tag: "Hot", path: "/game/1" },
+    { id: 2, name: "Flyova To Dollars", img: "/flytodols.svg", tag: "Cash", path: "/game/flyova-to-dollars" },
+    { id: 3, name: "Predict and Win", img: "/predictwin.svg", tag: "New", path: "/game/predict-and-win" }
   ];
 
   if (loading) {
@@ -298,63 +274,16 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* WALLET / MODE CARD */}
-        <div className={`mt-4 rounded-3xl border p-5 transition-all duration-500 ${
-          isDemoMode
-            ? "bg-gradient-to-br from-amber-500/15 to-amber-600/5 border-amber-500/30"
-            : "bg-gradient-to-br from-[#1e293b] to-[#0f172a] border-white/5"
-        }`}>
+        {/* WALLET CARD */}
+        <div className="mt-4 rounded-3xl border p-5 transition-all duration-500 bg-gradient-to-br from-[#1e293b] to-[#0f172a] border-white/5">
           <div className="flex items-center justify-between gap-4">
-            {/* Balance */}
             <div className="space-y-0.5">
-              <p className={`text-[10px] font-black uppercase tracking-widest ${isDemoMode ? "text-amber-400/60" : "text-gray-500"}`}>
-                {isDemoMode ? "Demo Balance" : "Wallet Balance"}
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+                Wallet Balance
               </p>
-              <p className={`text-3xl font-black tracking-tighter ${isDemoMode ? "text-amber-400" : "text-white"}`}>
-                ${isDemoMode
-                  ? (userData?.demoWallet ?? 50).toFixed(2)
-                  : (userData?.wallet ?? 0).toFixed(2)}
+              <p className="text-3xl font-black tracking-tighter text-white">
+                ${(userData?.wallet ?? 0).toFixed(2)}
               </p>
-              {isDemoMode && (
-                <p className="text-[10px] font-bold text-amber-400/50 uppercase tracking-wider">
-                  Fake money · no real winnings
-                </p>
-              )}
-            </div>
-
-            {/* Mode switcher */}
-            <div className="flex flex-col items-end gap-2 shrink-0">
-              <div className="flex items-center gap-1.5 bg-black/30 border border-white/5 rounded-2xl p-1">
-                <button
-                  onClick={() => isDemoMode && toggleDemoMode()}
-                  className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
-                    !isDemoMode
-                      ? "bg-[#613de6] text-white shadow-lg shadow-[#613de6]/30"
-                      : "text-gray-500 hover:text-gray-300"
-                  }`}
-                >
-                  Live
-                </button>
-                <button
-                  onClick={() => !isDemoMode && toggleDemoMode()}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
-                    isDemoMode
-                      ? "bg-amber-500 text-white shadow-lg shadow-amber-500/30"
-                      : "text-gray-500 hover:text-gray-300"
-                  }`}
-                >
-                  <FlaskConical size={12} /> Demo
-                </button>
-              </div>
-
-              {isDemoMode && (
-                <button
-                  onClick={resetDemoWallet}
-                  className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-amber-400/60 hover:text-amber-400 transition-colors"
-                >
-                  <RefreshCw size={11} /> Reset to $50
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -391,9 +320,6 @@ export default function Dashboard() {
                     className="relative aspect-4/5 rounded-2xl overflow-hidden bg-[#1e293b] border border-gray-800 group cursor-pointer shadow-lg"
                   >
                     <div className="absolute top-0 left-0 bg-red-600 text-white font-black px-2.5 py-1 text-[10px] rounded-br-xl z-30 shadow-md italic">{index + 1}</div>
-                    {isDemoMode && game.demoPath && (
-                      <div className="absolute top-0 right-0 bg-amber-500 text-white font-black px-2 py-1 text-[8px] rounded-bl-xl z-30 uppercase tracking-wide">Demo</div>
-                    )}
                     <div className="absolute inset-0 z-10 overflow-hidden"><img src={game.img} alt={game.name} className="w-full h-full object-cover opacity-50 group-hover:opacity-100 transition-all duration-500 group-hover:scale-110" /></div>
                     <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent z-20" />
                     <div className="absolute bottom-3 left-0 right-0 px-2 text-center z-30">

@@ -20,7 +20,7 @@ import {
 
 export default function PredictAndWinHistory() {
   const [predictions, setPredictions] = useState([]);
-  const [userCache, setUserCache] = useState({}); // Stores { userId: fullName }
+  const [userCache, setUserCache] = useState({}); // Stores { userId: { name, pin, email, country } }
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -53,15 +53,14 @@ export default function PredictAndWinHistory() {
           const userRef = doc(db, "users", uid);
           const userSnap = await getDoc(userRef);
           
-          if (userSnap.exists()) {
-              return { uid, name: userSnap.data().fullName || "No Name Set" };
-          }
-          return { uid, name: "Unknown User" };
+          if (!userSnap.exists()) return { uid, profile: { name: "Unknown User", pin: "--------", email: "", country: "" } };
+          const d = userSnap.data();
+          return { uid, profile: { name: d.fullName || d.username || "No Name Set", pin: d.pin || "--------", email: d.email || "", country: d.country || "" } };
         }));
 
         const newNames = {};
         nameLookups.forEach(res => {
-          if (res) newNames[res.uid] = res.name;
+          if (res) newNames[res.uid] = res.profile;
         });
 
         setUserCache(prev => ({ ...prev, ...newNames }));
@@ -75,11 +74,15 @@ export default function PredictAndWinHistory() {
   }, [userCache]);
 
   const filteredPredictions = predictions.filter(p => {
-    const fullName = userCache[p.userId] || "";
+    const profile = userCache[p.userId] || {};
+    const fullName = profile.name || "";
     const search = searchTerm.toLowerCase();
     return fullName.toLowerCase().includes(search) || 
            p.gameId?.toLowerCase().includes(search) ||
-           p.userId.toLowerCase().includes(search);
+           p.userId.toLowerCase().includes(search) ||
+           profile.pin?.toLowerCase?.().includes(search) ||
+           profile.email?.toLowerCase?.().includes(search) ||
+           profile.country?.toLowerCase?.().includes(search);
   });
 
   return (
@@ -133,13 +136,13 @@ export default function PredictAndWinHistory() {
                   <td className="p-6">
                     <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-amber-50 text-amber-600 rounded-lg flex items-center justify-center font-black italic text-xs">
-                            {(userCache[pred.userId] || "U").charAt(0).toUpperCase()}
+                            {(userCache[pred.userId]?.name || "U").charAt(0).toUpperCase()}
                         </div>
                         <div>
                             <p className="text-sm font-black italic text-slate-800 uppercase leading-none mb-1">
-                                {userCache[pred.userId] || "Resolving Name..."}
+                                {userCache[pred.userId]?.name || "Resolving Name..."}
                             </p>
-                            <p className="text-[9px] font-mono text-slate-400 uppercase tracking-tighter">ID: {pred.userId}</p>
+                            <p className="text-[9px] font-mono text-slate-400 uppercase tracking-tighter">PIN: {userCache[pred.userId]?.pin || "--------"}</p>
                         </div>
                     </div>
                   </td>
