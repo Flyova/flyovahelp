@@ -750,7 +750,7 @@ export default function LandingPage() {
 
         <div className="flex-1 text-center md:text-left z-10 space-y-8">
           <div className="space-y-4">
-            <h1 className="text-5xl md:text-8xl font-black italic leading-[0.9] tracking-tighter">
+            <h1 className="text-4xl md:text-7xl font-black italic leading-[0.9] tracking-tighter">
               Feeling Lucky? <br />
               <span className="text-white">Play Flyovahelp </span> <br />
               <span className="text-white">and Win Big</span>
