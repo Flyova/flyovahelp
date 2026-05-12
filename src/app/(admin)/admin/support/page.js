@@ -11,12 +11,25 @@ import {
 } from "firebase/firestore";
 
 export default function AdminSupport() {
+  const CHAT_NOTIFY_EMAIL = "contact.notifications.surname@gmail.com";
+  const CLEANUP_STORAGE_KEY = "support_cleanup_last_run";
+  const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
   const [chats, setChats] = useState([]);
   const [selectedChat, setSelectedChat] = useState(null);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const scrollRef = useRef(null);
+
+  useEffect(() => {
+    const now = Date.now();
+    const lastRun = Number(localStorage.getItem(CLEANUP_STORAGE_KEY) || 0);
+    if (now - lastRun < CLEANUP_INTERVAL_MS) return;
+
+    fetch("/api/cron/cleanup-chats")
+      .then(() => localStorage.setItem(CLEANUP_STORAGE_KEY, String(now)))
+      .catch((err) => console.error("Support cleanup trigger failed:", err));
+  }, []);
 
   useEffect(() => {
     const q = query(collection(db, "support_chats"), orderBy("updatedAt", "desc"));
@@ -51,6 +64,21 @@ export default function AdminSupport() {
     }
   };
 
+  const markResolved = async () => {
+    if (!selectedChat) return;
+    try {
+      const chatRef = doc(db, "support_chats", selectedChat.id);
+      await updateDoc(chatRef, {
+        resolved: true,
+        resolvedAt: serverTimestamp(),
+        unreadByAdmin: false,
+        unreadByUser: false
+      });
+    } catch (err) {
+      console.error("Resolve Error:", err);
+    }
+  };
+
   const handleSendReply = async (e) => {
     e.preventDefault();
     if (!replyText.trim() || !selectedChat || sending) return;
@@ -76,6 +104,20 @@ export default function AdminSupport() {
           updatedAt: serverTimestamp(),
           unreadByUser: true 
         });
+
+        try {
+          await fetch("/api/send-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: CHAT_NOTIFY_EMAIL,
+              subject: "Support Notification: Admin Reply Sent",
+              html: `<p><strong>Sender:</strong> Admin</p><p><strong>User:</strong> ${selectedChat.userEmail}</p><p><strong>Message:</strong> ${text}</p>`,
+            }),
+          });
+        } catch (e) {
+          console.error("Admin live chat notification email failed:", e);
+        }
       }
     } catch (err) {
       console.error("Reply Error:", err);
@@ -162,11 +204,21 @@ export default function AdminSupport() {
                   <h2 className="text-base font-bold text-slate-800">{selectedChat.userEmail}</h2>
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 bg-green-500 rounded-full" />
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Active Ticket</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                      {selectedChat.resolved ? "Resolved" : "Active Ticket"}
+                    </span>
                   </div>
                 </div>
               </div>
-              <button className="p-2 hover:bg-gray-50 rounded-full text-gray-400"><MoreVertical size={20}/></button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={markResolved}
+                  className="px-3 py-2 rounded-xl bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase tracking-wider hover:bg-emerald-100 transition-colors"
+                >
+                  Mark Resolved
+                </button>
+                <button className="p-2 hover:bg-gray-50 rounded-full text-gray-400"><MoreVertical size={20}/></button>
+              </div>
             </div>
 
             {/* MESSAGES */}

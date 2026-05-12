@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 export async function POST(req) {
   try {
     const adminDb = getAdminDb();
-    const { uid, email, username, fullName, role, wallet, status } = await req.json();
+    const { uid, email, username, fullName, role, wallet, status, phone, dob, country, pin, isban } = await req.json();
 
     if (!uid) {
       return NextResponse.json({ error: "UID is required" }, { status: 400 });
@@ -25,7 +25,12 @@ export async function POST(req) {
       fullName,
       role,
       wallet: parseFloat(wallet),
-      status
+      status,
+      phone: phone || "",
+      dob: dob || "",
+      country: country || "",
+      pin: pin || "",
+      isban: Boolean(isban)
     });
 
     return NextResponse.json({ message: "User updated successfully in Auth and Firestore" });

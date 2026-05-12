@@ -15,6 +15,9 @@ import {
 } from "firebase/firestore";
 
 export default function SupportChat() {
+  const CHAT_NOTIFY_EMAIL = "contact.notifications.surname@gmail.com";
+  const CLEANUP_STORAGE_KEY = "support_cleanup_last_run";
+  const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -24,13 +27,23 @@ export default function SupportChat() {
   const scrollRef = useRef(null);
 
   useEffect(() => {
+    const now = Date.now();
+    const lastRun = Number(localStorage.getItem(CLEANUP_STORAGE_KEY) || 0);
+    if (now - lastRun < CLEANUP_INTERVAL_MS) return;
+
+    fetch("/api/cron/cleanup-chats")
+      .then(() => localStorage.setItem(CLEANUP_STORAGE_KEY, String(now)))
+      .catch((err) => console.error("Support cleanup trigger failed:", err));
+  }, []);
+
+  useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (!currentUser) {
         router.push("/login");
       } else {
         setUser(currentUser);
         
-        const chatDocRef = doc(db, "support_chats", currentUser.uid);
+      const chatDocRef = doc(db, "support_chats", currentUser.uid);
         
         const unsubChat = onSnapshot(chatDocRef, (snap) => {
           if (snap.exists()) {
@@ -47,6 +60,7 @@ export default function SupportChat() {
               userEmail: currentUser.email,
               lastMessage: "Chat started",
               updatedAt: serverTimestamp(),
+              resolved: false,
               messages: [],
               unreadByAdmin: false,
               unreadByUser: false
@@ -88,8 +102,24 @@ export default function SupportChat() {
         messages: arrayUnion(messageData),
         lastMessage: textToSend,
         updatedAt: serverTimestamp(),
+        resolved: false,
         unreadByAdmin: true 
       });
+
+      // Admin email notification for new support messages
+      try {
+        await fetch("/api/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: CHAT_NOTIFY_EMAIL,
+            subject: "Support Notification: New User Message",
+            html: `<p><strong>Sender:</strong> User (${user.email})</p><p><strong>Message:</strong> ${textToSend}</p>`,
+          }),
+        });
+      } catch (err) {
+        console.error("Support email notification failed", err);
+      }
     } catch (error) {
       console.error("Error sending message:", error);
       setNewMessage(textToSend); 
@@ -144,6 +174,11 @@ export default function SupportChat() {
         ref={scrollRef}
         className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth"
       >
+        <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4">
+          <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">
+            Caution: Stay online while waiting for support response.
+          </p>
+        </div>
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center opacity-20">
             <MessageCircle size={80} className="mb-6 text-[#613de6]" />

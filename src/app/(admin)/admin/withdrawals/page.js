@@ -105,7 +105,10 @@ export default function AdminWithdrawalList() {
         
         batch.update(userRef, { 
           wallet: increment(Number(refundAmt)),
-          ...(withdrawal.bonusRecovered > 0 && { bonusDeducted: false })
+          ...(withdrawal.bonusRecovered > 0 && { 
+            bonusDeducted: false,
+            welcomeBonusStatus: "paid"
+          })
         });
 
         const txRef = doc(collection(db, "users", withdrawal.userId, "transactions"));

@@ -22,7 +22,7 @@ import {
 
 export default function FlyovaHistory() {
   const [bets, setBets] = useState([]);
-  const [userCache, setUserCache] = useState({}); // Stores { userId: fullName }
+  const [userCache, setUserCache] = useState({}); // Stores { userId: { name, pin, email, country } }
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -52,11 +52,13 @@ export default function FlyovaHistory() {
       if (uniqueUserIds.length > 0) {
         const nameLookups = await Promise.all(uniqueUserIds.map(async (uid) => {
           const userSnap = await getDoc(doc(db, "users", uid));
-          return userSnap.exists() ? { uid, name: userSnap.data().fullName } : { uid, name: "Deleted User" };
+          if (!userSnap.exists()) return { uid, profile: { name: "Deleted User", pin: "--------", email: "", country: "" } };
+          const d = userSnap.data();
+          return { uid, profile: { name: d.fullName || d.username || "User", pin: d.pin || "--------", email: d.email || "", country: d.country || "" } };
         }));
 
         const newNames = {};
-        nameLookups.forEach(res => { if(res) newNames[res.uid] = res.name });
+        nameLookups.forEach(res => { if(res) newNames[res.uid] = res.profile });
         setUserCache(prev => ({ ...prev, ...newNames }));
       }
 
@@ -68,11 +70,15 @@ export default function FlyovaHistory() {
   }, [userCache]);
 
   const filteredBets = bets.filter(b => {
-    const fullName = userCache[b.userId] || "";
+    const profile = userCache[b.userId] || {};
+    const fullName = profile.name || "";
     const search = searchTerm.toLowerCase();
     return fullName.toLowerCase().includes(search) || 
            b.gameId?.toLowerCase().includes(search) ||
-           b.userId.toLowerCase().includes(search);
+           b.userId.toLowerCase().includes(search) ||
+           profile.pin?.toLowerCase?.().includes(search) ||
+           profile.email?.toLowerCase?.().includes(search) ||
+           profile.country?.toLowerCase?.().includes(search);
   });
 
   return (
@@ -121,13 +127,13 @@ export default function FlyovaHistory() {
                 <td className="p-6">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-indigo-50 text-[#613de6] rounded-lg flex items-center justify-center font-black italic text-xs border border-indigo-100">
-                        {(userCache[bet.userId] || "U").charAt(0).toUpperCase()}
+                            {(userCache[bet.userId]?.name || "U").charAt(0).toUpperCase()}
                     </div>
                     <div>
                         <p className="text-sm font-black italic text-slate-800 uppercase leading-none mb-1">
-                            {userCache[bet.userId] || "Resolving..."}
+                            {userCache[bet.userId]?.name || "Resolving..."}
                         </p>
-                        <p className="text-[9px] font-mono text-slate-400">ID: {bet.userId?.slice(-8)}</p>
+                        <p className="text-[9px] font-mono text-slate-400">PIN: {userCache[bet.userId]?.pin || "--------"}</p>
                     </div>
                   </div>
                 </td>

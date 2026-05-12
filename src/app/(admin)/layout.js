@@ -81,7 +81,7 @@ export default function AdminLayout({ children }) {
     { name: "Bet 3 History", icon: History, path: "/admin/bet3" },
     { name: "Settings", icon: UserCheck, path: "/admin/settings" },
     { name: "Blog Posts", icon: FileText, path: "/admin/blog" },
-    { name: "Live Chat", icon: MessageCircle, path: "/admin/support" },
+    { name: "Support", icon: MessageCircle, path: "/admin/support" },
     { name: "Send Jackpot", icon: Trophy, path: "/admin/jackpot" },
     { name: "Account Deletion", icon: Delete, path: "/admin/deletions" },
   ];
@@ -153,7 +153,7 @@ export default function AdminLayout({ children }) {
           </button>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-10 bg-[#020617]">
+        <main className="admin-theme flex-1 overflow-y-auto p-4 md:p-10 bg-[#020617]">
           {children}
         </main>
       </div>

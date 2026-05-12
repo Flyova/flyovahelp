@@ -36,6 +36,18 @@ export default function AdminAgentManagement() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
+  const formatJoinedDate = (agent) => {
+    const candidates = [agent?.createdAt, agent?.joinedAt, agent?.approvedAt, agent?.reviewed_at];
+    for (const ts of candidates) {
+      if (ts?.toDate) return ts.toDate().toLocaleDateString();
+      if (typeof ts === "string" || typeof ts === "number") {
+        const d = new Date(ts);
+        if (!Number.isNaN(d.getTime())) return d.toLocaleDateString();
+      }
+    }
+    return "N/A";
+  };
+
   useEffect(() => {
     setLoading(true);
     const q = query(
@@ -173,6 +185,9 @@ export default function AdminAgentManagement() {
                         <div>
                             <h3 className="font-black uppercase italic text-xs text-slate-800">{agent.full_name}</h3>
                             <span className="text-[9px] text-slate-400 font-bold uppercase">{agent.country}</span>
+                            <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">
+                              Joined: {formatJoinedDate(agent)}
+                            </p>
                         </div>
                     </div>
                     <ChevronRight size={16} className={selectedAgent?.id === agent.id ? "text-[#613de6]" : "text-slate-300"} />
@@ -191,6 +206,7 @@ export default function AdminAgentManagement() {
                             <div className="flex flex-wrap gap-4">
                                 <InfoBadge icon={Globe} label={selectedAgent.country} />
                                 <InfoBadge icon={Mail} label={selectedAgent.email} />
+                                <InfoBadge icon={Clock} label={`Joined: ${formatJoinedDate(selectedAgent)}`} />
                             </div>
                         </div>
                         <div className="flex gap-3 w-full md:w-auto">

@@ -70,3 +70,59 @@ body {
   float: left;
   height: 0;
 }
+
+/* ── ADMIN DARK THEME NORMALIZATION ───────────────────────────────────── */
+.admin-theme {
+  color: #e2e8f0;
+}
+
+.admin-theme .bg-white {
+  background-color: #0f172a !important;
+}
+
+.admin-theme .bg-slate-50 {
+  background-color: #111827 !important;
+}
+
+.admin-theme .bg-slate-50\/50 {
+  background-color: rgba(17, 24, 39, 0.7) !important;
+}
+
+.admin-theme .bg-slate-100 {
+  background-color: #1f2937 !important;
+}
+
+.admin-theme .bg-slate-100\/30 {
+  background-color: rgba(31, 41, 55, 0.3) !important;
+}
+
+.admin-theme .border-slate-50,
+.admin-theme .border-slate-100,
+.admin-theme .border-slate-200 {
+  border-color: rgba(148, 163, 184, 0.16) !important;
+}
+
+.admin-theme .text-slate-900 {
+  color: #f8fafc !important;
+}
+
+.admin-theme .text-slate-800 {
+  color: #f1f5f9 !important;
+}
+
+.admin-theme .text-slate-700 {
+  color: #e2e8f0 !important;
+}
+
+.admin-theme .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+.admin-theme .text-slate-500,
+.admin-theme .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+.admin-theme .text-slate-300 {
+  color: #64748b !important;
+}

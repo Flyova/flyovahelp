@@ -3,18 +3,21 @@ import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { 
   collectionGroup, // <--- Key for searching all sub-collections
+  collection,
   query, 
   onSnapshot, 
   orderBy, 
   where,
   limit, 
   startAfter, 
-  getDocs 
+  getDocs,
+  documentId
 } from "firebase/firestore";
 import { Send, Search, ArrowRight, User, Hash, Loader2, ChevronDown } from "lucide-react";
 
 export default function AdminTransfers() {
   const [transfers, setTransfers] = useState([]);
+  const [userProfiles, setUserProfiles] = useState({}); // { userId: { pin, email, name } }
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -22,6 +25,32 @@ export default function AdminTransfers() {
   const [hasMore, setHasMore] = useState(true);
 
   const PAGE_SIZE = 20;
+
+  const fetchUserProfiles = async (userIds) => {
+    const uniqueIds = [...new Set(userIds)].filter(id => id && !userProfiles[id]);
+    if (uniqueIds.length === 0) return;
+
+    const nextProfiles = { ...userProfiles };
+    const chunks = [];
+    for (let i = 0; i < uniqueIds.length; i += 10) {
+      chunks.push(uniqueIds.slice(i, i + 10));
+    }
+
+    for (const chunk of chunks) {
+      const q = query(collection(db, "users"), where(documentId(), "in", chunk));
+      const snap = await getDocs(q);
+      snap.forEach((d) => {
+        const data = d.data();
+        nextProfiles[d.id] = {
+          pin: data.pin || "",
+          email: data.email || "",
+          name: data.fullName || data.username || "",
+        };
+      });
+    }
+
+    setUserProfiles(nextProfiles);
+  };
 
   useEffect(() => {
     // We use collectionGroup to find all "transactions" sub-collections
@@ -34,8 +63,10 @@ export default function AdminTransfers() {
       limit(PAGE_SIZE)
     );
     
-    const unsub = onSnapshot(q, (snap) => {
+    const unsub = onSnapshot(q, async (snap) => {
       const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const relatedUserIds = docs.flatMap((t) => [t.senderId, t.receiverId]);
+      await fetchUserProfiles(relatedUserIds);
       setTransfers(docs);
       setLastDoc(snap.docs[snap.docs.length - 1]);
       setHasMore(snap.docs.length === PAGE_SIZE);
@@ -65,6 +96,8 @@ export default function AdminTransfers() {
       const snap = await getDocs(q);
       if (!snap.empty) {
         const newDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const relatedUserIds = newDocs.flatMap((t) => [t.senderId, t.receiverId]);
+        await fetchUserProfiles(relatedUserIds);
         setTransfers(prev => [...prev, ...newDocs]);
         setLastDoc(snap.docs[snap.docs.length - 1]);
         setHasMore(snap.docs.length === PAGE_SIZE);
@@ -81,7 +114,11 @@ export default function AdminTransfers() {
   const filtered = transfers.filter(tx => 
     tx.senderName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     tx.receiverName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tx.txId?.toLowerCase().includes(searchTerm.toLowerCase())
+    tx.txId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    tx.senderId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    tx.receiverId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (tx.senderPin || userProfiles[tx.senderId]?.pin || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (tx.receiverPin || userProfiles[tx.receiverId]?.pin || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -96,7 +133,7 @@ export default function AdminTransfers() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input 
             type="text"
-            placeholder="Search Name or TXID..."
+            placeholder="Search Name, TXID, ID or PIN..."
             className="bg-white border border-slate-200 pl-12 pr-6 py-3 rounded-2xl text-xs font-bold outline-none w-full md:w-80 transition-all shadow-sm"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -140,7 +177,7 @@ export default function AdminTransfers() {
                         </div>
                         <div>
                           <p className="text-sm font-black text-slate-800">{tx.senderName}</p>
-                          <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-tighter">PIN: {tx.senderPin || '---'}</p>
+                          <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-tighter">PIN: {tx.senderPin || userProfiles[tx.senderId]?.pin || '---'}</p>
                         </div>
                       </div>
                     </td>
@@ -158,7 +195,7 @@ export default function AdminTransfers() {
                         </div>
                         <div>
                           <p className="text-sm font-black text-slate-800">{tx.receiverName}</p>
-                          <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-tighter">PIN: {tx.receiverPin || '---'}</p>
+                          <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-tighter">PIN: {tx.receiverPin || userProfiles[tx.receiverId]?.pin || '---'}</p>
                         </div>
                       </div>
                     </td>

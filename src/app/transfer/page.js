@@ -34,7 +34,8 @@ export default function TransferPage() {
     wallet: 0, 
     pin: "", 
     fullName: "",
-    bonusClaimed: false // Track bonus status
+    bonusClaimed: false,
+    bonusDeducted: false
   });
   
   const [recipientPin, setRecipientPin] = useState("");
@@ -74,7 +75,8 @@ export default function TransferPage() {
               wallet: data.wallet || 0, 
               pin: data.pin || "",
               fullName: data.fullName || data.username || "User",
-              bonusClaimed: data.bonusClaimed || false // Sync bonus status from DB
+              bonusClaimed: data.bonusClaimed || false,
+              bonusDeducted: data.bonusDeducted || false
             });
           }
         });
@@ -111,15 +113,16 @@ export default function TransferPage() {
   const handleTransfer = async () => {
     const val = parseFloat(amount);
     const fee = calculateTransferFee(val);
+    const shouldRepayBonus = userData.bonusClaimed && !userData.bonusDeducted;
     
     // Check if we need to repay the $3.00 bonus
-    const bonusRepayment = userData.bonusClaimed ? 3.00 : 0.00;
+    const bonusRepayment = shouldRepayBonus ? 3.00 : 0.00;
     const totalDeduct = val + fee + bonusRepayment;
 
     if (!val || val < 1) return alert("Minimum transfer is $1.00");
     if (!recipientData) return alert("Please enter a valid recipient PIN");
     
-    const balanceError = userData.bonusClaimed 
+    const balanceError = shouldRepayBonus
         ? `Insufficient balance. You need $${totalDeduct.toFixed(2)} ($${val.toFixed(2)} + $${fee.toFixed(2)} fee + $3.00 Bonus Repayment)`
         : `Insufficient balance. You need $${totalDeduct.toFixed(2)} (Amount + Fee)`;
 
@@ -130,6 +133,7 @@ export default function TransferPage() {
       const recipientRef = doc(db, "users", recipientData.id);
       const recipientSnap = await getDoc(recipientRef);
       const recipientEmail = recipientSnap.exists() ? recipientSnap.data().email : null;
+      const recipientPinValue = recipientSnap.exists() ? (recipientSnap.data().pin || recipientPin) : recipientPin;
 
       const batch = writeBatch(db);
       const senderRef = doc(db, "users", user.uid);
@@ -138,8 +142,13 @@ export default function TransferPage() {
       // 1. Deduct total amount (Value + Fee + Bonus if applicable)
       batch.update(senderRef, { 
         wallet: increment(-totalDeduct),
-        // If they had a bonus, set it to false now so they aren't charged again
-        ...(userData.bonusClaimed && { bonusClaimed: false })
+        // Mark bonus as recovered only once.
+        ...(shouldRepayBonus && {
+          bonusClaimed: false,
+          bonusDeducted: true,
+          welcomeBonusStatus: "recovered",
+          welcomeBonusRecoveredAt: serverTimestamp()
+        })
       });
 
       // 2. Credit only the base value to the receiver
@@ -152,8 +161,10 @@ export default function TransferPage() {
         bonusRepaid: bonusRepayment, // Log the repayment for transparency
         senderId: user.uid,
         senderName: userData.fullName,
+        senderPin: userData.pin || "",
         receiverId: recipientData.id,
         receiverName: recipientData.name,
+        receiverPin: recipientPinValue || "",
         type: "p2p_transfer",
         timestamp: serverTimestamp(),
         status: "completed",
@@ -262,7 +273,8 @@ export default function TransferPage() {
   }
 
   const currentFee = calculateTransferFee(amount);
-  const bonusRepaymentAmount = userData.bonusClaimed ? 3.00 : 0.00;
+  const shouldRepayBonus = userData.bonusClaimed && !userData.bonusDeducted;
+  const bonusRepaymentAmount = shouldRepayBonus ? 3.00 : 0.00;
   const totalWithFee = (parseFloat(amount) || 0) + currentFee + bonusRepaymentAmount;
 
   return (
@@ -320,14 +332,14 @@ export default function TransferPage() {
             </div>
           </div>
 
-          {(parseFloat(amount) > 0 || userData.bonusClaimed) && (
+          {(parseFloat(amount) > 0 || shouldRepayBonus) && (
             <div className="bg-black/20 border border-white/5 p-5 rounded-3xl space-y-2 animate-in fade-in slide-in-from-top-2">
                <div className="flex justify-between items-center">
                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Service Fee</span>
                   <span className="text-[10px] font-black text-rose-500">+ ${currentFee.toFixed(2)}</span>
                </div>
                
-               {userData.bonusClaimed && (
+               {shouldRepayBonus && (
                  <div className="flex justify-between items-center">
                     <span className="text-[10px] font-bold text-[#613de6] uppercase tracking-widest">Bonus Repayment</span>
                     <span className="text-[10px] font-black text-[#613de6] tracking-widest">+ $3.00</span>
