@@ -4,15 +4,17 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from "firebase/firestore";
+import { canAccessAdminPath, resolvePrivilegedRole } from "@/lib/adminAccess";
 import {
   LayoutDashboard, ArrowDownCircle, UserCheck, Wallet,
   ArrowUpCircle, Send, Delete, Users, History, Trophy,
-  MessageCircle, X, LogOut, Menu, Loader2, FileText
+  MessageCircle, X, LogOut, Menu, Loader2, FileText, CheckCircle2
 } from "lucide-react";
 
 export default function AdminLayout({ children }) {
   const [authorized, setAuthorized] = useState(false);
+  const [accessRole, setAccessRole] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const router = useRouter();
@@ -29,19 +31,71 @@ export default function AdminLayout({ children }) {
       if (user) {
         try {
           const userDoc = await getDoc(doc(db, "users", user.uid));
-          if (userDoc.exists() && userDoc.data().role === "admin") {
+          if (!userDoc.exists()) {
+            const mappedRoleFromEmail = resolvePrivilegedRole(null, user.email);
+            if (!mappedRoleFromEmail) {
+              await signOut(auth);
+              router.push("/admin/login");
+              setLoading(false);
+              return;
+            }
+            await setDoc(doc(db, "users", user.uid), {
+              uid: user.uid,
+              email: user.email || "",
+              username: (user.email || "staff").split("@")[0],
+              fullName: "Portal Operator",
+              role: mappedRoleFromEmail,
+              status: "online",
+              verified: true,
+              createdAt: serverTimestamp(),
+              lastAdminLogin: serverTimestamp()
+            });
+
+            setAccessRole(mappedRoleFromEmail);
             setAuthorized(true);
-          } else {
+            if (!canAccessAdminPath(mappedRoleFromEmail, pathname)) {
+              if (mappedRoleFromEmail === "support") router.replace("/admin/support");
+              else if (mappedRoleFromEmail === "staff") router.replace("/admin/broadcast");
+              else router.replace("/admin");
+            } else {
+              setLoading(false);
+            }
+            return;
+          }
+
+          const userData = userDoc.data();
+          const role = resolvePrivilegedRole(userData.role, user.email);
+
+          if (!role) {
             await signOut(auth);
             router.push("/admin/login");
+            setLoading(false);
+            return;
+          }
+
+          setAccessRole(role);
+          setAuthorized(true);
+
+          // Backfill inferred role for consistency.
+          if (userData.role !== role) {
+            updateDoc(doc(db, "users", user.uid), { role }).catch(() => {});
+          }
+
+          if (!canAccessAdminPath(role, pathname)) {
+            if (role === "support") router.replace("/admin/support");
+            else if (role === "staff") router.replace("/admin/broadcast");
+            else router.replace("/admin");
+          } else {
+            setLoading(false);
           }
         } catch (error) {
           router.push("/admin/login");
+          setLoading(false);
         }
       } else {
         router.push("/admin/login");
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -66,25 +120,44 @@ export default function AdminLayout({ children }) {
   // Don't wrap Login Page in the Sidebar layout
   if (pathname === "/admin/login") return <>{children}</>;
   if (!authorized) return null;
+  if (!canAccessAdminPath(accessRole, pathname)) return null;
 
-  const navItems = [
-    { name: "Dashboard", icon: LayoutDashboard, path: "/admin" },
-    { name: "Deposit Approvals", icon: ArrowDownCircle, path: "/admin/deposits" },
-    { name: "Agent List", icon: UserCheck, path: "/admin/agents" },
-    { name: "Agent Transactions", icon: Wallet, path: "/admin/agent-tx" },
-    { name: "Transfers", icon: Send, path: "/admin/transfers" },
-    { name: "Withdrawals", icon: ArrowUpCircle, path: "/admin/withdrawals" },
-    { name: "Announcements", icon: Send, path: "/admin/broadcast" },
-    { name: "User Directory", icon: Users, path: "/admin/users" },
-    { name: "Bet 1 History", icon: History, path: "/admin/bet1" },
-    { name: "Bet 2 History", icon: History, path: "/admin/bet2" },
-    { name: "Bet 3 History", icon: History, path: "/admin/bet3" },
-    { name: "Settings", icon: UserCheck, path: "/admin/settings" },
-    { name: "Blog Posts", icon: FileText, path: "/admin/blog" },
-    { name: "Support", icon: MessageCircle, path: "/admin/support" },
-    { name: "Send Jackpot", icon: Trophy, path: "/admin/jackpot" },
-    { name: "Account Deletion", icon: Delete, path: "/admin/deletions" },
-  ];
+  const navByRole = {
+    admin: [
+      { name: "Dashboard", icon: LayoutDashboard, path: "/admin" },
+      { name: "Deposit Approvals", icon: ArrowDownCircle, path: "/admin/deposits" },
+      { name: "Agent List", icon: UserCheck, path: "/admin/agents" },
+      { name: "Agent Transactions", icon: Wallet, path: "/admin/agent-tx" },
+      { name: "Transfers", icon: Send, path: "/admin/transfers" },
+      { name: "Withdrawals", icon: ArrowUpCircle, path: "/admin/withdrawals" },
+      { name: "Announcements", icon: Send, path: "/admin/broadcast" },
+      { name: "User Directory", icon: Users, path: "/admin/users" },
+      { name: "Bet 1 History", icon: History, path: "/admin/bet1" },
+      { name: "Bet 2 History", icon: History, path: "/admin/bet2" },
+      { name: "Bet 3 History", icon: History, path: "/admin/bet3" },
+      { name: "Settings", icon: UserCheck, path: "/admin/settings" },
+      { name: "Blog Posts", icon: FileText, path: "/admin/blog" },
+      { name: "Support", icon: MessageCircle, path: "/admin/support" },
+      { name: "Testimonials", icon: CheckCircle2, path: "/admin/testimonials" },
+      { name: "Send Jackpot", icon: Trophy, path: "/admin/jackpot" },
+      { name: "Account Deletion", icon: Delete, path: "/admin/deletions" },
+    ],
+    support: [
+      { name: "Dashboard", icon: LayoutDashboard, path: "/admin" },
+      { name: "Agent Transactions", icon: Wallet, path: "/admin/agent-tx" },
+      { name: "Support", icon: MessageCircle, path: "/admin/support" },
+    ],
+    staff: [
+      { name: "Dashboard", icon: LayoutDashboard, path: "/admin" },
+      { name: "Agent Transactions", icon: Wallet, path: "/admin/agent-tx" },
+      { name: "Announcements", icon: Send, path: "/admin/broadcast" },
+      { name: "Testimonial Approvals", icon: CheckCircle2, path: "/admin/testimonials" },
+      { name: "Blog Posts", icon: FileText, path: "/admin/blog" },
+    ],
+  };
+
+  const navItems = navByRole[accessRole] || [];
+  const panelLabel = accessRole === "support" ? "Support Console" : accessRole === "staff" ? "Staff Console" : "Admin Engine";
 
   return (
     <div className="flex min-h-screen bg-[#020617]">
@@ -102,7 +175,7 @@ export default function AdminLayout({ children }) {
         <div className="p-8 flex justify-between items-center shrink-0">
           <div>
             <h2 className="text-2xl font-black italic tracking-tighter text-[#613de6]">FLY OVA</h2>
-            <p className="text-[10px] font-black uppercase opacity-40 tracking-widest text-white">Admin Engine</p>
+            <p className="text-[10px] font-black uppercase opacity-40 tracking-widest text-white">{panelLabel}</p>
           </div>
           <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-slate-400">
             <X size={24} />

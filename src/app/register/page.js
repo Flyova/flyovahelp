@@ -8,7 +8,7 @@ import {
   Loader2, Mail, User, Phone, AlertCircle, Eye, EyeOff, ArrowRight
 } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { createUserWithEmailAndPassword, updateProfile, signOut } from "firebase/auth";
 import {
   doc, setDoc, serverTimestamp, getDoc,
   collection, query, where, getDocs
@@ -125,7 +125,7 @@ function RegisterForm() {
         phone: normalizedPhone,
         dob: formData.dob,
         pin: userPin,
-        status: "online",
+        status: "offline",
         wallet: claimBonus ? 3.0 : 0.0,
         bonusClaimed: claimBonus,
         bonusDeducted: false,
@@ -153,6 +153,12 @@ function RegisterForm() {
         });
       } catch (e) { console.error("Email failed", e); }
 
+      // Prevent access to protected pages before verification is completed.
+      try {
+        await signOut(auth);
+      } catch (e) {
+        console.error("Auto sign-out after registration failed", e);
+      }
       router.push(`/verify?email=${formData.email}`);
     } catch (err) {
       setError(err.message);

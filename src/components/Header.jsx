@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { 
@@ -21,6 +21,7 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 
 export default function Header() {
   const router = useRouter();
+  const verifyRedirectedRef = useRef(false);
   const [showBalances, setShowBalances] = useState(false);
   const [copied, setCopied] = useState(false);
   const [hasUnreadSupport, setHasUnreadSupport] = useState(false); // Support state
@@ -46,6 +47,19 @@ export default function Header() {
         unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
+
+            if (data.verified !== true) {
+              if (!verifyRedirectedRef.current) {
+                verifyRedirectedRef.current = true;
+                setShowBalances(false);
+                signOut(auth).finally(() => {
+                  const email = encodeURIComponent(user.email || data.email || "");
+                  router.push(`/verify?email=${email}`);
+                });
+              }
+              return;
+            }
+
             setUserData(prev => ({
               ...prev,
               wallet: data.wallet?.toFixed(2) || "0.00",
@@ -81,6 +95,7 @@ export default function Header() {
         });
 
       } else {
+        verifyRedirectedRef.current = false;
         if (unsubscribeUser) unsubscribeUser();
         if (unsubscribeAgent) unsubscribeAgent();
         if (unsubscribeSupport) unsubscribeSupport();

@@ -27,7 +27,10 @@ import {
   Loader2,
   ChevronDown,
   Calendar,
-  RotateCcw
+  RotateCcw,
+  MessageSquare,
+  X,
+  ImageIcon
 } from "lucide-react";
 
 export default function AgentTransactions() {
@@ -40,6 +43,9 @@ export default function AgentTransactions() {
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const [actionLoading, setActionLoading] = useState(null); 
+  const [chatTrade, setChatTrade] = useState(null);
+  const [tradeMessages, setTradeMessages] = useState([]);
+  const [chatLoading, setChatLoading] = useState(false);
 
   const PAGE_SIZE = 20;
 
@@ -115,6 +121,25 @@ export default function AgentTransactions() {
 
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    if (!chatTrade?.id) return undefined;
+    setChatLoading(true);
+    const q = query(collection(db, "trades", chatTrade.id, "messages"), orderBy("createdAt", "asc"));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setTradeMessages(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setChatLoading(false);
+      },
+      (err) => {
+        console.error("Trade chat fetch error:", err);
+        setTradeMessages([]);
+        setChatLoading(false);
+      }
+    );
+    return () => unsub();
+  }, [chatTrade?.id]);
 
   const loadMore = async () => {
     if (!lastDoc || loadingMore) return;
@@ -245,6 +270,25 @@ export default function AgentTransactions() {
     );
   });
 
+  const getSenderMeta = (msg) => {
+    if (!chatTrade) return { name: "Unknown", role: "Unknown", isAgent: false };
+    if (msg.senderId === chatTrade.agentId) {
+      return {
+        name: agentNames[chatTrade.agentId] || chatTrade.agentName || "Agent",
+        role: "Agent",
+        isAgent: true
+      };
+    }
+    if (msg.senderId === chatTrade.senderId) {
+      return {
+        name: chatTrade.senderName || userProfiles[chatTrade.senderId]?.name || "Client",
+        role: "Client",
+        isAgent: false
+      };
+    }
+    return { name: "Unknown User", role: "Unknown", isAgent: false };
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -338,6 +382,13 @@ export default function AgentTransactions() {
                     </td>
                     <td className="p-6">
                         <div className="flex items-center justify-end gap-2">
+                            <button
+                                onClick={() => setChatTrade(trade)}
+                                className="flex items-center gap-1 px-3 py-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-500 hover:text-white transition-all border border-indigo-100"
+                            >
+                                <MessageSquare size={12} />
+                                <span className="text-[8px] font-black uppercase tracking-tighter">View Chat</span>
+                            </button>
                             {/* YELLOW REFUND BUTTON */}
                             <button 
                                 onClick={() => handleRefundOnly(trade)}
@@ -376,6 +427,89 @@ export default function AgentTransactions() {
           </div>
         )}
       </div>
+
+      {chatTrade && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 md:p-8">
+          <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => setChatTrade(null)} />
+          <div className="relative z-10 w-full max-w-4xl bg-white rounded-[2rem] border border-slate-200 shadow-2xl overflow-hidden">
+            <div className="p-5 md:p-6 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Trade Chat Monitor</p>
+                <h3 className="text-lg font-black italic uppercase tracking-tight text-slate-800">
+                  Trade ID: {chatTrade.id}
+                </h3>
+                <p className="text-[11px] font-bold text-slate-500 mt-1">
+                  Agent: {agentNames[chatTrade.agentId] || chatTrade.agentName || "Agent"} · Client: {chatTrade.senderName || userProfiles[chatTrade.senderId]?.name || "Client"}
+                </p>
+              </div>
+              <button
+                onClick={() => setChatTrade(null)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-y-auto p-5 md:p-6 bg-slate-50/70 space-y-3">
+              {chatLoading ? (
+                <div className="h-40 flex items-center justify-center">
+                  <Loader2 size={28} className="animate-spin text-indigo-600" />
+                </div>
+              ) : tradeMessages.length === 0 ? (
+                <div className="h-40 flex items-center justify-center text-[11px] font-black uppercase tracking-widest text-slate-400">
+                  No chat messages for this trade yet.
+                </div>
+              ) : (
+                tradeMessages.map((msg) => {
+                  const sender = getSenderMeta(msg);
+                  const msgTime = msg.createdAt?.toDate
+                    ? msg.createdAt.toDate().toLocaleString()
+                    : "Pending timestamp";
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`rounded-2xl p-4 border ${
+                        sender.isAgent ? "bg-indigo-50 border-indigo-100" : "bg-white border-slate-200"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
+                              sender.isAgent ? "bg-indigo-600 text-white" : "bg-slate-200 text-slate-700"
+                            }`}
+                          >
+                            {sender.role}
+                          </span>
+                          <span className="text-[11px] font-black text-slate-700">{sender.name}</span>
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-400">{msgTime}</span>
+                      </div>
+
+                      {msg.image ? (
+                        <a href={msg.image} target="_blank" rel="noreferrer" className="block group">
+                          <div className="inline-flex items-center gap-2 text-[11px] font-black text-indigo-600 mb-2">
+                            <ImageIcon size={13} /> Image Attachment
+                          </div>
+                          <img
+                            src={msg.image}
+                            alt="Trade proof"
+                            className="max-h-72 rounded-xl border border-slate-200 group-hover:opacity-90 transition-opacity"
+                          />
+                        </a>
+                      ) : (
+                        <p className="text-sm font-bold text-slate-700 leading-relaxed whitespace-pre-wrap">
+                          {msg.text || "—"}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -25,9 +25,22 @@ export default function LoginPage() {
       const cred = await signInWithEmailAndPassword(auth, formData.email, formData.password);
       const userRef = doc(db, "users", cred.user.uid);
       const userSnap = await getDoc(userRef);
+      if (!userSnap.exists()) {
+        await signOut(auth);
+        setError("Account profile is missing. Please contact support.");
+        setLoading(false);
+        return;
+      }
       const userData = userSnap.data();
 
-      if (userSnap.exists() && userData?.isban === true) {
+      if (userData?.verified !== true) {
+        await signOut(auth);
+        router.push(`/verify?email=${encodeURIComponent(formData.email)}`);
+        setLoading(false);
+        return;
+      }
+
+      if (userData?.isban === true) {
         await signOut(auth);
         setError("This account is disabled. Please contact support for assistance.");
         setLoading(false);
@@ -35,7 +48,7 @@ export default function LoginPage() {
       }
 
       const updateData = { status: "online", lastSeen: serverTimestamp() };
-      if (userSnap.exists() && !userData?.pin) updateData.pin = generateUserPin();
+      if (!userData?.pin) updateData.pin = generateUserPin();
       await updateDoc(userRef, updateData);
       router.push("/dashboard");
     } catch {
