@@ -8,6 +8,25 @@ import {
 } from "lucide-react";
 
 const CONTACT_EMAIL = "info@flyovahelp.com";
+const PAGE_URL = "https://flyovahelp.com/advertise";
+const breadcrumbJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: "Home",
+      item: "https://flyovahelp.com/",
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "Advertise",
+      item: PAGE_URL,
+    },
+  ],
+};
 
 const STATS = [
   { value: "50K+", label: "Active Players" },
@@ -63,6 +82,10 @@ export default function AdvertisePage() {
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-white">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
       {/* NAV */}
       <div className="sticky top-0 z-50 bg-[#0f172a]/90 backdrop-blur-md border-b border-white/5 px-6 py-4 flex items-center justify-between">
         <button

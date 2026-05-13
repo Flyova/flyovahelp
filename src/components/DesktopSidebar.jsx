@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, History, Wallet, Settings, ChevronLeft, ChevronRight } from "lucide-react";
+import { Home, History, Wallet, Settings, BookOpen, ChevronLeft, ChevronRight } from "lucide-react";
 
 export default function DesktopSidebar({ collapsed, onToggle }) {
   const pathname = usePathname();
@@ -10,6 +10,7 @@ export default function DesktopSidebar({ collapsed, onToggle }) {
     { name: "Home", icon: Home, path: "/dashboard" },
     { name: "History", icon: History, path: "/history" },
     { name: "Deposit", icon: Wallet, path: "/deposit" },
+    { name: "Blog", icon: BookOpen, path: "/blog" },
     { name: "Settings", icon: Settings, path: "/settings" },
   ];
 

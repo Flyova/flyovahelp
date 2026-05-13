@@ -158,8 +158,18 @@ export default function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-[100] w-full bg-[#613de6] text-white shadow-lg">
-      <div className="container mx-auto px-4 h-14 flex items-center justify-between">
+    <>
+      {showBalances && (
+        <button
+          type="button"
+          aria-label="Close wallet dropdown"
+          onClick={() => setShowBalances(false)}
+          className="fixed inset-0 z-[90] bg-[#020617]/35 backdrop-blur-sm"
+        />
+      )}
+
+      <header className="sticky top-0 z-[100] w-full bg-[#613de6] text-white shadow-lg">
+        <div className="container mx-auto px-4 h-14 flex items-center justify-between">
         <div 
           className="flex items-center space-x-2 cursor-pointer"
           onClick={() => router.push('/dashboard')}
@@ -287,8 +297,9 @@ export default function Header() {
             )}
           </div>
         </div>
-      </div>
-    </header>
+        </div>
+      </header>
+    </>
   );
 }
 

@@ -8,6 +8,25 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 import { Calendar, Clock, ArrowRight, Search, Loader2, FileText, ChevronDown } from "lucide-react";
 
 const PAGE_SIZE = 9;
+const PAGE_URL = "https://flyovahelp.com/blog";
+const breadcrumbJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: "Home",
+      item: "https://flyovahelp.com/",
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "Blog",
+      item: PAGE_URL,
+    },
+  ],
+};
 
 function PostCard({ post }) {
   const date = post.publishedAt?.toDate().toLocaleDateString("en-US", {
@@ -92,6 +111,10 @@ export default function BlogPage() {
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-white">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
       {/* Background */}
       <div className="fixed inset-0 pointer-events-none select-none overflow-hidden">
         <div className="absolute -top-40 -right-40 w-150 h-150 bg-[#613de6] rounded-full opacity-[0.08] blur-[120px]" />
