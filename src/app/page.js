@@ -52,11 +52,50 @@ function StatCard({ value, suffix, label, color }) {
 }
 
 const FAQ_ITEMS = [
-  { q: "How do I get started?", a: "Create a free account, deposit funds into your wallet, and jump straight into any game. Setup takes under 2 minutes." },
-  { q: "How does withdrawal work?", a: "Request a withdrawal from your wallet and a verified Flyova Agent in your region will process it. Most payouts are completed within minutes." },
-  { q: "What is a Flyova Agent?", a: "Agents are verified community members who process withdrawals. They earn a commission on every transaction they handle." },
-  { q: "Is my money safe?", a: "Yes. All transactions are logged and monitored. Our agent system is verified and every payout is tracked end-to-end." },
-  { q: "Can I play on mobile?", a: "Absolutely. Flyovahelp is built mobile-first and works perfectly on any smartphone or tablet browser." },
+  {
+    q: "How does deposit work?",
+    a: "Proceed to deposit using your verified crypto wallet or a verified Flyova Agent in your region. Deposits are processed in less than 30 minutes.",
+  },
+  {
+    q: "How does withdrawal work?",
+    a: "Request a withdrawal from your wallet to your verified crypto wallet or a verified Flyova Agent in your region. Agent payouts are completed within minutes.",
+  },
+  {
+    q: "What is a Flyova Agent?",
+    a: "Agents are verified community members who process deposits and withdrawals. They earn a commission on every transaction they handle.",
+  },
+  {
+    q: "How do I transfer money to another user?",
+    a: "Instantly transfer using the recipient's 8-digit account pin. No admin approval needed.",
+  },
+  {
+    q: "Can I stake on my own?",
+    a: "Yes. Flyova provides medium for users to stake on their own as many times and anytime as possible.",
+  },
+  {
+    q: "How much do I need to play Flyova games?",
+    a: "Deposit as low as 10.00 USD to start your journey on Flyovahelp. Minimum deposit starts from 1.00 USD.",
+  },
+  {
+    q: "Is there free prediction days?",
+    a: "Absolutely. Flyova admins offer daily free predictions on weekdays and weekends.",
+  },
+  {
+    q: "Which country is eligible to create Flyova account?",
+    a: "Everyone, regardless of country, can own a verified Flyova account.",
+  },
+  {
+    q: "What do I need to apply as a Flyova Agent?",
+    a: "Just a verified Flyova account, age qualification and trustworthiness.",
+  },
+  {
+    q: "What are the withdrawal days?",
+    a: "Flyova do not have any specific days or time for withdrawal. Users can withdraw anytime and any-day.",
+  },
+  {
+    q: "How do I earn jackpot?",
+    a: "Participate on Flyova activities including referral programs, advertising, deposits, stakes, etc to earn.",
+  },
 ];
 
 // ─── DEMO COMPONENTS ────────────────────────────────────────────────────────
@@ -1382,7 +1421,7 @@ export default function LandingPage() {
 
           {/* Bottom bar */}
           <div className="flex flex-col sm:flex-row items-center justify-between w-full gap-3">
-            <p className="text-[10px] font-black tracking-widest text-white/30 uppercase">© 2026 Flyovhelp Arena. All rights reserved.</p>
+            <p className="text-[10px] font-black tracking-widest text-white/30 uppercase">© 2026 Flyovahelp Arena. All rights reserved.</p>
             <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Play responsibly · 18+ only</p>
           </div>
           <a
