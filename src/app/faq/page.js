@@ -26,7 +26,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "How much do I need to play Flyova games?",
-    a: "Deposit as low as 10.00 USD to start your journey on Flyovahelp. Minimum deposit starts from 1.00 USD.",
+    a: "Deposit as low as 10.00 USD to start your journey on Flyovahelp. Minimum stake starts from 1.00 USD.",
   },
   {
     q: "Is there free prediction days?",
