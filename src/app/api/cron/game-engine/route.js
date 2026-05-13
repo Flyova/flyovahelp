@@ -17,7 +17,7 @@ export async function GET() {
     const now = Date.now();
     const WIN_MULTIPLIER = 1.3;
     const REFUND_PERCENTAGE = 0.8; // 80% refund for 1 correct number
-    const REFERRAL_COMMISSION_RATE = 0.003; // 0.3%
+    const REFERRAL_COMMISSION_RATE = 0.025; // 2.5%
     let settlementLog = "";
 
     const gameRef = rtdb.ref("active_game_flyova");

@@ -143,19 +143,55 @@ export default function Dashboard() {
       let withdrawalAmount = 0;
       const withdrawalCountry = userData?.country || "Unknown Country";
       try {
-        const withdrawalsSnap = await getDocs(
-          query(collection(db, "withdrawals"), where("userId", "==", user.uid), limit(30))
-        );
-        const latestApproved = withdrawalsSnap.docs
-          .map((d) => d.data())
-          .filter((w) => w.status === "approved")
-          .sort((a, b) => {
-            const aTime = a.processedAt?.toMillis?.() || a.timestamp?.toMillis?.() || 0;
-            const bTime = b.processedAt?.toMillis?.() || b.timestamp?.toMillis?.() || 0;
-            return bTime - aTime;
-          })[0];
+        const pickLatestAmount = (rows, getTime) => {
+          let latest = { amount: 0, time: 0 };
+          for (const row of rows) {
+            const amount = Number(row?.amount || 0);
+            const time = Number(getTime(row) || 0);
+            if (amount > 0 && time >= latest.time) {
+              latest = { amount, time };
+            }
+          }
+          return latest.amount;
+        };
 
-        withdrawalAmount = Number(latestApproved?.amount || 0);
+        const withdrawalsSnap = await getDocs(
+          query(collection(db, "withdrawals"), where("userId", "==", user.uid), limit(60))
+        );
+        const approvedWithdrawals = withdrawalsSnap.docs
+          .map((d) => d.data())
+          .filter((w) => w.status === "approved");
+
+        const tradesSnap = await getDocs(
+          query(collection(db, "trades"), where("senderId", "==", user.uid), limit(60))
+        );
+        const completedWithdrawalTrades = tradesSnap.docs
+          .map((d) => d.data())
+          .filter((t) => t.type === "withdrawal" && (t.status === "completed" || t.status === "approved"));
+
+        const latestWithdrawalAmount = pickLatestAmount(
+          approvedWithdrawals,
+          (w) =>
+            w?.processedAt?.toMillis?.() ||
+            w?.completedAt?.toMillis?.() ||
+            w?.timestamp?.toMillis?.() ||
+            (typeof w?.processedAt === "number" ? w.processedAt : 0) ||
+            (typeof w?.completedAt === "number" ? w.completedAt : 0) ||
+            (typeof w?.timestamp === "number" ? w.timestamp : 0)
+        );
+
+        const latestTradeWithdrawalAmount = pickLatestAmount(
+          completedWithdrawalTrades,
+          (t) =>
+            t?.completedAt?.toMillis?.() ||
+            t?.createdAt?.toMillis?.() ||
+            t?.timestamp?.toMillis?.() ||
+            (typeof t?.completedAt === "number" ? t.completedAt : 0) ||
+            (typeof t?.createdAt === "number" ? t.createdAt : 0) ||
+            (typeof t?.timestamp === "number" ? t.timestamp : 0)
+        );
+
+        withdrawalAmount = Math.max(latestWithdrawalAmount, latestTradeWithdrawalAmount);
       } catch (lookupError) {
         console.error("Could not load latest approved withdrawal for testimonial:", lookupError);
       }
@@ -251,8 +287,30 @@ export default function Dashboard() {
       )}
 
       <div className="mx-auto max-w-7xl px-4 md:px-6 lg:px-8 pt-6 md:pt-8">
-        {/* JACKPOT ALERTS */}
+        {/* ANNOUNCEMENTS */}
         <div className="space-y-2 relative z-50">
+          {announcements
+            .filter(msg => !readMessages.includes(msg.id))
+            .map((msg) => (
+              <div key={msg.id} className={`p-5 rounded-[2rem] border flex items-start justify-between gap-4 shadow-2xl ${msg.type === 'warning' ? 'bg-amber-500 border-amber-400' : msg.type === 'success' ? 'bg-emerald-600 border-emerald-500' : 'bg-[#1e293b] border-white/10'}`}>
+                <div className="flex items-start gap-3">
+                  <div className="bg-white/10 p-2.5 rounded-xl mt-1">
+                    {msg.type === 'warning' ? <AlertTriangle size={18} className="text-white" /> :
+                     msg.type === 'success' ? <CheckCircle2 size={18} className="text-white" /> :
+                     <Megaphone size={18} className="text-[#613de6]" />}
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-1">Announcement</p>
+                    <p className="text-sm font-bold text-white leading-tight">{msg.message}</p>
+                  </div>
+                </div>
+                <button onClick={() => markAsRead(msg.id)} className="bg-white/10 p-2 rounded-full transition-colors"><X size={16} className="text-white" /></button>
+              </div>
+            ))}
+        </div>
+
+        {/* JACKPOT ALERTS */}
+        <div className="space-y-2 relative z-50 pt-2">
           {pendingJackpots.map((jackpot) => (
             <div key={jackpot.id} className="p-5 rounded-[2rem] border bg-amber-500 border-amber-400 flex items-center justify-between gap-4 shadow-2xl animate-bounce-subtle">
               <div className="flex items-start gap-3">
@@ -297,20 +355,6 @@ export default function Dashboard() {
             </div>
           </div>
         )}
-
-        {/* WALLET CARD */}
-        <div className="mt-4 rounded-3xl border p-5 transition-all duration-500 bg-gradient-to-br from-[#1e293b] to-[#0f172a] border-white/5">
-          <div className="flex items-center justify-between gap-4">
-            <div className="space-y-0.5">
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-                Wallet Balance
-              </p>
-              <p className="text-3xl font-black tracking-tighter text-white">
-                ${(userData?.wallet ?? 0).toFixed(2)}
-              </p>
-            </div>
-          </div>
-        </div>
 
         <div className="mt-4 md:mt-6 grid grid-cols-1 xl:grid-cols-12 gap-6">
           <section className="xl:col-span-8 space-y-6">
@@ -379,28 +423,6 @@ export default function Dashboard() {
           </section>
 
           <aside className="xl:col-span-4 space-y-4 xl:sticky xl:top-24 h-fit">
-            {/* ANNOUNCEMENT OVERLAY */}
-            <div className="space-y-2 relative z-50">
-              {announcements
-                .filter(msg => !readMessages.includes(msg.id))
-                .map((msg) => (
-                  <div key={msg.id} className={`p-5 rounded-[2rem] border flex items-start justify-between gap-4 shadow-2xl ${msg.type === 'warning' ? 'bg-amber-500 border-amber-400' : msg.type === 'success' ? 'bg-emerald-600 border-emerald-500' : 'bg-[#1e293b] border-white/10'}`}>
-                    <div className="flex items-start gap-3">
-                      <div className="bg-white/10 p-2.5 rounded-xl mt-1">
-                        {msg.type === 'warning' ? <AlertTriangle size={18} className="text-white" /> :
-                         msg.type === 'success' ? <CheckCircle2 size={18} className="text-white" /> :
-                         <Megaphone size={18} className="text-[#613de6]" />}
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-1">Announcement</p>
-                        <p className="text-sm font-bold text-white leading-tight">{msg.message}</p>
-                      </div>
-                    </div>
-                    <button onClick={() => markAsRead(msg.id)} className="bg-white/10 p-2 rounded-full transition-colors"><X size={16} className="text-white" /></button>
-                  </div>
-                ))}
-            </div>
-
             {/* TRADE MONITOR OVERLAY */}
             {activeTrades.length > 0 && (
               <div className="space-y-2 relative z-40">

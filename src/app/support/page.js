@@ -24,6 +24,7 @@ export default function SupportChat() {
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [chatResolved, setChatResolved] = useState(false);
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -49,6 +50,7 @@ export default function SupportChat() {
           if (snap.exists()) {
             const data = snap.data();
             setMessages(data.messages || []);
+            setChatResolved(data.resolved === true);
             
             // Clear the unread status for the user when they open the chat
             if (data.unreadByUser === true) {
@@ -65,6 +67,7 @@ export default function SupportChat() {
               unreadByAdmin: false,
               unreadByUser: false
             });
+            setChatResolved(false);
           }
           setLoading(false);
         });
@@ -156,9 +159,12 @@ export default function SupportChat() {
           </button>
           <div>
             <h2 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
-              Live Support <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+              Live Support{" "}
+              <span className={`w-2 h-2 rounded-full ${chatResolved ? "bg-amber-400" : "bg-emerald-500 animate-pulse"}`} />
             </h2>
-            <p className="text-[10px] font-bold text-gray-500 uppercase italic">Online</p>
+            <p className="text-[10px] font-bold text-gray-500 uppercase italic">
+              {chatResolved ? "Resolved" : "Online"}
+            </p>
           </div>
         </div>
         <button 
@@ -179,6 +185,13 @@ export default function SupportChat() {
             Caution: Stay online while waiting for support response.
           </p>
         </div>
+        {chatResolved && (
+          <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-2xl p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">
+              Support marked this chat as resolved. Send a new message to reopen it.
+            </p>
+          </div>
+        )}
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center opacity-20">
             <MessageCircle size={80} className="mb-6 text-[#613de6]" />
@@ -187,6 +200,18 @@ export default function SupportChat() {
         ) : (
           messages.map((msg, idx) => {
             const isMe = msg.senderType === "user";
+            const isSystem = msg.senderType === "system";
+            if (isSystem) {
+              return (
+                <div key={idx} className="flex justify-center animate-in slide-in-from-bottom-4">
+                  <div className="max-w-[90%] bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-4 py-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400 text-center">
+                      {msg.text}
+                    </p>
+                  </div>
+                </div>
+              );
+            }
             return (
               <div key={idx} className={`flex ${isMe ? "justify-end" : "justify-start"} animate-in slide-in-from-bottom-4`}>
                 <div className={`max-w-[85%] flex flex-col ${isMe ? "items-end" : "items-start"}`}>

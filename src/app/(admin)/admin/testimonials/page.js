@@ -5,11 +5,14 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
+  limit,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
-  updateDoc
+  updateDoc,
+  where
 } from "firebase/firestore";
 import { CheckCircle2, Loader2, Search, XCircle } from "lucide-react";
 
@@ -35,18 +38,76 @@ export default function AdminTestimonialApprovals() {
     const unsub = onSnapshot(q, async (snap) => {
       const raw = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-      // Backfill missing country/amount from user profile where possible.
+      // Backfill missing country/amount from user profile + payout history where possible.
       const hydrated = await Promise.all(
         raw.map(async (item) => {
-          if (item.country && item.amount) return item;
+          const currentAmount = Number(item.amount || 0);
+          const needsCountry = !item.country;
+          const needsAmount = !currentAmount || currentAmount <= 0;
+          if (!needsCountry && !needsAmount) return item;
           if (!item.userId) return item;
+
           try {
             const userSnap = await getDoc(doc(db, "users", item.userId));
-            if (!userSnap.exists()) return item;
-            const userData = userSnap.data();
+            const userData = userSnap.exists() ? userSnap.data() : {};
+
+            let recoveredAmount = currentAmount;
+            if (needsAmount) {
+              const pickLatestAmount = (rows, getTime) => {
+                let latest = { amount: 0, time: 0 };
+                for (const row of rows) {
+                  const amount = Number(row?.amount || 0);
+                  const time = Number(getTime(row) || 0);
+                  if (amount > 0 && time >= latest.time) {
+                    latest = { amount, time };
+                  }
+                }
+                return latest.amount;
+              };
+
+              const withdrawalsSnap = await getDocs(
+                query(collection(db, "withdrawals"), where("userId", "==", item.userId), limit(60))
+              );
+              const approvedWithdrawals = withdrawalsSnap.docs
+                .map((d) => d.data())
+                .filter((w) => w.status === "approved");
+
+              const tradesSnap = await getDocs(
+                query(collection(db, "trades"), where("senderId", "==", item.userId), limit(60))
+              );
+              const completedWithdrawalTrades = tradesSnap.docs
+                .map((d) => d.data())
+                .filter((t) => t.type === "withdrawal" && (t.status === "completed" || t.status === "approved"));
+
+              const latestWithdrawalAmount = pickLatestAmount(
+                approvedWithdrawals,
+                (w) =>
+                  w?.processedAt?.toMillis?.() ||
+                  w?.completedAt?.toMillis?.() ||
+                  w?.timestamp?.toMillis?.() ||
+                  (typeof w?.processedAt === "number" ? w.processedAt : 0) ||
+                  (typeof w?.completedAt === "number" ? w.completedAt : 0) ||
+                  (typeof w?.timestamp === "number" ? w.timestamp : 0)
+              );
+
+              const latestTradeWithdrawalAmount = pickLatestAmount(
+                completedWithdrawalTrades,
+                (t) =>
+                  t?.completedAt?.toMillis?.() ||
+                  t?.createdAt?.toMillis?.() ||
+                  t?.timestamp?.toMillis?.() ||
+                  (typeof t?.completedAt === "number" ? t.completedAt : 0) ||
+                  (typeof t?.createdAt === "number" ? t.createdAt : 0) ||
+                  (typeof t?.timestamp === "number" ? t.timestamp : 0)
+              );
+
+              recoveredAmount = Math.max(latestWithdrawalAmount, latestTradeWithdrawalAmount);
+            }
+
             return {
               ...item,
-              country: item.country || userData.country || "Unknown Country"
+              country: item.country || userData.country || "Unknown Country",
+              amount: recoveredAmount
             };
           } catch {
             return item;
@@ -166,4 +227,3 @@ export default function AdminTestimonialApprovals() {
     </div>
   );
 }
-

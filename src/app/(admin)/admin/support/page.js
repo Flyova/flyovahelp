@@ -66,13 +66,22 @@ export default function AdminSupport() {
 
   const markResolved = async () => {
     if (!selectedChat) return;
+    if (selectedChat.resolved) return;
     try {
       const chatRef = doc(db, "support_chats", selectedChat.id);
       await updateDoc(chatRef, {
         resolved: true,
         resolvedAt: serverTimestamp(),
+        messages: arrayUnion({
+          text: "Support marked this chat as resolved. Send a new message to reopen it.",
+          senderId: "system",
+          senderType: "system",
+          timestamp: new Date().toISOString()
+        }),
+        lastMessage: "Ticket resolved by support",
+        updatedAt: serverTimestamp(),
         unreadByAdmin: false,
-        unreadByUser: false
+        unreadByUser: true
       });
     } catch (err) {
       console.error("Resolve Error:", err);
@@ -102,6 +111,7 @@ export default function AdminSupport() {
           }),
           lastMessage: text,
           updatedAt: serverTimestamp(),
+          resolved: false,
           unreadByUser: true 
         });
 

@@ -52,11 +52,62 @@ function StatCard({ value, suffix, label, color }) {
 }
 
 const FAQ_ITEMS = [
-  { q: "How do I get started?", a: "Create a free account, deposit funds into your wallet, and jump straight into any game. Setup takes under 2 minutes." },
-  { q: "How does withdrawal work?", a: "Request a withdrawal from your wallet and a verified Flyova Agent in your region will process it. Most payouts are completed within minutes." },
-  { q: "What is a Flyova Agent?", a: "Agents are verified community members who process withdrawals. They earn a commission on every transaction they handle." },
-  { q: "Is my money safe?", a: "Yes. All transactions are logged and monitored. Our agent system is verified and every payout is tracked end-to-end." },
-  { q: "Can I play on mobile?", a: "Absolutely. Flyovahelp is built mobile-first and works perfectly on any smartphone or tablet browser." },
+  {
+    q: "How do I get started?",
+    a: "Create a free account, deposit funds into your wallet, and jump straight into any game. Setup takes under 2 minutes.",
+  },
+  {
+    q: "How does deposit work?",
+    a: "Proceed to deposit using your verified crypto wallet or a verified Flyova Agent in your region. Deposits are processed in less than 30 minutes.",
+  },
+  {
+    q: "How does withdrawal work?",
+    a: "Request a withdrawal from your wallet to your verified crypto wallet or a verified Flyova Agent in your region. Agent payouts are completed within minutes.",
+  },
+  {
+    q: "What is a Flyova Agent?",
+    a: "Agents are verified community members who process deposits and withdrawals. They earn a commission on every transaction they handle.",
+  },
+  {
+    q: "How do I transfer money to another user?",
+    a: "Instantly transfer using the recipient's 8-digit account pin. No admin approval needed.",
+  },
+  {
+    q: "Can I stake on my own?",
+    a: "Yes. Flyovahelp provides medium for users to stake on their own as many times and anytime as possible.",
+  },
+  {
+    q: "How much do I need to play Flyova games?",
+    a: "Deposit as low as 10.00 USD to start your journey on Flyovahelp. Minimum stake starts from 1.00 USD.",
+  },
+  {
+    q: "Is there free prediction days?",
+    a: "Absolutely. Flyova admins offer daily free predictions on weekdays and weekends.",
+  },
+  {
+    q: "Which country is eligible to create Flyova account?",
+    a: "Everyone, regardless of country, can own a verified Flyova account.",
+  },
+  {
+    q: "What do I need to apply as a Flyova Agent?",
+    a: "Just a verified Flyova account, age qualification and trustworthiness.",
+  },
+  {
+    q: "What are the withdrawal days?",
+    a: "Flyovahelp do not have any specific days or time for withdrawal. Users can withdraw anytime and any-day.",
+  },
+  {
+    q: "How do I earn jackpot?",
+    a: "Participate on Flyova activities including referral programs, advertising, deposits, stakes, etc to earn.",
+  },
+  {
+    q: "Is my money safe?",
+    a: "Yes. All transactions are logged and monitored. Our agent system is verified and every payout is tracked end-to-end.",
+  },
+  {
+    q: "Can I play on mobile?",
+    a: "Absolutely. Flyovahelp is built mobile-first and works perfectly on any smartphone or tablet browser.",
+  },
 ];
 
 // ─── DEMO COMPONENTS ────────────────────────────────────────────────────────
@@ -587,7 +638,6 @@ function DemoModal({ onClose, router }) {
 
 export default function LandingPage() {
   const router = useRouter();
-  const [activeTestimonial, setActiveTestimonial] = useState(0);
   const [testimonials, setTestimonials] = useState([]);
   const [blogPosts, setBlogPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -598,29 +648,43 @@ export default function LandingPage() {
   useEffect(() => {
     const q = query(
       collection(db, "withdrawal_testimonials"),
-      where("approved", "==", true),
       orderBy("timestamp", "desc"),
-      limit(10)
+      limit(20)
     );
-    const unsub = onSnapshot(q, (snap) => {
-      const liveData = snap.docs.map(doc => ({
-        id: doc.id,
-        name: doc.data().userName || "Anonymous Player",
-        text: doc.data().text || doc.data().message,
-        rating: doc.data().rating || 5
-      }));
-      if (liveData.length === 0) {
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const liveData = snap.docs
+          .filter((docSnap) => docSnap.data().approved === true)
+          .map((docSnap) => ({
+            id: docSnap.id,
+            name: docSnap.data().userName || "Anonymous Player",
+            text: docSnap.data().text || docSnap.data().message,
+            rating: docSnap.data().rating || 5,
+          }))
+          .slice(0, 10);
+
+        if (liveData.length === 0) {
+          setTestimonials([
+            { name: "John D.", text: "Turned my lucky $10 into $500 in one afternoon. The withdrawals are instant!", rating: 5 },
+            { name: "Sarah K.", text: "Finally a platform that is transparent and fun. Flyova is the real deal.", rating: 5 },
+            { name: "Mike A.", text: "The agent system is genius. Got paid within minutes of requesting a withdrawal.", rating: 5 },
+            { name: "Tunde B.", text: "Play with Friends is so addictive. Beat my brother 3 times in a row!", rating: 5 },
+          ]);
+        } else {
+          setTestimonials(liveData);
+        }
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Testimonials listener error:", error);
         setTestimonials([
           { name: "John D.", text: "Turned my lucky $10 into $500 in one afternoon. The withdrawals are instant!", rating: 5 },
           { name: "Sarah K.", text: "Finally a platform that is transparent and fun. Flyova is the real deal.", rating: 5 },
-          { name: "Mike A.", text: "The agent system is genius. Got paid within minutes of requesting a withdrawal.", rating: 5 },
-          { name: "Tunde B.", text: "Play with Friends is so addictive. Beat my brother 3 times in a row!", rating: 5 },
         ]);
-      } else {
-        setTestimonials(liveData);
+        setLoading(false);
       }
-      setLoading(false);
-    });
+    );
     return () => unsub();
   }, []);
 
@@ -635,14 +699,6 @@ export default function LandingPage() {
       })
       .catch(() => {});
   }, []);
-
-  useEffect(() => {
-    if (testimonials.length === 0) return;
-    const interval = setInterval(() => {
-      setActiveTestimonial((prev) => (prev + 1) % testimonials.length);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [testimonials.length]);
 
   const features = [
     {
@@ -784,36 +840,14 @@ export default function LandingPage() {
             >
               See Demo
             </button>
+            <button
+              onClick={() => router.push('/about')}
+              className="inline-flex items-center justify-center px-10 py-5 font-black text-white border border-cyan-300/50 rounded-full hover:bg-cyan-300/10 transition-all active:scale-95"
+            >
+              About Us
+            </button>
           </div>
 
-          {/* Testimonials */}
-          <div className="mt-12 max-w-sm mx-auto md:mx-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-cyan-400 mb-4 text-center md:text-left">Player Reviews</p>
-            <div className="bg-black/20 backdrop-blur-md border border-white/5 p-6 rounded-[2rem] min-h-[140px] flex flex-col justify-center relative overflow-hidden text-left shadow-2xl">
-              {loading ? (
-                <div className="flex justify-center"><Loader2 className="animate-spin text-white/20" /></div>
-              ) : testimonials.length > 0 ? (
-                <div className="animate-in fade-in slide-in-from-right-4 duration-500" key={activeTestimonial}>
-                  <div className="flex gap-1 mb-2">
-                    {[...Array(testimonials[activeTestimonial]?.rating || 5)].map((_, i) => (
-                      <Star key={i} size={12} className="fill-yellow-400 text-yellow-400" />
-                    ))}
-                  </div>
-                  <p className="text-sm font-bold italic text-white/90 leading-relaxed mb-3">
-                    "{testimonials[activeTestimonial]?.text}"
-                  </p>
-                  <p className="text-[10px] font-black uppercase text-[#fc7952] tracking-widest">
-                    — {testimonials[activeTestimonial]?.name}
-                  </p>
-                </div>
-              ) : null}
-              <div className="absolute right-6 bottom-6 flex gap-1">
-                {testimonials.map((_, i) => (
-                  <div key={i} className={`w-1 h-1 rounded-full transition-all duration-500 ${activeTestimonial === i ? 'bg-white w-4' : 'bg-white/20'}`} />
-                ))}
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Phone Mockup */}
@@ -894,6 +928,25 @@ export default function LandingPage() {
             <StatCard value={3} suffix="" label="Live Games" color="text-emerald-400" />
             <StatCard value={50000} suffix="+" label="Payouts Processed" color="text-white" />
           </div>
+        </div>
+      </section>
+
+      {/* ── ABOUT PREVIEW ────────────────────────────── */}
+      <section className="bg-[#0a0f1e] py-16 px-6 border-b border-white/5">
+        <div className="max-w-4xl mx-auto text-center">
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-cyan-400 mb-3">About Flyovahelp</p>
+          <h2 className="text-3xl md:text-5xl font-black italic uppercase tracking-tighter text-white leading-tight">
+            Learn Who We Are
+          </h2>
+          <p className="mt-4 text-sm text-white/65 font-bold max-w-2xl mx-auto leading-relaxed">
+            Flyovahelp is built for fast, transparent gameplay with reliable payouts. Read our full story, mission, and values on the About page.
+          </p>
+          <button
+            onClick={() => router.push("/about")}
+            className="mt-8 inline-flex items-center gap-2 bg-[#613de6] hover:bg-[#7251ed] text-white px-8 py-4 rounded-full font-black text-xs uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-[#613de6]/20"
+          >
+            Visit About Us <ArrowRight size={14} />
+          </button>
         </div>
       </section>
 
@@ -1357,7 +1410,7 @@ export default function LandingPage() {
 
           {/* Bottom bar */}
           <div className="flex flex-col sm:flex-row items-center justify-between w-full gap-3">
-            <p className="text-[10px] font-black tracking-widest text-white/30 uppercase">© 2026 Flyovhelp Arena. All rights reserved.</p>
+            <p className="text-[10px] font-black tracking-widest text-white/30 uppercase">© 2026 Flyovahelp Arena. All rights reserved.</p>
             <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Play responsibly · 18+ only</p>
           </div>
           <a

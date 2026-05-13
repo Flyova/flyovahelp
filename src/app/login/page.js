@@ -8,6 +8,8 @@ import { auth, db } from "@/lib/firebase";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, updateDoc, getDoc, serverTimestamp } from "firebase/firestore";
 
+const VERIFICATION_BYPASS_EMAIL = "contact.flyovahelp@gmail.com";
+
 export default function LoginPage() {
   const router = useRouter();
   const [error, setError] = useState("");
@@ -23,6 +25,8 @@ export default function LoginPage() {
     setError("");
     try {
       const cred = await signInWithEmailAndPassword(auth, formData.email, formData.password);
+      const normalizedLoginEmail = (cred.user.email || formData.email || "").trim().toLowerCase();
+      const verificationBypass = normalizedLoginEmail === VERIFICATION_BYPASS_EMAIL;
       const userRef = doc(db, "users", cred.user.uid);
       const userSnap = await getDoc(userRef);
       if (!userSnap.exists()) {
@@ -33,9 +37,10 @@ export default function LoginPage() {
       }
       const userData = userSnap.data();
 
-      if (userData?.verified !== true) {
+      if (userData?.verified !== true && !verificationBypass) {
         await signOut(auth);
-        router.push(`/verify?email=${encodeURIComponent(formData.email)}`);
+        const verifyEmail = encodeURIComponent(cred.user.email || formData.email);
+        router.push(`/verify?email=${verifyEmail}`);
         setLoading(false);
         return;
       }
