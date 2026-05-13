@@ -140,10 +140,34 @@ export default function Dashboard() {
     setSubmittingTestimonial(true);
 
     try {
+      let withdrawalAmount = 0;
+      const withdrawalCountry = userData?.country || "Unknown Country";
+      try {
+        const withdrawalsSnap = await getDocs(
+          query(collection(db, "withdrawals"), where("userId", "==", user.uid), limit(30))
+        );
+        const latestApproved = withdrawalsSnap.docs
+          .map((d) => d.data())
+          .filter((w) => w.status === "approved")
+          .sort((a, b) => {
+            const aTime = a.processedAt?.toMillis?.() || a.timestamp?.toMillis?.() || 0;
+            const bTime = b.processedAt?.toMillis?.() || b.timestamp?.toMillis?.() || 0;
+            return bTime - aTime;
+          })[0];
+
+        withdrawalAmount = Number(latestApproved?.amount || 0);
+      } catch (lookupError) {
+        console.error("Could not load latest approved withdrawal for testimonial:", lookupError);
+      }
+
+      const testimonialUserName = userData?.fullName || userData?.username || "A Player";
       await addDoc(collection(db, "withdrawal_testimonials"), {
         userId: user.uid,
-        userName: userData?.fullName || userData?.username || "A Player",
+        userName: testimonialUserName,
         message: testimonialText,
+        amount: withdrawalAmount,
+        country: withdrawalCountry,
+        summaryLine: `@${testimonialUserName} withdrew $${withdrawalAmount} from ${withdrawalCountry}`,
         timestamp: serverTimestamp(),
         approved: false 
       });

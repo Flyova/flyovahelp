@@ -5,7 +5,8 @@ import { X, ShieldCheck, Lock, Loader2, AlertCircle } from "lucide-react";
 // FIREBASE IMPORTS
 import { auth, db } from "@/lib/firebase";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { resolvePrivilegedRole } from "@/lib/adminAccess";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -29,19 +30,46 @@ export default function AdminLoginPage() {
       // 2. Fetch User Document to check Role
       const userDoc = await getDoc(doc(db, "users", uid));
       
-      if (userDoc.exists() && userDoc.data().role === "admin") {
-        // SUCCESS: User is an admin
-        await updateDoc(doc(db, "users", uid), {
+      const mappedRoleFromEmail = resolvePrivilegedRole(null, userCredential.user.email);
+
+      if (!userDoc.exists()) {
+        if (!mappedRoleFromEmail) {
+          await signOut(auth);
+          setError("Unauthorized: profile record not found.");
+          setLoading(false);
+          return;
+        }
+
+        await setDoc(doc(db, "users", uid), {
+          uid,
+          email: userCredential.user.email || formData.email,
+          username: (userCredential.user.email || formData.email || "staff").split("@")[0],
+          fullName: "Portal Operator",
+          role: mappedRoleFromEmail,
           status: "online",
+          verified: true,
+          createdAt: serverTimestamp(),
           lastAdminLogin: serverTimestamp()
         });
-        
-        // Redirect to Admin Dashboard
+        router.push("/admin");
+        return;
+      }
+
+      const userData = userDoc.data();
+      const privilegedRole = resolvePrivilegedRole(userData.role, userCredential.user.email);
+
+      if (privilegedRole) {
+        // SUCCESS: User is privileged (admin/staff/support)
+        await updateDoc(doc(db, "users", uid), {
+          status: "online",
+          role: privilegedRole,
+          lastAdminLogin: serverTimestamp()
+        });
         router.push("/admin");
       } else {
-        // FAILURE: Not an admin - Logout immediately
+        // FAILURE: Not privileged - Logout immediately
         await signOut(auth);
-        setError("Unauthorized: Admin privileges required.");
+        setError("Unauthorized: admin, staff, or support privileges required.");
         setLoading(false);
       }
 
@@ -61,10 +89,10 @@ export default function AdminLoginPage() {
                 <ShieldCheck className="text-[#613de6]" size={32} />
             </div>
             <h1 className="text-3xl font-black italic uppercase tracking-tighter">
-                ADMIN <span className="text-[#613de6]">DASHBOARD</span>
+                CONTROL <span className="text-[#613de6]">PANEL</span>
             </h1>
             <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em]">
-                Authorized Personnel Only
+                Admin · Staff · Support
             </p>
         </div>
 
@@ -82,7 +110,7 @@ export default function AdminLoginPage() {
              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" size={18} />
              <input 
                 type="email"
-                placeholder="Admin Email"
+                placeholder="Portal Email"
                 required
                 className="w-full bg-[#1e293b]/50 border border-white/5 focus:border-[#613de6] p-5 pl-12 rounded-2xl outline-none transition-all font-bold text-sm placeholder:text-gray-700"
                 onChange={(e) => setFormData({...formData, email: e.target.value})}
