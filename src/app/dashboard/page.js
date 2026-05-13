@@ -143,19 +143,55 @@ export default function Dashboard() {
       let withdrawalAmount = 0;
       const withdrawalCountry = userData?.country || "Unknown Country";
       try {
-        const withdrawalsSnap = await getDocs(
-          query(collection(db, "withdrawals"), where("userId", "==", user.uid), limit(30))
-        );
-        const latestApproved = withdrawalsSnap.docs
-          .map((d) => d.data())
-          .filter((w) => w.status === "approved")
-          .sort((a, b) => {
-            const aTime = a.processedAt?.toMillis?.() || a.timestamp?.toMillis?.() || 0;
-            const bTime = b.processedAt?.toMillis?.() || b.timestamp?.toMillis?.() || 0;
-            return bTime - aTime;
-          })[0];
+        const pickLatestAmount = (rows, getTime) => {
+          let latest = { amount: 0, time: 0 };
+          for (const row of rows) {
+            const amount = Number(row?.amount || 0);
+            const time = Number(getTime(row) || 0);
+            if (amount > 0 && time >= latest.time) {
+              latest = { amount, time };
+            }
+          }
+          return latest.amount;
+        };
 
-        withdrawalAmount = Number(latestApproved?.amount || 0);
+        const withdrawalsSnap = await getDocs(
+          query(collection(db, "withdrawals"), where("userId", "==", user.uid), limit(60))
+        );
+        const approvedWithdrawals = withdrawalsSnap.docs
+          .map((d) => d.data())
+          .filter((w) => w.status === "approved");
+
+        const tradesSnap = await getDocs(
+          query(collection(db, "trades"), where("senderId", "==", user.uid), limit(60))
+        );
+        const completedWithdrawalTrades = tradesSnap.docs
+          .map((d) => d.data())
+          .filter((t) => t.type === "withdrawal" && (t.status === "completed" || t.status === "approved"));
+
+        const latestWithdrawalAmount = pickLatestAmount(
+          approvedWithdrawals,
+          (w) =>
+            w?.processedAt?.toMillis?.() ||
+            w?.completedAt?.toMillis?.() ||
+            w?.timestamp?.toMillis?.() ||
+            (typeof w?.processedAt === "number" ? w.processedAt : 0) ||
+            (typeof w?.completedAt === "number" ? w.completedAt : 0) ||
+            (typeof w?.timestamp === "number" ? w.timestamp : 0)
+        );
+
+        const latestTradeWithdrawalAmount = pickLatestAmount(
+          completedWithdrawalTrades,
+          (t) =>
+            t?.completedAt?.toMillis?.() ||
+            t?.createdAt?.toMillis?.() ||
+            t?.timestamp?.toMillis?.() ||
+            (typeof t?.completedAt === "number" ? t.completedAt : 0) ||
+            (typeof t?.createdAt === "number" ? t.createdAt : 0) ||
+            (typeof t?.timestamp === "number" ? t.timestamp : 0)
+        );
+
+        withdrawalAmount = Math.max(latestWithdrawalAmount, latestTradeWithdrawalAmount);
       } catch (lookupError) {
         console.error("Could not load latest approved withdrawal for testimonial:", lookupError);
       }

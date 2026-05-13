@@ -73,20 +73,12 @@ const FAQ_ITEMS = [
     a: "Instantly transfer using the recipient's 8-digit account pin. No admin approval needed.",
   },
   {
-    q: "Is my money safe?",
-    a: "Yes. All transactions are logged and monitored. Our agent system is verified and every payout is tracked end-to-end.",
-  },
-  {
-    q: "Can I play on mobile?",
-    a: "Absolutely. Flyovahelp is built mobile-first and works perfectly on any smartphone or tablet browser.",
-  },
-  {
     q: "Can I stake on my own?",
-    a: "Yes. Flyova provides medium for users to stake on their own as many times and anytime as possible.",
+    a: "Yes. Flyovahelp provides medium for users to stake on their own as many times and anytime as possible.",
   },
   {
     q: "How much do I need to play Flyova games?",
-    a: "Deposit as low as 10.00 USD to start your journey on Flyovahelp. Minimum deposit starts from 1.00 USD.",
+    a: "Deposit as low as 10.00 USD to start your journey on Flyovahelp. Minimum stake starts from 1.00 USD.",
   },
   {
     q: "Is there free prediction days?",
@@ -102,11 +94,19 @@ const FAQ_ITEMS = [
   },
   {
     q: "What are the withdrawal days?",
-    a: "Flyova do not have any specific days or time for withdrawal. Users can withdraw anytime and any-day.",
+    a: "Flyovahelp do not have any specific days or time for withdrawal. Users can withdraw anytime and any-day.",
   },
   {
     q: "How do I earn jackpot?",
     a: "Participate on Flyova activities including referral programs, advertising, deposits, stakes, etc to earn.",
+  },
+  {
+    q: "Is my money safe?",
+    a: "Yes. All transactions are logged and monitored. Our agent system is verified and every payout is tracked end-to-end.",
+  },
+  {
+    q: "Can I play on mobile?",
+    a: "Absolutely. Flyovahelp is built mobile-first and works perfectly on any smartphone or tablet browser.",
   },
 ];
 

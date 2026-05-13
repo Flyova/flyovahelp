@@ -173,7 +173,7 @@ export default function Header() {
         <div className="container mx-auto px-4 h-14 flex items-center justify-between">
         <div 
           className="flex items-center space-x-2 cursor-pointer"
-          onClick={() => router.push('/dashboard')}
+          onClick={() => router.push('/')}
         >
           <Image src="/logo.svg" alt="Logo" width={100} height={22} />
         </div>

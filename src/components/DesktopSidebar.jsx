@@ -24,7 +24,7 @@ export default function DesktopSidebar({ collapsed, onToggle }) {
     { name: "Deposit", icon: Wallet, path: "/deposit" },
     { name: "Blog Post", icon: BookOpen, path: "/blog" },
     { name: "FAQ", icon: CircleHelp, path: "/faq" },
-    { name: "Contact Us", icon: MessageCircle, path: "/support" },
+    { name: "Contact Support", icon: MessageCircle, path: "/support" },
     { name: "Advertise with Us", icon: Megaphone, path: "/advertise" },
     { name: "About Us", icon: Info, path: "/about" },
     { name: "Settings", icon: Settings, path: "/settings" },

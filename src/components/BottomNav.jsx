@@ -32,7 +32,7 @@ export default function BottomNav() {
   const moreNavs = [
     { name: "Blog Post", icon: BookOpen, path: "/blog" },
     { name: "FAQ", icon: CircleHelp, path: "/faq" },
-    { name: "Contact Us", icon: MessageCircle, path: "/support" },
+    { name: "Contact Support", icon: MessageCircle, path: "/support" },
     { name: "Advertise with Us", icon: Megaphone, path: "/advertise" },
     { name: "About Us", icon: Info, path: "/about" },
     { name: "Settings", icon: Settings, path: "/settings" },
