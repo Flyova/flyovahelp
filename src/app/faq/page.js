@@ -5,6 +5,10 @@ const PAGE_URL = "https://flyovahelp.com/faq";
 
 const FAQ_ITEMS = [
   {
+    q: "How do I get started?",
+    a: "Create a free account, deposit funds into your wallet, and jump straight into any game. Setup takes under 2 minutes.",
+  },
+  {
     q: "How does deposit work?",
     a: "Proceed to deposit using your verified crypto wallet or a verified Flyova Agent in your region. Deposits are processed in less than 30 minutes.",
   },
@@ -19,6 +23,14 @@ const FAQ_ITEMS = [
   {
     q: "How do I transfer money to another user?",
     a: "Instantly transfer using the recipient's 8-digit account pin. No admin approval needed.",
+  },
+  {
+    q: "Is my money safe?",
+    a: "Yes. All transactions are logged and monitored. Our agent system is verified and every payout is tracked end-to-end.",
+  },
+  {
+    q: "Can I play on mobile?",
+    a: "Absolutely. Flyovahelp is built mobile-first and works perfectly on any smartphone or tablet browser.",
   },
   {
     q: "Can I stake on my own?",
