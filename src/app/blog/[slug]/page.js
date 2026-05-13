@@ -7,6 +7,8 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore";
 import { Calendar, Clock, ArrowLeft, ArrowRight, Loader2, FileText } from "lucide-react";
 
+const SITE_URL = "https://flyovahelp.com";
+
 export default function BlogPostPage() {
   const params = useParams();
   const router = useRouter();
@@ -54,9 +56,64 @@ export default function BlogPostPage() {
   const date = post.publishedAt?.toDate().toLocaleDateString("en-US", {
     month: "long", day: "numeric", year: "numeric",
   });
+  const pageUrl = `${SITE_URL}/blog/${post.slug}`;
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: `${SITE_URL}/`,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Blog",
+        item: `${SITE_URL}/blog`,
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: post.title,
+        item: pageUrl,
+      },
+    ],
+  };
+  const articleJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: post.title,
+    description: post.excerpt || "Read this Flyovahelp blog post.",
+    author: {
+      "@type": "Person",
+      name: post.author || "Flyovahelp Team",
+    },
+    publisher: {
+      "@type": "Organization",
+      name: "Flyovahelp",
+      logo: {
+        "@type": "ImageObject",
+        url: `${SITE_URL}/logo.svg`,
+      },
+    },
+    mainEntityOfPage: pageUrl,
+    url: pageUrl,
+    datePublished: post.publishedAt?.toDate?.()?.toISOString?.() || undefined,
+    image: post.coverImage || undefined,
+  };
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-white">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
+      />
       {/* Background glow */}
       <div className="fixed inset-0 pointer-events-none select-none overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-150 h-75 bg-[#613de6] rounded-full opacity-[0.08] blur-[100px]" />

@@ -702,6 +702,7 @@ export default function LandingPage() {
           <a href="#how-it-works" className="hover:text-[#fc7952] transition">How It Works</a>
           <a href="#features" className="hover:text-[#fc7952] transition">Features</a>
           <a href="#reviews" className="hover:text-[#fc7952] transition">Reviews</a>
+          <button onClick={() => router.push('/about')} className="hover:text-[#fc7952] transition">About Us</button>
           <button onClick={() => router.push('/login')} className="hover:text-[#fc7952] transition">Login</button>
         </div>
 
@@ -736,6 +737,15 @@ export default function LandingPage() {
               {href.replace("#", "").replace(/-/g, " ")}
             </a>
           ))}
+          <button
+            onClick={() => {
+              setMenuOpen(false);
+              router.push('/about');
+            }}
+            className="block w-full text-left text-sm font-black uppercase tracking-wider hover:text-[#fc7952] transition py-1"
+          >
+            About Us
+          </button>
           <button onClick={() => router.push('/register')}
             className="block w-full border border-white/30 text-white py-3 rounded-full font-black text-sm text-center">
             Register Free
@@ -1284,6 +1294,7 @@ export default function LandingPage() {
               { label: "How It Works", href: "#how-it-works" },
               { label: "Features", href: "#features" },
               { label: "Reviews", href: "#reviews" },
+              { label: "About Us", href: "/about", push: true },
               { label: "Register", href: "/register", push: true },
               { label: "Support", href: "/support", push: true },
             ].map((link) => (
