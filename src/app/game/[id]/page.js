@@ -39,6 +39,7 @@ export default function GamePage() {
   const [stakeAmount, setStakeAmount] = useState(1);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const WIN_TARGET = 15;
+  const MATCH_ADMIN_FEE_RATE = 0.25;
 
   // 1. Auth & Wallet Listener
   useEffect(() => {
@@ -219,7 +220,7 @@ export default function GamePage() {
 
   const initiateChallenge = async () => {
     const totalWager = (stakeAmount * WIN_TARGET);
-    const calculatedFee = stakeAmount / 2; 
+    const calculatedFee = stakeAmount * MATCH_ADMIN_FEE_RATE;
     const totalCost = totalWager + calculatedFee;
 
     if (myWallet < totalCost) return alert("Insufficient Balance!");
@@ -424,7 +425,7 @@ export default function GamePage() {
               </div>
               <div className="space-y-2 mb-8 px-2">
                 <div className="flex justify-between text-[10px] font-black uppercase"><span className="opacity-40">Entry Wager ({WIN_TARGET}x)</span><span>${stakeAmount * WIN_TARGET}</span></div>
-                <div className="flex justify-between text-[10px] font-black uppercase text-emerald-400"><span>Match Admin Fee</span><span>${(stakeAmount / 2).toFixed(2)}</span></div>
+                <div className="flex justify-between text-[10px] font-black uppercase text-emerald-400"><span>Match Admin Fee (25%)</span><span>${(stakeAmount * MATCH_ADMIN_FEE_RATE).toFixed(2)}</span></div>
               </div>
               <button onClick={initiateChallenge} className="w-full bg-[#fc7952] py-4 rounded-2xl font-black uppercase text-xs mb-3 shadow-lg">Send Challenge</button>
               <button onClick={() => setShowStakeModal(null)} className="w-full text-gray-500 font-black uppercase text-[10px]">Cancel</button>

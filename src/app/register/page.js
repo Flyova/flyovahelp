@@ -142,7 +142,7 @@ function RegisterForm() {
       });
 
       try {
-        await fetch("/api/send-email", {
+        const emailResponse = await fetch("/api/send-email", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -151,7 +151,13 @@ function RegisterForm() {
             html: `<p>Hello ${formData.fullName}, your code is ${otpCode}</p>`,
           }),
         });
-      } catch (e) { console.error("Email failed", e); }
+        if (!emailResponse.ok) {
+          const emailPayload = await emailResponse.json().catch(() => ({}));
+          console.error("Registration verification email failed:", emailPayload?.error || "Unknown error");
+        }
+      } catch (e) {
+        console.error("Email failed", e);
+      }
 
       // Prevent access to protected pages before verification is completed.
       try {

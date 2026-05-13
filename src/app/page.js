@@ -626,7 +626,6 @@ function DemoModal({ onClose, router }) {
 
 export default function LandingPage() {
   const router = useRouter();
-  const [activeTestimonial, setActiveTestimonial] = useState(0);
   const [testimonials, setTestimonials] = useState([]);
   const [blogPosts, setBlogPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -637,29 +636,43 @@ export default function LandingPage() {
   useEffect(() => {
     const q = query(
       collection(db, "withdrawal_testimonials"),
-      where("approved", "==", true),
       orderBy("timestamp", "desc"),
-      limit(10)
+      limit(20)
     );
-    const unsub = onSnapshot(q, (snap) => {
-      const liveData = snap.docs.map(doc => ({
-        id: doc.id,
-        name: doc.data().userName || "Anonymous Player",
-        text: doc.data().text || doc.data().message,
-        rating: doc.data().rating || 5
-      }));
-      if (liveData.length === 0) {
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const liveData = snap.docs
+          .filter((docSnap) => docSnap.data().approved === true)
+          .map((docSnap) => ({
+            id: docSnap.id,
+            name: docSnap.data().userName || "Anonymous Player",
+            text: docSnap.data().text || docSnap.data().message,
+            rating: docSnap.data().rating || 5,
+          }))
+          .slice(0, 10);
+
+        if (liveData.length === 0) {
+          setTestimonials([
+            { name: "John D.", text: "Turned my lucky $10 into $500 in one afternoon. The withdrawals are instant!", rating: 5 },
+            { name: "Sarah K.", text: "Finally a platform that is transparent and fun. Flyova is the real deal.", rating: 5 },
+            { name: "Mike A.", text: "The agent system is genius. Got paid within minutes of requesting a withdrawal.", rating: 5 },
+            { name: "Tunde B.", text: "Play with Friends is so addictive. Beat my brother 3 times in a row!", rating: 5 },
+          ]);
+        } else {
+          setTestimonials(liveData);
+        }
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Testimonials listener error:", error);
         setTestimonials([
           { name: "John D.", text: "Turned my lucky $10 into $500 in one afternoon. The withdrawals are instant!", rating: 5 },
           { name: "Sarah K.", text: "Finally a platform that is transparent and fun. Flyova is the real deal.", rating: 5 },
-          { name: "Mike A.", text: "The agent system is genius. Got paid within minutes of requesting a withdrawal.", rating: 5 },
-          { name: "Tunde B.", text: "Play with Friends is so addictive. Beat my brother 3 times in a row!", rating: 5 },
         ]);
-      } else {
-        setTestimonials(liveData);
+        setLoading(false);
       }
-      setLoading(false);
-    });
+    );
     return () => unsub();
   }, []);
 
@@ -674,14 +687,6 @@ export default function LandingPage() {
       })
       .catch(() => {});
   }, []);
-
-  useEffect(() => {
-    if (testimonials.length === 0) return;
-    const interval = setInterval(() => {
-      setActiveTestimonial((prev) => (prev + 1) % testimonials.length);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [testimonials.length]);
 
   const features = [
     {
@@ -831,34 +836,6 @@ export default function LandingPage() {
             </button>
           </div>
 
-          {/* Testimonials */}
-          <div className="mt-12 max-w-sm mx-auto md:mx-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-cyan-400 mb-4 text-center md:text-left">Player Reviews</p>
-            <div className="bg-black/20 backdrop-blur-md border border-white/5 p-6 rounded-[2rem] min-h-[140px] flex flex-col justify-center relative overflow-hidden text-left shadow-2xl">
-              {loading ? (
-                <div className="flex justify-center"><Loader2 className="animate-spin text-white/20" /></div>
-              ) : testimonials.length > 0 ? (
-                <div className="animate-in fade-in slide-in-from-right-4 duration-500" key={activeTestimonial}>
-                  <div className="flex gap-1 mb-2">
-                    {[...Array(testimonials[activeTestimonial]?.rating || 5)].map((_, i) => (
-                      <Star key={i} size={12} className="fill-yellow-400 text-yellow-400" />
-                    ))}
-                  </div>
-                  <p className="text-sm font-bold italic text-white/90 leading-relaxed mb-3">
-                    "{testimonials[activeTestimonial]?.text}"
-                  </p>
-                  <p className="text-[10px] font-black uppercase text-[#fc7952] tracking-widest">
-                    — {testimonials[activeTestimonial]?.name}
-                  </p>
-                </div>
-              ) : null}
-              <div className="absolute right-6 bottom-6 flex gap-1">
-                {testimonials.map((_, i) => (
-                  <div key={i} className={`w-1 h-1 rounded-full transition-all duration-500 ${activeTestimonial === i ? 'bg-white w-4' : 'bg-white/20'}`} />
-                ))}
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Phone Mockup */}

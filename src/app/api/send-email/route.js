@@ -16,7 +16,11 @@ export async function POST(req) {
       return NextResponse.json({ message: "Email sent successfully", data: result.data }, { status: 200 });
     } else {
       console.error("Resend internal error:", result.error);
-      return NextResponse.json({ error: result.error }, { status: 500 });
+      const errorMessage =
+        typeof result.error === "string"
+          ? result.error
+          : result.error?.message || "Email delivery failed.";
+      return NextResponse.json({ error: errorMessage }, { status: 500 });
     }
   } catch (error) {
     console.error("API Route Error:", error);

@@ -1,7 +1,19 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, History, Wallet, Settings, BookOpen, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Home,
+  History,
+  Wallet,
+  Settings,
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
+  CircleHelp,
+  MessageCircle,
+  Megaphone,
+  Info,
+} from "lucide-react";
 
 export default function DesktopSidebar({ collapsed, onToggle }) {
   const pathname = usePathname();
@@ -10,7 +22,11 @@ export default function DesktopSidebar({ collapsed, onToggle }) {
     { name: "Home", icon: Home, path: "/dashboard" },
     { name: "History", icon: History, path: "/history" },
     { name: "Deposit", icon: Wallet, path: "/deposit" },
-    { name: "Blog", icon: BookOpen, path: "/blog" },
+    { name: "Blog Post", icon: BookOpen, path: "/blog" },
+    { name: "FAQ", icon: CircleHelp, path: "/faq" },
+    { name: "Contact Us", icon: MessageCircle, path: "/support" },
+    { name: "Advertise with Us", icon: Megaphone, path: "/advertise" },
+    { name: "About Us", icon: Info, path: "/about" },
     { name: "Settings", icon: Settings, path: "/settings" },
   ];
 
@@ -22,7 +38,7 @@ export default function DesktopSidebar({ collapsed, onToggle }) {
     >
       <nav className="p-3 space-y-2 flex-1">
         {navs.map((nav) => {
-          const isActive = pathname === nav.path;
+          const isActive = nav.path === "/blog" ? pathname === "/blog" || pathname.startsWith("/blog/") : pathname === nav.path;
           const Icon = nav.icon;
           return (
             <Link

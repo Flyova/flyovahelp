@@ -115,7 +115,7 @@ function VerifyContent() {
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     await updateDoc(doc(db, "users", userDoc.id), { otp: otpCode });
 
-    await fetch("/api/send-email", {
+    const emailResponse = await fetch("/api/send-email", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -124,6 +124,10 @@ function VerifyContent() {
         html: `<p>Hello ${userData.fullName || userData.username || "Player"}, your verification code is <strong>${otpCode}</strong>.</p>`,
       }),
     });
+    const emailPayload = await emailResponse.json().catch(() => ({}));
+    if (!emailResponse.ok) {
+      throw new Error(emailPayload?.error || "Could not send verification email.");
+    }
 
     setResendCooldown(60);
     if (showNotice) setResendNotice("A new 6-digit code has been sent to your email.");

@@ -24,7 +24,7 @@ export default function ClientLayoutShell({ children }) {
     pathname.startsWith("/blog/") ||
     pathname.startsWith("/admin");
 
-  const sidebarNavPaths = ["/dashboard", "/history", "/deposit", "/settings"];
+  const sidebarNavPaths = ["/dashboard", "/history", "/deposit", "/settings", "/support", "/faq", "/about"];
   const showDesktopBack = !isAuthPage && !sidebarNavPaths.includes(pathname);
 
   return (

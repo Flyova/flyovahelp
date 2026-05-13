@@ -1,7 +1,18 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Home, History, Wallet, Settings, BookOpen, Ellipsis } from "lucide-react";
+import {
+  Home,
+  History,
+  Wallet,
+  Settings,
+  BookOpen,
+  Ellipsis,
+  CircleHelp,
+  MessageCircle,
+  Megaphone,
+  Info,
+} from "lucide-react";
 import { usePathname } from "next/navigation";
 
 export default function BottomNav() {
@@ -19,11 +30,17 @@ export default function BottomNav() {
   ];
 
   const moreNavs = [
+    { name: "Blog Post", icon: BookOpen, path: "/blog" },
+    { name: "FAQ", icon: CircleHelp, path: "/faq" },
+    { name: "Contact Us", icon: MessageCircle, path: "/support" },
+    { name: "Advertise with Us", icon: Megaphone, path: "/advertise" },
+    { name: "About Us", icon: Info, path: "/about" },
     { name: "Settings", icon: Settings, path: "/settings" },
-    { name: "Blog", icon: BookOpen, path: "/blog" },
   ];
 
-  const isMoreActive = pathname === "/settings" || pathname === "/blog" || pathname.startsWith("/blog/");
+  const isMoreActive = moreNavs.some((nav) =>
+    nav.path === "/blog" ? pathname === "/blog" || pathname.startsWith("/blog/") : pathname === nav.path
+  );
 
   return (
     <>
@@ -37,10 +54,10 @@ export default function BottomNav() {
       )}
 
       {showMore && (
-        <div className="fixed bottom-20 right-3 z-[110] w-44 rounded-2xl border border-white/10 bg-[#111827]/95 backdrop-blur-md p-2 shadow-2xl md:hidden">
+        <div className="fixed bottom-20 right-3 z-[110] w-56 rounded-2xl border border-white/10 bg-[#111827]/95 backdrop-blur-md p-2 shadow-2xl md:hidden">
           {moreNavs.map((nav) => {
             const Icon = nav.icon;
-            const isActive = pathname === nav.path || (nav.path === "/blog" && pathname.startsWith("/blog/"));
+            const isActive = nav.path === "/blog" ? pathname === "/blog" || pathname.startsWith("/blog/") : pathname === nav.path;
             return (
               <Link
                 key={nav.name}
