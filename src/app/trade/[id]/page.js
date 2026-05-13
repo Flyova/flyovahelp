@@ -202,38 +202,62 @@ export default function TradeRoom() {
         
         if (userSnap.exists()) {
           const userData = userSnap.data();
-          
-          if (userData.referredBy) {
-            // FIX: Query to find the Referrer's actual Document ID using their username
-            const referrerQuery = query(
-              collection(db, "users"), 
-              where("username", "==", userData.referredBy), 
+
+          const rewardAmount = amount * 0.025;
+          const applyReferralReward = (referrerDocId) => {
+            const referrerRef = doc(db, "users", referrerDocId);
+            batch.update(referrerRef, { referralBonus: increment(rewardAmount) });
+
+            const rewardLogRef = doc(collection(db, "users", referrerDocId, "transactions"));
+            batch.set(rewardLogRef, {
+              amount: rewardAmount,
+              type: "referral_reward",
+              status: "completed",
+              description: `2.5% commission from @${userData.username}'s deposit`,
+              createdAt: serverTimestamp(),
+              fromUser: userData.username,
+              tradeId: id
+            });
+          };
+
+          let referrerDocId = null;
+
+          // Primary mapping (current schema): referrer UID
+          if (userData.referrerUid && userData.referrerUid !== trade.senderId) {
+            const referrerByUidSnap = await getDoc(doc(db, "users", userData.referrerUid));
+            if (referrerByUidSnap.exists()) {
+              referrerDocId = referrerByUidSnap.id;
+            }
+          }
+
+          // Legacy fallback mapping by username/fullName label
+          if (!referrerDocId && userData.referredBy) {
+            const referrerByUsernameQ = query(
+              collection(db, "users"),
+              where("username", "==", userData.referredBy),
               limit(1)
             );
-            const referrerSnap = await getDocs(referrerQuery);
-
-            if (!referrerSnap.empty) {
-              const referrerDoc = referrerSnap.docs[0];
-              const referrerRef = referrerDoc.ref;
-              const rewardAmount = amount * 0.025; 
-
-              // Update Referrer's bonus balance
-              batch.update(referrerRef, { referralBonus: increment(rewardAmount) });
-              
-              // Create the transaction log inside the Referrer's sub-collection
-              const rewardLogRef = doc(collection(db, "users", referrerDoc.id, "transactions"));
-              batch.set(rewardLogRef, {
-                amount: rewardAmount,
-                type: "referral_reward",
-                status: "completed",
-                description: `2.5% commission from @${userData.username}'s deposit`,
-                createdAt: serverTimestamp(),
-                fromUser: userData.username,
-                tradeId: id 
-              });
+            const referrerByUsernameSnap = await getDocs(referrerByUsernameQ);
+            if (!referrerByUsernameSnap.empty) {
+              referrerDocId = referrerByUsernameSnap.docs[0].id;
             } else {
-              console.warn("Referrer username not found in database:", userData.referredBy);
+              const referrerByNameQ = query(
+                collection(db, "users"),
+                where("fullName", "==", userData.referredBy),
+                limit(1)
+              );
+              const referrerByNameSnap = await getDocs(referrerByNameQ);
+              if (!referrerByNameSnap.empty) referrerDocId = referrerByNameSnap.docs[0].id;
             }
+          }
+
+          if (referrerDocId) {
+            applyReferralReward(referrerDocId);
+          } else if (userData.referrerUid || userData.referredBy) {
+            console.warn("Referrer not resolved for deposit commission:", {
+              referrerUid: userData.referrerUid,
+              referredBy: userData.referredBy
+            });
           }
         }
       } else {

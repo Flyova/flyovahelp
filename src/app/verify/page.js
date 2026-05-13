@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, updateDoc, doc } from "firebase/firestore";
+import { collection, query, where, getDocs, updateDoc, doc, limit } from "firebase/firestore";
 import { ShieldCheck, ArrowRight, Loader2, CheckCircle2, AlertCircle, Mail, RotateCcw } from "lucide-react";
 
 function OtpInput({ value, onChange }) {
@@ -71,24 +71,111 @@ function VerifyContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendNotice, setResendNotice] = useState("");
 
   useEffect(() => {
     if (!email) router.push("/register");
   }, [email, router]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
+
+  const getUserDocByEmail = async () => {
+    if (!email) return null;
+    const q = query(collection(db, "users"), where("email", "==", email), limit(1));
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+    return snap.docs[0];
+  };
+
+  const issueAndSendOtp = async ({ showNotice = true } = {}) => {
+    if (!email) return;
+    setError("");
+    if (showNotice) setResendNotice("");
+
+    const userDoc = await getUserDocByEmail();
+    if (!userDoc) {
+      setError("User record not found.");
+      return;
+    }
+
+    const userData = userDoc.data();
+    if (userData.verified === true) {
+      if (showNotice) setResendNotice("This account is already verified. You can login.");
+      return;
+    }
+
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    await updateDoc(doc(db, "users", userDoc.id), { otp: otpCode });
+
+    await fetch("/api/send-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to: email,
+        subject: "Flyova Verification Code",
+        html: `<p>Hello ${userData.fullName || userData.username || "Player"}, your verification code is <strong>${otpCode}</strong>.</p>`,
+      }),
+    });
+
+    setResendCooldown(60);
+    if (showNotice) setResendNotice("A new 6-digit code has been sent to your email.");
+  };
+
+  useEffect(() => {
+    if (!email) return;
+    let active = true;
+
+    const autoSendIfMissingOtp = async () => {
+      try {
+        const userDoc = await getUserDocByEmail();
+        if (!active || !userDoc) return;
+        const userData = userDoc.data();
+        if (userData.verified === true) return;
+        if (!userData.otp) {
+          await issueAndSendOtp({ showNotice: false });
+        }
+      } catch (e) {
+        console.error("Auto OTP send failed:", e);
+      }
+    };
+
+    autoSendIfMissingOtp();
+    return () => {
+      active = false;
+    };
+  }, [email]);
+
+  const handleResendCode = async () => {
+    if (resendCooldown > 0 || resending) return;
+    setResending(true);
+    try {
+      await issueAndSendOtp({ showNotice: true });
+    } catch (e) {
+      console.error("Resend failed:", e);
+      setError("Could not resend code. Please try again.");
+    } finally {
+      setResending(false);
+    }
+  };
 
   const handleVerify = async (e) => {
     e.preventDefault();
     if (otp.replace(/\D/g, "").length < 6) return setError("Please enter the full 6-digit code.");
     setLoading(true);
     setError("");
+    setResendNotice("");
 
     try {
-      const q = query(collection(db, "users"), where("email", "==", email));
-      const snap = await getDocs(q);
-
-      if (snap.empty) { setError("User record not found."); setLoading(false); return; }
-
-      const userDoc = snap.docs[0];
+      const userDoc = await getUserDocByEmail();
+      if (!userDoc) { setError("User record not found."); setLoading(false); return; }
       if (userDoc.data().otp === otp) {
         await updateDoc(doc(db, "users", userDoc.id), { verified: true, otp: null });
         setSuccess(true);
@@ -166,6 +253,23 @@ function VerifyContent() {
                 <p className="text-[10px] font-bold text-gray-400 uppercase leading-relaxed">
                   Check your <span className="text-white">inbox or spam</span>. The code is required to activate your account.
                 </p>
+              </div>
+
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={handleResendCode}
+                  disabled={resending || resendCooldown > 0}
+                  className="w-full flex items-center justify-center gap-2 bg-[#0f172a] border border-white/10 hover:border-[#613de6]/50 text-white py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-40"
+                >
+                  {resending ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+                  {resendCooldown > 0 ? `Re-send in ${resendCooldown}s` : "Re-send Code"}
+                </button>
+                {resendNotice && (
+                  <p className="text-center text-[10px] font-black uppercase tracking-wider text-emerald-400">
+                    {resendNotice}
+                  </p>
+                )}
               </div>
             </div>
 

@@ -784,6 +784,12 @@ export default function LandingPage() {
             >
               See Demo
             </button>
+            <button
+              onClick={() => router.push('/about')}
+              className="inline-flex items-center justify-center px-10 py-5 font-black text-white border border-cyan-300/50 rounded-full hover:bg-cyan-300/10 transition-all active:scale-95"
+            >
+              About Us
+            </button>
           </div>
 
           {/* Testimonials */}
@@ -894,6 +900,25 @@ export default function LandingPage() {
             <StatCard value={3} suffix="" label="Live Games" color="text-emerald-400" />
             <StatCard value={50000} suffix="+" label="Payouts Processed" color="text-white" />
           </div>
+        </div>
+      </section>
+
+      {/* ── ABOUT PREVIEW ────────────────────────────── */}
+      <section className="bg-[#0a0f1e] py-16 px-6 border-b border-white/5">
+        <div className="max-w-4xl mx-auto text-center">
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-cyan-400 mb-3">About Flyovahelp</p>
+          <h2 className="text-3xl md:text-5xl font-black italic uppercase tracking-tighter text-white leading-tight">
+            Learn Who We Are
+          </h2>
+          <p className="mt-4 text-sm text-white/65 font-bold max-w-2xl mx-auto leading-relaxed">
+            Flyovahelp is built for fast, transparent gameplay with reliable payouts. Read our full story, mission, and values on the About page.
+          </p>
+          <button
+            onClick={() => router.push("/about")}
+            className="mt-8 inline-flex items-center gap-2 bg-[#613de6] hover:bg-[#7251ed] text-white px-8 py-4 rounded-full font-black text-xs uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-[#613de6]/20"
+          >
+            Visit About Us <ArrowRight size={14} />
+          </button>
         </div>
       </section>
 
