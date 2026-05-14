@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { db, auth } from "@/lib/firebase";
 import { 
@@ -133,6 +133,69 @@ export default function GamePage() {
     return () => clearInterval(interval);
   }, [outgoingChallenge]);
 
+  const handleForfeit = useCallback(async ({ gameId, expectedRound, expectedTurn }) => {
+    if (!gameId || !expectedTurn) return;
+
+    const gameRef = doc(db, "games", gameId);
+    const timeoutRound = Number(expectedRound || 0);
+    const timeoutTurn = String(expectedTurn || "");
+    if (!timeoutTurn) return;
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const liveSnap = await transaction.get(gameRef);
+        if (!liveSnap.exists()) return false;
+
+        const liveGame = liveSnap.data();
+        if (liveGame?.status !== "active") return false;
+
+        const liveRound = Number(liveGame?.round || 0);
+        const liveTurn = liveGame?.turn;
+
+        // Another client already advanced the round/turn.
+        if (liveRound !== timeoutRound || liveTurn !== timeoutTurn) return false;
+
+        const loserId = liveTurn;
+        if (!loserId || (loserId !== liveGame.player1 && loserId !== liveGame.player2)) return false;
+
+        const loserIsP1 = loserId === liveGame.player1;
+        const winnerScoreKey = loserIsP1 ? "scores.p2" : "scores.p1";
+        const loserPoolKey = loserIsP1 ? "wagerPool.p1" : "wagerPool.p2";
+        const winnerPoolKey = loserIsP1 ? "wagerPool.p2" : "wagerPool.p1";
+
+        const currentP1 = Number(liveGame?.scores?.p1 || 0);
+        const currentP2 = Number(liveGame?.scores?.p2 || 0);
+        const nextP1 = currentP1 + (loserIsP1 ? 0 : 1);
+        const nextP2 = currentP2 + (loserIsP1 ? 1 : 0);
+        const isGameOver = nextP1 >= WIN_TARGET || nextP2 >= WIN_TARGET;
+
+        const nextPicker =
+          liveGame.picker === liveGame.player1 ? liveGame.player2 : liveGame.player1;
+
+        const winAmount = Number(liveGame?.stakePerRound || 0);
+        const updatePayload = {
+          [winnerScoreKey]: increment(1),
+          round: increment(1),
+          turn: nextPicker,
+          picker: nextPicker,
+          gameState: "picking",
+          numberPool: [Math.floor(Math.random() * 100), Math.floor(Math.random() * 100)],
+          status: isGameOver ? "completed" : "active",
+        };
+
+        if (winAmount > 0) {
+          updatePayload[loserPoolKey] = increment(-winAmount);
+          updatePayload[winnerPoolKey] = increment(winAmount);
+        }
+
+        transaction.update(gameRef, updatePayload);
+        return true;
+      });
+    } catch (e) {
+      console.error("Forfeit error:", e);
+    }
+  }, [WIN_TARGET]);
+
   // 4. Game Timer Logic
   useEffect(() => {
     if (!activeGame || activeGame.status !== "active") return;
@@ -140,7 +203,11 @@ export default function GamePage() {
     const interval = setInterval(() => {
       setGameTimer((prev) => {
         if (prev <= 1) {
-          handleForfeit(); 
+          handleForfeit({
+            gameId: activeGame?.id,
+            expectedRound: activeGame?.round,
+            expectedTurn: activeGame?.turn,
+          });
           return 60;
         }
         return prev - 1;
@@ -148,39 +215,7 @@ export default function GamePage() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [activeGame?.turn, activeGame?.id, activeGame?.status]);
-
-  const handleForfeit = async () => {
-    if (!activeGame || activeGame.turn !== user.uid) return;
-    
-    const isP1 = user.uid === activeGame.player1;
-    const winAmount = activeGame.stakePerRound;
-    
-    const scoreKey = isP1 ? "scores.p2" : "scores.p1"; 
-    const loserPoolKey = isP1 ? "wagerPool.p1" : "wagerPool.p2";
-    const winnerPoolKey = isP1 ? "wagerPool.p2" : "wagerPool.p1";
-
-    try {
-        const nextPicker = activeGame.picker === activeGame.player1 ? activeGame.player2 : activeGame.player1;
-        const currentP1 = Number(activeGame?.scores?.p1 || 0);
-        const currentP2 = Number(activeGame?.scores?.p2 || 0);
-        const nextP1 = currentP1 + (!isP1 ? 1 : 0);
-        const nextP2 = currentP2 + (isP1 ? 1 : 0);
-        const isGameOver = nextP1 >= WIN_TARGET || nextP2 >= WIN_TARGET;
-
-        await updateDoc(doc(db, "games", activeGame.id), { 
-            [loserPoolKey]: increment(-winAmount),
-            [winnerPoolKey]: increment(winAmount),
-            [scoreKey]: increment(1),
-            round: increment(1),
-            turn: nextPicker,
-            picker: nextPicker,
-            gameState: "picking",
-            numberPool: [Math.floor(Math.random() * 100), Math.floor(Math.random() * 100)],
-            status: isGameOver ? "completed" : "active"
-        });
-    } catch (e) { console.error("Forfeit error:", e); }
-  };
+  }, [activeGame?.turn, activeGame?.round, activeGame?.id, activeGame?.status, handleForfeit]);
 
   const handleManualRefresh = async () => {
     if (!user || isRefreshing) return;
