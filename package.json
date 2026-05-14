@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "users:verify-all": "node scripts/verify-all-users.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.97.0",

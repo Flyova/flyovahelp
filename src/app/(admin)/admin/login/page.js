@@ -23,8 +23,36 @@ export default function AdminLoginPage() {
     setError("");
 
     try {
-      // 1. Authenticate with Firebase Auth
-      const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
+      const normalizedEmail = String(formData.email || "").trim().toLowerCase();
+      const normalizedPassword = String(formData.password || "").trim();
+
+      const signInWithBootstrapFallback = async () => {
+        try {
+          return await signInWithEmailAndPassword(auth, normalizedEmail, normalizedPassword);
+        } catch (initialError) {
+          const privilegedRole = resolvePrivilegedRole(null, normalizedEmail);
+          if (!privilegedRole) throw initialError;
+
+          const bootstrapRes = await fetch("/api/admin/bootstrap-auth", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: normalizedEmail,
+              password: normalizedPassword,
+            }),
+          });
+
+          if (!bootstrapRes.ok) {
+            const payload = await bootstrapRes.json().catch(() => ({}));
+            throw new Error(payload?.error || "Could not provision privileged account.");
+          }
+
+          return await signInWithEmailAndPassword(auth, normalizedEmail, normalizedPassword);
+        }
+      };
+
+      // 1. Authenticate with Firebase Auth (auto-bootstrap for staff/support if needed)
+      const userCredential = await signInWithBootstrapFallback();
       const uid = userCredential.user.uid;
 
       // 2. Fetch User Document to check Role
@@ -74,7 +102,7 @@ export default function AdminLoginPage() {
       }
 
     } catch (err) {
-      setError("Invalid administrative credentials.");
+      setError(err?.message || "Invalid administrative credentials.");
       setLoading(false);
     }
   };
