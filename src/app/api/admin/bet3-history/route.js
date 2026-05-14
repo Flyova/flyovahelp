@@ -3,6 +3,7 @@ import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const ADMIN_ROLES = new Set(["admin", "staff"]);
 
@@ -33,14 +34,15 @@ const getAuthorizedRequester = async (request) => {
   const token = parseBearerToken(request.headers.get("authorization"));
   if (!token) return { error: "Missing authorization token.", status: 401 };
 
+  const adminDb = getAdminDb();
   let decoded;
   try {
     decoded = await admin.auth().verifyIdToken(token);
-  } catch {
+  } catch (error) {
+    console.error("Bet3 history token verification failed:", error);
     return { error: "Invalid or expired authorization token.", status: 401 };
   }
 
-  const adminDb = getAdminDb();
   const userSnap = await adminDb.collection("users").doc(decoded.uid).get();
   const userData = userSnap.exists ? userSnap.data() : {};
   const role = resolvePrivilegedRole(userData?.role, decoded.email);

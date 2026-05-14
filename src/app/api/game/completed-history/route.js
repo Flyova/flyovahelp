@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const parseBearerToken = (headerValue) => {
   const raw = String(headerValue || "").trim();
@@ -16,10 +17,12 @@ export async function POST(request) {
       return NextResponse.json({ error: "Missing authorization token." }, { status: 401 });
     }
 
+    const adminDb = getAdminDb();
     let decoded;
     try {
       decoded = await admin.auth().verifyIdToken(token);
-    } catch {
+    } catch (error) {
+      console.error("Completed game token verification failed:", error);
       return NextResponse.json({ error: "Invalid or expired authorization token." }, { status: 401 });
     }
 
@@ -29,7 +32,6 @@ export async function POST(request) {
       return NextResponse.json({ error: "Game ID is required." }, { status: 400 });
     }
 
-    const adminDb = getAdminDb();
     const gameRef = adminDb.collection("games").doc(gameId);
     const gameSnap = await gameRef.get();
     if (!gameSnap.exists) {

@@ -1,179 +1,72 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { db } from "@/lib/firebase";
-import { collectionGroup, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query } from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import { Loader2, Search } from "lucide-react";
 
-const formatTime = (ts) => {
-  if (!ts?.toDate) return "N/A";
-  return ts.toDate().toLocaleString();
-};
-
-const parsePlanName = (title = "") => {
-  if (!title.startsWith("Predict Stake:")) return "";
-  return title.replace("Predict Stake:", "").trim() || "Unknown Plan";
+const formatTime = (value) => {
+  if (!value) return "N/A";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "N/A" : date.toLocaleString();
 };
 
 export default function PredictAndWinHistory() {
   const [rows, setRows] = useState([]);
-  const [userCache, setUserCache] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const userCacheRef = useRef({});
-
-  useEffect(() => {
-    userCacheRef.current = userCache;
-  }, [userCache]);
 
   useEffect(() => {
     let active = true;
 
-    const hydrateFromDocs = async (docs, { fallbackMode = false } = {}) => {
-      const raw = docs.map((d) => {
-        const data = d.data();
-        const pathSegments = d.ref.path.split("/");
-        const userIdFromPath = pathSegments[1];
-        return { id: d.id, userId: userIdFromPath, ...data };
-      });
+    const fetchRows = async (user) => {
+      if (!user) return;
+      setLoading(true);
+      setLoadError("");
 
-      const cache = userCacheRef.current || {};
-      const uniqueUserIds = [...new Set(raw.map((r) => r.userId))].filter((uid) => uid && !cache[uid]);
-      if (uniqueUserIds.length > 0) {
-        const lookups = await Promise.all(
-          uniqueUserIds.map(async (uid) => {
-            const snapUser = await getDoc(doc(db, "users", uid));
-            if (!snapUser.exists()) {
-              return {
-                uid,
-                profile: { name: "Unknown User", email: "", pin: "--------", country: "" },
-              };
-            }
-            const d = snapUser.data();
-            return {
-              uid,
-              profile: {
-                name: d.fullName || d.username || "User",
-                email: d.email || "",
-                pin: d.pin || "--------",
-                country: d.country || "",
-              },
-            };
-          })
-        );
+      try {
+        const requestHistory = async (forceRefresh = false) => {
+          const token = await user.getIdToken(forceRefresh);
+          return fetch("/api/admin/bet2-history", {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+          });
+        };
 
-        const next = {};
-        lookups.forEach((u) => {
-          next[u.uid] = u.profile;
-        });
-        if (active && Object.keys(next).length > 0) {
-          setUserCache((prev) => ({ ...prev, ...next }));
+        let response = await requestHistory(true);
+        if (response.status === 401) {
+          response = await requestHistory(true);
         }
-      }
 
-      const eventsByUser = new Map();
-
-      for (const tx of raw) {
-        const ts = tx.timestamp;
-        const tsMs = ts?.toMillis ? ts.toMillis() : 0;
-        if (!tx.userId || tsMs <= 0) continue;
-
-        const title = tx.title || "";
-        const planName = parsePlanName(title);
-        const isPlanStake = Boolean(planName);
-        const isPredictRound = title === "Predict and Win" || title === "Predict Win" || tx.type === "prediction";
-        const isPredictWin = title === "Predict Win";
-
-        if (!isPlanStake && !isPredictRound && !isPredictWin) continue;
-
-        const list = eventsByUser.get(tx.userId) || [];
-        list.push({
-          type: isPlanStake ? "stake" : isPredictWin ? "win" : "round",
-          planName,
-          amount: Number(tx.amount || 0),
-          timestamp: ts,
-          tsMs,
-        });
-        eventsByUser.set(tx.userId, list);
-      }
-
-      const sessionRows = [];
-
-      for (const [uid, events] of eventsByUser.entries()) {
-        const sorted = [...events].sort((a, b) => a.tsMs - b.tsMs);
-        let currentSession = null;
-
-        for (const ev of sorted) {
-          if (ev.type === "stake") {
-            currentSession = {
-              id: `${uid}_${ev.tsMs}`,
-              userId: uid,
-              plan: ev.planName,
-              roundsPlayed: 0,
-              amountEarned: 0,
-              time: ev.timestamp,
-            };
-            sessionRows.push(currentSession);
-            continue;
-          }
-
-          if (!currentSession) continue;
-
-          if (ev.type === "round" || ev.type === "win") {
-            currentSession.roundsPlayed += 1;
-          }
-          if (ev.type === "win") {
-            currentSession.amountEarned += Number(ev.amount || 0);
-          }
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.error || "Could not load Predict & Win history.");
         }
-      }
 
-      sessionRows.sort((a, b) => (b.time?.toMillis?.() || 0) - (a.time?.toMillis?.() || 0));
-      if (!active) return;
-      setRows(sessionRows);
-      setLoading(false);
-      setLoadError(
-        fallbackMode
-          ? "Loaded with fallback mode. Create Firestore index for faster Bet 2 updates."
-          : ""
-      );
+        if (!active) return;
+        setRows(Array.isArray(payload.rows) ? payload.rows : []);
+      } catch (error) {
+        console.error("Bet 2 history API error:", error);
+        if (!active) return;
+        setRows([]);
+        setLoadError(error?.message || "Could not load Predict & Win history.");
+      } finally {
+        if (active) setLoading(false);
+      }
     };
 
-    const primaryQuery = query(
-      collectionGroup(db, "transactions"),
-      orderBy("timestamp", "desc"),
-      limit(2500)
-    );
-
-    const unsub = onSnapshot(
-      primaryQuery,
-      async (snap) => {
-        await hydrateFromDocs(snap.docs, { fallbackMode: false });
-      },
-      async (error) => {
-        console.error("Bet 2 listener error:", error);
-        if (!active) return;
-
-        // Fallback for collectionGroup index/precondition issues.
-        if (error?.code === "failed-precondition") {
-          try {
-            const fallbackQuery = query(collectionGroup(db, "transactions"), limit(5000));
-            const fallbackSnap = await getDocs(fallbackQuery);
-            await hydrateFromDocs(fallbackSnap.docs, { fallbackMode: true });
-            return;
-          } catch (fallbackError) {
-            console.error("Bet 2 fallback failed:", fallbackError);
-          }
-        }
-
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        setRows([]);
         setLoading(false);
-        setLoadError(error?.message || "Could not load Predict & Win history.");
+        return;
       }
-    );
+      fetchRows(user);
+    });
 
     return () => {
       active = false;
-      unsub();
+      unsubAuth();
     };
   }, []);
 
@@ -181,17 +74,17 @@ export default function PredictAndWinHistory() {
 
   const filtered = useMemo(() => {
     if (!search) return rows;
-    return rows.filter((r) => {
-      const profile = userCache[r.userId] || {};
+    return rows.filter((row) => {
+      const profile = row.player || {};
       return (
         profile.name?.toLowerCase().includes(search) ||
         profile.email?.toLowerCase().includes(search) ||
         profile.pin?.toLowerCase().includes(search) ||
         profile.country?.toLowerCase().includes(search) ||
-        r.plan?.toLowerCase().includes(search)
+        row.plan?.toLowerCase().includes(search)
       );
     });
-  }, [rows, userCache, search]);
+  }, [rows, search]);
 
   return (
     <div className="space-y-6">
@@ -203,7 +96,7 @@ export default function PredictAndWinHistory() {
       </div>
 
       {loadError && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-xl text-xs font-bold">
+        <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl text-xs font-bold">
           {loadError}
         </div>
       )}
@@ -245,7 +138,7 @@ export default function PredictAndWinHistory() {
               </tr>
             ) : (
               filtered.map((row) => {
-                const profile = userCache[row.userId] || {};
+                const profile = row.player || {};
                 return (
                   <tr key={row.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-6">

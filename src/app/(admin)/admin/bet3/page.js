@@ -46,10 +46,19 @@ export default function PlayWithFriendsHistory() {
       setError("");
 
       try {
-        const token = await user.getIdToken();
-        const response = await fetch("/api/admin/bet3-history", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const requestHistory = async (forceRefresh = false) => {
+          const token = await user.getIdToken(forceRefresh);
+          return fetch("/api/admin/bet3-history", {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+          });
+        };
+
+        let response = await requestHistory(true);
+        if (response.status === 401) {
+          response = await requestHistory(true);
+        }
+
         const payload = await response.json().catch(() => ({}));
 
         if (!response.ok) {

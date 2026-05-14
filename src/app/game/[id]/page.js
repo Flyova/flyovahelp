@@ -53,7 +53,7 @@ export default function GamePage() {
     if (!game?.id || !game?.player1 || !game?.player2) return false;
 
     try {
-      const token = await auth.currentUser?.getIdToken();
+      const token = await auth.currentUser?.getIdToken(true);
       if (!token) return false;
 
       const response = await fetch("/api/game/completed-history", {
