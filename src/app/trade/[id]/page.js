@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { db, auth } from "@/lib/firebase";
 import { 
   doc, onSnapshot, updateDoc, increment, 
-  collection, addDoc, serverTimestamp, query, orderBy, writeBatch, getDoc, where, getDocs, limit 
+  collection, addDoc, serverTimestamp, query, orderBy, writeBatch, getDoc, where, getDocs, limit, runTransaction
 } from "firebase/firestore";
 import { 
   Send, ShieldCheck, Landmark, AlertCircle, 
@@ -24,10 +24,77 @@ export default function TradeRoom() {
   const [timeLeft, setTimeLeft] = useState(null);
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
+  const expiryTimerRef = useRef(null);
+  const autoExpireBusyRef = useRef(false);
 
   const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dq9o866sc/image/upload";
   const UPLOAD_PRESET = "p_trade_proof"; 
   const API_KEY = "823961819667685";
+
+  const expirePendingTrade = async () => {
+    if (!id || autoExpireBusyRef.current) return;
+    autoExpireBusyRef.current = true;
+
+    let refundedUserId = null;
+    let shouldSyncUserTx = false;
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const tradeRef = doc(db, "trades", id);
+        const liveTradeSnap = await transaction.get(tradeRef);
+        if (!liveTradeSnap.exists()) return;
+
+        const liveTrade = liveTradeSnap.data();
+        const createdAtMs = liveTrade?.createdAt?.toDate
+          ? liveTrade.createdAt.toDate().getTime()
+          : Number(liveTrade?.createdAt || 0);
+        const isExpired = createdAtMs > 0 && (Date.now() - createdAtMs) >= (15 * 60 * 1000);
+
+        if (liveTrade?.status !== "pending" || !isExpired) return;
+
+        const tradeUpdate = {
+          status: "cancelled",
+          reason: "Expired",
+          declineReason: "Trade Timed Out",
+          cancelledAt: serverTimestamp(),
+        };
+
+        if (liveTrade?.type === "withdrawal") {
+          const refundAmount = Number(liveTrade?.amount || 0);
+          if (refundAmount > 0 && liveTrade?.senderId) {
+            const userRef = doc(db, "users", liveTrade.senderId);
+            transaction.update(userRef, { wallet: increment(refundAmount) });
+            tradeUpdate.refundedAt = serverTimestamp();
+            tradeUpdate.autoRefunded = true;
+            tradeUpdate.refundAmount = refundAmount;
+            refundedUserId = liveTrade.senderId;
+            shouldSyncUserTx = true;
+          }
+        }
+
+        transaction.update(tradeRef, tradeUpdate);
+      });
+
+      if (shouldSyncUserTx && refundedUserId) {
+        const txQ = query(
+          collection(db, "users", refundedUserId, "transactions"),
+          where("tradeId", "==", id),
+          limit(1)
+        );
+        const txSnap = await getDocs(txQ);
+        if (!txSnap.empty) {
+          await updateDoc(txSnap.docs[0].ref, {
+            status: "cancelled",
+            description: "Trade Expired - Trade Amount Refunded Automatically",
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Auto-expire refund failed:", err);
+    } finally {
+      autoExpireBusyRef.current = false;
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -52,20 +119,33 @@ export default function TradeRoom() {
                 setAgentBank(agentSnap.data());
             }
         }
-        
-        if (data.status === 'pending' && data.createdAt) {
+
+        if (expiryTimerRef.current) {
+          clearInterval(expiryTimerRef.current);
+          expiryTimerRef.current = null;
+        }
+        setTimeLeft(null);
+
+        if (data.status === "pending" && data.createdAt?.toDate) {
           const startTime = data.createdAt.toDate().getTime();
-          const expiryTime = startTime + (15 * 60 * 1000); 
-          const timer = setInterval(() => {
-            const now = new Date().getTime();
+          const expiryTime = startTime + (15 * 60 * 1000);
+
+          const tick = () => {
+            const now = Date.now();
             const diff = Math.max(0, Math.floor((expiryTime - now) / 1000));
             setTimeLeft(diff);
+
             if (diff <= 0) {
-              clearInterval(timer);
-              updateDoc(doc(db, "trades", id), { status: "cancelled", reason: "Expired" });
+              if (expiryTimerRef.current) {
+                clearInterval(expiryTimerRef.current);
+                expiryTimerRef.current = null;
+              }
+              expirePendingTrade();
             }
-          }, 1000);
-          return () => clearInterval(timer);
+          };
+
+          tick();
+          expiryTimerRef.current = setInterval(tick, 1000);
         }
       }
     });
@@ -76,7 +156,14 @@ export default function TradeRoom() {
       setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     });
 
-    return () => { unsubTrade(); unsubChat(); };
+    return () => {
+      if (expiryTimerRef.current) {
+        clearInterval(expiryTimerRef.current);
+        expiryTimerRef.current = null;
+      }
+      unsubTrade();
+      unsubChat();
+    };
   }, [id, agentBank]);
 
   const sendMessage = async (imageUrl = null) => {

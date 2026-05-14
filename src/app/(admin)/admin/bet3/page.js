@@ -1,36 +1,165 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { collection, doc, getDoc, onSnapshot, orderBy, query, where } from "firebase/firestore";
 import { Loader2, Search } from "lucide-react";
 
-function formatDate(item) {
-  if (item.finishedAt?.toDate) return item.finishedAt.toDate().toLocaleString();
-  if (item.createdAt) {
-    const d = new Date(item.createdAt);
-    if (!Number.isNaN(d.getTime())) return d.toLocaleString();
+const EMPTY_PROFILE = { fullName: "", username: "", email: "" };
+
+function toMillis(value) {
+  if (!value) return 0;
+  if (typeof value?.toMillis === "function") return value.toMillis();
+  if (typeof value?.toDate === "function") return value.toDate().getTime();
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const d = new Date(value);
+    if (!Number.isNaN(d.getTime())) return d.getTime();
   }
-  return "N/A";
+  return 0;
+}
+
+function getRowTimestamp(item) {
+  return Math.max(
+    toMillis(item?.finishedAt),
+    toMillis(item?.completedAt),
+    toMillis(item?.updatedAt),
+    toMillis(item?.createdAt)
+  );
+}
+
+function formatDate(item) {
+  const ts = getRowTimestamp(item);
+  if (!ts) return "N/A";
+  return new Date(ts).toLocaleString();
 }
 
 export default function PlayWithFriendsHistory() {
-  const [matches, setMatches] = useState([]);
+  const [persistedMatches, setPersistedMatches] = useState([]);
+  const [liveCompletedMatches, setLiveCompletedMatches] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
+  const profileCacheRef = useRef({});
 
   useEffect(() => {
-    const q = query(collection(db, "completed_games"), orderBy("finishedAt", "desc"));
-    const unsub = onSnapshot(
-      q,
+    let active = true;
+    let persistedLoaded = false;
+    let liveLoaded = false;
+
+    const markLoaded = () => {
+      if (persistedLoaded && liveLoaded && active) setLoading(false);
+    };
+
+    const getProfile = async (uid) => {
+      if (!uid) return EMPTY_PROFILE;
+      if (profileCacheRef.current[uid]) return profileCacheRef.current[uid];
+
+      try {
+        const snap = await getDoc(doc(db, "users", uid));
+        const profile = snap.exists() ? snap.data() : EMPTY_PROFILE;
+        profileCacheRef.current[uid] = profile;
+        return profile;
+      } catch (e) {
+        console.error("Bet3 profile lookup failed:", e);
+        profileCacheRef.current[uid] = EMPTY_PROFILE;
+        return EMPTY_PROFILE;
+      }
+    };
+
+    const persistedQ = query(collection(db, "completed_games"), orderBy("finishedAt", "desc"));
+    const liveQ = query(collection(db, "games"), where("status", "==", "completed"));
+
+    const unsubPersisted = onSnapshot(
+      persistedQ,
       (snap) => {
-        setMatches(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-        setLoading(false);
+        if (!active) return;
+        setPersistedMatches(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        persistedLoaded = true;
+        markLoaded();
       },
-      () => setLoading(false)
+      (err) => {
+        console.error("Bet3 completed_games listener error:", err);
+        if (!active) return;
+        setPersistedMatches([]);
+        persistedLoaded = true;
+        markLoaded();
+      }
     );
 
-    return () => unsub();
+    const unsubLive = onSnapshot(
+      liveQ,
+      async (snap) => {
+        try {
+          const hydrated = await Promise.all(
+            snap.docs.map(async (d) => {
+              const row = d.data();
+              const [p1, p2] = await Promise.all([getProfile(row.player1), getProfile(row.player2)]);
+
+              return {
+                id: d.id,
+                gameId: d.id,
+                amount: Number(row?.stakePerRound || 0),
+                player1Id: row?.player1 || "",
+                player1Name: p1?.fullName || p1?.username || "Player 1",
+                player1Email: p1?.email || "",
+                player2Id: row?.player2 || "",
+                player2Name: p2?.fullName || p2?.username || "Player 2",
+                player2Email: p2?.email || "",
+                p1RoundsPlayed: Number(row?.scores?.p1 || 0),
+                p2RoundsPlayed: Number(row?.scores?.p2 || 0),
+                totalRounds: Number(
+                  row?.round || (Number(row?.scores?.p1 || 0) + Number(row?.scores?.p2 || 0))
+                ),
+                createdAt: row?.createdAt || null,
+                finishedAt: row?.completedAt || row?.updatedAt || null,
+              };
+            })
+          );
+
+          if (!active) return;
+          setLiveCompletedMatches(hydrated);
+        } catch (err) {
+          console.error("Bet3 live games listener hydration error:", err);
+          if (!active) return;
+          setLiveCompletedMatches([]);
+        } finally {
+          liveLoaded = true;
+          markLoaded();
+        }
+      },
+      (err) => {
+        console.error("Bet3 games listener error:", err);
+        if (!active) return;
+        setLiveCompletedMatches([]);
+        liveLoaded = true;
+        markLoaded();
+      }
+    );
+
+    return () => {
+      active = false;
+      unsubPersisted();
+      unsubLive();
+    };
   }, []);
+
+  const matches = useMemo(() => {
+    const byId = new Map();
+
+    for (const row of liveCompletedMatches) {
+      const key = row?.gameId || row?.id;
+      if (key) byId.set(key, row);
+    }
+
+    for (const row of persistedMatches) {
+      const key = row?.gameId || row?.id;
+      if (key) {
+        const fallback = byId.get(key) || {};
+        byId.set(key, { ...fallback, ...row });
+      }
+    }
+
+    return Array.from(byId.values()).sort((a, b) => getRowTimestamp(b) - getRowTimestamp(a));
+  }, [persistedMatches, liveCompletedMatches]);
 
   const filtered = matches.filter((m) => {
     const s = searchTerm.toLowerCase();

@@ -10,6 +10,8 @@ const formatJoinedDate = (timestamp) => {
   return timestamp.toDate().toLocaleDateString();
 };
 
+const normalizePin = (value) => String(value || "").replace(/\D/g, "").slice(0, 8);
+
 const getWelcomeBonusMeta = (user) => {
   const status = user.welcomeBonusStatus;
   const claimed = Boolean(
@@ -96,12 +98,32 @@ export default function UserManagement() {
   };
 
   const handleUpdateUser = async () => {
+    const trimmedUsername = String(editForm.username || "").trim();
+    const normalizedPin = normalizePin(editForm.pin);
+    const pinConflictUser = users.find(
+      (u) => u.id !== selectedUser?.id && normalizePin(u.pin) === normalizedPin
+    );
+
+    if (!trimmedUsername) {
+      alert("Username is required.");
+      return;
+    }
+    if (normalizedPin.length !== 8) {
+      alert("Account PIN must be exactly 8 digits.");
+      return;
+    }
+    if (pinConflictUser) {
+      alert(`Account PIN ${normalizedPin} is already used by ${pinConflictUser.username || pinConflictUser.email || "another user"}.`);
+      return;
+    }
+
     setIsUpdating(true);
     try {
-      if (editForm.username !== selectedUser.username) {
-        const q = query(collection(db, "users"), where("username", "==", editForm.username));
+      if (trimmedUsername !== selectedUser.username) {
+        const q = query(collection(db, "users"), where("username", "==", trimmedUsername));
         const checkSnap = await getDocs(q);
-        if (!checkSnap.empty) {
+        const usernameConflict = checkSnap.docs.some((d) => d.id !== selectedUser?.id);
+        if (usernameConflict) {
           alert("Error: This username is already taken by another merchant.");
           setIsUpdating(false);
           return;
@@ -111,7 +133,11 @@ export default function UserManagement() {
       const res = await fetch("/api/admin/update-user", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editForm),
+        body: JSON.stringify({
+          ...editForm,
+          username: trimmedUsername,
+          pin: normalizedPin,
+        }),
       });
 
       const result = await res.json();
@@ -169,6 +195,16 @@ export default function UserManagement() {
     [bonusClaimants]
   );
   const unpaidBonusCount = bonusClaimants.length - paidBonusCount;
+  const normalizedEditingPin = normalizePin(editForm.pin);
+  const pinConflictUser = useMemo(
+    () =>
+      users.find(
+        (u) => u.id !== selectedUser?.id && normalizePin(u.pin) === normalizedEditingPin
+      ),
+    [users, selectedUser?.id, normalizedEditingPin]
+  );
+  const isPinValid = normalizedEditingPin.length === 8;
+  const canSaveProfile = !isUpdating && isPinValid && !pinConflictUser;
 
   if (loading) {
     return (
@@ -384,7 +420,22 @@ export default function UserManagement() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-slate-400">Account PIN</label>
-                  <input value={editForm.pin} onChange={(e) => setEditForm({ ...editForm, pin: e.target.value })} className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:border-[#613de6]" />
+                  <input
+                    value={editForm.pin}
+                    onChange={(e) => setEditForm({ ...editForm, pin: normalizePin(e.target.value) })}
+                    className={`w-full bg-slate-50 border p-4 rounded-2xl text-sm font-bold outline-none focus:border-[#613de6] ${
+                      pinConflictUser || (editForm.pin && !isPinValid) ? "border-rose-300" : "border-slate-100"
+                    }`}
+                  />
+                  {pinConflictUser ? (
+                    <p className="text-[10px] font-black uppercase text-rose-600">
+                      PIN already used by {pinConflictUser.username || pinConflictUser.email || "another user"}.
+                    </p>
+                  ) : (
+                    <p className={`text-[10px] font-black uppercase ${isPinValid ? "text-emerald-600" : "text-slate-400"}`}>
+                      {isPinValid ? "PIN available." : "PIN must be 8 digits."}
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-slate-400">Wallet Balance</label>
@@ -412,7 +463,7 @@ export default function UserManagement() {
               <div className="p-8 border-t border-slate-100">
                 <button
                   onClick={handleUpdateUser}
-                  disabled={isUpdating}
+                  disabled={!canSaveProfile}
                   className="w-full bg-[#613de6] text-white py-5 rounded-[2rem] font-black italic uppercase text-sm shadow-xl flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50 transition-all"
                 >
                   {isUpdating ? <Loader2 className="animate-spin" /> : (

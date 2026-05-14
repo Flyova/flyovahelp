@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "@/lib/firebase";
-import { collectionGroup, doc, getDoc, limit, onSnapshot, orderBy, query } from "firebase/firestore";
+import { collectionGroup, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query } from "firebase/firestore";
 import { Loader2, Search } from "lucide-react";
 
 const formatTime = (ts) => {
@@ -19,23 +19,26 @@ export default function PredictAndWinHistory() {
   const [userCache, setUserCache] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const userCacheRef = useRef({});
 
   useEffect(() => {
-    const q = query(
-      collectionGroup(db, "transactions"),
-      orderBy("timestamp", "desc"),
-      limit(2500)
-    );
+    userCacheRef.current = userCache;
+  }, [userCache]);
 
-    const unsub = onSnapshot(q, async (snap) => {
-      const raw = snap.docs.map((d) => {
+  useEffect(() => {
+    let active = true;
+
+    const hydrateFromDocs = async (docs, { fallbackMode = false } = {}) => {
+      const raw = docs.map((d) => {
         const data = d.data();
         const pathSegments = d.ref.path.split("/");
         const userIdFromPath = pathSegments[1];
         return { id: d.id, userId: userIdFromPath, ...data };
       });
 
-      const uniqueUserIds = [...new Set(raw.map((r) => r.userId))].filter((uid) => uid && !userCache[uid]);
+      const cache = userCacheRef.current || {};
+      const uniqueUserIds = [...new Set(raw.map((r) => r.userId))].filter((uid) => uid && !cache[uid]);
       if (uniqueUserIds.length > 0) {
         const lookups = await Promise.all(
           uniqueUserIds.map(async (uid) => {
@@ -63,7 +66,9 @@ export default function PredictAndWinHistory() {
         lookups.forEach((u) => {
           next[u.uid] = u.profile;
         });
-        setUserCache((prev) => ({ ...prev, ...next }));
+        if (active && Object.keys(next).length > 0) {
+          setUserCache((prev) => ({ ...prev, ...next }));
+        }
       }
 
       const eventsByUser = new Map();
@@ -124,12 +129,53 @@ export default function PredictAndWinHistory() {
       }
 
       sessionRows.sort((a, b) => (b.time?.toMillis?.() || 0) - (a.time?.toMillis?.() || 0));
+      if (!active) return;
       setRows(sessionRows);
       setLoading(false);
-    });
+      setLoadError(
+        fallbackMode
+          ? "Loaded with fallback mode. Create Firestore index for faster Bet 2 updates."
+          : ""
+      );
+    };
 
-    return () => unsub();
-  }, [userCache]);
+    const primaryQuery = query(
+      collectionGroup(db, "transactions"),
+      orderBy("timestamp", "desc"),
+      limit(2500)
+    );
+
+    const unsub = onSnapshot(
+      primaryQuery,
+      async (snap) => {
+        await hydrateFromDocs(snap.docs, { fallbackMode: false });
+      },
+      async (error) => {
+        console.error("Bet 2 listener error:", error);
+        if (!active) return;
+
+        // Fallback for collectionGroup index/precondition issues.
+        if (error?.code === "failed-precondition") {
+          try {
+            const fallbackQuery = query(collectionGroup(db, "transactions"), limit(5000));
+            const fallbackSnap = await getDocs(fallbackQuery);
+            await hydrateFromDocs(fallbackSnap.docs, { fallbackMode: true });
+            return;
+          } catch (fallbackError) {
+            console.error("Bet 2 fallback failed:", fallbackError);
+          }
+        }
+
+        setLoading(false);
+        setLoadError(error?.message || "Could not load Predict & Win history.");
+      }
+    );
+
+    return () => {
+      active = false;
+      unsub();
+    };
+  }, []);
 
   const search = searchTerm.toLowerCase().trim();
 
@@ -155,6 +201,12 @@ export default function PredictAndWinHistory() {
           Player subscriptions and rounds performance
         </p>
       </div>
+
+      {loadError && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-xl text-xs font-bold">
+          {loadError}
+        </div>
+      )}
 
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm relative">
         <Search className="absolute left-8 top-1/2 -translate-y-1/2 text-slate-400" size={18} />

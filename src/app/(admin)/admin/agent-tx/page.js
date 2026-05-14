@@ -49,6 +49,13 @@ export default function AgentTransactions() {
 
   const PAGE_SIZE = 20;
 
+  const normalizeStatus = (status) => String(status || "").trim().toLowerCase();
+  const getDisplayStatus = (trade) => {
+    if (trade?.refunded) return "refunded";
+    const normalized = normalizeStatus(trade?.status);
+    return normalized || "unknown";
+  };
+
   // Helper to fetch names for a list of agent IDs
   const fetchAgentNames = async (agentIds) => {
     const uniqueIds = [...new Set(agentIds)].filter(id => id && !agentNames[id]);
@@ -232,7 +239,8 @@ export default function AgentTransactions() {
   };
 
   const handleCancelTrade = async (trade) => {
-    if (["completed", "cancelled"].includes(trade.status)) {
+    const currentStatus = normalizeStatus(trade?.status);
+    if (["completed", "cancelled", "refunded"].includes(currentStatus) || trade?.refunded) {
       alert("This trade can no longer be cancelled.");
       return;
     }
@@ -336,6 +344,22 @@ export default function AgentTransactions() {
               ) : (
                 filtered.map((trade) => (
                   <tr key={trade.id} className="hover:bg-slate-50/50 transition-colors">
+                    {(() => {
+                      const status = getDisplayStatus(trade);
+                      const isDone = ["completed", "cancelled", "refunded"].includes(status);
+                      const statusClass =
+                        status === "completed"
+                          ? "bg-emerald-100 text-emerald-600"
+                          : status === "pending"
+                            ? "bg-orange-100 text-orange-600"
+                            : status === "acknowledged"
+                              ? "bg-indigo-100 text-indigo-600"
+                              : status === "refunded"
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-slate-100 text-slate-400";
+
+                      return (
+                        <>
                     <td className="p-6">
                       <div className="flex items-center gap-3">
                         <div className={`p-2 rounded-xl ${trade.type === 'deposit' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
@@ -370,11 +394,8 @@ export default function AgentTransactions() {
                       <p className="text-[9px] font-bold text-slate-400 uppercase">Rate: {trade.rate || '---'}</p>
                     </td>
                     <td className="p-6">
-                       <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
-                         trade.status === 'completed' ? 'bg-emerald-100 text-emerald-600' : 
-                         trade.status === 'pending' ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-400'
-                       }`}>
-                         {trade.status || 'unknown'}
+                       <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${statusClass}`}>
+                         {status}
                        </span>
                        <p className="text-[10px] font-bold text-slate-400 mt-2 flex items-center gap-1 uppercase">
                          <Calendar size={10} /> {trade.createdAt?.toDate ? trade.createdAt.toDate().toLocaleDateString() : '---'}
@@ -400,7 +421,7 @@ export default function AgentTransactions() {
                             </button>
                             <button
                                 onClick={() => handleCancelTrade(trade)}
-                                disabled={actionLoading === trade.id + "_cancel" || ["completed", "cancelled"].includes(trade.status)}
+                                disabled={actionLoading === trade.id + "_cancel" || isDone}
                                 className="flex items-center gap-1 px-3 py-2 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-500 hover:text-white transition-all border border-rose-100 disabled:opacity-40"
                             >
                                 {actionLoading === trade.id + "_cancel" ? <Loader2 size={12} className="animate-spin" /> : <ArrowUpRight size={12} />}
@@ -408,6 +429,9 @@ export default function AgentTransactions() {
                             </button>
                         </div>
                     </td>
+                        </>
+                      );
+                    })()}
                   </tr>
                 ))
               )}

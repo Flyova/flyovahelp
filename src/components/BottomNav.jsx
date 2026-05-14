@@ -49,29 +49,36 @@ export default function BottomNav() {
           type="button"
           aria-label="Close more menu"
           onClick={() => setShowMore(false)}
-          className="fixed inset-0 z-[99] bg-black/20 md:hidden"
+          className="fixed inset-0 z-[109] bg-[#020617]/70 backdrop-blur-[1px] md:hidden"
         />
       )}
 
       {showMore && (
-        <div className="fixed bottom-20 right-3 z-[110] w-56 rounded-2xl border border-white/10 bg-[#111827]/95 backdrop-blur-md p-2 shadow-2xl md:hidden">
-          {moreNavs.map((nav) => {
-            const Icon = nav.icon;
-            const isActive = nav.path === "/blog" ? pathname === "/blog" || pathname.startsWith("/blog/") : pathname === nav.path;
-            return (
-              <Link
-                key={nav.name}
-                href={nav.path}
-                onClick={() => setShowMore(false)}
-                className={`flex items-center gap-2 rounded-xl px-3 py-2.5 transition-all ${
-                  isActive ? "bg-[#613de6]/20 text-[#a78bfa]" : "text-gray-300 hover:bg-white/5 hover:text-white"
-                }`}
-              >
-                <Icon size={16} />
-                <span className="text-[10px] font-black uppercase tracking-wide">{nav.name}</span>
-              </Link>
-            );
-          })}
+        <div className="fixed inset-y-0 right-0 z-[120] w-[50vw] min-w-[220px] max-w-[380px] border-l border-white/10 bg-[#0b1228]/98 backdrop-blur-xl p-4 pt-8 shadow-[0_0_50px_rgba(0,0,0,0.55)] animate-in slide-in-from-right duration-300 md:hidden">
+          <div className="mb-4 px-2">
+            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-white/45">More</p>
+          </div>
+          <div className="space-y-1.5">
+            {moreNavs.map((nav) => {
+              const Icon = nav.icon;
+              const isActive = nav.path === "/blog" ? pathname === "/blog" || pathname.startsWith("/blog/") : pathname === nav.path;
+              return (
+                <Link
+                  key={nav.name}
+                  href={nav.path}
+                  onClick={() => setShowMore(false)}
+                  className={`flex items-center gap-3 rounded-2xl px-4 py-4 transition-all ${
+                    isActive
+                      ? "bg-[#613de6]/25 text-[#d8ccff] border border-[#613de6]/35"
+                      : "text-gray-100 hover:bg-white/10 hover:text-white border border-transparent"
+                  }`}
+                >
+                  <Icon size={21} />
+                  <span className="text-[13px] font-black uppercase tracking-[0.08em]">{nav.name}</span>
+                </Link>
+              );
+            })}
+          </div>
         </div>
       )}
 
