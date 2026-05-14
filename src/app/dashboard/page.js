@@ -5,7 +5,7 @@ import {
   Search, Loader2, ShieldCheck, ArrowRight, Clock,
   ArrowUpRight, Megaphone, X, AlertTriangle,
   CheckCircle2, Heart, Star, MessageCircle, Trophy,
-  GraduationCap, SkipForward, PlayCircle
+  GraduationCap, SkipForward, PlayCircle, Check
 } from "lucide-react";
 // FIREBASE IMPORTS
 import { auth, db } from "@/lib/firebase";
@@ -33,15 +33,21 @@ export default function Dashboard() {
   const [submittingTestimonial, setSubmittingTestimonial] = useState(false);
   const [hasApprovedWithdrawal, setHasApprovedWithdrawal] = useState(false);
   const [tutorialPromptGame, setTutorialPromptGame] = useState(null);
+  const [dontShowTutorialAgain, setDontShowTutorialAgain] = useState(false);
 
   // Announcement States
   const [announcements, setAnnouncements] = useState([]);
-  const [readMessages, setReadMessages] = useState([]);
+  const [readMessages, setReadMessages] = useState(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const saved = localStorage.getItem("read_announcements");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
-    const saved = localStorage.getItem("read_announcements");
-    if (saved) setReadMessages(JSON.parse(saved));
-
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (!currentUser) {
         router.push("/login");
@@ -233,16 +239,51 @@ export default function Dashboard() {
   };
 
   const handleNavigation = (path) => { if (path !== "#") router.push(path); };
-  const askTutorialBeforeGame = (game) => setTutorialPromptGame(game);
-  const skipTutorial = () => {
+  const saveTutorialPreference = async (game) => {
+    if (!user?.uid || !game?.tutorialKey) return;
+    try {
+      await updateDoc(doc(db, "users", user.uid), {
+        [`tutorialPromptsDismissed.${game.tutorialKey}`]: true
+      });
+    } catch (e) {
+      console.error("Failed to save tutorial preference:", e);
+      localStorage.setItem(`tutorial_prompt_dismissed_${user.uid}_${game.tutorialKey}`, "true");
+    }
+  };
+  const isTutorialDismissed = (game) => {
+    if (!game?.tutorialKey) return false;
+    const remoteDismissed = userData?.tutorialPromptsDismissed?.[game.tutorialKey] === true;
+    const localDismissed = user?.uid
+      ? localStorage.getItem(`tutorial_prompt_dismissed_${user.uid}_${game.tutorialKey}`) === "true"
+      : false;
+    return remoteDismissed || localDismissed;
+  };
+  const askTutorialBeforeGame = (game) => {
+    if (isTutorialDismissed(game)) {
+      handleNavigation(game.path);
+      return;
+    }
+    setDontShowTutorialAgain(false);
+    setTutorialPromptGame(game);
+  };
+  const closeTutorialPrompt = async () => {
+    if (dontShowTutorialAgain) await saveTutorialPreference(tutorialPromptGame);
+    setTutorialPromptGame(null);
+    setDontShowTutorialAgain(false);
+  };
+  const skipTutorial = async () => {
     if (!tutorialPromptGame?.path) return;
+    if (dontShowTutorialAgain) await saveTutorialPreference(tutorialPromptGame);
     handleNavigation(tutorialPromptGame.path);
     setTutorialPromptGame(null);
+    setDontShowTutorialAgain(false);
   };
-  const startTutorial = () => {
+  const startTutorial = async () => {
     if (!tutorialPromptGame?.tutorialPath) return;
+    if (dontShowTutorialAgain) await saveTutorialPreference(tutorialPromptGame);
     router.push(`${tutorialPromptGame.tutorialPath}?next=${encodeURIComponent(tutorialPromptGame.path)}`);
     setTutorialPromptGame(null);
+    setDontShowTutorialAgain(false);
   };
 
   const handleGameClick = (game) => {
@@ -255,6 +296,7 @@ export default function Dashboard() {
       name: "Play with Friends",
       img: "/play_friends.svg",
       tag: "Hot",
+      tutorialKey: "play_with_friends",
       path: "/game/1",
       tutorialPath: "/game/demo/friends",
       tutorialPoints: ["Understand turns", "Learn scoring to 15", "Practice risk-free"]
@@ -264,6 +306,7 @@ export default function Dashboard() {
       name: "Flyova To Dollars",
       img: "/flytodols.svg",
       tag: "Cash",
+      tutorialKey: "flyova_to_dollars",
       path: "/game/flyova-to-dollars",
       tutorialPath: "/game/demo/flyova",
       tutorialPoints: ["Pick 2 numbers", "Set stake", "See result flow"]
@@ -273,6 +316,7 @@ export default function Dashboard() {
       name: "Predict and Win",
       img: "/predictwin.svg",
       tag: "New",
+      tutorialKey: "predict_and_win",
       path: "/game/predict-and-win",
       tutorialPath: "/game/demo/predict",
       tutorialPoints: ["Choose condition", "Lock prediction", "Understand payout"]
@@ -329,7 +373,7 @@ export default function Dashboard() {
           <button
             type="button"
             aria-label="Close tutorial prompt"
-            onClick={() => setTutorialPromptGame(null)}
+            onClick={closeTutorialPrompt}
             className="absolute inset-0 bg-black/75 backdrop-blur-sm"
           />
           <div className="relative z-10 w-full max-w-md rounded-[2.2rem] border border-[#613de6]/35 bg-[#111a35] p-7 shadow-[0_20px_80px_rgba(0,0,0,0.65)] animate-in zoom-in-95 duration-200">
@@ -344,7 +388,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <button
-                onClick={() => setTutorialPromptGame(null)}
+                onClick={closeTutorialPrompt}
                 className="p-2 rounded-xl bg-white/5 text-white/60 hover:text-white hover:bg-white/10 transition-colors"
               >
                 <X size={16} />
@@ -362,6 +406,21 @@ export default function Dashboard() {
                 ))}
               </div>
             </div>
+
+            <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-white/80 transition-colors hover:bg-white/[0.07]">
+              <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${dontShowTutorialAgain ? "border-[#fc7952] bg-[#fc7952]" : "border-white/25 bg-black/20"}`}>
+                {dontShowTutorialAgain && <Check size={14} className="text-white" />}
+              </span>
+              <input
+                type="checkbox"
+                checked={dontShowTutorialAgain}
+                onChange={(e) => setDontShowTutorialAgain(e.target.checked)}
+                className="sr-only"
+              />
+              <span className="text-[11px] font-black uppercase tracking-widest">
+                Don&apos;t show this again
+              </span>
+            </label>
 
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
@@ -488,9 +547,7 @@ export default function Dashboard() {
             <div>
               <div
                 onClick={() =>
-                  askTutorialBeforeGame(
-                    topGames.find((g) => g.path === "/game/flyova-to-dollars") || topGames[1]
-                  )
+                  handleGameClick(topGames.find((g) => g.path === "/game/flyova-to-dollars") || topGames[1])
                 }
                 className="relative w-full h-52 md:h-64 rounded-3xl overflow-hidden bg-[#613de6] group cursor-pointer shadow-2xl border border-white/5"
               >

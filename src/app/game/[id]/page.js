@@ -40,11 +40,49 @@ export default function GamePage() {
   const [stakeAmount, setStakeAmount] = useState(1);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [notification, setNotification] = useState(null);
+  const persistedCompletedGameRef = useRef(null);
   const WIN_TARGET = 15;
   const MATCH_ADMIN_FEE_RATE = 0.25;
 
   const showNotification = useCallback((type, title, message) => {
     setNotification({ type, title, message, id: Date.now() });
+  }, []);
+
+  const persistCompletedGameHistory = useCallback(async (game) => {
+    if (!game?.id || !game?.player1 || !game?.player2) return false;
+
+    try {
+      const [p1Snap, p2Snap] = await Promise.all([
+        getDoc(doc(db, "users", game.player1)),
+        getDoc(doc(db, "users", game.player2)),
+      ]);
+      const p1 = p1Snap.exists() ? p1Snap.data() : {};
+      const p2 = p2Snap.exists() ? p2Snap.data() : {};
+
+      await setDoc(doc(db, "completed_games", game.id), {
+        gameId: game.id,
+        amount: Number(game.stakePerRound || 0),
+        player1Id: game.player1,
+        player1Name: p1.fullName || p1.username || "Player 1",
+        player1Email: p1.email || "",
+        player1Pin: p1.pin || "",
+        player1Country: p1.country || "",
+        player2Id: game.player2,
+        player2Name: p2.fullName || p2.username || "Player 2",
+        player2Email: p2.email || "",
+        player2Pin: p2.pin || "",
+        player2Country: p2.country || "",
+        p1RoundsPlayed: Number(game?.scores?.p1 || 0),
+        p2RoundsPlayed: Number(game?.scores?.p2 || 0),
+        totalRounds: Number(game?.round || 0),
+        createdAt: game?.createdAt || null,
+        finishedAt: game?.completedAt || serverTimestamp(),
+      }, { merge: true });
+      return true;
+    } catch (e) {
+      console.error("Failed to persist completed game history", e);
+      return false;
+    }
   }, []);
 
   // 1. Auth & Wallet Listener
@@ -189,6 +227,10 @@ export default function GamePage() {
           status: isGameOver ? "completed" : "active",
         };
 
+        if (isGameOver) {
+          updatePayload.completedAt = serverTimestamp();
+        }
+
         if (winAmount > 0) {
           updatePayload[loserPoolKey] = increment(-winAmount);
           updatePayload[winnerPoolKey] = increment(winAmount);
@@ -222,6 +264,14 @@ export default function GamePage() {
 
     return () => clearInterval(interval);
   }, [activeGame?.turn, activeGame?.round, activeGame?.id, activeGame?.status, handleForfeit]);
+
+  useEffect(() => {
+    if (!activeGame || activeGame.status !== "completed") return;
+    if (persistedCompletedGameRef.current === activeGame.id) return;
+    persistCompletedGameHistory(activeGame).then((saved) => {
+      if (saved) persistedCompletedGameRef.current = activeGame.id;
+    });
+  }, [activeGame, persistCompletedGameHistory]);
 
   const handleManualRefresh = async () => {
     if (!user || isRefreshing) return;
@@ -347,6 +397,10 @@ export default function GamePage() {
           status: isGameOver ? "completed" : "active"
         };
 
+        if (isGameOver) {
+          updatePayload.completedAt = serverTimestamp();
+        }
+
         if (wasCorrect) {
           updatePayload[loserPoolKey] = increment(-winAmount);
           updatePayload[winnerPoolKey] = increment(winAmount);
@@ -369,37 +423,7 @@ export default function GamePage() {
       }
     };
 
-    // Persist completed match history for admin bet history table
-    try {
-      const [p1Snap, p2Snap] = await Promise.all([
-        getDoc(doc(db, "users", player1)),
-        getDoc(doc(db, "users", player2)),
-      ]);
-      const p1 = p1Snap.exists() ? p1Snap.data() : {};
-      const p2 = p2Snap.exists() ? p2Snap.data() : {};
-
-      await setDoc(doc(db, "completed_games", id), {
-        gameId: id,
-        amount: Number(activeGame.stakePerRound || 0),
-        player1Id: player1,
-        player1Name: p1.fullName || p1.username || "Player 1",
-        player1Email: p1.email || "",
-        player1Pin: p1.pin || "",
-        player1Country: p1.country || "",
-        player2Id: player2,
-        player2Name: p2.fullName || p2.username || "Player 2",
-        player2Email: p2.email || "",
-        player2Pin: p2.pin || "",
-        player2Country: p2.country || "",
-        p1RoundsPlayed: Number(activeGame?.scores?.p1 || 0),
-        p2RoundsPlayed: Number(activeGame?.scores?.p2 || 0),
-        totalRounds: Number(activeGame?.round || 0),
-        createdAt: typeof activeGame?.createdAt === "number" ? activeGame.createdAt : null,
-        finishedAt: serverTimestamp(),
-      }, { merge: true });
-    } catch (e) {
-      console.error("Failed to persist completed game history", e);
-    }
+    await persistCompletedGameHistory(activeGame);
 
     await refund(player1, wagerPool.p1);
     await refund(player2, wagerPool.p2);

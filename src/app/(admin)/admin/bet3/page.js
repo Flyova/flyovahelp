@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "@/lib/firebase";
-import { collection, doc, getDoc, onSnapshot, orderBy, query, where } from "firebase/firestore";
+import { collection, doc, getDoc, onSnapshot, query, where } from "firebase/firestore";
 import { Loader2, Search } from "lucide-react";
 
 const EMPTY_PROFILE = { fullName: "", username: "", email: "" };
@@ -65,7 +65,7 @@ export default function PlayWithFriendsHistory() {
       }
     };
 
-    const persistedQ = query(collection(db, "completed_games"), orderBy("finishedAt", "desc"));
+    const persistedQ = query(collection(db, "completed_games"));
     const liveQ = query(collection(db, "games"), where("status", "==", "completed"));
 
     const unsubPersisted = onSnapshot(
