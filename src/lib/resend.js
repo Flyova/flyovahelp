@@ -2,7 +2,7 @@ import { Resend } from 'resend';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const RESEND_FROM_EMAIL =
-  process.env.RESEND_FROM_EMAIL || 'Flyova Notifications <noreply@notify.flyovahelp.com>';
+  process.env.RESEND_FROM_EMAIL || 'Flyovahelp <noreply@notify.flyovahelp.com>';
 
 export const sendEmail = async (to, subject, html) => {
   try {
