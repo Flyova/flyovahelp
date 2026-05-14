@@ -12,7 +12,9 @@ import {
   writeBatch,
   serverTimestamp,
   orderBy,
-  limit
+  limit,
+  getDoc,
+  getDocs
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
@@ -217,6 +219,74 @@ export default function AgentDashboard() {
     }
   };
 
+  const handleDeclineTrade = async (trade) => {
+    if (!window.confirm("Decline this trade request?")) return;
+
+    setActionLoading(trade.id);
+    try {
+      const batch = writeBatch(db);
+
+      // Refund only applies to withdrawal requests because funds were already locked from user wallet.
+      if (trade.type === "withdrawal") {
+        const refundAmount = Number(trade.amount || 0);
+        const userRef = doc(db, "users", trade.senderId);
+        batch.update(userRef, { wallet: increment(refundAmount) });
+
+        const transQ = query(
+          collection(db, "users", trade.senderId, "transactions"),
+          where("tradeId", "==", trade.id),
+          limit(1)
+        );
+        const transSnap = await getDocs(transQ);
+        if (!transSnap.empty) {
+          batch.update(transSnap.docs[0].ref, {
+            status: "cancelled",
+            description: "Withdrawal Declined - Trade Amount Refunded",
+          });
+        }
+      }
+
+      batch.update(doc(db, "trades", trade.id), {
+        status: "cancelled",
+        cancelledAt: serverTimestamp(),
+        declineReason: "Agent Declined",
+      });
+
+      await batch.commit();
+
+      try {
+        const userSnap = await getDoc(doc(db, "users", trade.senderId));
+        if (userSnap.exists()) {
+          await fetch("/api/send-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: userSnap.data().email,
+              subject: "Trade Request Declined",
+              html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
+                  <h2 style="color: #e11d48; border-bottom: 1px solid #eee; padding-bottom: 10px;">Request Declined</h2>
+                  <p>Hello,</p>
+                  <p>Your ${trade.type} request for $${trade.amount} has been declined by the agent.</p>
+                  <p>${trade.type === "withdrawal"
+                    ? "The original trade amount has been refunded to your wallet balance."
+                    : "This transaction has been cancelled. No funds were charged."}</p>
+                  <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">Flyovahelp</div>
+                </div>
+              `,
+            }),
+          });
+        }
+      } catch (emailErr) {
+        console.error("Decline email failed:", emailErr);
+      }
+    } catch (e) {
+      alert("Decline error: " + e.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   if (agent?.banned) {
     return (
       <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-6 text-center">
@@ -364,10 +434,11 @@ export default function AgentDashboard() {
                     {trade.status === 'pending' ? (
                     <div className="flex gap-2">
                         <button 
-                        onClick={() => updateDoc(doc(db, "trades", trade.id), { status: "cancelled" })} 
+                        onClick={() => handleDeclineTrade(trade)} 
+                        disabled={actionLoading === trade.id}
                         className="flex-1 bg-white/5 py-4 rounded-2xl text-[10px] font-black uppercase text-rose-500 border border-white/5 hover:bg-rose-500/5 transition-all"
                         >
-                        Decline
+                        {actionLoading === trade.id ? <Loader2 className="animate-spin mx-auto" size={14} /> : "Decline"}
                         </button>
                         <button 
                         onClick={() => handleAcceptTrade(trade)} 

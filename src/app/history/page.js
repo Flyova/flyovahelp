@@ -56,6 +56,15 @@ export default function HistoryPage() {
           const unsubTrans = onSnapshot(qTrans, (snap) => {
             const data = snap.docs.map(doc => {
               const docData = doc.data();
+              const isAgentWithdrawalMirror =
+                docData.type === "withdrawal" &&
+                docData.method === "agent" &&
+                Boolean(docData.tradeId);
+
+              // Agent withdrawals are rendered from the `trades` stream as "P2P Agent Debit".
+              // Hide mirrored `transactions` rows to prevent duplicate history cards.
+              if (isAgentWithdrawalMirror) return null;
+
               const isTransfer = docData.type === 'p2p_transfer';
               const isFinance = docData.type === 'withdrawal' || docData.category === 'finance' || isTransfer;
               
@@ -88,7 +97,7 @@ export default function HistoryPage() {
                 category: isFinance ? 'finance' : 'games',
                 date: docData.timestamp?.toDate() || new Date()
               };
-            });
+            }).filter(Boolean);
             updateState(data, 'trans');
           });
 
