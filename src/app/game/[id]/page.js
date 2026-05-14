@@ -5,7 +5,7 @@ import { db, auth } from "@/lib/firebase";
 import { 
   doc, onSnapshot, updateDoc, increment, collection, 
   query, where, setDoc, addDoc, deleteDoc, 
-  serverTimestamp, or, orderBy, limit, runTransaction, getDoc
+  serverTimestamp, or, orderBy, limit, runTransaction
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { User, Zap, Wallet, ShieldCheck, Trophy, Ghost, MessageSquare, Send, X as CloseIcon, Search, Users, Timer as TimerIcon, RefreshCw, Loader2 } from "lucide-react";
@@ -41,7 +41,8 @@ export default function GamePage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [notification, setNotification] = useState(null);
   const persistedCompletedGameRef = useRef(null);
-  const WIN_TARGET = 15;
+  const ROUNDS_PER_PLAYER = 15;
+  const MAX_ROUNDS = ROUNDS_PER_PLAYER * 2;
   const MATCH_ADMIN_FEE_RATE = 0.25;
 
   const showNotification = useCallback((type, title, message) => {
@@ -52,32 +53,23 @@ export default function GamePage() {
     if (!game?.id || !game?.player1 || !game?.player2) return false;
 
     try {
-      const [p1Snap, p2Snap] = await Promise.all([
-        getDoc(doc(db, "users", game.player1)),
-        getDoc(doc(db, "users", game.player2)),
-      ]);
-      const p1 = p1Snap.exists() ? p1Snap.data() : {};
-      const p2 = p2Snap.exists() ? p2Snap.data() : {};
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return false;
 
-      await setDoc(doc(db, "completed_games", game.id), {
-        gameId: game.id,
-        amount: Number(game.stakePerRound || 0),
-        player1Id: game.player1,
-        player1Name: p1.fullName || p1.username || "Player 1",
-        player1Email: p1.email || "",
-        player1Pin: p1.pin || "",
-        player1Country: p1.country || "",
-        player2Id: game.player2,
-        player2Name: p2.fullName || p2.username || "Player 2",
-        player2Email: p2.email || "",
-        player2Pin: p2.pin || "",
-        player2Country: p2.country || "",
-        p1RoundsPlayed: Number(game?.scores?.p1 || 0),
-        p2RoundsPlayed: Number(game?.scores?.p2 || 0),
-        totalRounds: Number(game?.round || 0),
-        createdAt: game?.createdAt || null,
-        finishedAt: game?.completedAt || serverTimestamp(),
-      }, { merge: true });
+      const response = await fetch("/api/game/completed-history", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ gameId: game.id }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || "Could not save completed game history.");
+      }
+
       return true;
     } catch (e) {
       console.error("Failed to persist completed game history", e);
@@ -207,19 +199,18 @@ export default function GamePage() {
         const loserPoolKey = loserIsP1 ? "wagerPool.p1" : "wagerPool.p2";
         const winnerPoolKey = loserIsP1 ? "wagerPool.p2" : "wagerPool.p1";
 
-        const currentP1 = Number(liveGame?.scores?.p1 || 0);
-        const currentP2 = Number(liveGame?.scores?.p2 || 0);
-        const nextP1 = currentP1 + (loserIsP1 ? 0 : 1);
-        const nextP2 = currentP2 + (loserIsP1 ? 1 : 0);
-        const isGameOver = nextP1 >= WIN_TARGET || nextP2 >= WIN_TARGET;
+        const isGameOver = liveRound >= MAX_ROUNDS;
 
         const nextPicker =
           liveGame.picker === liveGame.player1 ? liveGame.player2 : liveGame.player1;
 
         const winAmount = Number(liveGame?.stakePerRound || 0);
+        const pickerRoundsKey =
+          liveGame.picker === liveGame.player1 ? "roundsPlayed.p1" : "roundsPlayed.p2";
         const updatePayload = {
           [winnerScoreKey]: increment(1),
-          round: increment(1),
+          [pickerRoundsKey]: increment(1),
+          round: isGameOver ? MAX_ROUNDS : increment(1),
           turn: nextPicker,
           picker: nextPicker,
           gameState: "picking",
@@ -242,7 +233,7 @@ export default function GamePage() {
     } catch (e) {
       console.error("Forfeit error:", e);
     }
-  }, [WIN_TARGET]);
+  }, [MAX_ROUNDS]);
 
   // 4. Game Timer Logic
   useEffect(() => {
@@ -310,7 +301,7 @@ export default function GamePage() {
   };
 
   const initiateChallenge = async () => {
-    const totalWager = (stakeAmount * WIN_TARGET);
+    const totalWager = (stakeAmount * ROUNDS_PER_PLAYER);
     const calculatedFee = stakeAmount * MATCH_ADMIN_FEE_RATE;
     const totalCost = totalWager + calculatedFee;
 
@@ -348,6 +339,7 @@ export default function GamePage() {
         
         await setDoc(doc(db, "games", gameId), {
           player1: chal.from, player2: user.uid, scores: { p1: 0, p2: 0 },
+          roundsPlayed: { p1: 0, p2: 0 },
           turn: chal.from, round: 1, gameState: "picking", picker: chal.from, 
           stakePerRound: chal.stakePerRound, 
           wagerPool: { p1: chal.totalWager, p2: chal.totalWager },
@@ -384,15 +376,15 @@ export default function GamePage() {
 
         const winAmount = activeGame.stakePerRound;
         const nextPicker = activeGame.picker === activeGame.player1 ? activeGame.player2 : activeGame.player1;
-        const currentP1 = Number(activeGame?.scores?.p1 || 0);
-        const currentP2 = Number(activeGame?.scores?.p2 || 0);
-        const nextP1 = currentP1 + (wasCorrect && isP1 ? 1 : 0);
-        const nextP2 = currentP2 + (wasCorrect && !isP1 ? 1 : 0);
-        const isGameOver = nextP1 >= WIN_TARGET || nextP2 >= WIN_TARGET;
+        const completedRound = Number(activeGame?.round || 0);
+        const isGameOver = completedRound >= MAX_ROUNDS;
+        const pickerRoundsKey =
+          activeGame.picker === activeGame.player1 ? "roundsPlayed.p1" : "roundsPlayed.p2";
 
         const updatePayload = {
-          gameState: "picking", turn: nextPicker, picker: nextPicker, round: increment(1),
+          gameState: "picking", turn: nextPicker, picker: nextPicker, round: isGameOver ? MAX_ROUNDS : increment(1),
           [scoreKey]: wasCorrect ? increment(1) : increment(0),
+          [pickerRoundsKey]: increment(1),
           numberPool: [Math.floor(Math.random() * 100), Math.floor(Math.random() * 100)],
           status: isGameOver ? "completed" : "active"
         };
@@ -423,7 +415,11 @@ export default function GamePage() {
       }
     };
 
-    await persistCompletedGameHistory(activeGame);
+    const historySaved = await persistCompletedGameHistory(activeGame);
+    if (!historySaved) {
+      showNotification("error", "History Not Saved", "Could not save this match history yet. Please try again.");
+      return;
+    }
 
     await refund(player1, wagerPool.p1);
     await refund(player2, wagerPool.p2);
@@ -503,7 +499,7 @@ export default function GamePage() {
                 <button onClick={() => setStakeAmount(stakeAmount + 1)} className="w-10 h-10 bg-[#613de6] rounded-xl font-bold">+</button>
               </div>
               <div className="space-y-2 mb-8 px-2">
-                <div className="flex justify-between text-[10px] font-black uppercase"><span className="opacity-40">Entry Wager ({WIN_TARGET}x)</span><span>${stakeAmount * WIN_TARGET}</span></div>
+                <div className="flex justify-between text-[10px] font-black uppercase"><span className="opacity-40">Entry Wager ({ROUNDS_PER_PLAYER}x)</span><span>${stakeAmount * ROUNDS_PER_PLAYER}</span></div>
                 <div className="flex justify-between text-[10px] font-black uppercase text-emerald-400"><span>Match Admin Fee (25%)</span><span>${(stakeAmount * MATCH_ADMIN_FEE_RATE).toFixed(2)}</span></div>
               </div>
               <button onClick={initiateChallenge} className="w-full bg-[#fc7952] py-4 rounded-2xl font-black uppercase text-xs mb-3 shadow-lg">Send Challenge</button>
@@ -577,7 +573,7 @@ export default function GamePage() {
       <ToastNotification notification={notification} onClose={() => setNotification(null)} />
       <div className="bg-[#613de6] p-4 flex justify-between items-center shadow-lg relative z-20">
         <div className="flex flex-col">
-            <span className="font-black italic text-[10px] uppercase">ROUND {activeGame?.round} · FIRST TO {WIN_TARGET}</span>
+            <span className="font-black italic text-[10px] uppercase">ROUND {activeGame?.round} / {MAX_ROUNDS}</span>
             <div className={`flex items-center gap-1 mt-0.5 ${gameTimer < 10 ? 'text-red-400 animate-pulse' : 'text-white/60'}`}>
                 <TimerIcon size={10} />
                 <span className="text-[10px] font-black font-mono">{gameTimer}S LEFT</span>

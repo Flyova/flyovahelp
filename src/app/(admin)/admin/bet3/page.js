@@ -1,10 +1,8 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { db } from "@/lib/firebase";
-import { collection, doc, getDoc, onSnapshot, query, where } from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import { Loader2, Search } from "lucide-react";
-
-const EMPTY_PROFILE = { fullName: "", username: "", email: "" };
 
 function toMillis(value) {
   if (!value) return 0;
@@ -34,136 +32,60 @@ function formatDate(item) {
 }
 
 export default function PlayWithFriendsHistory() {
-  const [persistedMatches, setPersistedMatches] = useState([]);
-  const [liveCompletedMatches, setLiveCompletedMatches] = useState([]);
+  const [matches, setMatches] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
-  const profileCacheRef = useRef({});
+  const [error, setError] = useState("");
 
   useEffect(() => {
     let active = true;
-    let persistedLoaded = false;
-    let liveLoaded = false;
 
-    const markLoaded = () => {
-      if (persistedLoaded && liveLoaded && active) setLoading(false);
-    };
-
-    const getProfile = async (uid) => {
-      if (!uid) return EMPTY_PROFILE;
-      if (profileCacheRef.current[uid]) return profileCacheRef.current[uid];
+    const fetchHistory = async (user) => {
+      if (!user) return;
+      setLoading(true);
+      setError("");
 
       try {
-        const snap = await getDoc(doc(db, "users", uid));
-        const profile = snap.exists() ? snap.data() : EMPTY_PROFILE;
-        profileCacheRef.current[uid] = profile;
-        return profile;
-      } catch (e) {
-        console.error("Bet3 profile lookup failed:", e);
-        profileCacheRef.current[uid] = EMPTY_PROFILE;
-        return EMPTY_PROFILE;
+        const token = await user.getIdToken();
+        const response = await fetch("/api/admin/bet3-history", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(payload?.error || "Could not load match history.");
+        }
+
+        if (!active) return;
+        setMatches(Array.isArray(payload.matches) ? payload.matches : []);
+      } catch (err) {
+        console.error("Bet3 history API error:", err);
+        if (!active) return;
+        setMatches([]);
+        setError(err?.message || "Could not load match history.");
+      } finally {
+        if (active) setLoading(false);
       }
     };
 
-    const persistedQ = query(collection(db, "completed_games"));
-    const liveQ = query(collection(db, "games"), where("status", "==", "completed"));
-
-    const unsubPersisted = onSnapshot(
-      persistedQ,
-      (snap) => {
-        if (!active) return;
-        setPersistedMatches(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-        persistedLoaded = true;
-        markLoaded();
-      },
-      (err) => {
-        console.error("Bet3 completed_games listener error:", err);
-        if (!active) return;
-        setPersistedMatches([]);
-        persistedLoaded = true;
-        markLoaded();
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        setMatches([]);
+        setLoading(false);
+        return;
       }
-    );
-
-    const unsubLive = onSnapshot(
-      liveQ,
-      async (snap) => {
-        try {
-          const hydrated = await Promise.all(
-            snap.docs.map(async (d) => {
-              const row = d.data();
-              const [p1, p2] = await Promise.all([getProfile(row.player1), getProfile(row.player2)]);
-
-              return {
-                id: d.id,
-                gameId: d.id,
-                amount: Number(row?.stakePerRound || 0),
-                player1Id: row?.player1 || "",
-                player1Name: p1?.fullName || p1?.username || "Player 1",
-                player1Email: p1?.email || "",
-                player2Id: row?.player2 || "",
-                player2Name: p2?.fullName || p2?.username || "Player 2",
-                player2Email: p2?.email || "",
-                p1RoundsPlayed: Number(row?.scores?.p1 || 0),
-                p2RoundsPlayed: Number(row?.scores?.p2 || 0),
-                totalRounds: Number(
-                  row?.round || (Number(row?.scores?.p1 || 0) + Number(row?.scores?.p2 || 0))
-                ),
-                createdAt: row?.createdAt || null,
-                finishedAt: row?.completedAt || row?.updatedAt || null,
-              };
-            })
-          );
-
-          if (!active) return;
-          setLiveCompletedMatches(hydrated);
-        } catch (err) {
-          console.error("Bet3 live games listener hydration error:", err);
-          if (!active) return;
-          setLiveCompletedMatches([]);
-        } finally {
-          liveLoaded = true;
-          markLoaded();
-        }
-      },
-      (err) => {
-        console.error("Bet3 games listener error:", err);
-        if (!active) return;
-        setLiveCompletedMatches([]);
-        liveLoaded = true;
-        markLoaded();
-      }
-    );
+      fetchHistory(user);
+    });
 
     return () => {
       active = false;
-      unsubPersisted();
-      unsubLive();
+      unsubAuth();
     };
   }, []);
 
-  const matches = useMemo(() => {
-    const byId = new Map();
-
-    for (const row of liveCompletedMatches) {
-      const key = row?.gameId || row?.id;
-      if (key) byId.set(key, row);
-    }
-
-    for (const row of persistedMatches) {
-      const key = row?.gameId || row?.id;
-      if (key) {
-        const fallback = byId.get(key) || {};
-        byId.set(key, { ...fallback, ...row });
-      }
-    }
-
-    return Array.from(byId.values()).sort((a, b) => getRowTimestamp(b) - getRowTimestamp(a));
-  }, [persistedMatches, liveCompletedMatches]);
-
-  const filtered = matches.filter((m) => {
+  const filtered = useMemo(() => {
     const s = searchTerm.toLowerCase();
-    return (
+    return matches.filter((m) => (
       String(m.amount ?? "").toLowerCase().includes(s) ||
       (m.player1Name || "").toLowerCase().includes(s) ||
       (m.player1Id || "").toLowerCase().includes(s) ||
@@ -171,8 +93,8 @@ export default function PlayWithFriendsHistory() {
       (m.player2Name || "").toLowerCase().includes(s) ||
       (m.player2Id || "").toLowerCase().includes(s) ||
       (m.player2Email || "").toLowerCase().includes(s)
-    );
-  });
+    ));
+  }, [matches, searchTerm]);
 
   return (
     <div className="space-y-6">
@@ -212,6 +134,12 @@ export default function PlayWithFriendsHistory() {
                     <p className="text-[10px] font-black uppercase text-slate-400">Loading Match History...</p>
                   </td>
                 </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan="6" className="p-12 text-center text-rose-400 font-black italic uppercase text-xs tracking-widest">
+                    {error}
+                  </td>
+                </tr>
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan="6" className="p-12 text-center text-slate-300 font-black italic uppercase text-xs tracking-widest">
@@ -220,7 +148,7 @@ export default function PlayWithFriendsHistory() {
                 </tr>
               ) : (
                 filtered.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
+                  <tr key={item.id || item.gameId} className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-6 text-sm font-black text-emerald-600">${Number(item.amount || 0).toFixed(2)}</td>
                     <td className="p-6">
                       <p className="text-sm font-black italic text-slate-800 uppercase">{item.player1Name || "Player 1"}</p>
