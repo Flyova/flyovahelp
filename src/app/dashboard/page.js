@@ -356,6 +356,37 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* TRADE / DEPOSIT NOTIFICATIONS */}
+        {activeTrades.length > 0 && (
+          <div className="space-y-2 relative z-40 pt-2">
+            {activeTrades.map((trade) => (
+              <div
+                key={trade.id}
+                onClick={() => router.push(`/trade/${trade.id}`)}
+                className="bg-[#613de6] p-4 rounded-2xl flex items-center justify-between border border-white/20 shadow-2xl cursor-pointer hover:brightness-110 transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/20 p-2 rounded-lg animate-pulse">
+                    <Clock size={18} className="text-white" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-white/70 uppercase mb-1">
+                      {trade.agentId === user?.uid ? "Action Required" : "Ongoing Trade"}
+                    </p>
+                    <p className="text-xs font-bold text-white uppercase italic tracking-tighter">
+                      {trade.type}: <span className="text-orange-300">{trade.status}</span> (${trade.amount})
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 bg-black/20 px-3 py-2 rounded-xl">
+                  <span className="text-[9px] font-black text-white uppercase">Enter Room</span>
+                  <ArrowUpRight size={14} className="text-white" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="mt-4 md:mt-6 grid grid-cols-1 xl:grid-cols-12 gap-6">
           <section className="xl:col-span-8 space-y-6">
             {/* Top Banner */}
@@ -423,27 +454,6 @@ export default function Dashboard() {
           </section>
 
           <aside className="xl:col-span-4 space-y-4 xl:sticky xl:top-24 h-fit">
-            {/* TRADE MONITOR OVERLAY */}
-            {activeTrades.length > 0 && (
-              <div className="space-y-2 relative z-40">
-                {activeTrades.map((trade) => (
-                  <div key={trade.id} onClick={() => router.push(`/trade/${trade.id}`)} className="bg-[#613de6] p-4 rounded-2xl flex items-center justify-between border border-white/20 shadow-2xl cursor-pointer hover:brightness-110 transition-all">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-white/20 p-2 rounded-lg animate-pulse"><Clock size={18} className="text-white" /></div>
-                      <div>
-                        <p className="text-[10px] font-black text-white/70 uppercase mb-1">{trade.agentId === user?.uid ? "Action Required" : "Ongoing Trade"}</p>
-                        <p className="text-xs font-bold text-white uppercase italic tracking-tighter">{trade.type}: <span className="text-orange-300">{trade.status}</span> (${trade.amount})</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 bg-black/20 px-3 py-2 rounded-xl">
-                      <span className="text-[9px] font-black text-white uppercase">Enter Room</span>
-                      <ArrowUpRight size={14} className="text-white" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
             {userData && userData.isAgent !== true && (
               <div className="mt-2">
                 <div className="relative bg-gradient-to-br from-[#1e293b] to-[#0f172a] p-6 rounded-[2rem] border border-[#613de6]/30 overflow-hidden group shadow-2xl">
