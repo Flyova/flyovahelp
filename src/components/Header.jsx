@@ -11,8 +11,7 @@ import {
   Send,
   Copy,
   Check,
-  Users,
-  MessageCircle // Added for Support
+  Users
 } from "lucide-react";
 // FIREBASE IMPORTS
 import { auth, db } from "@/lib/firebase";
@@ -23,7 +22,6 @@ export default function Header() {
   const router = useRouter();
   const [showBalances, setShowBalances] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [hasUnreadSupport, setHasUnreadSupport] = useState(false); // Support state
   const [userData, setUserData] = useState({
     wallet: "0.00",
     referralBonus: "0.00",
@@ -36,7 +34,6 @@ export default function Header() {
   useEffect(() => {
     let unsubscribeUser = null;
     let unsubscribeAgent = null;
-    let unsubscribeSupport = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -72,21 +69,10 @@ export default function Header() {
           }
         });
 
-        // 2. Listen for Support Messages (Simulated Push)
-        const chatRef = doc(db, "support_chats", user.uid);
-        unsubscribeSupport = onSnapshot(chatRef, (snap) => {
-          if (snap.exists()) {
-            const chatData = snap.data();
-            setHasUnreadSupport(chatData.unreadByUser === true);
-          }
-        });
-
       } else {
         if (unsubscribeUser) unsubscribeUser();
         if (unsubscribeAgent) unsubscribeAgent();
-        if (unsubscribeSupport) unsubscribeSupport();
         setUserData({ wallet: "0.00", referralBonus: "0.00", gameCredits: "0.00", agentBalance: "0.00", pin: "--------", isAgent: false });
-        setHasUnreadSupport(false);
       }
     });
 
@@ -94,7 +80,6 @@ export default function Header() {
       unsubscribeAuth();
       if (unsubscribeUser) unsubscribeUser();
       if (unsubscribeAgent) unsubscribeAgent();
-      if (unsubscribeSupport) unsubscribeSupport();
     };
   }, []);
 
@@ -141,7 +126,6 @@ export default function Header() {
   const handleTransferClick = () => { setShowBalances(false); router.push("/transfer"); };
   const handleAgentDashboardClick = () => { setShowBalances(false); router.push("/agent/dashboard"); };
   const handleReferralsClick = () => { setShowBalances(false); router.push("/referrals"); };
-  const handleSupportClick = () => { setShowBalances(false); router.push("/support"); };
 
   const handleLogout = async () => {
     try {
@@ -179,26 +163,6 @@ export default function Header() {
         </div>
 
         <div className="flex items-center space-x-3">
-          {/* SUPPORT ICON WITH ALERT BADGE */}
-          {/* LIVE CHAT BUTTON */}
-          <div 
-            onClick={handleSupportClick}
-            className="relative flex items-center gap-2 px-3 py-2 bg-black/10 hover:bg-black/20 rounded-full cursor-pointer transition-all active:scale-95 border border-white/5"
-          >
-            <div className="relative">
-              <MessageCircle size={16} className="text-white" />
-              {hasUnreadSupport && (
-                <span className="absolute -top-1.5 -right-1.5 flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border border-[#613de6]"></span>
-                </span>
-              )}
-            </div>
-            <span className="text-[9px] font-black uppercase tracking-[0.1em] text-white/90">
-              Support
-            </span>
-          </div>
-
           {/* WALLET SECTION */}
           <div className="relative">
             <button 
