@@ -1,10 +1,8 @@
 "use client";
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, updateDoc, doc, limit } from "firebase/firestore";
 import { ShieldCheck, ArrowRight, Loader2, CheckCircle2, AlertCircle, Mail, RotateCcw } from "lucide-react";
 
 function OtpInput({ value, onChange }) {
@@ -65,7 +63,7 @@ function OtpInput({ value, onChange }) {
 function VerifyContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const email = searchParams.get("email");
+  const email = String(searchParams.get("email") || "").trim().toLowerCase();
 
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
@@ -87,51 +85,39 @@ function VerifyContent() {
     return () => clearInterval(timer);
   }, [resendCooldown]);
 
-  const getUserDocByEmail = async () => {
-    if (!email) return null;
-    const q = query(collection(db, "users"), where("email", "==", email), limit(1));
-    const snap = await getDocs(q);
-    if (snap.empty) return null;
-    return snap.docs[0];
-  };
+  const callVerificationApi = useCallback(async (payload) => {
+    const response = await fetch("/api/auth/verification", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = await response.json().catch(() => ({}));
+    return { ok: response.ok, body };
+  }, []);
 
-  const issueAndSendOtp = async ({ showNotice = true } = {}) => {
+  const issueAndSendOtp = useCallback(async ({ showNotice = true } = {}) => {
     if (!email) return;
     setError("");
     if (showNotice) setResendNotice("");
 
-    const userDoc = await getUserDocByEmail();
-    if (!userDoc) {
-      setError("User record not found.");
-      return;
-    }
-
-    const userData = userDoc.data();
-    if (userData.verified === true) {
-      if (showNotice) setResendNotice("This account is already verified. You can login.");
-      return;
-    }
-
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    await updateDoc(doc(db, "users", userDoc.id), { otp: otpCode });
-
-    const emailResponse = await fetch("/api/send-email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        to: email,
-        subject: "Flyova Verification Code",
-        html: `<p>Hello ${userData.fullName || userData.username || "Player"}, your verification code is <strong>${otpCode}</strong>.</p>`,
-      }),
+    const { ok, body } = await callVerificationApi({
+      action: "resend",
+      email,
     });
-    const emailPayload = await emailResponse.json().catch(() => ({}));
-    if (!emailResponse.ok) {
-      throw new Error(emailPayload?.error || "Could not send verification email.");
+
+    if (!ok) {
+      setError(body?.error || "Could not resend code. Please try again.");
+      return;
+    }
+
+    if (body?.alreadyVerified) {
+      if (showNotice) setResendNotice(body?.message || "This account is already verified. You can login.");
+      return;
     }
 
     setResendCooldown(60);
-    if (showNotice) setResendNotice("A new 6-digit code has been sent to your email.");
-  };
+    if (showNotice) setResendNotice(body?.message || "A new 6-digit code has been sent to your email.");
+  }, [email, callVerificationApi]);
 
   useEffect(() => {
     if (!email) return;
@@ -139,11 +125,13 @@ function VerifyContent() {
 
     const autoSendIfMissingOtp = async () => {
       try {
-        const userDoc = await getUserDocByEmail();
-        if (!active || !userDoc) return;
-        const userData = userDoc.data();
-        if (userData.verified === true) return;
-        if (!userData.otp) {
+        const { ok, body } = await callVerificationApi({
+          action: "status",
+          email,
+        });
+        if (!active || !ok) return;
+        if (!body?.exists || body?.verified === true) return;
+        if (!body?.hasOtp) {
           await issueAndSendOtp({ showNotice: false });
         }
       } catch (e) {
@@ -155,7 +143,7 @@ function VerifyContent() {
     return () => {
       active = false;
     };
-  }, [email]);
+  }, [email, callVerificationApi, issueAndSendOtp]);
 
   const handleResendCode = async () => {
     if (resendCooldown > 0 || resending) return;
@@ -172,22 +160,28 @@ function VerifyContent() {
 
   const handleVerify = async (e) => {
     e.preventDefault();
-    if (otp.replace(/\D/g, "").length < 6) return setError("Please enter the full 6-digit code.");
+    const cleanOtp = otp.replace(/\D/g, "").slice(0, 6);
+    if (cleanOtp.length < 6) return setError("Please enter the full 6-digit code.");
     setLoading(true);
     setError("");
     setResendNotice("");
 
     try {
-      const userDoc = await getUserDocByEmail();
-      if (!userDoc) { setError("User record not found."); setLoading(false); return; }
-      if (userDoc.data().otp === otp) {
-        await updateDoc(doc(db, "users", userDoc.id), { verified: true, otp: null });
-        setSuccess(true);
-        setTimeout(() => router.push("/login"), 2200);
-      } else {
-        setError("The code you entered is incorrect. Please try again.");
+      const { ok, body } = await callVerificationApi({
+        action: "verify",
+        email,
+        otp: cleanOtp,
+      });
+
+      if (!ok) {
+        setError(body?.error || "An error occurred. Please try again.");
+        return;
       }
-    } catch {
+
+      setSuccess(true);
+      setTimeout(() => router.push("/login"), 2200);
+    } catch (error) {
+      console.error("Verify error:", error);
       setError("An error occurred. Please try again.");
     } finally {
       setLoading(false);

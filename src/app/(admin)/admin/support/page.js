@@ -2,23 +2,23 @@
 import { useEffect, useState, useRef } from "react";
 import { 
   Search, MessageCircle, Send, Loader2, 
-  User, Clock, ChevronLeft, Bell, MoreVertical
+  ChevronLeft, MoreVertical
 } from "lucide-react";
-import { auth, db } from "@/lib/firebase";
-import { 
-  collection, query, orderBy, onSnapshot, 
-  doc, updateDoc, arrayUnion, serverTimestamp, getDoc 
-} from "firebase/firestore";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+
+const CHAT_NOTIFY_EMAIL = "contact.notifications.surname@gmail.com";
+const CLEANUP_STORAGE_KEY = "support_cleanup_last_run";
+const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const SUPPORT_POLL_INTERVAL_MS = 5000;
 
 export default function AdminSupport() {
-  const CHAT_NOTIFY_EMAIL = "contact.notifications.surname@gmail.com";
-  const CLEANUP_STORAGE_KEY = "support_cleanup_last_run";
-  const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
   const [chats, setChats] = useState([]);
   const [selectedChat, setSelectedChat] = useState(null);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -32,23 +32,86 @@ export default function AdminSupport() {
   }, []);
 
   useEffect(() => {
-    const q = query(collection(db, "support_chats"), orderBy("updatedAt", "desc"));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      const chatList = snap.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setChats(chatList);
-      setLoading(false);
-      
-      // Update selected chat details if it's currently open
-      if (selectedChat) {
-        const updated = chatList.find(c => c.id === selectedChat.id);
-        if (updated) setSelectedChat(updated);
+    let pollTimer = null;
+    let active = true;
+
+    const fetchSupportChats = async ({ silent = false } = {}) => {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        if (!silent && active) {
+          setLoading(false);
+          setLoadError("You are logged out. Please sign in again.");
+          setChats([]);
+          setSelectedChat(null);
+        }
+        return;
       }
+
+      try {
+        const token = await currentUser.getIdToken();
+        const response = await fetch("/api/admin/support-chats", {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(payload?.error || "Could not load support chats right now.");
+        }
+
+        const chatList = Array.isArray(payload.chats) ? payload.chats : [];
+        if (!active) return;
+
+        setChats(chatList);
+        setLoadError("");
+        setSelectedChat((currentSelected) => {
+          if (!currentSelected) return null;
+          return chatList.find((chat) => chat.id === currentSelected.id) || null;
+        });
+      } catch (error) {
+        console.error("Support chats fetch error:", error);
+        if (!active) return;
+        if (!silent) {
+          setLoadError(error?.message || "Could not load support chats right now.");
+        }
+      } finally {
+        if (!silent && active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+
+      if (!currentUser) {
+        setLoading(false);
+        setLoadError("You are logged out. Please sign in again.");
+        setChats([]);
+        setSelectedChat(null);
+        return;
+      }
+
+      setLoading(true);
+      setLoadError("");
+      await fetchSupportChats({ silent: false });
+
+      pollTimer = window.setInterval(() => {
+        fetchSupportChats({ silent: true });
+      }, SUPPORT_POLL_INTERVAL_MS);
     });
-    return () => unsubscribe();
-  }, [selectedChat?.id]);
+
+    return () => {
+      active = false;
+      if (pollTimer) {
+        clearInterval(pollTimer);
+      }
+      unsubscribeAuth();
+    };
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -59,8 +122,23 @@ export default function AdminSupport() {
   const selectChat = async (chat) => {
     setSelectedChat(chat);
     if (chat.unreadByAdmin) {
-      const chatRef = doc(db, "support_chats", chat.id);
-      await updateDoc(chatRef, { unreadByAdmin: false });
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return;
+        await fetch("/api/admin/support-chats", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            action: "mark_read",
+            chatId: chat.id,
+          }),
+        });
+      } catch (error) {
+        console.error("Mark read failed:", error);
+      }
     }
   };
 
@@ -68,21 +146,24 @@ export default function AdminSupport() {
     if (!selectedChat) return;
     if (selectedChat.resolved) return;
     try {
-      const chatRef = doc(db, "support_chats", selectedChat.id);
-      await updateDoc(chatRef, {
-        resolved: true,
-        resolvedAt: serverTimestamp(),
-        messages: arrayUnion({
-          text: "Support marked this chat as resolved. Send a new message to reopen it.",
-          senderId: "system",
-          senderType: "system",
-          timestamp: new Date().toISOString()
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return;
+      const response = await fetch("/api/admin/support-chats", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: "mark_resolved",
+          chatId: selectedChat.id,
         }),
-        lastMessage: "Ticket resolved by support",
-        updatedAt: serverTimestamp(),
-        unreadByAdmin: false,
-        unreadByUser: true
       });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || "Could not resolve ticket.");
+      }
+      setSelectedChat((prev) => (prev ? { ...prev, resolved: true } : prev));
     } catch (err) {
       console.error("Resolve Error:", err);
     }
@@ -97,41 +178,43 @@ export default function AdminSupport() {
     setReplyText("");
 
     try {
-      const chatRef = doc(db, "support_chats", selectedChat.id);
-      
-      // Ensure the document exists before updating
-      const snap = await getDoc(chatRef);
-      if (snap.exists()) {
-        await updateDoc(chatRef, {
-          messages: arrayUnion({
-            text: text,
-            senderId: "admin",
-            senderType: "admin",
-            timestamp: new Date().toISOString()
-          }),
-          lastMessage: text,
-          updatedAt: serverTimestamp(),
-          resolved: false,
-          unreadByUser: true 
-        });
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("You are logged out. Please sign in again.");
 
-        try {
-          await fetch("/api/send-email", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              to: CHAT_NOTIFY_EMAIL,
-              subject: "Support Notification: Admin Reply Sent",
-              html: `<p><strong>Sender:</strong> Admin</p><p><strong>User:</strong> ${selectedChat.userEmail}</p><p><strong>Message:</strong> ${text}</p>`,
-            }),
-          });
-        } catch (e) {
-          console.error("Admin live chat notification email failed:", e);
-        }
+      const response = await fetch("/api/admin/support-chats", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: "reply",
+          chatId: selectedChat.id,
+          message: text,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || "Failed to send message.");
+      }
+
+      try {
+        await fetch("/api/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: CHAT_NOTIFY_EMAIL,
+            subject: "Support Notification: Admin Reply Sent",
+            html: `<p><strong>Sender:</strong> Admin</p><p><strong>User:</strong> ${selectedChat.userEmail}</p><p><strong>Message:</strong> ${text}</p>`,
+          }),
+        });
+      } catch (e) {
+        console.error("Admin live chat notification email failed:", e);
       }
     } catch (err) {
       console.error("Reply Error:", err);
-      alert("Failed to send message. Check console.");
+      alert(err?.message || "Failed to send message. Check console.");
       setReplyText(text);
     } finally {
       setSending(false);
@@ -143,6 +226,23 @@ export default function AdminSupport() {
       <Loader2 className="animate-spin text-blue-600" size={32} />
     </div>
   );
+
+  if (loadError) {
+    return (
+      <div className="h-screen bg-[#0b1220] text-white flex items-center justify-center p-6">
+        <div className="max-w-md w-full rounded-3xl border border-rose-400/20 bg-[#111827] p-8 text-center space-y-4">
+          <h2 className="text-lg font-black uppercase tracking-wide text-rose-300">Support Unavailable</h2>
+          <p className="text-sm text-slate-300">{loadError}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-5 py-3 rounded-2xl bg-[#613de6] hover:bg-[#724fff] text-xs font-black uppercase tracking-widest"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-white text-slate-900 overflow-hidden font-sans">

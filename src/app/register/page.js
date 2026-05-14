@@ -92,8 +92,18 @@ function RegisterForm() {
     }
 
     try {
+      const normalizedEmail = String(formData.email || "").trim().toLowerCase();
+      const normalizedUsername = String(formData.username || "").trim();
+      const normalizedFullName = String(formData.fullName || "").trim();
+
+      if (!normalizedEmail) {
+        setError("Email is required.");
+        setLoading(false);
+        return;
+      }
+
       const usernameSnap = await getDocs(
-        query(collection(db, "users"), where("username", "==", formData.username))
+        query(collection(db, "users"), where("username", "==", normalizedUsername))
       );
       if (!usernameSnap.empty) {
         setError("This username is already taken. Please choose another.");
@@ -112,15 +122,16 @@ function RegisterForm() {
       }
 
       const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-      const cred = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
-      await updateProfile(cred.user, { displayName: formData.username });
+      const cred = await createUserWithEmailAndPassword(auth, normalizedEmail, formData.password);
+      await updateProfile(cred.user, { displayName: normalizedUsername });
       const userPin = generateUserPin();
 
       await setDoc(doc(db, "users", cred.user.uid), {
         uid: cred.user.uid,
-        fullName: formData.fullName,
-        username: formData.username,
-        email: formData.email,
+        fullName: normalizedFullName,
+        username: normalizedUsername,
+        email: normalizedEmail,
+        emailLower: normalizedEmail,
         country: selectedCountry.name,
         phone: normalizedPhone,
         dob: formData.dob,
@@ -146,9 +157,9 @@ function RegisterForm() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            to: formData.email,
+            to: normalizedEmail,
             subject: "Welcome to Flyova - Verify Your Account",
-            html: `<p>Hello ${formData.fullName}, your code is ${otpCode}</p>`,
+            html: `<p>Hello ${normalizedFullName || normalizedUsername || "Player"}, your code is ${otpCode}</p>`,
           }),
         });
         if (!emailResponse.ok) {
@@ -165,7 +176,7 @@ function RegisterForm() {
       } catch (e) {
         console.error("Auto sign-out after registration failed", e);
       }
-      router.push(`/verify?email=${formData.email}`);
+      router.push(`/verify?email=${encodeURIComponent(normalizedEmail)}`);
     } catch (err) {
       setError(err.message);
       setLoading(false);
