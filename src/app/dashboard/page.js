@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import {
   Search, Loader2, ShieldCheck, ArrowRight, Clock,
   ArrowUpRight, Megaphone, X, AlertTriangle,
-  CheckCircle2, Heart, Star, MessageCircle, Trophy
+  CheckCircle2, Heart, Star, MessageCircle, Trophy,
+  GraduationCap, SkipForward, PlayCircle
 } from "lucide-react";
 // FIREBASE IMPORTS
 import { auth, db } from "@/lib/firebase";
@@ -31,6 +32,7 @@ export default function Dashboard() {
   const [testimonialText, setTestimonialText] = useState("");
   const [submittingTestimonial, setSubmittingTestimonial] = useState(false);
   const [hasApprovedWithdrawal, setHasApprovedWithdrawal] = useState(false);
+  const [tutorialPromptGame, setTutorialPromptGame] = useState(null);
 
   // Announcement States
   const [announcements, setAnnouncements] = useState([]);
@@ -231,15 +233,50 @@ export default function Dashboard() {
   };
 
   const handleNavigation = (path) => { if (path !== "#") router.push(path); };
+  const askTutorialBeforeGame = (game) => setTutorialPromptGame(game);
+  const skipTutorial = () => {
+    if (!tutorialPromptGame?.path) return;
+    handleNavigation(tutorialPromptGame.path);
+    setTutorialPromptGame(null);
+  };
+  const startTutorial = () => {
+    if (!tutorialPromptGame?.tutorialPath) return;
+    router.push(`${tutorialPromptGame.tutorialPath}?next=${encodeURIComponent(tutorialPromptGame.path)}`);
+    setTutorialPromptGame(null);
+  };
 
   const handleGameClick = (game) => {
-    handleNavigation(game.path);
+    askTutorialBeforeGame(game);
   };
 
   const topGames = [
-    { id: 1, name: "Play with Friends", img: "/play_friends.svg", tag: "Hot", path: "/game/1" },
-    { id: 2, name: "Flyova To Dollars", img: "/flytodols.svg", tag: "Cash", path: "/game/flyova-to-dollars" },
-    { id: 3, name: "Predict and Win", img: "/predictwin.svg", tag: "New", path: "/game/predict-and-win" }
+    {
+      id: 1,
+      name: "Play with Friends",
+      img: "/play_friends.svg",
+      tag: "Hot",
+      path: "/game/1",
+      tutorialPath: "/game/demo/friends",
+      tutorialPoints: ["Understand turns", "Learn scoring to 15", "Practice risk-free"]
+    },
+    {
+      id: 2,
+      name: "Flyova To Dollars",
+      img: "/flytodols.svg",
+      tag: "Cash",
+      path: "/game/flyova-to-dollars",
+      tutorialPath: "/game/demo/flyova",
+      tutorialPoints: ["Pick 2 numbers", "Set stake", "See result flow"]
+    },
+    {
+      id: 3,
+      name: "Predict and Win",
+      img: "/predictwin.svg",
+      tag: "New",
+      path: "/game/predict-and-win",
+      tutorialPath: "/game/demo/predict",
+      tutorialPoints: ["Choose condition", "Lock prediction", "Understand payout"]
+    }
   ];
 
   if (loading) {
@@ -282,6 +319,64 @@ export default function Dashboard() {
             >
               {submittingTestimonial ? <Loader2 size={16} className="animate-spin" /> : "Submit Review"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* PRE-GAME TUTORIAL PROMPT */}
+      {tutorialPromptGame && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center px-5">
+          <button
+            type="button"
+            aria-label="Close tutorial prompt"
+            onClick={() => setTutorialPromptGame(null)}
+            className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+          />
+          <div className="relative z-10 w-full max-w-md rounded-[2.2rem] border border-[#613de6]/35 bg-[#111a35] p-7 shadow-[0_20px_80px_rgba(0,0,0,0.65)] animate-in zoom-in-95 duration-200">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-[#613de6]/25 border border-[#613de6]/35 flex items-center justify-center">
+                  <GraduationCap size={22} className="text-[#c8b9ff]" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/50">Before You Play</p>
+                  <h3 className="text-xl font-black italic uppercase tracking-tight text-white">Need a Tutorial?</h3>
+                </div>
+              </div>
+              <button
+                onClick={() => setTutorialPromptGame(null)}
+                className="p-2 rounded-xl bg-white/5 text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-white/10 bg-[#0b1228] p-4">
+              <p className="text-sm font-black text-[#fc7952] uppercase tracking-tight">{tutorialPromptGame.name}</p>
+              <p className="text-xs font-bold text-white/65 mt-1">Try a short simulator tutorial before staking real funds.</p>
+              <div className="mt-3 space-y-2">
+                {(tutorialPromptGame.tutorialPoints || []).map((point) => (
+                  <div key={point} className="text-[11px] font-black uppercase tracking-wider text-white/75">
+                    - {point}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                onClick={startTutorial}
+                className="bg-[#613de6] hover:bg-[#7251ed] text-white px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-[#613de6]/30"
+              >
+                <PlayCircle size={15} /> Start Tutorial
+              </button>
+              <button
+                onClick={skipTutorial}
+                className="bg-white/10 hover:bg-white/15 text-white px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 border border-white/10 flex items-center justify-center gap-2"
+              >
+                <SkipForward size={15} /> Skip & Play
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -391,7 +486,14 @@ export default function Dashboard() {
           <section className="xl:col-span-8 space-y-6">
             {/* Top Banner */}
             <div>
-              <div onClick={() => handleNavigation('/game/flyova-to-dollars')} className="relative w-full h-52 md:h-64 rounded-3xl overflow-hidden bg-[#613de6] group cursor-pointer shadow-2xl border border-white/5">
+              <div
+                onClick={() =>
+                  askTutorialBeforeGame(
+                    topGames.find((g) => g.path === "/game/flyova-to-dollars") || topGames[1]
+                  )
+                }
+                className="relative w-full h-52 md:h-64 rounded-3xl overflow-hidden bg-[#613de6] group cursor-pointer shadow-2xl border border-white/5"
+              >
           <div className="absolute inset-0 opacity-40 group-hover:opacity-60 transition-opacity"><img src="/flytodols.svg" alt="Background" className="w-full h-full object-cover" /></div>
           <div className="absolute inset-0 bg-gradient-to-r from-black/60 to-transparent" />
           <div className="absolute bottom-6 left-6 z-10">

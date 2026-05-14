@@ -30,6 +30,7 @@ function drawResult(willWin, selectedChoice) {
 
 export default function DemoPredict() {
   const router = useRouter();
+  const [nextPath, setNextPath] = useState("/game/predict-and-win");
   const [uid, setUid] = useState(null);
 
   // Persisted demo wallet from Firestore
@@ -51,6 +52,14 @@ export default function DemoPredict() {
 
   const stateRef = useRef({});
   stateRef.current = { hasBet, selectedChoice, winPattern, gameCount, wallet };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const nextParam = new URLSearchParams(window.location.search).get("next");
+    if (nextParam && nextParam.startsWith("/")) {
+      setNextPath(nextParam);
+    }
+  }, []);
 
   // Auth guard + Firestore wallet subscription
   useEffect(() => {
@@ -142,14 +151,22 @@ export default function DemoPredict() {
       {/* DEMO BANNER */}
       <div className="w-full bg-amber-500/20 border-b border-amber-500/40 px-4 py-2 flex items-center justify-between">
         <span className="text-amber-400 text-xs font-black uppercase tracking-widest">
-          Demo Mode — No Subscription Needed
+          Tutorial Simulator - No Subscription Needed
         </span>
-        <Link
-          href="/game/predict-and-win"
-          className="flex items-center gap-1 text-xs font-bold text-amber-400 hover:text-amber-300 transition-colors"
-        >
-          Play Real <ArrowRight size={12} />
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => router.push(nextPath)}
+            className="text-[10px] font-black uppercase tracking-widest text-amber-300/80 hover:text-amber-200 transition-colors"
+          >
+            Skip Tutorial
+          </button>
+          <Link
+            href={nextPath}
+            className="flex items-center gap-1 text-xs font-bold text-amber-400 hover:text-amber-300 transition-colors"
+          >
+            Play Real <ArrowRight size={12} />
+          </Link>
+        </div>
       </div>
 
       <div className="max-w-md mx-auto px-4 pt-4 space-y-4">

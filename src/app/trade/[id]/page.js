@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { db, auth } from "@/lib/firebase";
 import { 
   doc, onSnapshot, updateDoc, increment, 
-  collection, addDoc, serverTimestamp, query, orderBy, writeBatch, getDoc, where, getDocs, limit, runTransaction
+  collection, addDoc, serverTimestamp, query, orderBy, writeBatch, getDoc, where, getDocs, limit, runTransaction, deleteField
 } from "firebase/firestore";
 import { 
   Send, ShieldCheck, Landmark, AlertCircle, 
@@ -366,7 +366,14 @@ export default function TradeRoom() {
       batch.update(doc(db, "trades", id), { 
         status: "completed", 
         completedAt: serverTimestamp(),
-        finalFee: feeAmount
+        finalFee: feeAmount,
+        cancelledAt: deleteField(),
+        cancelledBy: deleteField(),
+        declineReason: deleteField(),
+        reason: deleteField(),
+        refunded: deleteField(),
+        refundedAt: deleteField(),
+        autoRefunded: deleteField(),
       });
       
       await batch.commit();

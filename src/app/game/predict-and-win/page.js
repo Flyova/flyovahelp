@@ -9,6 +9,7 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { Timer, CheckCircle2, Lock, Clock, Trophy, Wallet, XCircle, ArrowLeft, AlertCircle, Calendar } from "lucide-react";
 import { useRouter } from "next/navigation";
+import ToastNotification from "@/components/ToastNotification";
 
 export default function PredictAndWin() {
   const router = useRouter();
@@ -36,6 +37,7 @@ export default function PredictAndWin() {
   const [pendingPlan, setPendingPlan] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [placingPrediction, setPlacingPrediction] = useState(false);
+  const [notification, setNotification] = useState(null);
   const predictionLockRef = useRef(false);
 
   const WIN_REWARD = 0.20;
@@ -48,6 +50,10 @@ export default function PredictAndWin() {
     { id: "1d", name: "1 Day", price: 95, duration: 24 * 60 * 60 * 1000 },
     { id: "1w", name: "1 Week", price: 650, duration: 7 * 24 * 60 * 60 * 1000 },
   ];
+
+  const showNotification = (type, title, message) => {
+    setNotification({ type, title, message, id: Date.now() });
+  };
 
   // 1. Auth & Data Sync
   useEffect(() => {
@@ -170,7 +176,8 @@ export default function PredictAndWin() {
 const buySubscription = async () => {
     if (!pendingPlan || !user) return;
     if (userData.wallet < pendingPlan.price) {
-        alert("Insufficient Balance");
+        const msg = `Insufficient balance. Plan: $${Number(pendingPlan.price).toFixed(2)} | Available: $${Number(userData.wallet || 0).toFixed(2)}`;
+        showNotification("warning", "Low Balance", msg);
         setShowConfirmModal(false);
         return;
     }
@@ -226,7 +233,7 @@ const buySubscription = async () => {
         setShowConfirmModal(false);
     } catch (e) { 
         console.error(e);
-        alert("Transaction failed. Please try again.");
+        showNotification("error", "Transaction Failed", "Please try again.");
     } finally {
         setSubmitting(false);
     }
@@ -296,6 +303,7 @@ const buySubscription = async () => {
   if (!hasSubscribed) {
     return (
       <div className="min-h-screen bg-[#0f172a] text-white p-6 relative">
+        <ToastNotification notification={notification} onClose={() => setNotification(null)} />
         <div className="text-center mt-10 mb-10">
             <Lock size={48} className="mx-auto text-[#613de6] mb-4" />
             <h1 className="text-3xl font-black italic uppercase">Predict & Win</h1>
@@ -351,6 +359,7 @@ const buySubscription = async () => {
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-white flex flex-col relative overflow-hidden pb-24">
+      <ToastNotification notification={notification} onClose={() => setNotification(null)} />
       {/* Result Alert */}
       {showResultAlert && (
         <div className="absolute inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in zoom-in duration-300">

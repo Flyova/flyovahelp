@@ -9,6 +9,7 @@ import { ref as rtdbRef, onValue } from "firebase/database";
 import { onAuthStateChanged } from "firebase/auth";
 import { Timer, CheckCircle2, Trophy, History, XCircle, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import ToastNotification from "@/components/ToastNotification";
 
 export default function FlyovaToDollars() {
   const router = useRouter();
@@ -24,6 +25,8 @@ export default function FlyovaToDollars() {
   const [stake, setStake] = useState(1);
   const [placingBet, setPlacingBet] = useState(false);
   const placeBetLockRef = useRef(false);
+  const [betError, setBetError] = useState("");
+  const [notification, setNotification] = useState(null);
   const [activeBets, setActiveBets] = useState([]); 
   const [gameStatus, setGameStatus] = useState("betting"); 
   const [lastWinningNumbers, setLastWinningNumbers] = useState([]);
@@ -35,6 +38,10 @@ export default function FlyovaToDollars() {
 
   const GAME_DURATION = 120;
   const WIN_MULTIPLIER = 1.3; 
+
+  const showNotification = (type, title, message) => {
+    setNotification({ type, title, message, id: Date.now() });
+  };
 
 
     
@@ -151,7 +158,22 @@ export default function FlyovaToDollars() {
   };
 
   const placeBet = async () => {
-    if (selectedNumbers.length !== 2 || myWallet < stake || !currentGame || placingBet || placeBetLockRef.current) return;
+    if (!currentGame || placingBet || placeBetLockRef.current) return;
+    if (selectedNumbers.length !== 2) {
+      setBetError("Select 2 numbers before placing your bet.");
+      return;
+    }
+    if (stake <= 0) {
+      setBetError("Enter a valid stake amount.");
+      return;
+    }
+    if (myWallet < stake) {
+      const msg = `Insufficient balance. Stake: $${Number(stake).toFixed(2)} | Available: $${Number(myWallet || 0).toFixed(2)}`;
+      setBetError(msg);
+      showNotification("warning", "Low Balance", msg);
+      return;
+    }
+    setBetError("");
     placeBetLockRef.current = true;
     setPlacingBet(true);
     try {
@@ -171,7 +193,8 @@ export default function FlyovaToDollars() {
       });
       await fetchUserBets(currentGame.id);
     } catch (e) {
-      alert("Error placing bet");
+      console.error("Error placing bet:", e);
+      showNotification("error", "Bet Failed", "Error placing bet. Please try again.");
     } finally {
       setPlacingBet(false);
       placeBetLockRef.current = false;
@@ -187,6 +210,7 @@ export default function FlyovaToDollars() {
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-white flex flex-col pb-24 relative overflow-hidden">
+      <ToastNotification notification={notification} onClose={() => setNotification(null)} />
       
       {/* RESULT MODAL */}
       {showResultAlert && (
@@ -268,13 +292,26 @@ export default function FlyovaToDollars() {
                 {/* Stake Panel */}
                 <div className="w-full max-w-xs bg-[#1e293b] p-6 rounded-[2.5rem] border border-white/5">
                     <div className="flex items-center justify-between mb-6 bg-black/20 p-4 rounded-2xl">
-                        <button onClick={() => setStake(Math.max(1, stake - 1))} className="w-10 h-10 bg-[#613de6] rounded-xl font-bold">-</button>
+                        <button onClick={() => { setStake(Math.max(1, stake - 1)); setBetError(""); }} className="w-10 h-10 bg-[#613de6] rounded-xl font-bold">-</button>
                         <div className="flex items-center text-[#fc7952]">
                             <span className="text-2xl font-black italic mr-1">$</span>
-                            <input type="number" value={stake} onChange={(e) => setStake(parseInt(e.target.value) || 1)} className="bg-transparent text-2xl font-black italic w-12 text-center outline-none" />
+                            <input
+                              type="number"
+                              value={stake}
+                              onChange={(e) => {
+                                setStake(parseInt(e.target.value) || 1);
+                                setBetError("");
+                              }}
+                              className="bg-transparent text-2xl font-black italic w-12 text-center outline-none"
+                            />
                         </div>
-                        <button onClick={() => setStake(stake + 1)} className="w-10 h-10 bg-[#613de6] rounded-xl font-bold">+</button>
+                        <button onClick={() => { setStake(stake + 1); setBetError(""); }} className="w-10 h-10 bg-[#613de6] rounded-xl font-bold">+</button>
                     </div>
+                    {betError && (
+                      <p className="mb-3 text-[10px] font-black uppercase tracking-wider text-rose-400 text-center">
+                        {betError}
+                      </p>
+                    )}
                    <button 
     onClick={placeBet} 
     disabled={selectedNumbers.length !== 2 || timeLeft <= 0 || gameStatus === "waiting" || placingBet}

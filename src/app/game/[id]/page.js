@@ -9,6 +9,7 @@ import {
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { User, Zap, Wallet, ShieldCheck, Trophy, Ghost, MessageSquare, Send, X as CloseIcon, Search, Users, Timer as TimerIcon, RefreshCw, Loader2 } from "lucide-react";
+import ToastNotification from "@/components/ToastNotification";
 
 export default function GamePage() {
   const { id } = useParams();
@@ -38,8 +39,13 @@ export default function GamePage() {
   const [showStakeModal, setShowStakeModal] = useState(null);
   const [stakeAmount, setStakeAmount] = useState(1);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [notification, setNotification] = useState(null);
   const WIN_TARGET = 15;
   const MATCH_ADMIN_FEE_RATE = 0.25;
+
+  const showNotification = useCallback((type, title, message) => {
+    setNotification({ type, title, message, id: Date.now() });
+  }, []);
 
   // 1. Auth & Wallet Listener
   useEffect(() => {
@@ -258,7 +264,13 @@ export default function GamePage() {
     const calculatedFee = stakeAmount * MATCH_ADMIN_FEE_RATE;
     const totalCost = totalWager + calculatedFee;
 
-    if (myWallet < totalCost) return alert("Insufficient Balance!");
+    if (myWallet < totalCost) {
+      return showNotification(
+        "warning",
+        "Low Balance",
+        `Insufficient balance. Required: $${Number(totalCost).toFixed(2)} | Available: $${Number(myWallet || 0).toFixed(2)}`
+      );
+    }
     
     await addDoc(collection(db, "challenges"), {
       from: user.uid, fromName: user.displayName || "Player", to: showStakeModal.id, toName: showStakeModal.username, status: "pending",
@@ -271,7 +283,13 @@ export default function GamePage() {
     const chal = incomingChallenge;
     if (!chal) return;
     const totalCost = chal.totalWager + chal.fee;
-    if (myWallet < totalCost) return alert("Insufficient funds!");
+    if (myWallet < totalCost) {
+      return showNotification(
+        "warning",
+        "Low Balance",
+        `Insufficient balance to accept challenge. Required: $${Number(totalCost).toFixed(2)} | Available: $${Number(myWallet || 0).toFixed(2)}`
+      );
+    }
     
     const gameId = `match_${Date.now()}`;
     try {
@@ -402,6 +420,7 @@ export default function GamePage() {
     const myRefund = isP1 ? activeGame.wagerPool?.p1 : activeGame.wagerPool?.p2;
     return (
       <div className="min-h-screen bg-[#0f172a] text-white flex flex-col items-center justify-center p-6 text-center">
+        <ToastNotification notification={notification} onClose={() => setNotification(null)} />
         <Trophy size={64} className="text-[#fc7952] mb-4" />
         <h1 className="text-4xl font-black italic uppercase mb-2">Game Over</h1>
         <div className="bg-[#1e293b] p-8 rounded-[2.5rem] w-full max-w-sm border border-white/5 mb-6">
@@ -423,6 +442,7 @@ export default function GamePage() {
   if (!activeGame) {
     return (
       <div className="min-h-screen bg-[#0f172a] text-white p-6 pb-32">
+        <ToastNotification notification={notification} onClose={() => setNotification(null)} />
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-xl font-black italic uppercase">Challenge Friends</h1>
@@ -530,6 +550,7 @@ export default function GamePage() {
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-white flex flex-col relative overflow-hidden pb-[80px]">
+      <ToastNotification notification={notification} onClose={() => setNotification(null)} />
       <div className="bg-[#613de6] p-4 flex justify-between items-center shadow-lg relative z-20">
         <div className="flex flex-col">
             <span className="font-black italic text-[10px] uppercase">ROUND {activeGame?.round} · FIRST TO {WIN_TARGET}</span>

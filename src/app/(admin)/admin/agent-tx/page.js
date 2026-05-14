@@ -49,10 +49,32 @@ export default function AgentTransactions() {
 
   const PAGE_SIZE = 20;
 
+  const toMillis = (value) => {
+    if (!value) return 0;
+    if (typeof value?.toMillis === "function") return value.toMillis();
+    if (typeof value?.toDate === "function") return value.toDate().getTime();
+    if (typeof value === "number") return value;
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+
   const normalizeStatus = (status) => String(status || "").trim().toLowerCase();
   const getDisplayStatus = (trade) => {
-    if (trade?.refunded) return "refunded";
     const normalized = normalizeStatus(trade?.status);
+    const terminalEvents = [
+      { status: "completed", at: toMillis(trade?.completedAt) },
+      { status: "refunded", at: toMillis(trade?.refundedAt) },
+      { status: "cancelled", at: toMillis(trade?.cancelledAt) },
+    ]
+      .filter((event) => event.at > 0)
+      .sort((a, b) => b.at - a.at);
+
+    if (terminalEvents.length > 0) return terminalEvents[0].status;
+    if (trade?.refunded || normalized === "refunded") return "refunded";
+    if (["completed", "complete", "approved"].includes(normalized)) return "completed";
+    if (["cancelled", "canceled", "declined", "expired"].includes(normalized)) return "cancelled";
+    if (normalized === "accepted") return "acknowledged";
+    if (trade?.declineReason || trade?.reason === "Expired") return "cancelled";
     return normalized || "unknown";
   };
 
@@ -131,7 +153,6 @@ export default function AgentTransactions() {
 
   useEffect(() => {
     if (!chatTrade?.id) return undefined;
-    setChatLoading(true);
     const q = query(collection(db, "trades", chatTrade.id, "messages"), orderBy("createdAt", "asc"));
     const unsub = onSnapshot(
       q,
@@ -404,7 +425,10 @@ export default function AgentTransactions() {
                     <td className="p-6">
                         <div className="flex items-center justify-end gap-2">
                             <button
-                                onClick={() => setChatTrade(trade)}
+                                onClick={() => {
+                                  setChatLoading(true);
+                                  setChatTrade(trade);
+                                }}
                                 className="flex items-center gap-1 px-3 py-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-500 hover:text-white transition-all border border-indigo-100"
                             >
                                 <MessageSquare size={12} />
