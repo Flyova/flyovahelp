@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { db } from "@/lib/firebase";
@@ -76,7 +75,6 @@ function PostCard({ post }) {
 }
 
 export default function BlogPage() {
-  const router = useRouter();
   const [allPosts, setAllPosts] = useState([]);
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [loading, setLoading] = useState(true);
@@ -126,17 +124,6 @@ export default function BlogPage() {
         <Link href="/">
           <Image src="/logo.svg" alt="Flyovahelp" width={110} height={28} />
         </Link>
-        <div className="flex items-center gap-3">
-          <button onClick={() => router.push("/login")} className="text-xs font-black uppercase tracking-wider text-gray-400 hover:text-white transition-colors">
-            Login
-          </button>
-          <button
-            onClick={() => router.push("/register")}
-            className="bg-[#613de6] hover:brightness-110 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all"
-          >
-            Sign Up
-          </button>
-        </div>
       </div>
 
       {/* Hero */}
