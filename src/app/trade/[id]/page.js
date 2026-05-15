@@ -253,6 +253,7 @@ export default function TradeRoom() {
                 <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
                   <h2 style="color: #613de6; border-bottom: 1px solid #eee; padding-bottom: 10px;">Agent Accepted Trade</h2>
                   <p>Hello,</p>
+                  <p><strong>Trade ID:</strong> ${id}</p>
                   <p>The agent has accepted your ${trade.type} request for $${trade.amount}.</p>
                   <p>${trade.type === 'deposit' 
                     ? "Please return to the Trade Room to view the agent's bank details and make your payment." 

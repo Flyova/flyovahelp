@@ -8,11 +8,12 @@ import {
   orderBy,
   doc,
   getDoc,
-  updateDoc,
+  getDocs,
   increment,
   writeBatch,
   serverTimestamp,
-  where
+  where,
+  limit
 } from "firebase/firestore";
 import { 
   Search, 
@@ -31,6 +32,7 @@ export default function AdminWithdrawalList() {
   const [withdrawals, setWithdrawals] = useState([]);
   const [userCache, setUserCache] = useState({}); 
   const [searchTerm, setSearchTerm] = useState("");
+  const [viewMode, setViewMode] = useState("pending");
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
@@ -38,7 +40,6 @@ export default function AdminWithdrawalList() {
   useEffect(() => {
     const q = query(
       collection(db, "withdrawals"), 
-      where("status", "==", "pending"),
       orderBy("timestamp", "desc")
     );
     
@@ -74,6 +75,65 @@ export default function AdminWithdrawalList() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const toMillis = (v) => {
+    if (!v) return 0;
+    if (typeof v === "number") return v;
+    if (typeof v?.toMillis === "function") return v.toMillis();
+    if (typeof v?.toDate === "function") return v.toDate().getTime();
+    return 0;
+  };
+
+  const resolveWithdrawalTxRef = async (withdrawal) => {
+    if (!withdrawal?.userId) return null;
+    const txCollection = collection(db, "users", withdrawal.userId, "transactions");
+
+    if (withdrawal.userTransactionId) {
+      const linkedRef = doc(txCollection, withdrawal.userTransactionId);
+      const linkedSnap = await getDoc(linkedRef);
+      if (linkedSnap.exists()) return linkedRef;
+    }
+
+    if (withdrawal.id) {
+      const byWithdrawalQ = query(
+        txCollection,
+        where("withdrawalId", "==", withdrawal.id),
+        limit(1)
+      );
+      const byWithdrawalSnap = await getDocs(byWithdrawalQ);
+      if (!byWithdrawalSnap.empty) return byWithdrawalSnap.docs[0].ref;
+    }
+
+    // Backward compatibility for older rows created before withdrawalId linkage.
+    const pendingQ = query(txCollection, where("status", "==", "pending"), limit(25));
+    const pendingSnap = await getDocs(pendingQ);
+    const targetAmount = Number(withdrawal.amount || 0);
+    const targetAddress = String(withdrawal.details?.usdtAddress || "").trim().toLowerCase();
+    const targetTime = toMillis(withdrawal.timestamp);
+
+    let bestRef = null;
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    pendingSnap.docs.forEach((row) => {
+      const data = row.data();
+      if (data.type !== "withdrawal") return;
+
+      const rowAmount = Math.abs(Number(data.amount || 0));
+      if (rowAmount !== targetAmount) return;
+
+      const rowAddress = String(data.details?.usdtAddress || "").trim().toLowerCase();
+      if (targetAddress && rowAddress && rowAddress !== targetAddress) return;
+
+      const rowTime = toMillis(data.timestamp);
+      const score = targetTime > 0 && rowTime > 0 ? Math.abs(targetTime - rowTime) : 0;
+      if (score < bestScore) {
+        bestScore = score;
+        bestRef = row.ref;
+      }
+    });
+
+    return bestRef;
+  };
+
  const handleStatusUpdate = async (withdrawal, newStatus) => {
     const actionText = newStatus === "approved" ? "Approve" : "Decline & Refund";
     if (!confirm(`${actionText} this $${withdrawal.amount} withdrawal?`)) return;
@@ -89,19 +149,39 @@ export default function AdminWithdrawalList() {
         processedAt: serverTimestamp() 
       });
 
+      const existingTxRef = await resolveWithdrawalTxRef(withdrawal);
+
       if (newStatus === "approved") {
-        const txRef = doc(collection(db, "users", withdrawal.userId, "transactions"));
-        batch.set(txRef, {
-          title: "Withdrawal Approved",
-          amount: Number(withdrawal.amount),
-          type: "withdrawal",
-          status: "completed",
-          timestamp: serverTimestamp(),
-          details: `Payout to ${withdrawal.details?.usdtAddress} confirmed.`
-        });
+        if (existingTxRef) {
+          batch.update(existingTxRef, {
+            status: "completed",
+            completedAt: serverTimestamp(),
+            processedAt: serverTimestamp(),
+          });
+        } else {
+          const txRef = doc(collection(db, "users", withdrawal.userId, "transactions"));
+          batch.set(txRef, {
+            title: "Withdrawal Requested",
+            amount: -Number(withdrawal.amount),
+            type: "withdrawal",
+            method: "usdt",
+            status: "completed",
+            timestamp: serverTimestamp(),
+            details: { usdtAddress: withdrawal.details?.usdtAddress || "" },
+            withdrawalId: withdrawal.id,
+          });
+        }
 
       } else if (newStatus === "declined") {
         const refundAmt = withdrawal.totalDeducted || (withdrawal.amount + (withdrawal.fee || 0));
+
+        if (existingTxRef) {
+          batch.update(existingTxRef, {
+            status: "cancelled",
+            cancelledAt: serverTimestamp(),
+            processedAt: serverTimestamp(),
+          });
+        }
         
         batch.update(userRef, { 
           wallet: increment(Number(refundAmt)),
@@ -170,12 +250,26 @@ export default function AdminWithdrawalList() {
   };
 
   const filtered = withdrawals.filter(d => {
+    const status = d.status || "pending";
+    if (viewMode === "pending" && status !== "pending") return false;
+    if (viewMode === "history" && status === "pending") return false;
+
     const fullName = userCache[d.userId] || "";
     const search = searchTerm.toLowerCase();
     return fullName.toLowerCase().includes(search) || 
            d.userId?.toLowerCase().includes(search) ||
-           d.details?.usdtAddress?.toLowerCase().includes(search);
+           d.details?.usdtAddress?.toLowerCase().includes(search) ||
+           status.toLowerCase().includes(search);
   });
+
+  const pendingCount = withdrawals.filter((d) => (d.status || "pending") === "pending").length;
+  const historyCount = withdrawals.filter((d) => (d.status || "pending") !== "pending").length;
+
+  const renderStatus = (status) => {
+    if (status === "approved" || status === "completed") return <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase bg-emerald-50 text-emerald-600">Approved</span>;
+    if (status === "declined" || status === "rejected") return <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase bg-rose-50 text-rose-600">Declined</span>;
+    return <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase bg-amber-50 text-amber-600">Pending</span>;
+  };
 
   return (
     <div className="space-y-6 pb-24 md:pb-0">
@@ -186,8 +280,34 @@ export default function AdminWithdrawalList() {
         </div>
         <div className="bg-[#fc7952] text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg shadow-[#fc7952]/20">
             <Clock size={16} />
-            <span className="text-[10px] font-black uppercase tracking-widest">{withdrawals.length} Pending</span>
+            <span className="text-[10px] font-black uppercase tracking-widest">
+              {viewMode === "pending" ? `${pendingCount} Pending` : viewMode === "history" ? `${historyCount} History` : `${withdrawals.length} Total`}
+            </span>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setViewMode("pending")}
+          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === "pending" ? "bg-[#fc7952] text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+        >
+          Pending ({pendingCount})
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode("history")}
+          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === "history" ? "bg-[#1e293b] text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+        >
+          History ({historyCount})
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode("all")}
+          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === "all" ? "bg-slate-700 text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+        >
+          All ({withdrawals.length})
+        </button>
       </div>
 
       <div className="bg-white p-2 md:p-4 rounded-2xl border border-slate-200 shadow-sm relative">
@@ -215,7 +335,7 @@ export default function AdminWithdrawalList() {
             {loading ? (
                 <tr className="block md:table-row"><td colSpan="5" className="p-12 text-center"><Loader2 className="animate-spin mx-auto text-[#613de6]" /></td></tr>
             ) : filtered.length === 0 ? (
-                <tr className="block md:table-row"><td colSpan="5" className="p-12 text-center text-slate-300 font-black italic uppercase text-xs tracking-widest">Queue Clear</td></tr>
+                <tr className="block md:table-row"><td colSpan="5" className="p-12 text-center text-slate-300 font-black italic uppercase text-xs tracking-widest">No Records Found</td></tr>
             ) : filtered.map((item) => (
               <tr key={item.id} className="block md:table-row hover:bg-slate-50/50 transition-colors p-4 md:p-0">
                 
@@ -273,24 +393,30 @@ export default function AdminWithdrawalList() {
 
                 {/* ACTION BUTTONS */}
                 <td className="block md:table-cell p-2 md:p-6">
-                    <div className="flex md:justify-center gap-3 mt-4 md:mt-0">
-                        <button 
-                          onClick={() => handleStatusUpdate(item, 'approved')}
-                          disabled={processingId === item.id}
-                          className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 md:py-2 bg-emerald-500 text-white rounded-2xl hover:bg-emerald-600 transition-all font-black uppercase text-[10px] md:text-[9px] italic shadow-lg shadow-emerald-500/20 disabled:opacity-50"
-                        >
-                          {processingId === item.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={14} />}
-                          Approve
-                        </button>
-                        <button 
-                          onClick={() => handleStatusUpdate(item, 'declined')}
-                          disabled={processingId === item.id}
-                          className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 md:py-2 bg-rose-50 text-rose-500 rounded-2xl hover:bg-rose-100 transition-all font-black uppercase text-[10px] md:text-[9px] italic"
-                        >
-                          <X size={14} />
-                          Decline
-                        </button>
-                    </div>
+                    {(item.status || "pending") === "pending" ? (
+                      <div className="flex md:justify-center gap-3 mt-4 md:mt-0">
+                          <button 
+                            onClick={() => handleStatusUpdate(item, 'approved')}
+                            disabled={processingId === item.id}
+                            className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 md:py-2 bg-emerald-500 text-white rounded-2xl hover:bg-emerald-600 transition-all font-black uppercase text-[10px] md:text-[9px] italic shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                          >
+                            {processingId === item.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={14} />}
+                            Approve
+                          </button>
+                          <button 
+                            onClick={() => handleStatusUpdate(item, 'declined')}
+                            disabled={processingId === item.id}
+                            className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 md:py-2 bg-rose-50 text-rose-500 rounded-2xl hover:bg-rose-100 transition-all font-black uppercase text-[10px] md:text-[9px] italic"
+                          >
+                            <X size={14} />
+                            Decline
+                          </button>
+                      </div>
+                    ) : (
+                      <div className="mt-4 md:mt-0 md:flex md:justify-center">
+                        {renderStatus(item.status || "pending")}
+                      </div>
+                    )}
                 </td>
 
                 {/* DATE */}

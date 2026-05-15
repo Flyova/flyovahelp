@@ -17,10 +17,26 @@ import {
 } from "lucide-react";
 
 function ToolBtn({ onClick, active, title, disabled, children }) {
+  const handlePointerDown = (e) => {
+    e.preventDefault();
+    if (disabled) return;
+    onClick?.();
+  };
+
+  const handleKeyDown = (e) => {
+    if (disabled) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onClick?.();
+    }
+  };
+
   return (
     <button
       type="button"
-      onMouseDown={(e) => { e.preventDefault(); onClick(); }}
+      onPointerDown={handlePointerDown}
+      onKeyDown={handleKeyDown}
+      onClick={(e) => e.preventDefault()}
       disabled={disabled}
       title={title}
       className={`p-1.5 rounded-lg transition-all disabled:opacity-30 ${
@@ -80,15 +96,18 @@ export default function RichTextEditor({ content, onChange, placeholder = "Start
 
   if (!editor) return null;
 
+  const canUndo = editor.can().chain().focus().undo().run();
+  const canRedo = editor.can().chain().focus().redo().run();
+
   return (
     <div className="border border-white/8 rounded-2xl overflow-hidden bg-[#0f172a]">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-0.5 p-2 border-b border-white/8 bg-[#1e293b]">
         {/* History */}
-        <ToolBtn title="Undo" onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()}>
+        <ToolBtn title="Undo" onClick={() => editor.chain().focus().undo().run()} disabled={!canUndo}>
           <Undo2 size={15} />
         </ToolBtn>
-        <ToolBtn title="Redo" onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()}>
+        <ToolBtn title="Redo" onClick={() => editor.chain().focus().redo().run()} disabled={!canRedo}>
           <Redo2 size={15} />
         </ToolBtn>
 

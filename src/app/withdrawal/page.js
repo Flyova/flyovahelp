@@ -14,7 +14,8 @@ import {
   where, 
   getDocs,
   getDoc,
-  limit 
+  limit,
+  writeBatch
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { 
@@ -185,6 +186,9 @@ const handleWithdraw = async () => {
     try {
       if (method === "usdt") {
         // ... (Existing USDT logic remains the same)
+        const withdrawalRef = doc(collection(db, "withdrawals"));
+        const userTxRef = doc(collection(db, "users", user.uid, "transactions"));
+
         const txData = {
           userId: user.uid,
           amount: withdrawAmount,
@@ -196,6 +200,8 @@ const handleWithdraw = async () => {
           method: "usdt",
           details: { usdtAddress },
           timestamp: serverTimestamp(),
+          withdrawalId: withdrawalRef.id,
+          userTransactionId: userTxRef.id,
         };
 
         if (isEligibleForBonusDeduction) {
@@ -218,12 +224,14 @@ const handleWithdraw = async () => {
           await updateDoc(doc(db, "users", user.uid), { wallet: increment(-totalDeduct) });
         }
 
-        await addDoc(collection(db, "withdrawals"), txData);
-        await addDoc(collection(db, "users", user.uid, "transactions"), {
-            ...txData,
-            title: "Withdrawal Requested",
-            amount: -withdrawAmount 
+        const requestBatch = writeBatch(db);
+        requestBatch.set(withdrawalRef, txData);
+        requestBatch.set(userTxRef, {
+          ...txData,
+          title: "Withdrawal Requested",
+          amount: -withdrawAmount,
         });
+        await requestBatch.commit();
 
         // --- EMAIL NOTIFICATION ONLY FOR USDT ---
         try {

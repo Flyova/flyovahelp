@@ -23,6 +23,11 @@ export default function HistoryPage() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const getDayKey = (date) => `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+  const isPredictRoundTx = (item) =>
+    item.category === "games" &&
+    (item.type === "prediction" || (item.type === "win" && String(item.title || "").toLowerCase().includes("predict")));
+
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -54,8 +59,27 @@ export default function HistoryPage() {
           setLoading(true);
           
           const unsubTrans = onSnapshot(qTrans, (snap) => {
-            const data = snap.docs.map(doc => {
-              const docData = doc.data();
+            const normalizeAddress = (value) => String(value || "").trim().toLowerCase();
+            const toMillis = (value) => {
+              if (!value) return 0;
+              if (typeof value === "number") return value;
+              if (typeof value?.toMillis === "function") return value.toMillis();
+              if (typeof value?.toDate === "function") return value.toDate().getTime();
+              return 0;
+            };
+
+            const rows = snap.docs.map((row) => ({ id: row.id, data: row.data() }));
+            const completedWithdrawalIds = new Set(
+              rows
+                .filter((row) =>
+                  row.data.type === "withdrawal" &&
+                  (row.data.status === "completed" || row.data.status === "approved") &&
+                  Boolean(row.data.withdrawalId)
+                )
+                .map((row) => row.data.withdrawalId)
+            );
+
+            const data = rows.map(({ id, data: docData }) => {
               const isAgentWithdrawalMirror =
                 docData.type === "withdrawal" &&
                 docData.method === "agent" &&
@@ -65,6 +89,34 @@ export default function HistoryPage() {
               // Hide mirrored `transactions` rows to prevent duplicate history cards.
               if (isAgentWithdrawalMirror) return null;
 
+              const isUsdtWithdrawal = docData.type === "withdrawal" && (docData.method === "usdt" || !docData.method);
+              const isPendingUsdt = isUsdtWithdrawal && docData.status === "pending";
+              const isLinkedDuplicate =
+                Boolean(docData.withdrawalId) &&
+                completedWithdrawalIds.has(docData.withdrawalId);
+
+              // Backward compatibility: old admin flow created a second "Withdrawal Approved" row.
+              // Hide the stale pending twin when a matching approved/completed row exists.
+              const hasLegacyTwin = isPendingUsdt && rows.some(({ id: otherId, data: other }) => {
+                if (otherId === id) return false;
+                if (other.type !== "withdrawal") return false;
+                if (!(other.status === "completed" || other.status === "approved")) return false;
+                if (other.title !== "Withdrawal Approved") return false;
+
+                const sameAmount =
+                  Math.abs(Number(other.amount || 0)) === Math.abs(Number(docData.amount || 0));
+                if (!sameAmount) return false;
+
+                const pendingAddress = normalizeAddress(docData.details?.usdtAddress);
+                const approvedAddress = normalizeAddress(other.details?.usdtAddress);
+                if (pendingAddress && approvedAddress && pendingAddress !== approvedAddress) return false;
+
+                const timeGap = Math.abs(toMillis(other.timestamp) - toMillis(docData.timestamp));
+                return timeGap > 0 && timeGap <= 24 * 60 * 60 * 1000;
+              });
+
+              if (isPendingUsdt && (isLinkedDuplicate || hasLegacyTwin)) return null;
+              
               const isTransfer = docData.type === 'p2p_transfer';
               const isFinance = docData.type === 'withdrawal' || docData.category === 'finance' || isTransfer;
               
@@ -90,7 +142,7 @@ export default function HistoryPage() {
               }
 
               return {
-                id: doc.id,
+                id,
                 ...docData,
                 mainTitle,
                 subDetail,
@@ -145,6 +197,70 @@ export default function HistoryPage() {
     return true;
   });
 
+  const predictSummaryByDay = new Map();
+  filteredData.forEach((item) => {
+    if (!isPredictRoundTx(item)) return;
+    const dayKey = getDayKey(item.date);
+    const current = predictSummaryByDay.get(dayKey) || {
+      count: 0,
+      wins: 0,
+      losses: 0,
+      pending: 0,
+      net: 0,
+      latestDate: item.date,
+    };
+
+    current.count += 1;
+    current.net += Number(item.amount || 0);
+    if (item.status === "pending") current.pending += 1;
+    else if (item.status === "loss") current.losses += 1;
+    else if (item.status === "win" || item.status === "completed") current.wins += 1;
+
+    if (item.date > current.latestDate) current.latestDate = item.date;
+    predictSummaryByDay.set(dayKey, current);
+  });
+
+  const renderedData = [];
+  const injectedPredictGroups = new Set();
+
+  filteredData.forEach((item) => {
+    if (!isPredictRoundTx(item)) {
+      renderedData.push(item);
+      return;
+    }
+
+    const dayKey = getDayKey(item.date);
+    const summary = predictSummaryByDay.get(dayKey);
+
+    if (!summary || summary.count <= 1) {
+      renderedData.push(item);
+      return;
+    }
+
+    if (injectedPredictGroups.has(dayKey)) return;
+    injectedPredictGroups.add(dayKey);
+
+    const groupStatus =
+      summary.pending > 0
+        ? "pending"
+        : summary.wins > 0 && summary.losses === 0
+          ? "win"
+          : summary.wins === 0 && summary.losses > 0
+            ? "loss"
+            : "completed";
+
+    renderedData.push({
+      id: `predict-group-${dayKey}`,
+      type: "predict_group",
+      category: "games",
+      status: groupStatus,
+      amount: summary.net,
+      date: summary.latestDate,
+      mainTitle: "PREDICT & WIN",
+      subDetail: `${summary.count} Rounds · W${summary.wins} L${summary.losses}${summary.pending ? ` P${summary.pending}` : ""}`,
+    });
+  });
+
   return (
     <div className="min-h-screen bg-[#0f172a] pb-24 text-white">
       {/* Header Section */}
@@ -184,8 +300,11 @@ export default function HistoryPage() {
               <Loader2 className="w-12 h-12 text-[#613de6] animate-spin mx-auto mb-4" />
               <p className="text-gray-500 font-black uppercase text-[10px] tracking-widest">Syncing Nodes...</p>
             </div>
-          ) : filteredData.map((item) => {
-            const isPositive = item.type === 'win' || item.type === 'deposit' || (item.type === 'p2p_transfer' && item.direction === 'in');
+          ) : renderedData.map((item) => {
+            const amountValue = Number(item.amount || 0);
+            const isPositive = item.type === "p2p_transfer" ? item.direction === "in" : amountValue > 0;
+            const isNegative = item.type === "p2p_transfer" ? item.direction !== "in" : amountValue < 0;
+            const iconTone = isPositive ? "bg-green-500/10 text-green-500" : isNegative ? "bg-red-500/10 text-red-500" : "bg-slate-500/10 text-slate-400";
             const dateStr = item.date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
             
             return (
@@ -194,11 +313,10 @@ export default function HistoryPage() {
                 className="bg-[#1e293b] border border-white/5 p-5 rounded-[2.5rem] flex items-center justify-between group hover:border-[#613de6]/50 transition-all duration-300 shadow-xl"
               >
                 <div className="flex items-center space-x-4">
-                  <div className={`p-4 rounded-2xl shadow-inner ${
-                    isPositive ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
-                  }`}>
+                  <div className={`p-4 rounded-2xl shadow-inner ${iconTone}`}>
                     {item.type === 'win' ? <Trophy size={20}/> : 
                      item.type === 'stake' ? <Swords size={20}/> :
+                     item.type === 'predict_group' ? <Swords size={20}/> :
                      item.type === 'p2p_transfer' ? <Send size={20}/> :
                      item.type === 'deposit' ? <ArrowDownLeft size={20}/> : <ArrowUpRight size={20}/>}
                   </div>
@@ -231,12 +349,12 @@ export default function HistoryPage() {
 
                 <div className="text-right">
                   <p className={`font-black text-xl italic tracking-tighter ${
-                    isPositive ? 'text-green-400' : 'text-red-400'
+                    isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
                   }`}>
-                    {isPositive ? '+' : '-'}${Math.abs(parseFloat(item.amount || 0)).toFixed(2)}
+                    {isPositive ? '+' : isNegative ? '-' : ''}${Math.abs(amountValue).toFixed(2)}
                   </p>
                   <span className="text-[8px] font-black uppercase opacity-30 tracking-widest">
-                    {item.type === 'p2p_transfer' ? 'P2P Transfer' : (item.type || 'Transaction')}
+                    {item.type === 'p2p_transfer' ? 'P2P Transfer' : item.type === 'predict_group' ? 'Prediction Summary' : (item.type || 'Transaction')}
                   </span>
                 </div>
               </div>
@@ -244,7 +362,7 @@ export default function HistoryPage() {
           })}
         </div>
 
-        {!loading && filteredData.length === 0 && (
+        {!loading && renderedData.length === 0 && (
           <div className="text-center py-24 bg-[#1e293b] rounded-[3rem] border border-dashed border-white/5 opacity-50">
             <Coins size={48} className="mx-auto mb-4 text-gray-700" />
             <p className="font-black uppercase text-[10px] tracking-[0.2em] text-gray-500">No History found in {filter}</p>

@@ -7,7 +7,7 @@ import {
   limit, getDoc, setDoc, Timestamp, runTransaction, where, getDocs 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { Timer, CheckCircle2, Lock, Clock, Trophy, Wallet, XCircle, ArrowLeft, AlertCircle, Calendar } from "lucide-react";
+import { Timer, CheckCircle2, Lock, Clock, Trophy, Wallet, XCircle, ArrowLeft, AlertCircle, Calendar, TrendingUp } from "lucide-react";
 import { useRouter } from "next/navigation";
 import ToastNotification from "@/components/ToastNotification";
 
@@ -38,6 +38,7 @@ export default function PredictAndWin() {
   const [submitting, setSubmitting] = useState(false);
   const [placingPrediction, setPlacingPrediction] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [sessionEarnings, setSessionEarnings] = useState(0);
   const predictionLockRef = useRef(false);
 
   const WIN_REWARD = 0.20;
@@ -53,6 +54,25 @@ export default function PredictAndWin() {
 
   const showNotification = (type, title, message) => {
     setNotification({ type, title, message, id: Date.now() });
+  };
+
+  const toMillis = (value) => {
+    if (!value) return 0;
+    if (typeof value === "number") return value;
+    if (typeof value?.toMillis === "function") return value.toMillis();
+    if (typeof value?.toDate === "function") return value.toDate().getTime();
+    return 0;
+  };
+
+  const getDurationFromStakeTitle = (title) => {
+    if (!title || typeof title !== "string") return 0;
+    const clean = title.toLowerCase();
+    if (clean.includes("3 hours")) return 3 * 60 * 60 * 1000;
+    if (clean.includes("5 hours")) return 5 * 60 * 60 * 1000;
+    if (clean.includes("12 hours")) return 12 * 60 * 60 * 1000;
+    if (clean.includes("1 day")) return 24 * 60 * 60 * 1000;
+    if (clean.includes("1 week")) return 7 * 24 * 60 * 60 * 1000;
+    return 0;
   };
 
   // 1. Auth & Data Sync
@@ -108,6 +128,62 @@ export default function PredictAndWin() {
     }, 1000);
     return () => clearInterval(interval);
   }, [userData]);
+
+  useEffect(() => {
+    const loadSessionEarnings = async () => {
+      if (!user?.uid || !hasSubscribed) {
+        setSessionEarnings(0);
+        return;
+      }
+
+      try {
+        const txQ = query(
+          collection(db, "users", user.uid, "transactions"),
+          orderBy("timestamp", "desc"),
+          limit(300)
+        );
+        const txSnap = await getDocs(txQ);
+        const rows = txSnap.docs.map((d) => d.data());
+
+        const latestStake = rows.find(
+          (row) =>
+            row?.type === "stake" &&
+            typeof row?.title === "string" &&
+            row.title.toLowerCase().startsWith("predict stake:")
+        );
+
+        let sessionStartMs = toMillis(userData?.subscription_started_at);
+
+        if (!sessionStartMs) {
+          const durationMs = getDurationFromStakeTitle(latestStake?.title);
+          const expiryMs = toMillis(userData?.subscription_expires);
+          if (durationMs > 0 && expiryMs > 0) sessionStartMs = expiryMs - durationMs;
+        }
+
+        if (!sessionStartMs) {
+          sessionStartMs = toMillis(latestStake?.timestamp);
+        }
+
+        const total = rows.reduce((sum, row) => {
+          const isPredictWin =
+            row?.type === "win" &&
+            String(row?.title || "").toLowerCase().includes("predict");
+          if (!isPredictWin) return sum;
+
+          const txMs = toMillis(row?.timestamp);
+          if (sessionStartMs > 0 && txMs > 0 && txMs < sessionStartMs) return sum;
+
+          return sum + Number(row?.amount || 0);
+        }, 0);
+
+        setSessionEarnings(Number(total.toFixed(2)));
+      } catch (error) {
+        console.error("Failed to compute Predict & Win session earnings:", error);
+      }
+    };
+
+    loadSessionEarnings();
+  }, [user?.uid, hasSubscribed, userData?.subscription_expires, userData?.subscription_started_at]);
 
   // 3. Global Round Listener
   useEffect(() => {
@@ -283,6 +359,7 @@ const buySubscription = async () => {
                     await updateDoc(doc(db, "users", user.uid, "transactions", transDoc.id), {
                         title: "Predict Win", amount: WIN_REWARD, status: "win", type: "win", timestamp: serverTimestamp()
                     });
+                    setSessionEarnings((prev) => Number((prev + WIN_REWARD).toFixed(2)));
                 } else {
                     setResultType('lose');
                     await updateDoc(doc(db, "users", user.uid, "transactions", transDoc.id), {
@@ -397,6 +474,22 @@ const buySubscription = async () => {
         <div className="inline-flex items-center space-x-3 bg-black/20 px-8 py-4 rounded-[2rem] border border-white/5 mt-4">
             <Timer size={24} className="text-[#613de6]" />
             <span className="text-4xl font-black italic font-mono">0:{timeLeft.toString().padStart(2, '0')}</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mt-5">
+          <div className="bg-[#0f172a]/50 rounded-[1.8rem] p-4 text-center border border-white/5">
+            <p className="text-[10px] text-white/30 uppercase tracking-widest font-black mb-2">Session Earnings</p>
+            <div className="flex items-center justify-center gap-1">
+              <TrendingUp size={14} className="text-emerald-400" />
+              <span className="text-2xl font-black italic text-emerald-400 tracking-tighter">
+                +${sessionEarnings.toFixed(2)}
+              </span>
+            </div>
+          </div>
+          <div className="bg-[#0f172a]/50 rounded-[1.8rem] p-4 text-center border border-white/5">
+            <p className="text-[10px] text-white/30 uppercase tracking-widest font-black mb-2">Reward/Win</p>
+            <span className="text-2xl font-black italic text-yellow-400 tracking-tighter">+${WIN_REWARD.toFixed(2)}</span>
+          </div>
         </div>
       </div>
 

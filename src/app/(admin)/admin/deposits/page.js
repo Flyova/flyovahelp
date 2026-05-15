@@ -8,11 +8,9 @@ import {
   orderBy,
   doc,
   getDoc,
-  updateDoc,
   increment,
   writeBatch,
-  serverTimestamp,
-  where
+  serverTimestamp
 } from "firebase/firestore";
 import { 
   Search, 
@@ -20,7 +18,6 @@ import {
   Check, 
   X,
   Clock,
-  ExternalLink,
   Copy,
   Image as ImageIcon,
   Link2
@@ -30,6 +27,7 @@ export default function AdminDepositList() {
   const [deposits, setDeposits] = useState([]);
   const [userCache, setUserCache] = useState({}); 
   const [searchTerm, setSearchTerm] = useState("");
+  const [viewMode, setViewMode] = useState("pending");
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
@@ -37,7 +35,6 @@ export default function AdminDepositList() {
   useEffect(() => {
     const q = query(
       collection(db, "deposits"), 
-      where("status", "==", "pending"),
       orderBy("createdAt", "desc")
     );
     
@@ -151,12 +148,26 @@ export default function AdminDepositList() {
   };
 
   const filtered = deposits.filter(d => {
+    const status = d.status || "pending";
+    if (viewMode === "pending" && status !== "pending") return false;
+    if (viewMode === "history" && status === "pending") return false;
+
     const fullName = userCache[d.userId] || "";
     const search = searchTerm.toLowerCase();
     return fullName.toLowerCase().includes(search) || 
            d.userId?.toLowerCase().includes(search) ||
-           d.transactionHash?.toLowerCase().includes(search);
+           d.transactionHash?.toLowerCase().includes(search) ||
+           status.toLowerCase().includes(search);
   });
+
+  const pendingCount = deposits.filter((d) => (d.status || "pending") === "pending").length;
+  const historyCount = deposits.filter((d) => (d.status || "pending") !== "pending").length;
+
+  const renderStatus = (status) => {
+    if (status === "completed") return <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase bg-emerald-50 text-emerald-600">Completed</span>;
+    if (status === "rejected") return <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase bg-rose-50 text-rose-600">Rejected</span>;
+    return <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase bg-amber-50 text-amber-600">Pending</span>;
+  };
 
   return (
     <div className="space-y-6 pb-20 md:pb-0">
@@ -177,8 +188,34 @@ export default function AdminDepositList() {
         </div>
         <div className="bg-[#613de6] text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg shadow-[#613de6]/20">
             <Clock size={16} />
-            <span className="text-[10px] font-black uppercase tracking-widest">{deposits.length} Pending</span>
+            <span className="text-[10px] font-black uppercase tracking-widest">
+              {viewMode === "pending" ? `${pendingCount} Pending` : viewMode === "history" ? `${historyCount} History` : `${deposits.length} Total`}
+            </span>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setViewMode("pending")}
+          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === "pending" ? "bg-[#613de6] text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+        >
+          Pending ({pendingCount})
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode("history")}
+          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === "history" ? "bg-[#1e293b] text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+        >
+          History ({historyCount})
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode("all")}
+          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === "all" ? "bg-slate-700 text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+        >
+          All ({deposits.length})
+        </button>
       </div>
 
       {/* SEARCH BAR */}
@@ -208,7 +245,7 @@ export default function AdminDepositList() {
             {loading ? (
                 <tr className="block md:table-row"><td colSpan="5" className="p-12 text-center"><Loader2 className="animate-spin mx-auto text-[#fc7952]" /></td></tr>
             ) : filtered.length === 0 ? (
-                <tr className="block md:table-row"><td colSpan="5" className="p-12 text-center text-slate-300 font-black italic uppercase text-xs tracking-widest">Empty Workspace</td></tr>
+                <tr className="block md:table-row"><td colSpan="5" className="p-12 text-center text-slate-300 font-black italic uppercase text-xs tracking-widest">No Records Found</td></tr>
             ) : filtered.map((item) => (
               <tr key={item.id} className="block md:table-row hover:bg-slate-50/50 transition-colors p-4 md:p-0">
                 
@@ -279,24 +316,30 @@ export default function AdminDepositList() {
 
                 {/* ACTION BUTTONS (Full width on mobile) */}
                 <td className="block md:table-cell p-2 md:p-6">
-                    <div className="flex md:justify-center gap-3 mt-4 md:mt-0">
-                        <button 
-                          onClick={() => handleStatusUpdate(item, 'completed')}
-                          disabled={processingId === item.id}
-                          className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 md:py-2 bg-emerald-500 text-white rounded-2xl hover:bg-emerald-600 transition-all font-black uppercase text-[10px] md:text-[9px] italic shadow-lg shadow-emerald-500/20 disabled:opacity-50"
-                        >
-                          {processingId === item.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={14} />}
-                          Approve
-                        </button>
-                        <button 
-                          onClick={() => handleStatusUpdate(item, 'rejected')}
-                          disabled={processingId === item.id}
-                          className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 md:py-2 bg-rose-50 text-rose-500 rounded-2xl hover:bg-rose-100 transition-all font-black uppercase text-[10px] md:text-[9px] italic"
-                        >
-                          <X size={14} />
-                          Reject
-                        </button>
-                    </div>
+                    {(item.status || "pending") === "pending" ? (
+                      <div className="flex md:justify-center gap-3 mt-4 md:mt-0">
+                          <button 
+                            onClick={() => handleStatusUpdate(item, 'completed')}
+                            disabled={processingId === item.id}
+                            className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 md:py-2 bg-emerald-500 text-white rounded-2xl hover:bg-emerald-600 transition-all font-black uppercase text-[10px] md:text-[9px] italic shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                          >
+                            {processingId === item.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={14} />}
+                            Approve
+                          </button>
+                          <button 
+                            onClick={() => handleStatusUpdate(item, 'rejected')}
+                            disabled={processingId === item.id}
+                            className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 md:py-2 bg-rose-50 text-rose-500 rounded-2xl hover:bg-rose-100 transition-all font-black uppercase text-[10px] md:text-[9px] italic"
+                          >
+                            <X size={14} />
+                            Reject
+                          </button>
+                      </div>
+                    ) : (
+                      <div className="mt-4 md:mt-0 md:flex md:justify-center">
+                        {renderStatus(item.status || "pending")}
+                      </div>
+                    )}
                 </td>
 
                 {/* DATE */}
