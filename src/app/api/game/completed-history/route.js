@@ -55,8 +55,8 @@ export async function POST(request) {
     const p1 = p1Snap.exists ? p1Snap.data() : {};
     const p2 = p2Snap.exists ? p2Snap.data() : {};
     const totalRounds = Number(game?.round || 0);
-    const p1RoundsPlayed = Number(game?.roundsPlayed?.p1 ?? Math.ceil(totalRounds / 2));
-    const p2RoundsPlayed = Number(game?.roundsPlayed?.p2 ?? Math.floor(totalRounds / 2));
+    const p1Score = Number(game?.scores?.p1 || 0);
+    const p2Score = Number(game?.scores?.p2 || 0);
 
     await adminDb.collection("completed_games").doc(gameId).set(
       {
@@ -72,10 +72,10 @@ export async function POST(request) {
         player2Email: p2.email || "",
         player2Pin: p2.pin || "",
         player2Country: p2.country || "",
-        p1RoundsPlayed,
-        p2RoundsPlayed,
-        p1Score: Number(game?.scores?.p1 || 0),
-        p2Score: Number(game?.scores?.p2 || 0),
+        p1RoundsPlayed: p1Score,
+        p2RoundsPlayed: p2Score,
+        p1Score,
+        p2Score,
         totalRounds,
         createdAt: game?.createdAt || null,
         finishedAt: game?.completedAt || admin.firestore.FieldValue.serverTimestamp(),

@@ -130,8 +130,8 @@ export default function PlayWithFriendsHistory() {
                 <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Amount</th>
                 <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Player1 / ID / Email</th>
                 <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Player2 / ID / Email</th>
-                <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">P1 Round Played</th>
-                <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">P2 Round Played</th>
+                <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">P1 Rounds Won</th>
+                <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">P2 Rounds Won</th>
                 <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Date</th>
               </tr>
             </thead>
