@@ -56,6 +56,7 @@ function Divider() {
 
 export default function RichTextEditor({ content, onChange, placeholder = "Start writing…" }) {
   const fileInputRef = useRef(null);
+  const initialContent = useRef(content);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -67,7 +68,7 @@ export default function RichTextEditor({ content, onChange, placeholder = "Start
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       Placeholder.configure({ placeholder }),
     ],
-    content,
+    content: initialContent.current,
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
     editorProps: {
       attributes: { class: "tiptap-prose focus:outline-none min-h-[420px] px-1 py-2" },
@@ -96,8 +97,8 @@ export default function RichTextEditor({ content, onChange, placeholder = "Start
 
   if (!editor) return null;
 
-  const canUndo = editor.can().chain().focus().undo().run();
-  const canRedo = editor.can().chain().focus().redo().run();
+  const canUndo = editor.can().undo();
+  const canRedo = editor.can().redo();
 
   return (
     <div className="border border-white/8 rounded-2xl overflow-hidden bg-[#0f172a]">

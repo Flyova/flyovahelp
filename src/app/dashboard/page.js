@@ -497,7 +497,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-1">Payout Success</p>
-                  <p className="text-sm font-bold text-white leading-tight">Tell us about your recent withdrawal? Share the love!</p>
+                  <p className="text-sm font-bold text-white leading-tight">Tell us about your recent withdrawal, games played or flyovahelp activities you like or dislike. Share the love!</p>
                 </div>
               </div>
               <button
