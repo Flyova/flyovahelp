@@ -221,12 +221,18 @@ export default function FlyovaToDollars() {
                 <Trophy size={60} className="mx-auto text-green-400 mb-4 animate-bounce" />
                 <h2 className="text-3xl font-black italic uppercase mb-2 text-white">You Won!</h2>
                 <p className="text-[#fc7952] text-2xl font-black italic">+${winAmount.toFixed(2)}</p>
+                {lastWinningNumbers.length > 0 && (
+                  <p className="text-sm text-gray-400 mt-2">Winning: {lastWinningNumbers.join(" & ")}</p>
+                )}
               </>
             ) : (
               <>
                 <XCircle size={60} className="mx-auto text-red-500 mb-4" />
                 <h2 className="text-xl font-black italic uppercase mb-2 text-white">No Luck!</h2>
-                <p className="text-sm opacity-70">Try again next round</p>
+                {lastWinningNumbers.length > 0 && (
+                  <p className="text-sm text-gray-400">Winning: {lastWinningNumbers.join(" & ")}</p>
+                )}
+                <p className="text-sm opacity-70 mt-1">Try again next round</p>
               </>
             )}
             <button onClick={() => setShowResultAlert(false)} className="mt-6 text-[10px] font-bold uppercase tracking-widest opacity-50">Close</button>
