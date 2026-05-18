@@ -154,6 +154,20 @@ function DemoGamePicker({ onSelect, onClose }) {
             <ArrowRight size={16} className="text-gray-600 group-hover:text-emerald-400 transition-colors flex-shrink-0" />
           </div>
         </button>
+
+        <button onClick={() => onSelect("friends")}
+          className="w-full bg-[#1e293b] border border-white/5 hover:border-[#a78bfa]/40 p-5 rounded-2xl text-left transition-all group">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-[#a78bfa]/10 flex items-center justify-center text-[#a78bfa] flex-shrink-0">
+              <Users size={22} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-black italic uppercase tracking-tighter text-white">Play with Friends</h3>
+              <p className="text-xs font-bold text-gray-500 mt-0.5">Hide a number · Guess theirs · First to 5 wins</p>
+            </div>
+            <ArrowRight size={16} className="text-gray-600 group-hover:text-[#a78bfa] transition-colors flex-shrink-0" />
+          </div>
+        </button>
       </div>
     </div>
   );
@@ -618,6 +632,231 @@ function PredictDemo({ onBack, onRegister }) {
   );
 }
 
+function FriendsDemo({ onBack, onRegister }) {
+  const TOTAL_ROUNDS = 5;
+  const TURN_SECONDS = 12;
+
+  function makePool() {
+    const a = Math.floor(Math.random() * 90) + 10;
+    let b = Math.floor(Math.random() * 90) + 10;
+    while (b === a) b = Math.floor(Math.random() * 90) + 10;
+    return [a, b];
+  }
+
+  const [phase, setPhase] = useState("intro"); // intro | hide | guess | result | done
+  const [pool, setPool] = useState(() => makePool());
+  const [botHidden, setBotHidden] = useState(null);
+  const [myHidden, setMyHidden] = useState(null);
+  const [myGuess, setMyGuess] = useState(null);
+  const [scores, setScores] = useState({ you: 0, bot: 0 });
+  const [roundOutcome, setRoundOutcome] = useState(null);
+  const [round, setRound] = useState(1);
+  const [timer, setTimer] = useState(TURN_SECONDS);
+
+  useEffect(() => {
+    if (phase !== "hide" && phase !== "guess") return;
+    if (timer <= 0) {
+      if (phase === "hide") {
+        const auto = pool[Math.floor(Math.random() * pool.length)];
+        handleHide(auto, true);
+      } else {
+        const auto = pool[Math.floor(Math.random() * pool.length)];
+        handleGuess(auto, true);
+      }
+      return;
+    }
+    const t = setTimeout(() => setTimer(p => p - 1), 1000);
+    return () => clearTimeout(t);
+  }, [phase, timer]);
+
+  const startRound = (nextRound) => {
+    const nextPool = makePool();
+    const botPick = nextPool[Math.floor(Math.random() * nextPool.length)];
+    setPool(nextPool);
+    setBotHidden(botPick);
+    setMyHidden(null);
+    setMyGuess(null);
+    setRoundOutcome(null);
+    setRound(nextRound);
+    setTimer(TURN_SECONDS);
+    setPhase("hide");
+  };
+
+  const handleHide = (num, isAuto = false) => {
+    if (phase !== "hide") return;
+    setMyHidden(num);
+    setTimer(TURN_SECONDS);
+    setPhase("guess");
+  };
+
+  const handleGuess = (num, isAuto = false) => {
+    if (phase !== "guess") return;
+    setMyGuess(num);
+    const won = num === botHidden;
+    const next = { you: scores.you + (won ? 1 : 0), bot: scores.bot + (won ? 0 : 1) };
+    setScores(next);
+    setRoundOutcome(won ? "win" : "lose");
+    setPhase("result");
+  };
+
+  const progressPct = `${(timer / TURN_SECONDS) * 100}%`;
+
+  return (
+    <div className="p-7 space-y-5">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <button onClick={phase === "intro" || phase === "done" ? onBack : () => {}}
+          className="bg-white/5 p-2.5 rounded-xl text-gray-500 hover:text-white transition-colors">
+          <ArrowLeft size={18} />
+        </button>
+        <div className="flex-1">
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#a78bfa]">Tutorial</p>
+          <h2 className="text-lg font-black italic uppercase tracking-tighter text-white">Play with Friends</h2>
+        </div>
+        {phase !== "intro" && phase !== "done" && (
+          <div className="flex gap-2">
+            <div className="bg-[#1e293b] px-3 py-2 rounded-xl border border-white/5 text-center">
+              <p className="text-[9px] font-black text-gray-500 uppercase">You</p>
+              <p className="text-sm font-black text-[#fc7952]">{scores.you}</p>
+            </div>
+            <div className="bg-[#1e293b] px-3 py-2 rounded-xl border border-white/5 text-center">
+              <p className="text-[9px] font-black text-gray-500 uppercase">Bot</p>
+              <p className="text-sm font-black text-[#a78bfa]">{scores.bot}</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* INTRO */}
+      {phase === "intro" && (
+        <div className="space-y-5">
+          <div className="bg-[#a78bfa]/10 border border-[#a78bfa]/20 rounded-2xl p-5 space-y-4">
+            <p className="text-sm font-black italic uppercase tracking-tighter text-white">How the game works</p>
+            <ul className="space-y-3">
+              {[
+                { n: "1", text: "Each round, both players see the same 2 random numbers." },
+                { n: "2", text: "You secretly pick one number to 'hide' — your opponent tries to guess it." },
+                { n: "3", text: "Then you guess which number your opponent hid." },
+                { n: "4", text: "Correct guess = 1 point. First player to score 15 points wins the match." },
+              ].map(item => (
+                <li key={item.n} className="flex gap-3">
+                  <span className="w-5 h-5 rounded-full bg-[#a78bfa]/20 text-[#a78bfa] text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">{item.n}</span>
+                  <p className="text-xs font-bold text-white/75 leading-relaxed">{item.text}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="bg-[#1e293b] border border-white/5 rounded-2xl p-4 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-[#613de6]/10 flex items-center justify-center text-[#613de6] flex-shrink-0">
+              <Users size={16} />
+            </div>
+            <p className="text-xs font-bold text-gray-400 leading-relaxed">
+              This tutorial simulates <span className="text-white">5 rounds</span> against a bot so you can learn the mechanics before challenging real players.
+            </p>
+          </div>
+          <button onClick={() => startRound(1)}
+            className="w-full bg-[#613de6] text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2">
+            Start Tutorial <ArrowRight size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* HIDE / GUESS PHASES */}
+      {(phase === "hide" || phase === "guess") && (
+        <div className="space-y-4">
+          {/* Timer bar */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Round {round} of {TOTAL_ROUNDS}</span>
+              <span className="text-sm font-black tabular-nums text-amber-300">{timer}s</span>
+            </div>
+            <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
+              <div className="h-full rounded-full bg-amber-400 transition-all duration-1000" style={{ width: progressPct }} />
+            </div>
+          </div>
+
+          <TutorialTip step={phase === "hide" ? 1 : 2} total={2} accent="#a78bfa">
+            {phase === "hide"
+              ? "Pick one number to hide. The bot will try to guess which one you chose."
+              : `You hid ${myHidden}. Now guess which number the bot is hiding — pick from the same two.`}
+          </TutorialTip>
+
+          <div className="grid grid-cols-2 gap-4">
+            {pool.map(num => (
+              <button key={num}
+                onClick={() => phase === "hide" ? handleHide(num) : handleGuess(num)}
+                className={`py-8 rounded-2xl text-2xl font-black italic transition-all active:scale-95 border-2 ${
+                  myHidden === num && phase === "guess"
+                    ? "bg-[#fc7952]/15 border-[#fc7952] text-[#fc7952]"
+                    : "bg-[#1e293b] border-white/5 text-white hover:border-[#a78bfa]/40"
+                }`}>
+                {num}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* RESULT */}
+      {phase === "result" && (
+        <div className="space-y-4">
+          <div className={`p-5 rounded-2xl text-center space-y-2 ${roundOutcome === "win" ? "bg-emerald-500/10 border border-emerald-500/30" : "bg-white/5 border border-white/10"}`}>
+            <p className="text-3xl">{roundOutcome === "win" ? "✅" : "❌"}</p>
+            <p className={`text-xl font-black italic uppercase tracking-tighter ${roundOutcome === "win" ? "text-emerald-400" : "text-white"}`}>
+              {roundOutcome === "win" ? "Correct Guess!" : "Wrong Guess"}
+            </p>
+            <p className="text-xs font-bold text-gray-400">
+              Bot hid: <span className="text-white font-black">{botHidden}</span> · You guessed: <span className="text-white font-black">{myGuess}</span>
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-[#1e293b] rounded-2xl p-3 text-center border border-white/5">
+              <p className="text-[9px] font-black text-gray-500 uppercase">You</p>
+              <p className="text-2xl font-black text-[#fc7952]">{scores.you}</p>
+            </div>
+            <div className="bg-[#1e293b] rounded-2xl p-3 text-center border border-white/5">
+              <p className="text-[9px] font-black text-gray-500 uppercase">Bot</p>
+              <p className="text-2xl font-black text-[#a78bfa]">{scores.bot}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => round >= TOTAL_ROUNDS ? setPhase("done") : startRound(round + 1)}
+            className="w-full bg-[#613de6] text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95">
+            {round >= TOTAL_ROUNDS ? "See Summary →" : "Next Round →"}
+          </button>
+        </div>
+      )}
+
+      {/* DONE */}
+      {phase === "done" && (
+        <div className="space-y-5">
+          <div className={`p-6 rounded-2xl text-center space-y-2 ${scores.you >= scores.bot ? "bg-emerald-500/10 border border-emerald-500/20" : "bg-white/5 border border-white/10"}`}>
+            <p className="text-4xl">{scores.you >= scores.bot ? "🏆" : "🎯"}</p>
+            <p className="text-2xl font-black italic uppercase tracking-tighter text-white">Tutorial Complete!</p>
+            <p className="text-sm font-bold text-gray-400">
+              Final score: <span className="text-[#fc7952] font-black">{scores.you}</span> – <span className="text-[#a78bfa] font-black">{scores.bot}</span>
+            </p>
+          </div>
+          <div className="bg-[#613de6]/10 border border-[#613de6]/25 rounded-2xl p-4 space-y-1.5">
+            <p className="text-[10px] font-black uppercase tracking-widest text-[#a78bfa]">Real game</p>
+            <p className="text-xs font-bold text-white/65 leading-relaxed">
+              In the real game you play 30 rounds (15 each) against a live opponent. Stake any amount — correct guesses transfer your stake from their pool to yours. Winner takes the larger share.
+            </p>
+          </div>
+          <button onClick={onRegister}
+            className="w-full bg-[#613de6] text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2">
+            Play for Real — Sign Up Free <ArrowRight size={14} />
+          </button>
+          <button onClick={() => { setScores({ you: 0, bot: 0 }); setPhase("intro"); }}
+            className="w-full bg-white/5 border border-white/5 text-gray-500 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white/10 transition-all">
+            Replay Tutorial
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DemoModal({ onClose, router }) {
   const [screen, setScreen] = useState("pick");
   const handleRegister = () => { onClose(); router.push("/register"); };
@@ -629,6 +868,7 @@ function DemoModal({ onClose, router }) {
         {screen === "pick"    && <DemoGamePicker onSelect={setScreen} onClose={onClose} />}
         {screen === "flyova"  && <FlyovaDemo  onBack={() => setScreen("pick")} onRegister={handleRegister} />}
         {screen === "predict" && <PredictDemo onBack={() => setScreen("pick")} onRegister={handleRegister} />}
+        {screen === "friends" && <FriendsDemo onBack={() => setScreen("pick")} onRegister={handleRegister} />}
       </div>
     </div>
   );
