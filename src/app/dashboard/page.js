@@ -497,7 +497,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-1">Payout Success</p>
-                  <p className="text-sm font-bold text-white leading-tight">Tell us about your recent withdrawal, games played or flyovahelp activities you like or dislike. Share the love!</p>
+                  <p className="text-sm font-bold text-white leading-tight">Tell us about your recent withdrawal, game experience or flyovahelp activities you like or dislike. Share the love!</p>
                 </div>
               </div>
               <button
@@ -586,6 +586,59 @@ export default function Dashboard() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* PLAY WITH FRIENDS DEMO */}
+            <div>
+              <p className="text-[10px] font-black uppercase text-gray-500 tracking-[0.2em] mb-4 px-1">Try For Free</p>
+              <div className="relative rounded-4xl overflow-hidden bg-linear-to-br from-[#1a1040] to-[#0b1228] border border-[#613de6]/30 shadow-2xl">
+                <div className="absolute inset-0 opacity-10 pointer-events-none">
+                  <img src="/play_friends.svg" alt="" className="w-full h-full object-cover" />
+                </div>
+                <div className="relative z-10 p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="bg-[#fc7952] px-2.5 py-1 rounded-full">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-white">Demo Mode</span>
+                    </div>
+                    <div className="bg-white/10 px-2.5 py-1 rounded-full">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-white/60">No Funds Required</span>
+                    </div>
+                  </div>
+                  <h3 className="text-xl font-black italic uppercase tracking-tight text-white leading-tight mb-1">
+                    Play with <span className="text-[#a78bfa]">Friends</span>
+                  </h3>
+                  <p className="text-[11px] font-bold text-white/50 mb-4 leading-relaxed">
+                    Practice the number-guessing game against a smart bot. Learn the rules, master your strategy, then challenge real players.
+                  </p>
+                  <div className="grid grid-cols-3 gap-2 mb-5">
+                    {[
+                      { label: "Hide a number", sub: "Pick first" },
+                      { label: "Guess theirs", sub: "From same pool" },
+                      { label: "First to 5", sub: "Wins the round" }
+                    ].map((step, i) => (
+                      <div key={i} className="bg-black/30 rounded-2xl p-3 text-center border border-white/5">
+                        <p className="text-[8px] font-black uppercase tracking-widest text-[#a78bfa] mb-1">Step {i + 1}</p>
+                        <p className="text-[10px] font-black text-white uppercase leading-tight">{step.label}</p>
+                        <p className="text-[8px] text-white/40 font-bold mt-0.5">{step.sub}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => router.push("/game/demo/friends")}
+                      className="flex-1 bg-[#613de6] hover:bg-[#7251ed] text-white py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-[#613de6]/30 transition-all active:scale-95 flex items-center justify-center gap-2"
+                    >
+                      <PlayCircle size={14} /> Try Demo
+                    </button>
+                    <button
+                      onClick={() => handleGameClick(topGames[0])}
+                      className="flex-1 bg-white/10 hover:bg-white/15 text-white py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest border border-white/10 transition-all active:scale-95 flex items-center justify-center gap-2"
+                    >
+                      <ArrowRight size={14} /> Play Real
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 

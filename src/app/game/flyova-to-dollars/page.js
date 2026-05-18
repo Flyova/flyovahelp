@@ -222,7 +222,7 @@ export default function FlyovaToDollars() {
                 <h2 className="text-3xl font-black italic uppercase mb-2 text-white">You Won!</h2>
                 <p className="text-[#fc7952] text-2xl font-black italic">+${winAmount.toFixed(2)}</p>
                 {lastWinningNumbers.length > 0 && (
-                  <p className="text-sm text-gray-400 mt-2">Winning: {lastWinningNumbers.join(" & ")}</p>
+                  <p className="text-sm text-gray-400 mt-2">You won winning numbers: {lastWinningNumbers.join(" & ")}</p>
                 )}
               </>
             ) : (
@@ -230,7 +230,7 @@ export default function FlyovaToDollars() {
                 <XCircle size={60} className="mx-auto text-red-500 mb-4" />
                 <h2 className="text-xl font-black italic uppercase mb-2 text-white">No Luck!</h2>
                 {lastWinningNumbers.length > 0 && (
-                  <p className="text-sm text-gray-400">Winning: {lastWinningNumbers.join(" & ")}</p>
+                  <p className="text-sm text-gray-400">Winning numbers were: {lastWinningNumbers.join(" & ")}</p>
                 )}
                 <p className="text-sm opacity-70 mt-1">Try again next round</p>
               </>

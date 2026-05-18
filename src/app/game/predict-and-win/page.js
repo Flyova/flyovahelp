@@ -446,11 +446,17 @@ const buySubscription = async () => {
                 <Trophy size={60} className="mx-auto text-green-500 mb-4 animate-bounce" />
                 <h2 className="text-3xl font-black italic uppercase text-white mb-2">You WON!</h2>
                 <p className="text-[#fc7952] text-2xl font-black italic tracking-tighter">${WIN_REWARD.toFixed(2)}</p>
+                {lastResult && (
+                  <p className="text-sm text-gray-400 mt-2">You won winning numbers: {lastResult.n1} & {lastResult.n2}</p>
+                )}
               </>
             ) : (
               <>
                 <XCircle size={60} className="mx-auto text-red-500 mb-4 animate-pulse" />
-                <h2 className="text-xl font-black italic uppercase text-white mb-2 leading-tight">You lose,<br/>Better luck next time!</h2>
+                <h2 className="text-xl font-black italic uppercase text-white mb-2 leading-tight">No Luck!</h2>
+                {lastResult && (
+                  <p className="text-sm text-gray-400">Winning numbers were: {lastResult.n1} & {lastResult.n2}</p>
+                )}
               </>
             )}
           </div>
