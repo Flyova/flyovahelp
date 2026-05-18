@@ -27,8 +27,9 @@ export default function FlyovaToDollars() {
   const placeBetLockRef = useRef(false);
   const [betError, setBetError] = useState("");
   const [notification, setNotification] = useState(null);
-  const [activeBets, setActiveBets] = useState([]); 
-  const [gameStatus, setGameStatus] = useState("betting"); 
+  const [activeBets, setActiveBets] = useState([]);
+  const activeBetsRef = useRef([]);
+  const [gameStatus, setGameStatus] = useState("betting");
   const [lastWinningNumbers, setLastWinningNumbers] = useState([]);
   
   // Alert States
@@ -45,6 +46,9 @@ export default function FlyovaToDollars() {
 
 
     
+  // Keep ref in sync so RTDB listener always sees fresh activeBets
+  useEffect(() => { activeBetsRef.current = activeBets; }, [activeBets]);
+
   // 1. AUTH & WALLET SYNC
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -75,11 +79,22 @@ export default function FlyovaToDollars() {
         setTimeLeft(diff);
 
         if (data.status === "settled") {
-          // Check results immediately upon settlement
-          if (user) {
-            setLastWinningNumbers(data.winners || []);
-            checkGameResult(user.uid, data.gameId);
+          const winners = data.winners || [];
+          setLastWinningNumbers(winners);
+
+          // Compute result immediately from local bet state — no Firestore query needed
+          const bets = activeBetsRef.current;
+          if (bets.length > 0) {
+            const userPicks = bets.flatMap(b => b.picks || []);
+            const won = userPicks.some(pick => winners.includes(pick));
+            const totalStake = bets.reduce((sum, b) => sum + Number(b.amount || 0), 0);
+            setResultType(won ? "win" : "loss");
+            if (won) setWinAmount(totalStake * WIN_MULTIPLIER);
+            setShowResultAlert(true);
           }
+
+          // Also query Firestore in background to get accurate payout if backend differs
+          if (user) checkGameResult(user.uid, data.gameId);
           setGameStatus("waiting");
         } else {
           // If a new game is active, reset UI but keep result alert if it was triggered
@@ -115,36 +130,44 @@ export default function FlyovaToDollars() {
     return () => clearInterval(interval);
   }, [timeLeft, gameStatus]);
 
-  const checkGameResult = async (userId, gameId) => {
+  const checkGameResult = async (userId, gameId, attempt = 0) => {
+    const MAX_ATTEMPTS = 10;
+    const RETRY_DELAY = 1500;
+
     const q = query(
       collection(db, "users", userId, "transactions"),
       where("gameId", "==", gameId),
       limit(1)
     );
     const snap = await getDocs(q);
+
     if (!snap.empty) {
       const betData = snap.docs[0].data();
       if (betData.status === "win") {
         setWinAmount(betData.payout || betData.amount * WIN_MULTIPLIER);
         setResultType("win");
         setShowResultAlert(true);
+        return;
       } else if (betData.status === "loss") {
         setResultType("loss");
         setShowResultAlert(true);
+        return;
       }
+      // status is still "pending" — backend hasn't settled yet, retry
+    }
+
+    if (attempt < MAX_ATTEMPTS) {
+      setTimeout(() => checkGameResult(userId, gameId, attempt + 1), RETRY_DELAY);
     }
   };
 
 
-    useEffect(() => {
-  if (showResultAlert) {
-    // Modified: Result shows for 3.5 seconds then auto-closes to let user play next round
-    const timer = setTimeout(() => {
-      setShowResultAlert(false);
-    }, 3500); 
-    return () => clearTimeout(timer);
-  }
-}, [showResultAlert]);
+  useEffect(() => {
+    if (showResultAlert) {
+      const timer = setTimeout(() => setShowResultAlert(false), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [showResultAlert]);
 
   const fetchUserBets = async (gameId) => {
     if (!user) return;
@@ -214,28 +237,54 @@ export default function FlyovaToDollars() {
       
       {/* RESULT MODAL */}
       {showResultAlert && (
-        <div className="absolute inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className={`w-full max-w-xs p-8 rounded-[2.5rem] border-2 text-center shadow-2xl ${resultType === 'win' ? 'bg-[#1e293b] border-green-500 shadow-green-500/30' : 'bg-[#1e293b] border-red-500 shadow-red-500/30'}`}>
-            {resultType === 'win' ? (
-              <>
-                <Trophy size={60} className="mx-auto text-green-400 mb-4 animate-bounce" />
-                <h2 className="text-3xl font-black italic uppercase mb-2 text-white">You Won!</h2>
-                <p className="text-[#fc7952] text-2xl font-black italic">+${winAmount.toFixed(2)}</p>
-                {lastWinningNumbers.length > 0 && (
-                  <p className="text-sm text-gray-400 mt-2">You won winning numbers: {lastWinningNumbers.join(" & ")}</p>
-                )}
-              </>
-            ) : (
-              <>
-                <XCircle size={60} className="mx-auto text-red-500 mb-4" />
-                <h2 className="text-xl font-black italic uppercase mb-2 text-white">No Luck!</h2>
-                {lastWinningNumbers.length > 0 && (
-                  <p className="text-sm text-gray-400">Winning numbers were: {lastWinningNumbers.join(" & ")}</p>
-                )}
-                <p className="text-sm opacity-70 mt-1">Try again next round</p>
-              </>
-            )}
-            <button onClick={() => setShowResultAlert(false)} className="mt-6 text-[10px] font-bold uppercase tracking-widest opacity-50">Close</button>
+        <div className="absolute inset-0 z-[100] flex items-center justify-center p-6 bg-black/75 backdrop-blur-md animate-in fade-in duration-300">
+          <div className={`w-full max-w-sm rounded-3xl border-2 text-center shadow-2xl overflow-hidden ${resultType === 'win' ? 'bg-[#0d1f17] border-emerald-500/60 shadow-emerald-500/20' : 'bg-[#1a0f0f] border-red-500/60 shadow-red-500/20'}`}>
+            <div className={`px-8 pt-10 pb-6 ${resultType === 'win' ? 'bg-emerald-500/5' : 'bg-red-500/5'}`}>
+              <p className="text-5xl mb-4">{resultType === 'win' ? '🎉' : '😔'}</p>
+              {resultType === 'win' ? (
+                <>
+                  <h2 className="text-3xl font-black italic uppercase text-emerald-400 mb-2">
+                    YOU WON ${winAmount.toFixed(2)}!
+                  </h2>
+                  {lastWinningNumbers.length > 0 && (
+                    <p className="text-sm font-bold text-white/60">
+                      Winning numbers were: <span className="text-white font-black">{lastWinningNumbers.join(" & ")}</span>
+                    </p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <h2 className="text-2xl font-black italic uppercase text-red-400 mb-2">
+                    No Match This Draw
+                  </h2>
+                  {lastWinningNumbers.length > 0 && (
+                    <p className="text-sm font-bold text-white/60">
+                      Winning numbers were: <span className="text-white font-black">{lastWinningNumbers.join(" & ")}</span>
+                    </p>
+                  )}
+                  <p className="text-xs text-white/30 font-bold mt-2">Better luck next round</p>
+                </>
+              )}
+            </div>
+            <button
+              onClick={() => setShowResultAlert(false)}
+              className="w-full py-4 text-[11px] font-black uppercase tracking-widest text-white/40 hover:text-white/70 transition-colors border-t border-white/5"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* SETTLING OVERLAY — shown between timer=0 and RTDB "settled" event */}
+      {timeLeft <= 0 && gameStatus === "betting" && !showResultAlert && (
+        <div className="absolute inset-0 z-90 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="flex flex-col items-center gap-4 bg-[#1e293b] border border-white/10 rounded-3xl px-10 py-8 shadow-2xl">
+            <Loader2 size={36} className="animate-spin text-[#fc7952]" />
+            <div className="text-center space-y-1">
+              <p className="text-sm font-black italic uppercase tracking-widest text-white">Drawing Results...</p>
+              <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Please wait</p>
+            </div>
           </div>
         </div>
       )}

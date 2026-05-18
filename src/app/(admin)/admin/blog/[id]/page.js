@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import {
-  Save, Globe, EyeOff, ArrowLeft, Upload, X, Loader2, Image as ImageIcon, CheckCircle2
+  Save, Globe, EyeOff, ArrowLeft, Upload, X, Loader2, Image as ImageIcon, CheckCircle2, Tag, Search
 } from "lucide-react";
 
 const RichTextEditor = dynamic(() => import("@/components/RichTextEditor"), { ssr: false, loading: () => (
@@ -40,6 +40,10 @@ function BlogEditorContent() {
   const [coverImagePath, setCoverImagePath] = useState("");
   const [coverUploading, setCoverUploading] = useState(false);
   const [coverProgress, setCoverProgress] = useState(0);
+  const [keywords, setKeywords] = useState([]);
+  const [keywordInput, setKeywordInput] = useState("");
+  const [metaTitle, setMetaTitle] = useState("");
+  const [metaDescription, setMetaDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(!isNew);
@@ -59,6 +63,9 @@ function BlogEditorContent() {
       setAuthor(d.author ?? "Flyovahelp Team");
       setCoverImage(d.coverImage ?? "");
       setCoverImagePath(d.coverImagePath ?? "");
+      setKeywords(d.keywords ?? []);
+      setMetaTitle(d.metaTitle ?? "");
+      setMetaDescription(d.metaDescription ?? "");
       setLoading(false);
     });
   }, [isNew, params.id, router]);
@@ -130,6 +137,9 @@ function BlogEditorContent() {
       author: author.trim() || "Flyovahelp Team",
       coverImage,
       coverImagePath,
+      keywords,
+      metaTitle: metaTitle.trim(),
+      metaDescription: metaDescription.trim(),
       published: publish ?? published,
       updatedAt: serverTimestamp(),
       readTime: calcReadTime(content),
@@ -299,6 +309,82 @@ function BlogEditorContent() {
               onChange={(e) => setAuthor(e.target.value)}
               className="w-full bg-slate-900 border border-slate-800 focus:border-[#613de6]/40 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-200 outline-none transition-colors"
             />
+          </div>
+
+          {/* Keywords */}
+          <div className="bg-[#0f172a] border border-slate-800 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Tag size={13} className="text-slate-400" />
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Keywords</p>
+            </div>
+            <div className="flex flex-wrap gap-1.5 min-h-7">
+              {keywords.map((kw) => (
+                <span key={kw} className="flex items-center gap-1 bg-[#613de6]/20 border border-[#613de6]/30 text-[#a78bfa] text-[10px] font-black uppercase tracking-wide px-2.5 py-1 rounded-full">
+                  {kw}
+                  <button
+                    type="button"
+                    onClick={() => setKeywords(keywords.filter((k) => k !== kw))}
+                    className="ml-0.5 hover:text-white transition-colors"
+                  >
+                    <X size={10} />
+                  </button>
+                </span>
+              ))}
+            </div>
+            <input
+              type="text"
+              value={keywordInput}
+              onChange={(e) => setKeywordInput(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.key === "Enter" || e.key === ",") && keywordInput.trim()) {
+                  e.preventDefault();
+                  const kw = keywordInput.trim().replace(/,/g, "").toLowerCase();
+                  if (kw && !keywords.includes(kw)) setKeywords([...keywords, kw]);
+                  setKeywordInput("");
+                } else if (e.key === "Backspace" && !keywordInput && keywords.length) {
+                  setKeywords(keywords.slice(0, -1));
+                }
+              }}
+              placeholder="Type keyword, press Enter…"
+              className="w-full bg-slate-900 border border-slate-800 focus:border-[#613de6]/40 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-200 placeholder:text-slate-500 outline-none transition-colors"
+            />
+            <p className="text-[10px] text-slate-500 font-bold">Press Enter or comma to add · Backspace to remove last</p>
+          </div>
+
+          {/* SEO / Meta Tags */}
+          <div className="bg-[#0f172a] border border-slate-800 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Search size={13} className="text-slate-400" />
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">SEO / Meta Tags</p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Meta Title</label>
+              <input
+                type="text"
+                value={metaTitle}
+                onChange={(e) => setMetaTitle(e.target.value)}
+                placeholder={title || "Defaults to post title"}
+                maxLength={70}
+                className="w-full bg-slate-900 border border-slate-800 focus:border-[#613de6]/40 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-200 placeholder:text-slate-500 outline-none transition-colors"
+              />
+              <p className={`text-right text-[10px] font-bold ${metaTitle.length > 60 ? "text-amber-400" : "text-slate-500"}`}>
+                {metaTitle.length}/70 {metaTitle.length > 60 ? "· trim for best SEO" : ""}
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Meta Description</label>
+              <textarea
+                value={metaDescription}
+                onChange={(e) => setMetaDescription(e.target.value)}
+                placeholder={excerpt || "Defaults to excerpt"}
+                rows={3}
+                maxLength={160}
+                className="w-full bg-slate-900 border border-slate-800 focus:border-[#613de6]/40 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-200 placeholder:text-slate-500 outline-none transition-colors resize-none"
+              />
+              <p className={`text-right text-[10px] font-bold ${metaDescription.length > 155 ? "text-amber-400" : "text-slate-500"}`}>
+                {metaDescription.length}/160 {metaDescription.length > 155 ? "· trim for best SEO" : ""}
+              </p>
+            </div>
           </div>
 
           {/* Status */}
