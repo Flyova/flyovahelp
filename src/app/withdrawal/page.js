@@ -257,6 +257,65 @@ const handleWithdraw = async () => {
         } catch (emailErr) {
           console.error("Email notification failed:", emailErr);
         }
+
+        // --- USER CONFIRMATION EMAIL ---
+        if (user.email) {
+          try {
+            await fetch('/api/send-email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                to: user.email,
+                subject: "Withdrawal Request Received",
+                html: `
+                  <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 30px 20px; color: #333;">
+                    <div style="background: #0f172a; padding: 30px; border-radius: 20px; text-align: center; margin-bottom: 24px;">
+                      <h1 style="color: #fc7952; font-style: italic; text-transform: uppercase; margin: 0; font-size: 22px; letter-spacing: 1px;">Flyova</h1>
+                    </div>
+                    <h2 style="font-size: 20px; margin-bottom: 8px;">Withdrawal Request Received</h2>
+                    <p style="color: #555; margin-bottom: 24px;">Hi ${userData.fullName}, your USDT withdrawal request has been submitted and is now being reviewed.</p>
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                      <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                          <td style="padding: 8px 0; color: #666; font-size: 13px;">Withdrawal Amount</td>
+                          <td style="padding: 8px 0; font-weight: bold; text-align: right;">$${withdrawAmount.toFixed(2)}</td>
+                        </tr>
+                        <tr>
+                          <td style="padding: 8px 0; color: #666; font-size: 13px;">Service Fee</td>
+                          <td style="padding: 8px 0; font-weight: bold; text-align: right; color: #e11d48;">$${fee.toFixed(2)}</td>
+                        </tr>
+                        ${bonusDeduction > 0 ? `
+                        <tr>
+                          <td style="padding: 8px 0; color: #666; font-size: 13px;">Bonus Recovery</td>
+                          <td style="padding: 8px 0; font-weight: bold; text-align: right; color: #d97706;">$${bonusDeduction.toFixed(2)}</td>
+                        </tr>` : ''}
+                        <tr style="border-top: 1px solid #e2e8f0;">
+                          <td style="padding: 12px 0 8px; font-weight: bold; font-size: 14px;">Total Deducted</td>
+                          <td style="padding: 12px 0 8px; font-weight: bold; text-align: right; font-size: 16px; color: #fc7952;">$${totalDeduct.toFixed(2)}</td>
+                        </tr>
+                        <tr>
+                          <td style="padding: 8px 0; color: #666; font-size: 13px;">Network</td>
+                          <td style="padding: 8px 0; font-weight: bold; text-align: right;">TRC20 (USDT)</td>
+                        </tr>
+                        <tr>
+                          <td style="padding: 8px 0; color: #666; font-size: 13px;">Destination</td>
+                          <td style="padding: 8px 0; font-weight: bold; text-align: right; font-size: 11px; word-break: break-all;">${usdtAddress}</td>
+                        </tr>
+                      </table>
+                    </div>
+                    <p style="color: #555; font-size: 13px; line-height: 1.6;">Our team typically processes USDT withdrawals within <strong>30–60 minutes</strong>. You will receive another email once your withdrawal has been approved or declined.</p>
+                    <p style="color: #999; font-size: 11px; margin-top: 24px; text-transform: uppercase; letter-spacing: 1px;">If you did not request this withdrawal, please contact support immediately.</p>
+                    <div style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; font-size: 11px; color: #aaa; text-align: center;">
+                      Flyova Gaming Platform
+                    </div>
+                  </div>
+                `
+              })
+            });
+          } catch (userEmailErr) {
+            console.error("User confirmation email failed:", userEmailErr);
+          }
+        }
         
         setLoading(false);
         setShowSuccess(true);
