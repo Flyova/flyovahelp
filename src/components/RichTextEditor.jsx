@@ -6,6 +6,8 @@ import LinkExt from "@tiptap/extension-link";
 import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import Placeholder from "@tiptap/extension-placeholder";
+import TextStyle from "@tiptap/extension-text-style";
+import FontFamily from "@tiptap/extension-font-family";
 import { useRef, useCallback } from "react";
 import { storage } from "@/lib/firebase";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
@@ -13,8 +15,19 @@ import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   Heading1, Heading2, Heading3, List, ListOrdered, Quote,
   Link2, Link2Off, ImagePlus, AlignLeft, AlignCenter, AlignRight,
-  Undo2, Redo2, Minus, Code
+  Undo2, Redo2, Minus, Code, ChevronDown
 } from "lucide-react";
+
+const FONTS = [
+  { label: "Default", value: "" },
+  { label: "Serif", value: "Georgia, serif" },
+  { label: "Mono", value: "ui-monospace, monospace" },
+  { label: "Inter", value: "Inter, sans-serif" },
+  { label: "Playfair", value: "'Playfair Display', serif" },
+  { label: "Roboto", value: "Roboto, sans-serif" },
+  { label: "Lato", value: "Lato, sans-serif" },
+  { label: "Merriweather", value: "Merriweather, serif" },
+];
 
 function ToolBtn({ onClick, active, title, disabled, children }) {
   const handlePointerDown = (e) => {
@@ -63,6 +76,8 @@ export default function RichTextEditor({ content, onChange, placeholder = "Start
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
       Underline,
+      TextStyle,
+      FontFamily,
       ImageExt.configure({ inline: false, allowBase64: false }),
       LinkExt.configure({ openOnClick: false }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
@@ -113,6 +128,32 @@ export default function RichTextEditor({ content, onChange, placeholder = "Start
         </ToolBtn>
 
         <Divider />
+
+        {/* Font Family */}
+        <div className="relative flex items-center">
+          <select
+            title="Font Family"
+            value={editor.getAttributes("textStyle").fontFamily ?? ""}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === "") {
+                editor.chain().focus().unsetFontFamily().run();
+              } else {
+                editor.chain().focus().setFontFamily(val).run();
+              }
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            className="appearance-none bg-transparent text-gray-400 hover:text-white text-[11px] font-bold pl-2 pr-6 py-1.5 rounded-lg hover:bg-white/10 transition-all outline-none cursor-pointer"
+            style={{ fontFamily: editor.getAttributes("textStyle").fontFamily || "inherit" }}
+          >
+            {FONTS.map((f) => (
+              <option key={f.value} value={f.value} style={{ fontFamily: f.value || "inherit", background: "#1e293b", color: "white" }}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={11} className="absolute right-1 text-gray-500 pointer-events-none" />
+        </div>
 
         {/* Headings */}
         <ToolBtn title="Heading 1" active={editor.isActive("heading", { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>

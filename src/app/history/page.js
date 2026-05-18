@@ -123,11 +123,17 @@ export default function HistoryPage() {
               let mainTitle = "";
               let subDetail = docData.title || "";
 
+              const isPlayWithFriends =
+                docData.title === "Match Stake" || docData.title === "Match Settlement";
+
               if (isTransfer) {
                 mainTitle = "P2P TRANSFER";
-                subDetail = docData.direction === 'in' 
-                  ? `From ${docData.senderName || 'User'}` 
+                subDetail = docData.direction === 'in'
+                  ? `From ${docData.senderName || 'User'}`
                   : `To ${docData.receiverName || 'User'}`;
+              } else if (isPlayWithFriends) {
+                mainTitle = "PLAY WITH FRIENDS";
+                subDetail = docData.title;
               } else if (docData.type === 'win') {
                 mainTitle = "GAME VICTORY";
                 subDetail = "Round Victory";
@@ -336,7 +342,7 @@ export default function HistoryPage() {
                         <p className="text-[9px] text-gray-500 font-bold uppercase">{dateStr}</p>
                         {item.status && (
                             <div className={`flex items-center gap-1 text-[8px] font-black uppercase px-2 py-0.5 rounded-md ${
-                                item.status === 'completed' || item.status === 'win' ? 'bg-green-500/20 text-green-400' : 
+                                item.status === 'completed' || item.status === 'win' ? 'bg-green-500/20 text-green-400' :
                                 item.status === 'pending' ? 'bg-orange-500/20 text-orange-400' : 'bg-red-500/20 text-red-400'
                             }`}>
                                 {(item.status === 'completed' || item.status === 'win') ? <CheckCircle2 size={10}/> : item.status === 'pending' ? <Clock size={10}/> : <XCircle size={10}/>}
@@ -344,6 +350,22 @@ export default function HistoryPage() {
                             </div>
                         )}
                     </div>
+                    {/* Account pin / reference details */}
+                    {item.type === 'withdrawal' && item.details?.usdtAddress && (
+                      <p className="text-[8px] font-bold text-[#613de6]/80 mt-1 font-mono tracking-wider">
+                        {item.details.usdtAddress.slice(0, 6)}...{item.details.usdtAddress.slice(-4)}
+                      </p>
+                    )}
+                    {(item.mainTitle === 'AGENT WITHDRAWAL' || item.mainTitle === 'AGENT DEPOSIT') && item.agentId && (
+                      <p className="text-[8px] font-bold text-[#613de6]/80 mt-1 font-mono tracking-wider">
+                        Trade #{(item.id || '').slice(-6).toUpperCase()}
+                      </p>
+                    )}
+                    {item.type === 'deposit' && item.addressUsed && (
+                      <p className="text-[8px] font-bold text-[#613de6]/80 mt-1 font-mono tracking-wider">
+                        {item.addressUsed.slice(0, 6)}...{item.addressUsed.slice(-4)}
+                      </p>
+                    )}
                   </div>
                 </div>
 

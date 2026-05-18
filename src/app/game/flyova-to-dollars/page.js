@@ -30,6 +30,8 @@ export default function FlyovaToDollars() {
   const [activeBets, setActiveBets] = useState([]);
   const activeBetsRef = useRef([]);
   const [gameStatus, setGameStatus] = useState("betting");
+  const gameStatusRef = useRef("betting");
+  const currentGameIdRef = useRef(null);
   const [lastWinningNumbers, setLastWinningNumbers] = useState([]);
   
   // Alert States
@@ -46,8 +48,9 @@ export default function FlyovaToDollars() {
 
 
     
-  // Keep ref in sync so RTDB listener always sees fresh activeBets
+  // Keep refs in sync so RTDB listener always sees fresh state
   useEffect(() => { activeBetsRef.current = activeBets; }, [activeBets]);
+  useEffect(() => { gameStatusRef.current = gameStatus; }, [gameStatus]);
 
   // 1. AUTH & WALLET SYNC
   useEffect(() => {
@@ -63,20 +66,25 @@ export default function FlyovaToDollars() {
   }, [router]);
 
   // 2. REALTIME ENGINE SYNC
+  // NOTE: gameStatus is intentionally NOT in the deps array.
+  // We use gameStatusRef + currentGameIdRef to read current values inside the callback
+  // without triggering re-subscriptions that can miss rapid RTDB transitions.
   useEffect(() => {
     const gameRef = rtdbRef(rtdb, "active_game_flyova");
     const unsubscribe = onValue(gameRef, async (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        setCurrentGame({ 
-            id: data.gameId, 
-            endTime: data.endTime, 
-            numbers: data.displayNumbers || [] 
-        });
-
         const now = Date.now();
         const diff = Math.max(0, Math.floor((data.endTime - now) / 1000));
+        const isNewGame = currentGameIdRef.current !== data.gameId;
+
+        setCurrentGame({
+            id: data.gameId,
+            endTime: data.endTime,
+            numbers: data.displayNumbers || []
+        });
         setTimeLeft(diff);
+        currentGameIdRef.current = data.gameId;
 
         if (data.status === "settled") {
           const winners = data.winners || [];
@@ -96,10 +104,12 @@ export default function FlyovaToDollars() {
           // Also query Firestore in background to get accurate payout if backend differs
           if (user) checkGameResult(user.uid, data.gameId);
           setGameStatus("waiting");
+          gameStatusRef.current = "waiting";
         } else {
-          // If a new game is active, reset UI but keep result alert if it was triggered
-          if (gameStatus === "waiting" || !currentGame) {
+          // New game started OR transitioning from waiting — always reset
+          if (gameStatusRef.current === "waiting" || isNewGame || !currentGameIdRef.current) {
             setGameStatus("betting");
+            gameStatusRef.current = "betting";
             setSelectedNumbers([]);
             setActiveBets([]);
             setLastWinningNumbers([]);
@@ -110,7 +120,7 @@ export default function FlyovaToDollars() {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [user, gameStatus]);
+  }, [user]);
 
   // 3. HISTORY SYNC
   useEffect(() => {
@@ -168,6 +178,17 @@ export default function FlyovaToDollars() {
       return () => clearTimeout(timer);
     }
   }, [showResultAlert]);
+
+  // Safety valve: if Drawing Results overlay is stuck for 30s, push to waiting state
+  // so users aren't permanently frozen when the backend is slow
+  useEffect(() => {
+    if (timeLeft > 0 || gameStatus !== "betting") return;
+    const timeout = setTimeout(() => {
+      setGameStatus("waiting");
+      gameStatusRef.current = "waiting";
+    }, 30000);
+    return () => clearTimeout(timeout);
+  }, [timeLeft, gameStatus]);
 
   const fetchUserBets = async (gameId) => {
     if (!user) return;
