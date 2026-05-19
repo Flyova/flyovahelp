@@ -303,7 +303,7 @@ const handleWithdraw = async () => {
                         </tr>
                       </table>
                     </div>
-                    <p style="color: #555; font-size: 13px; line-height: 1.6;">Our team typically processes USDT withdrawals within <strong>30-60 minutes</strong>. You will receive another email once your withdrawal has been approved or declined.</p>
+                    <p style="color: #555; font-size: 13px; line-height: 1.6;">Our team typically processes USDT withdrawals within <strong>24 hours</strong>. You will receive another email once your withdrawal has been approved or declined.</p>
                     <p style="color: #999; font-size: 11px; margin-top: 24px; text-transform: uppercase; letter-spacing: 1px;">If you did not request this withdrawal, please contact support immediately.</p>
                     <div style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; font-size: 11px; color: #aaa; text-align: center;">
                       Flyova Gaming Platform
