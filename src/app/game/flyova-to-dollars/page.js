@@ -299,7 +299,7 @@ export default function FlyovaToDollars() {
     <div className="min-h-screen bg-[#0f172a] text-white flex flex-col pb-24 relative overflow-hidden">
 
       {showResultAlert && (
-        <div className="absolute inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in zoom-in duration-300">
+        <div className="absolute inset-0 z-100 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in zoom-in duration-300">
           <div className={`w-full max-w-xs p-8 rounded-[2.5rem] border-2 text-center shadow-[0_0_50px_rgba(0,0,0,0.5)] ${
             resultType === 'win' ? 'bg-[#1e293b] border-green-500' :
             resultType === 'partial' ? 'bg-[#1e293b] border-amber-500' :
@@ -341,8 +341,8 @@ export default function FlyovaToDollars() {
       {/* Real-time Timer */}
       <div className="p-8 text-center bg-[#1e293b] border-b border-white/5 relative">
         <div className="absolute top-0 left-0 h-1 bg-[#fc7952] transition-all duration-1000" style={{ width: `${(timeLeft / (ROUND_DURATION / 1000)) * 100}%` }} />
-        <h1 className="text-xl font-black italic uppercase text-[#fc7952] mb-1">Flyova to Dollars</h1>
-        <div className="inline-flex items-center space-x-3 bg-black/20 px-8 py-4 rounded-[2rem] border border-white/5 mt-4">
+        <h1 className="lg:text-xl text-lg font-black italic uppercase text-[#fc7952] mb-1">Flyova to Dollars</h1>
+        <div className="inline-flex items-center space-x-3 bg-black/20 px-8 py-4 rounded-4xl border border-white/5 mt-4">
           <Timer size={24} className="text-[#613de6]" />
           <span className="text-4xl font-black italic font-mono">
             {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
@@ -439,7 +439,7 @@ export default function FlyovaToDollars() {
         </div>
         <div className="flex space-x-4 overflow-x-auto pb-2 no-scrollbar">
           {pastGames.map((pg) => (
-            <div key={pg.id} className="bg-[#1e293b] px-4 py-3 rounded-2xl border border-white/5 flex-shrink-0">
+            <div key={pg.id} className="bg-[#1e293b] px-4 py-3 rounded-2xl border border-white/5 shrink-0">
               <div className="flex space-x-2">
                 {pg.winners?.map(w => <span key={w} className="text-[#fc7952] font-black italic">{w}</span>)}
               </div>

@@ -337,7 +337,7 @@ export default function Dashboard() {
       
       {/* TESTIMONIAL MODAL */}
       {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center px-6">
+        <div className="fixed inset-0 z-100 flex items-center justify-center px-6">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowModal(false)} />
           <div className="bg-[#1e293b] w-full max-w-sm rounded-[2.5rem] border border-white/10 p-8 relative z-10 animate-in zoom-in-95 duration-300">
             <button onClick={() => setShowModal(false)} className="absolute top-6 right-6 text-gray-500 hover:text-white">
@@ -369,7 +369,7 @@ export default function Dashboard() {
 
       {/* PRE-GAME TUTORIAL PROMPT */}
       {tutorialPromptGame && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center px-5">
+        <div className="fixed inset-0 z-130 flex items-center justify-center px-5">
           <button
             type="button"
             aria-label="Close tutorial prompt"
@@ -446,7 +446,7 @@ export default function Dashboard() {
           {announcements
             .filter(msg => !readMessages.includes(msg.id))
             .map((msg) => (
-              <div key={msg.id} className={`p-5 rounded-[2rem] border flex items-start justify-between gap-4 shadow-2xl ${msg.type === 'warning' ? 'bg-amber-500 border-amber-400' : msg.type === 'success' ? 'bg-emerald-600 border-emerald-500' : 'bg-[#1e293b] border-white/10'}`}>
+              <div key={msg.id} className={`p-5 rounded-4xl border flex items-start justify-between gap-4 shadow-2xl ${msg.type === 'warning' ? 'bg-amber-500 border-amber-400' : msg.type === 'success' ? 'bg-emerald-600 border-emerald-500' : 'bg-[#1e293b] border-white/10'}`}>
                 <div className="flex items-start gap-3">
                   <div className="bg-white/10 p-2.5 rounded-xl mt-1">
                     {msg.type === 'warning' ? <AlertTriangle size={18} className="text-white" /> :
@@ -466,7 +466,7 @@ export default function Dashboard() {
         {/* JACKPOT ALERTS */}
         <div className="space-y-2 relative z-50 pt-2">
           {pendingJackpots.map((jackpot) => (
-            <div key={jackpot.id} className="p-5 rounded-[2rem] border bg-amber-500 border-amber-400 flex items-center justify-between gap-4 shadow-2xl animate-bounce-subtle">
+            <div key={jackpot.id} className="p-5 rounded-4xl border bg-amber-500 border-amber-400 flex items-center justify-between gap-4 shadow-2xl animate-bounce-subtle">
               <div className="flex items-start gap-3">
                 <div className="bg-white/20 p-2.5 rounded-xl">
                   <Trophy size={20} className="text-white fill-current" />
@@ -490,7 +490,7 @@ export default function Dashboard() {
         {/* WITHDRAWAL BANNER */}
         {hasApprovedWithdrawal && userData?.testimonialSubmitted !== true && (
           <div className="pt-4 relative z-50">
-            <div className="p-5 rounded-[2rem] border bg-emerald-600 border-emerald-500 flex items-center justify-between gap-4 shadow-2xl animate-in slide-in-from-top duration-500">
+            <div className="p-5 rounded-4xl border bg-emerald-600 border-emerald-500 flex items-center justify-between gap-4 shadow-2xl animate-in slide-in-from-top duration-500">
               <div className="flex items-start gap-3">
                 <div className="bg-white/10 p-2.5 rounded-xl">
                   <Heart size={18} className="text-white fill-current" />

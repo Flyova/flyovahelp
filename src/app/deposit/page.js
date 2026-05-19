@@ -282,7 +282,7 @@ export default function DepositPage() {
                 <ShieldAlert size={60} className="text-rose-500" />
             </div>
             <h2 className="text-3xl font-black italic uppercase text-white mb-3">Deposit Inactive</h2>
-            <p className="text-gray-400 text-xs font-bold uppercase tracking-[0.2em] max-w-[280px] leading-relaxed">
+            <p className="text-gray-400 text-xs font-bold uppercase tracking-[0.2em] max-w-70 leading-relaxed">
                 Deposits are temporarily disabled for system maintenance. Please check back shortly.
             </p>
             <button 
@@ -312,7 +312,7 @@ export default function DepositPage() {
         
         {/* ACTIVE USDT SESSION NOTICE */}
         {activeUsdtSession && method === "usdt" && (
-            <div className="bg-orange-500/10 border border-orange-500/20 p-6 rounded-[2rem] space-y-4 animate-in fade-in slide-in-from-top-4">
+            <div className="bg-orange-500/10 border border-orange-500/20 p-6 rounded-4xl space-y-4 animate-in fade-in slide-in-from-top-4">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <Clock size={16} className="text-orange-500" />
@@ -361,7 +361,7 @@ export default function DepositPage() {
           <div className="relative">
             <span className="absolute left-5 top-1/2 -translate-y-1/2 font-black text-[#613de6] text-xl">$</span>
             <input type="number" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)}
-              placeholder="0.00" className="w-full bg-[#1e293b] border border-white/5 p-6 pl-12 rounded-[2rem] font-black text-2xl outline-none focus:border-[#613de6]/50 transition-all" />
+              placeholder="0.00" className="w-full bg-[#1e293b] border border-white/5 p-6 pl-12 rounded-4xl font-black text-2xl outline-none focus:border-[#613de6]/50 transition-all" />
           </div>
         </div>
 
@@ -414,7 +414,7 @@ export default function DepositPage() {
         <button 
           onClick={handleDeposit} 
           disabled={loading || !depositAmount || (method === 'agent' && !selectedAgent) || (activeUsdtSession && method === "usdt")}
-          className="w-full bg-[#613de6] py-5 rounded-[2rem] font-black uppercase italic text-sm shadow-2xl flex items-center justify-center gap-3 disabled:opacity-30 active:scale-95 transition-all"
+          className="w-full bg-[#613de6] py-5 rounded-4xl font-black uppercase italic text-sm shadow-2xl flex items-center justify-center gap-3 disabled:opacity-30 active:scale-95 transition-all"
         >
           {loading ? <Loader2 className="animate-spin" /> : <>PROCEED TO TRADE <ArrowRight size={20}/></>}
         </button>
