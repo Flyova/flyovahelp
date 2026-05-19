@@ -330,6 +330,8 @@ export default function HistoryPage() {
             const isNegative = item.type === "p2p_transfer" ? item.direction !== "in" : amountValue < 0;
             const iconTone = isPositive ? "bg-green-500/10 text-green-500" : isNegative ? "bg-red-500/10 text-red-500" : "bg-slate-500/10 text-slate-400";
             const dateStr = item.date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            // Partial refund records may have status "win" from old code — always show "partial"
+            const displayStatus = item.subDetail === 'Partial Refund · 80%' ? 'partial' : item.status;
             
             return (
               <div 
@@ -359,13 +361,14 @@ export default function HistoryPage() {
                     
                     <div className="flex items-center gap-2 mt-1">
                         <p className="text-[9px] text-gray-500 font-bold uppercase">{dateStr}</p>
-                        {item.status && (
+                        {displayStatus && (
                             <div className={`flex items-center gap-1 text-[8px] font-black uppercase px-2 py-0.5 rounded-md ${
-                                item.status === 'completed' || item.status === 'win' ? 'bg-green-500/20 text-green-400' :
-                                item.status === 'pending' ? 'bg-orange-500/20 text-orange-400' : 'bg-red-500/20 text-red-400'
+                                displayStatus === 'completed' || displayStatus === 'win' ? 'bg-green-500/20 text-green-400' :
+                                displayStatus === 'pending' ? 'bg-orange-500/20 text-orange-400' :
+                                displayStatus === 'partial' ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'
                             }`}>
-                                {(item.status === 'completed' || item.status === 'win') ? <CheckCircle2 size={10}/> : item.status === 'pending' ? <Clock size={10}/> : <XCircle size={10}/>}
-                                {item.status}
+                                {displayStatus === 'completed' || displayStatus === 'win' ? <CheckCircle2 size={10}/> : displayStatus === 'pending' ? <Clock size={10}/> : displayStatus === 'partial' ? <RefreshCw size={10}/> : <XCircle size={10}/>}
+                                {displayStatus}
                             </div>
                         )}
                     </div>

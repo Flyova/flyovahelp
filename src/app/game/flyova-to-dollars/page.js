@@ -18,7 +18,7 @@ import {
   runTransaction
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { Wallet, Timer, CheckCircle2, Trophy, ArrowLeft, History, XCircle, RefreshCw } from "lucide-react";
+import { Timer, CheckCircle2, Trophy, History, XCircle, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function FlyovaToDollars() {
@@ -182,35 +182,27 @@ export default function FlyovaToDollars() {
             const matchCount = currentGame.winners.filter(w => picks.includes(w)).length;
 
             if (matchCount === 2) {
-              // Both correct → stake returned + 30% profit
               const payout = parseFloat((betStake * WIN_MULTIPLIER).toFixed(2));
               totalPayout += payout;
               bestResult = "win";
-              await updateDoc(betDoc.ref, { status: "win" });
-              await addDoc(collection(db, "users", user.uid, "transactions"), {
+              // Update the stake record in place — no second row
+              await updateDoc(betDoc.ref, {
                 title: "Flyova Win",
                 amount: payout,
-                gameId: currentGame.id,
                 type: "win",
                 status: "win",
-                timestamp: serverTimestamp()
               });
             } else if (matchCount === 1) {
-              // One correct → 80% of stake refunded
               const refund = parseFloat((betStake * PARTIAL_REFUND).toFixed(2));
               totalPayout += refund;
               if (bestResult !== "win") bestResult = "partial";
-              await updateDoc(betDoc.ref, { status: "partial" });
-              await addDoc(collection(db, "users", user.uid, "transactions"), {
+              await updateDoc(betDoc.ref, {
                 title: "Flyova Partial Refund",
                 amount: refund,
-                gameId: currentGame.id,
                 type: "win",
-                status: "win",
-                timestamp: serverTimestamp()
+                status: "partial",
               });
             } else {
-              // No match → lose
               totalLost += betStake;
               await updateDoc(betDoc.ref, { status: "loss" });
             }
@@ -334,17 +326,6 @@ export default function FlyovaToDollars() {
           </div>
         </div>
       )}
-
-      {/* Header */}
-      <div className="bg-[#613de6] p-4 flex justify-between items-center shadow-lg relative z-20">
-        <button onClick={() => router.push('/dashboard')} className="flex items-center space-x-2">
-          <ArrowLeft size={16} /><span className="font-black italic text-[10px] uppercase">Lobby</span>
-        </button>
-        <div className="flex items-center space-x-2 bg-black/20 px-3 py-1 rounded-full border border-white/5">
-          <Wallet size={12} className="text-[#fc7952]" />
-          <span className="font-black italic text-sm">${myWallet.toFixed(2)}</span>
-        </div>
-      </div>
 
       {/* Real-time Timer */}
       <div className="p-8 text-center bg-[#1e293b] border-b border-white/5 relative">
