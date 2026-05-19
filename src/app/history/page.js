@@ -1,17 +1,18 @@
 "use client";
 import { useState, useEffect } from "react";
-import { 
-  ArrowDownLeft, 
-  ArrowUpRight, 
-  Swords, 
-  History, 
-  Trophy, 
-  Coins, 
-  Clock, 
-  CheckCircle2, 
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  Swords,
+  History,
+  Trophy,
+  Coins,
+  Clock,
+  CheckCircle2,
   XCircle,
   Loader2,
-  Send
+  Send,
+  RefreshCw
 } from "lucide-react";
 // FIREBASE IMPORTS
 import { auth, db } from "@/lib/firebase";
@@ -125,6 +126,13 @@ export default function HistoryPage() {
 
               const isPlayWithFriends =
                 docData.title === "Match Stake" || docData.title === "Match Settlement";
+              const isFlyovaStake = docData.title === "Flyova Stake";
+              const isFlyovaWin = docData.title === "Flyova Win";
+              const isFlyovaPartial = docData.title === "Flyova Partial Refund";
+              const isFlyova = isFlyovaStake || isFlyovaWin || isFlyovaPartial;
+
+              // Flyova stakes are debits — negate so they display as -$X (red)
+              const displayAmount = isFlyovaStake ? -(Math.abs(Number(docData.amount || 0))) : docData.amount;
 
               if (isTransfer) {
                 mainTitle = "P2P TRANSFER";
@@ -134,6 +142,15 @@ export default function HistoryPage() {
               } else if (isPlayWithFriends) {
                 mainTitle = "PLAY WITH FRIENDS";
                 subDetail = docData.title;
+              } else if (isFlyovaStake) {
+                mainTitle = "FLYOVA TO DOLLARS";
+                subDetail = "Round Stake";
+              } else if (isFlyovaWin) {
+                mainTitle = "FLYOVA TO DOLLARS";
+                subDetail = "Win · +30%";
+              } else if (isFlyovaPartial) {
+                mainTitle = "FLYOVA TO DOLLARS";
+                subDetail = "Partial Refund · 80%";
               } else if (docData.type === 'win') {
                 mainTitle = "GAME VICTORY";
                 subDetail = "Round Victory";
@@ -150,9 +167,10 @@ export default function HistoryPage() {
               return {
                 id,
                 ...docData,
+                amount: displayAmount,
                 mainTitle,
                 subDetail,
-                category: isFinance ? 'finance' : 'games',
+                category: isFlyova ? 'games' : isFinance ? 'finance' : 'games',
                 date: docData.timestamp?.toDate() || new Date()
               };
             }).filter(Boolean);
@@ -320,7 +338,8 @@ export default function HistoryPage() {
               >
                 <div className="flex items-center space-x-4">
                   <div className={`p-4 rounded-2xl shadow-inner ${iconTone}`}>
-                    {item.type === 'win' ? <Trophy size={20}/> : 
+                    {item.subDetail === 'Partial Refund · 80%' ? <RefreshCw size={20}/> :
+                     item.type === 'win' ? <Trophy size={20}/> :
                      item.type === 'stake' ? <Swords size={20}/> :
                      item.type === 'predict_group' ? <Swords size={20}/> :
                      item.type === 'p2p_transfer' ? <Send size={20}/> :

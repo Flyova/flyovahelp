@@ -543,23 +543,6 @@ export default function Dashboard() {
 
         <div className="mt-4 md:mt-6 grid grid-cols-1 xl:grid-cols-12 gap-6">
           <section className="xl:col-span-8 space-y-6">
-            {/* Top Banner */}
-            <div>
-              <div
-                onClick={() =>
-                  handleGameClick(topGames.find((g) => g.path === "/game/flyova-to-dollars") || topGames[1])
-                }
-                className="relative w-full h-52 md:h-64 rounded-3xl overflow-hidden bg-[#613de6] group cursor-pointer shadow-2xl border border-white/5"
-              >
-          <div className="absolute inset-0 opacity-40 group-hover:opacity-60 transition-opacity"><img src="/flytodols.svg" alt="Background" className="w-full h-full object-cover" /></div>
-          <div className="absolute inset-0 bg-gradient-to-r from-black/60 to-transparent" />
-          <div className="absolute bottom-6 left-6 z-10">
-            <h2 className="text-2xl font-black text-white italic leading-tight tracking-tighter">FLYOVA TO<br/><span className="text-[#fc7952]">DOLLARS</span></h2>
-            <button className="mt-3 bg-[#fc7952] text-white px-6 py-2 rounded-full text-xs font-black uppercase shadow-lg group-hover:scale-105 transition-all">Play Now</button>
-          </div>
-              </div>
-            </div>
-
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
               <input className="w-full bg-[#1e293b] border border-gray-800 p-4 pl-12 rounded-2xl text-sm focus:border-[#613de6] outline-none text-white font-bold" placeholder="Search for games..." />

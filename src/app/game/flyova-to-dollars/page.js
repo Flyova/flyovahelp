@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db, auth } from "@/lib/firebase";
 import {
   doc,
@@ -46,6 +46,9 @@ export default function FlyovaToDollars() {
   const PARTIAL_REFUND = 0.8;
   const REFERRAL_RATE = 0.025;
 
+  const revealedGameRef = useRef(null);   // prevents double-processing the same game
+  const transitioningRef = useRef(false); // true during the 10s gap between rounds
+
   // 1. Auth & Wallet Listener
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -62,14 +65,28 @@ export default function FlyovaToDollars() {
 
   // 2. Global Game & History Listener
   useEffect(() => {
-    const qActive = query(collection(db, "timed_games"), orderBy("endTime", "desc"), limit(1));
+    // Only listen to active games — avoids picking up completed games with future endTimes
+    const qActive = query(
+      collection(db, "timed_games"),
+      where("status", "==", "active"),
+      limit(1)
+    );
     const unsubActive = onSnapshot(qActive, (snap) => {
       if (!snap.empty) {
         const gameData = { id: snap.docs[0].id, ...snap.docs[0].data() };
+
+        // Discard orphaned games whose endTime is more than 125s away — stale doc from dev/testing
+        if (typeof gameData.endTime === "number" && gameData.endTime - Date.now() > 125000) {
+          updateDoc(doc(db, "timed_games", gameData.id), { status: "completed" }).catch(console.error);
+          return;
+        }
+
         setCurrentGame(gameData);
         checkIfUserBet(gameData.id);
 
         if (gameStatus === "results" && Date.now() < gameData.endTime) {
+          revealedGameRef.current = null;
+          transitioningRef.current = false;
           setGameStatus("betting");
           setSelectedNumbers([]);
           setLastWinners([]);
@@ -77,7 +94,8 @@ export default function FlyovaToDollars() {
           setShowResultAlert(false);
         }
       } else {
-        generateNewGame();
+        // Only generate a new game on fresh load, not during the post-round transition
+        if (!transitioningRef.current) generateNewGame();
       }
     });
 
@@ -132,16 +150,21 @@ export default function FlyovaToDollars() {
   };
 
   const revealResults = async () => {
+    // Guard: the interval fires every second — ensure we only process each game once
+    if (revealedGameRef.current === currentGame.id) return;
+    revealedGameRef.current = currentGame.id;
+
     setGameStatus("results");
     setLastWinners(currentGame.winners);
 
     if (user) {
       try {
-        // Fetch all stakes the user placed in this round
+        // Only fetch bets that haven't been processed yet (status === "pending")
         const q = query(
           collection(db, "users", user.uid, "transactions"),
           where("gameId", "==", currentGame.id),
-          where("type", "==", "stake")
+          where("type", "==", "stake"),
+          where("status", "==", "pending")
         );
         const betsSnap = await getDocs(q);
 
@@ -221,8 +244,12 @@ export default function FlyovaToDollars() {
     }
 
     await updateDoc(doc(db, "timed_games", currentGame.id), { status: "completed" });
+    transitioningRef.current = true; // block the else-branch from generating a duplicate game
     setTimeout(() => { setShowResultAlert(false); }, 7000);
-    setTimeout(() => { generateNewGame(); }, 10000);
+    setTimeout(() => {
+      transitioningRef.current = false;
+      generateNewGame();
+    }, 10000);
   };
 
   const placeBet = async () => {
