@@ -54,12 +54,16 @@ export default function AdminWithdrawalList() {
       if (uniqueUserIds.length > 0) {
         const nameLookups = await Promise.all(uniqueUserIds.map(async (uid) => {
           const userSnap = await getDoc(doc(db, "users", uid));
-          return userSnap.exists() ? { uid, name: userSnap.data().fullName } : { uid, name: "Unknown User" };
+          if (userSnap.exists()) {
+            const d = userSnap.data();
+            return { uid, name: d.fullName || "Unknown User", pin: d.pin || "—" };
+          }
+          return { uid, name: "Unknown User", pin: "—" };
         }));
 
-        const newNames = {};
-        nameLookups.forEach(res => { if(res) newNames[res.uid] = res.name });
-        setUserCache(prev => ({ ...prev, ...newNames }));
+        const newEntries = {};
+        nameLookups.forEach(res => { if(res) newEntries[res.uid] = { name: res.name, pin: res.pin }; });
+        setUserCache(prev => ({ ...prev, ...newEntries }));
       }
 
       setWithdrawals(withdrawalDocs);
@@ -254,9 +258,9 @@ export default function AdminWithdrawalList() {
     if (viewMode === "pending" && status !== "pending") return false;
     if (viewMode === "history" && status === "pending") return false;
 
-    const fullName = userCache[d.userId] || "";
+    const fullName = userCache[d.userId]?.name || "";
     const search = searchTerm.toLowerCase();
-    return fullName.toLowerCase().includes(search) || 
+    return fullName.toLowerCase().includes(search) ||
            d.userId?.toLowerCase().includes(search) ||
            d.details?.usdtAddress?.toLowerCase().includes(search) ||
            status.toLowerCase().includes(search);
@@ -343,13 +347,16 @@ export default function AdminWithdrawalList() {
                 <td className="block md:table-cell p-2 md:p-6">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-[#fc7952]/10 text-[#fc7952] rounded-xl flex items-center justify-center font-black italic text-sm">
-                        {(userCache[item.userId] || "U").charAt(0).toUpperCase()}
+                        {(userCache[item.userId]?.name || "U").charAt(0).toUpperCase()}
                     </div>
                     <div>
                         <p className="text-sm font-black italic text-slate-800 uppercase leading-none mb-1">
-                            {userCache[item.userId] || "Resolving..."}
+                            {userCache[item.userId]?.name || "Resolving..."}
                         </p>
                         <p className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-tighter">ID: {item.userId}</p>
+                        <p className="text-[9px] font-mono font-black text-[#613de6] uppercase tracking-widest mt-0.5">
+                            PIN: {userCache[item.userId]?.pin || "—"}
+                        </p>
                     </div>
                   </div>
                 </td>

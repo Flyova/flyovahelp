@@ -104,7 +104,18 @@ export default function UserActivityPage() {
               <tr key={tx.id}>
                 <td className="p-4 text-xs font-bold text-slate-700">{tx.title || "-"}</td>
                 <td className="p-4 text-xs font-bold text-slate-500 uppercase">{tx.type || "-"}</td>
-                <td className="p-4 text-xs font-black text-slate-900">${Number(tx.amount || 0).toFixed(2)}</td>
+                <td className="p-4 text-xs font-black">
+                  {(() => {
+                    const isDebit = tx.title === "Flyova Stake" || tx.title === "Match Stake" || tx.type === "stake";
+                    const isCredit = tx.type === "win" || tx.type === "deposit" || tx.title === "Flyova Win" || tx.title === "Flyova Win Payout" || tx.title === "Flyova Partial Refund" || tx.direction === "in";
+                    const amt = Number(tx.amount || 0);
+                    return (
+                      <span className={isDebit ? "text-rose-600" : isCredit ? "text-emerald-600" : "text-slate-900"}>
+                        {isDebit ? "-" : isCredit ? "+" : ""}${Math.abs(amt).toFixed(2)}
+                      </span>
+                    );
+                  })()}
+                </td>
                 <td className="p-4 text-xs font-black uppercase text-slate-500">{tx.status || "-"}</td>
                 <td className="p-4 text-xs font-bold text-slate-500">{tx.timestamp?.toDate ? tx.timestamp.toDate().toLocaleString() : "-"}</td>
               </tr>

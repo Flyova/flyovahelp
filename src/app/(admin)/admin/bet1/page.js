@@ -10,14 +10,15 @@ import {
   doc,
   getDoc
 } from "firebase/firestore";
-import { 
-  Search, 
-  Timer, 
-  Hash, 
+import {
+  Search,
+  Timer,
+  Hash,
   CheckCircle2,
   XCircle,
   Loader2,
-  TrendingUp
+  TrendingUp,
+  RefreshCw
 } from "lucide-react";
 
 export default function FlyovaHistory() {
@@ -30,7 +31,7 @@ export default function FlyovaHistory() {
     // 1. Listen for Flyova specific transactions
     const q = query(
       collectionGroup(db, "transactions"),
-      where("title", "in", ["Flyova Stake", "Flyova Win", "Flyova Win Payout"]),
+      where("title", "in", ["Flyova Stake", "Flyova Win", "Flyova Win Payout", "Flyova Partial Refund"]),
       orderBy("timestamp", "desc")
     );
 
@@ -150,13 +151,18 @@ export default function FlyovaHistory() {
                     </div>
                 </td>
                 <td className="p-6 text-center">
-                    <p className={`text-sm font-black italic ${bet.type === 'win' ? 'text-emerald-600' : 'text-slate-900'}`}>
-                        {bet.type === 'win' ? '+' : '-'}${bet.amount}
+                    <p className={`text-sm font-black italic ${bet.title === 'Flyova Win' || bet.title === 'Flyova Win Payout' ? 'text-emerald-600' : bet.title === 'Flyova Partial Refund' ? 'text-amber-500' : 'text-rose-500'}`}>
+                        {bet.title === 'Flyova Win' || bet.title === 'Flyova Win Payout' ? '+' : '-'}${Number(bet.amount || 0).toFixed(2)}
                     </p>
+                    <p className="text-[9px] font-bold text-slate-400 mt-0.5 uppercase">{bet.title === 'Flyova Partial Refund' ? 'Partial Refund' : bet.title === 'Flyova Stake' ? 'Stake' : 'Payout'}</p>
                 </td>
                 <td className="p-6 text-center">
                     <div className="flex justify-center">
-                        {bet.status === 'win' ? (
+                        {bet.title === 'Flyova Partial Refund' ? (
+                            <div className="flex items-center gap-1 text-amber-500 font-black text-[9px] uppercase">
+                                <RefreshCw size={12} /> Partial
+                            </div>
+                        ) : bet.status === 'win' ? (
                             <div className="flex items-center gap-1 text-emerald-500 font-black text-[9px] uppercase">
                                 <CheckCircle2 size={12} /> Won
                             </div>
