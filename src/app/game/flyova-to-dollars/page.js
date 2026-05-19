@@ -18,7 +18,7 @@ import {
   runTransaction
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { Timer, CheckCircle2, Trophy, History, XCircle, RefreshCw } from "lucide-react";
+import { Timer, CheckCircle2, Trophy, History, XCircle, RefreshCw, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function FlyovaToDollars() {
@@ -36,6 +36,7 @@ export default function FlyovaToDollars() {
   const [gameStatus, setGameStatus] = useState("betting");
   const [lastWinners, setLastWinners] = useState([]);
   const [activeBets, setActiveBets] = useState([]);
+  const [placingBet, setPlacingBet] = useState(false);
 
   // Alert States
   const [showResultAlert, setShowResultAlert] = useState(false);
@@ -45,6 +46,15 @@ export default function FlyovaToDollars() {
   const WIN_MULTIPLIER = 1.3;
   const PARTIAL_REFUND = 0.8;
   const REFERRAL_RATE = 0.025;
+  const ROUND_DURATION = 120000; // 2 minutes in ms
+
+  // Returns the next 2-minute UTC boundary so all clients agree on the same endTime
+  const getNextRoundEnd = () => {
+    const now = Date.now();
+    const boundary = Math.ceil(now / ROUND_DURATION) * ROUND_DURATION;
+    // If we're within 10s of a boundary, skip to the following one
+    return (boundary - now < 10000) ? boundary + ROUND_DURATION : boundary;
+  };
 
   const revealedGameRef = useRef(null);   // prevents double-processing the same game
   const transitioningRef = useRef(false); // true during the 10s gap between rounds
@@ -89,9 +99,8 @@ export default function FlyovaToDollars() {
           transitioningRef.current = false;
           setGameStatus("betting");
           setSelectedNumbers([]);
-          setLastWinners([]);
           setActiveBets([]);
-          setShowResultAlert(false);
+          // popup stays visible for its 7s timeout — don't clear it here
         }
       } else {
         // Only generate a new game on fresh load, not during the post-round transition
@@ -143,7 +152,7 @@ export default function FlyovaToDollars() {
     await addDoc(collection(db, "timed_games"), {
       numbers: shuffled,
       winners,
-      endTime: Date.now() + 120000,
+      endTime: getNextRoundEnd(),
       status: "active",
       createdAt: serverTimestamp()
     });
@@ -155,7 +164,7 @@ export default function FlyovaToDollars() {
     revealedGameRef.current = currentGame.id;
 
     setGameStatus("results");
-    setLastWinners(currentGame.winners);
+    const gameWinners = [...(currentGame.winners || [])]; // capture before any awaits
 
     if (user) {
       try {
@@ -228,6 +237,7 @@ export default function FlyovaToDollars() {
             });
           }
 
+          setLastWinners(gameWinners); // set together with the popup so they render in the same batch
           setResultType(bestResult);
           setWinAmount(totalPayout);
           setShowResultAlert(true);
@@ -235,32 +245,32 @@ export default function FlyovaToDollars() {
       } catch (err) { console.error(err); }
     }
 
+    setLastWinners(gameWinners); // ensure grid highlights show even if user had no bets
     await updateDoc(doc(db, "timed_games", currentGame.id), { status: "completed" });
-    transitioningRef.current = true; // block the else-branch from generating a duplicate game
+    transitioningRef.current = true; // block the else-branch from creating a duplicate
+    generateNewGame(); // next round starts immediately — endTime is the next global boundary
     setTimeout(() => { setShowResultAlert(false); }, 7000);
-    setTimeout(() => {
-      transitioningRef.current = false;
-      generateNewGame();
-    }, 10000);
   };
 
   const placeBet = async () => {
+    const stakeAmount = parseInt(stake, 10);
     if (selectedNumbers.length !== 2 || gameStatus !== "betting" || timeLeft <= 0) return;
-    if (stake < 1 || stake > myWallet) return;
+    if (!stakeAmount || stakeAmount < 1 || stakeAmount > myWallet) return;
+    setPlacingBet(true);
     try {
       // Verify balance and deduct stake atomically
       await runTransaction(db, async (transaction) => {
         const userRef = doc(db, "users", user.uid);
         const userSnap = await transaction.get(userRef);
         const balance = userSnap.data()?.wallet || 0;
-        if (balance < stake) throw new Error("Insufficient balance");
-        transaction.update(userRef, { wallet: increment(-stake) });
+        if (balance < stakeAmount) throw new Error("Insufficient balance");
+        transaction.update(userRef, { wallet: increment(-stakeAmount) });
       });
 
       // Record stake with picks and gameId for payout computation
       await addDoc(collection(db, "users", user.uid, "transactions"), {
         title: "Flyova Stake",
-        amount: stake,
+        amount: stakeAmount,
         picks: [...selectedNumbers],
         gameId: currentGame.id,
         type: "stake",
@@ -268,9 +278,10 @@ export default function FlyovaToDollars() {
         timestamp: serverTimestamp()
       });
 
-      setActiveBets(prev => [...prev, { picks: [...selectedNumbers], amount: stake }]);
-      setSelectedNumbers([]); // Reset picks for next bet
+      setActiveBets(prev => [...prev, { picks: [...selectedNumbers], amount: stakeAmount }]);
+      setSelectedNumbers([]);
     } catch (e) { console.error(e); alert(e.message || "Transaction failed"); }
+    finally { setPlacingBet(false); }
   };
 
   const toggleNumber = (num) => {
@@ -329,7 +340,7 @@ export default function FlyovaToDollars() {
 
       {/* Real-time Timer */}
       <div className="p-8 text-center bg-[#1e293b] border-b border-white/5 relative">
-        <div className="absolute top-0 left-0 h-1 bg-[#fc7952] transition-all duration-1000" style={{ width: `${(timeLeft / 120) * 100}%` }} />
+        <div className="absolute top-0 left-0 h-1 bg-[#fc7952] transition-all duration-1000" style={{ width: `${(timeLeft / (ROUND_DURATION / 1000)) * 100}%` }} />
         <h1 className="text-xl font-black italic uppercase text-[#fc7952] mb-1">Flyova to Dollars</h1>
         <div className="inline-flex items-center space-x-3 bg-black/20 px-8 py-4 rounded-[2rem] border border-white/5 mt-4">
           <Timer size={24} className="text-[#613de6]" />
@@ -388,16 +399,33 @@ export default function FlyovaToDollars() {
             <>
               <div className="flex items-center justify-between mb-6 bg-black/20 p-4 rounded-2xl">
                 <button onClick={() => setStake(Math.max(1, stake - 1))} className="w-10 h-10 bg-[#613de6] rounded-xl font-bold">-</button>
-                <div className="text-center"><span className="text-2xl font-black italic text-[#fc7952]">${stake}</span></div>
-                <button onClick={() => setStake(stake + 1)} className="w-10 h-10 bg-[#613de6] rounded-xl font-bold">+</button>
+                <input
+                  type="number"
+                  min="1"
+                  value={stake}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (!isNaN(val) && val >= 1) setStake(val);
+                    else if (e.target.value === "") setStake("");
+                  }}
+                  onBlur={() => { if (!stake || stake < 1) setStake(1); }}
+                  className="w-20 text-center text-2xl font-black italic text-[#fc7952] bg-transparent outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <button onClick={() => setStake((s) => (parseInt(s) || 0) + 1)} className="w-10 h-10 bg-[#613de6] rounded-xl font-bold">+</button>
               </div>
               <button
                 onClick={placeBet}
-                disabled={selectedNumbers.length !== 2 || timeLeft <= 0 || stake > myWallet}
+                disabled={placingBet || selectedNumbers.length !== 2 || timeLeft <= 0 || !parseInt(stake) || parseInt(stake) > myWallet}
                 className="w-full bg-[#fc7952] pt-4 pb-3 rounded-2xl font-black uppercase italic shadow-lg disabled:opacity-20 flex flex-col items-center"
               >
-                <span className="text-lg">PLACE BET</span>
-                <span className="text-[10px] opacity-80 mt-1 italic tracking-tight">Win: ${(stake * WIN_MULTIPLIER).toFixed(2)} · Partial: ${(stake * PARTIAL_REFUND).toFixed(2)}</span>
+                {placingBet ? (
+                  <Loader2 size={22} className="animate-spin my-0.5" />
+                ) : (
+                  <>
+                    <span className="text-lg">PLACE BET</span>
+                    <span className="text-[10px] opacity-80 mt-1 italic tracking-tight">Win: ${(parseInt(stake) * WIN_MULTIPLIER).toFixed(2)} · Partial: ${(parseInt(stake) * PARTIAL_REFUND).toFixed(2)}</span>
+                  </>
+                )}
               </button>
             </>
           )}
