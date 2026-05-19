@@ -126,13 +126,18 @@ export default function HistoryPage() {
 
               const isPlayWithFriends =
                 docData.title === "Match Stake" || docData.title === "Match Settlement";
-              const isFlyovaStake = docData.title === "Flyova Stake";
+              // Old cron settled partial refunds by setting status:"refunded" without updating title
+              const isLegacyRefund = docData.title === "Flyova Stake" && docData.status === "refunded";
+              const isFlyovaStake = docData.title === "Flyova Stake" && !isLegacyRefund;
               const isFlyovaWin = docData.title === "Flyova Win";
-              const isFlyovaPartial = docData.title === "Flyova Partial Refund";
+              const isFlyovaPartial = docData.title === "Flyova Partial Refund" || isLegacyRefund;
               const isFlyova = isFlyovaStake || isFlyovaWin || isFlyovaPartial;
 
               // Flyova stakes are debits — negate so they display as -$X (red)
-              const displayAmount = isFlyovaStake ? -(Math.abs(Number(docData.amount || 0))) : docData.amount;
+              // Legacy refunds: use stored payout field if available, otherwise calculate 80%
+              const displayAmount = isLegacyRefund
+                ? Number(docData.payout || (docData.amount * 0.8) || 0)
+                : isFlyovaStake ? -(Math.abs(Number(docData.amount || 0))) : docData.amount;
 
               if (isTransfer) {
                 mainTitle = "P2P TRANSFER";

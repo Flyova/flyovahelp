@@ -18,7 +18,7 @@ import {
   runTransaction
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { Timer, CheckCircle2, Trophy, History, XCircle, RefreshCw, Loader2 } from "lucide-react";
+import { Timer, CheckCircle2, Trophy, History, XCircle, RefreshCw, Loader2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function FlyovaToDollars() {
@@ -37,11 +37,13 @@ export default function FlyovaToDollars() {
   const [lastWinners, setLastWinners] = useState([]);
   const [activeBets, setActiveBets] = useState([]);
   const [placingBet, setPlacingBet] = useState(false);
+  const [lastGameNumbers, setLastGameNumbers] = useState([]);
 
   // Alert States
   const [showResultAlert, setShowResultAlert] = useState(false);
   const [resultType, setResultType] = useState(null); // 'win' | 'partial' | 'lose'
   const [winAmount, setWinAmount] = useState(0);
+  const [betResults, setBetResults] = useState([]); // per-bet breakdown for the modal
 
   const WIN_MULTIPLIER = 1.3;
   const PARTIAL_REFUND = 0.8;
@@ -165,6 +167,8 @@ export default function FlyovaToDollars() {
 
     setGameStatus("results");
     const gameWinners = [...(currentGame.winners || [])]; // capture before any awaits
+    const capturedNumbers = [...(currentGame.numbers || [])]; // freeze grid before game switches
+    setLastGameNumbers(capturedNumbers);
 
     if (user) {
       try {
@@ -182,9 +186,11 @@ export default function FlyovaToDollars() {
           const userSnap = await getDoc(doc(db, "users", user.uid));
           const referrerUid = userSnap.data()?.referrerUid;
 
-          let totalPayout = 0;
+          let displayPayout = 0;
+          let displayResult = "lose"; // 'win' | 'partial' | 'lose'
           let totalLost = 0;
-          let bestResult = "lose"; // 'win' | 'partial' | 'lose'
+          const userRef = doc(db, "users", user.uid);
+          const collectedResults = [];
 
           for (const betDoc of betsSnap.docs) {
             const { picks = [], amount: betStake } = betDoc.data();
@@ -192,34 +198,36 @@ export default function FlyovaToDollars() {
 
             if (matchCount === 2) {
               const payout = parseFloat((betStake * WIN_MULTIPLIER).toFixed(2));
-              totalPayout += payout;
-              bestResult = "win";
-              // Update the stake record in place — no second row
-              await updateDoc(betDoc.ref, {
-                title: "Flyova Win",
-                amount: payout,
-                type: "win",
-                status: "win",
-              });
+              displayPayout += payout;
+              displayResult = "win";
+              collectedResults.push({ picks, stake: betStake, result: "win", payout, matchCount });
+              // Atomic: only credit if bet is still pending (cron may have already settled it)
+              await runTransaction(db, async (tx) => {
+                const fresh = await tx.get(betDoc.ref);
+                if (fresh.data()?.status !== "pending") return;
+                tx.update(betDoc.ref, { title: "Flyova Win", amount: payout, type: "win", status: "win" });
+                tx.update(userRef, { wallet: increment(payout) });
+              }).catch(console.error);
             } else if (matchCount === 1) {
               const refund = parseFloat((betStake * PARTIAL_REFUND).toFixed(2));
-              totalPayout += refund;
-              if (bestResult !== "win") bestResult = "partial";
-              await updateDoc(betDoc.ref, {
-                title: "Flyova Partial Refund",
-                amount: refund,
-                type: "win",
-                status: "partial",
-              });
+              displayPayout += refund;
+              if (displayResult !== "win") displayResult = "partial";
+              collectedResults.push({ picks, stake: betStake, result: "partial", payout: refund, matchCount });
+              await runTransaction(db, async (tx) => {
+                const fresh = await tx.get(betDoc.ref);
+                if (fresh.data()?.status !== "pending") return;
+                tx.update(betDoc.ref, { title: "Flyova Partial Refund", amount: refund, type: "win", status: "partial" });
+                tx.update(userRef, { wallet: increment(refund) });
+              }).catch(console.error);
             } else {
               totalLost += betStake;
-              await updateDoc(betDoc.ref, { status: "loss" });
+              collectedResults.push({ picks, stake: betStake, result: "loss", payout: 0, matchCount });
+              await runTransaction(db, async (tx) => {
+                const fresh = await tx.get(betDoc.ref);
+                if (fresh.data()?.status !== "pending") return;
+                tx.update(betDoc.ref, { status: "loss" });
+              }).catch(console.error);
             }
-          }
-
-          // Credit payout to wallet
-          if (totalPayout > 0) {
-            await updateDoc(doc(db, "users", user.uid), { wallet: increment(totalPayout) });
           }
 
           // Referral commission: 2.5% of total lost stake goes to referrer's bonus
@@ -238,8 +246,9 @@ export default function FlyovaToDollars() {
           }
 
           setLastWinners(gameWinners); // set together with the popup so they render in the same batch
-          setResultType(bestResult);
-          setWinAmount(totalPayout);
+          setBetResults(collectedResults);
+          setResultType(displayResult);
+          setWinAmount(displayPayout);
           setShowResultAlert(true);
         }
       } catch (err) { console.error(err); }
@@ -249,7 +258,19 @@ export default function FlyovaToDollars() {
     await updateDoc(doc(db, "timed_games", currentGame.id), { status: "completed" });
     transitioningRef.current = true; // block the else-branch from creating a duplicate
     generateNewGame(); // next round starts immediately — endTime is the next global boundary
-    setTimeout(() => { setShowResultAlert(false); }, 7000);
+    setTimeout(() => {
+      setShowResultAlert(false);
+      setLastWinners([]);
+      setLastGameNumbers([]);
+      setBetResults([]);
+    }, 7000);
+  };
+
+  const closeModal = () => {
+    setShowResultAlert(false);
+    setLastWinners([]);
+    setLastGameNumbers([]);
+    setBetResults([]);
   };
 
   const placeBet = async () => {
@@ -299,41 +320,112 @@ export default function FlyovaToDollars() {
     <div className="min-h-screen bg-[#0f172a] text-white flex flex-col pb-24 relative overflow-hidden">
 
       {showResultAlert && (
-        <div className="absolute inset-0 z-100 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in zoom-in duration-300">
-          <div className={`w-full max-w-xs p-8 rounded-[2.5rem] border-2 text-center shadow-[0_0_50px_rgba(0,0,0,0.5)] ${
-            resultType === 'win' ? 'bg-[#1e293b] border-green-500' :
-            resultType === 'partial' ? 'bg-[#1e293b] border-amber-500' :
-            'bg-[#1e293b] border-red-500'
-          }`}>
-            {resultType === 'win' ? (
-              <>
-                <Trophy size={60} className="mx-auto text-green-500 mb-4 animate-bounce" />
-                <h2 className="text-3xl font-black italic uppercase text-white mb-2">You WON!</h2>
-                <p className="text-[#fc7952] text-2xl font-black italic tracking-tighter">${winAmount.toFixed(2)}</p>
-                {lastWinners.length > 0 && (
-                  <p className="text-sm text-gray-400 mt-3">Winning numbers: <span className="text-white font-black">{lastWinners.join(" & ")}</span></p>
-                )}
-              </>
-            ) : resultType === 'partial' ? (
-              <>
-                <RefreshCw size={60} className="mx-auto text-amber-400 mb-4 animate-spin" />
-                <h2 className="text-2xl font-black italic uppercase text-white mb-2">Partial Refund!</h2>
-                <p className="text-amber-400 text-2xl font-black italic tracking-tighter">${winAmount.toFixed(2)}</p>
-                <p className="text-sm text-gray-400 mt-2">One number matched — 80% refunded</p>
-                {lastWinners.length > 0 && (
-                  <p className="text-sm text-gray-400 mt-1">Winning numbers: <span className="text-white font-black">{lastWinners.join(" & ")}</span></p>
-                )}
-              </>
-            ) : (
-              <>
-                <XCircle size={60} className="mx-auto text-red-500 mb-4 animate-pulse" />
-                <h2 className="text-xl font-black italic uppercase text-white mb-2 leading-tight">No Luck!</h2>
-                {lastWinners.length > 0 && (
-                  <p className="text-sm text-gray-400 mt-1">Winning numbers were: <span className="text-white font-black">{lastWinners.join(" & ")}</span></p>
-                )}
-                <p className="text-xs text-gray-500 mt-2">Better luck next round</p>
-              </>
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={closeModal}
+        >
+          <div
+            className="w-full max-w-md bg-[#0f172a] rounded-t-[2.5rem] border border-white/10 shadow-2xl animate-in slide-in-from-bottom-8 duration-300 overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className={`px-6 pt-6 pb-5 flex items-center justify-between border-b border-white/5 ${
+              resultType === 'win' ? 'bg-green-500/10' :
+              resultType === 'partial' ? 'bg-amber-500/10' : 'bg-red-500/10'
+            }`}>
+              <div className="flex items-center gap-3">
+                {resultType === 'win'
+                  ? <Trophy size={24} className="text-green-400 animate-bounce" />
+                  : resultType === 'partial'
+                  ? <RefreshCw size={24} className="text-amber-400 animate-spin" />
+                  : <XCircle size={24} className="text-red-400 animate-pulse" />}
+                <div>
+                  <h2 className="text-lg font-black italic uppercase text-white leading-none">
+                    {resultType === 'win' ? 'You Won!' : resultType === 'partial' ? 'Partial Refund!' : 'No Luck!'}
+                  </h2>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Round Results</p>
+                </div>
+              </div>
+              <button onClick={closeModal} className="p-2 rounded-xl hover:bg-white/10 transition-colors">
+                <X size={18} className="text-slate-400" />
+              </button>
+            </div>
+
+            {/* Winning numbers strip */}
+            {lastWinners.length > 0 && (
+              <div className="px-6 py-3 bg-black/20 border-b border-white/5 flex items-center gap-3">
+                <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest shrink-0">Winning</p>
+                <div className="flex gap-2">
+                  {lastWinners.map(n => (
+                    <span key={n} className="w-9 h-9 bg-green-500 rounded-xl flex items-center justify-center font-black italic text-sm shadow-[0_0_12px_rgba(34,197,94,0.5)]">
+                      {n}
+                    </span>
+                  ))}
+                </div>
+              </div>
             )}
+
+            {/* Per-bet list */}
+            <div className="p-4 space-y-3 max-h-60 overflow-y-auto">
+              {betResults.map((bet, i) => (
+                <div key={i} className={`p-4 rounded-2xl border ${
+                  bet.result === 'win' ? 'bg-green-500/5 border-green-500/20' :
+                  bet.result === 'partial' ? 'bg-amber-500/5 border-amber-500/20' :
+                  'bg-red-500/5 border-red-500/20'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-black uppercase text-slate-500 tracking-wider">Picks</span>
+                      {bet.picks.map(p => (
+                        <span key={p} className={`w-8 h-8 rounded-lg flex items-center justify-center font-black italic text-xs border ${
+                          lastWinners.includes(p)
+                            ? 'bg-green-500 border-green-400 text-white'
+                            : 'bg-[#1e293b] border-white/10 text-slate-400'
+                        }`}>{p}</span>
+                      ))}
+                    </div>
+                    <span className={`text-base font-black italic ${
+                      bet.result === 'win' ? 'text-green-400' :
+                      bet.result === 'partial' ? 'text-amber-400' : 'text-red-400'
+                    }`}>
+                      {bet.result === 'loss' ? `-$${bet.stake.toFixed(2)}` : `+$${bet.payout.toFixed(2)}`}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-[9px] font-bold text-slate-500 uppercase">Staked: ${bet.stake.toFixed(2)}</span>
+                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
+                      bet.result === 'win' ? 'bg-green-500/20 text-green-400' :
+                      bet.result === 'partial' ? 'bg-amber-500/20 text-amber-400' :
+                      'bg-red-500/20 text-red-400'
+                    }`}>
+                      {bet.result === 'win' ? '2/2 · +30%' : bet.result === 'partial' ? '1/2 · 80% back' : '0/2 · Lost'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer summary + close */}
+            <div className="px-6 py-5 border-t border-white/5 flex items-center justify-between">
+              <div>
+                <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest">
+                  {resultType === 'lose' ? 'Total Lost' : 'Total Received'}
+                </p>
+                <p className={`text-2xl font-black italic tracking-tighter ${
+                  resultType === 'lose' ? 'text-red-400' : 'text-green-400'
+                }`}>
+                  {resultType === 'lose'
+                    ? `-$${betResults.reduce((s, b) => s + b.stake, 0).toFixed(2)}`
+                    : `+$${winAmount.toFixed(2)}`}
+                </p>
+              </div>
+              <button
+                onClick={closeModal}
+                className="bg-[#613de6] hover:bg-[#7c5ce6] text-white font-black uppercase text-xs px-7 py-3 rounded-2xl transition-all active:scale-95"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -372,9 +464,9 @@ export default function FlyovaToDollars() {
 
         {/* 4 Number Grid */}
         <div className="grid grid-cols-4 gap-4 w-full max-w-sm mb-12">
-          {currentGame?.numbers?.map((num) => {
+          {(lastGameNumbers.length > 0 ? lastGameNumbers : currentGame?.numbers || []).map((num) => {
             const isSelected = selectedNumbers.includes(num);
-            const isWinner = lastWinners.includes(num) && gameStatus === "results";
+            const isWinner = lastWinners.includes(num);
             return (
               <button
                 key={num}

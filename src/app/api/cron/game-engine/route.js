@@ -37,55 +37,39 @@ export async function GET() {
         .where("status", "==", "pending")
         .get();
 
-      const batch = adminDb.batch();
-
       for (const betDoc of usersSnap.docs) {
         const betData = betDoc.data();
-        const userPicks = betData.picks; 
-        const userRef = betDoc.ref.parent.parent; 
-        
-        const userSnap = await userRef.get();
-        const userData = userSnap.data();
-
+        const userPicks = betData.picks;
+        const userRef = betDoc.ref.parent.parent;
         const matches = userPicks.filter(num => winningNums.includes(num)).length;
 
-        if (matches === 2) {
-          const payout = betData.amount * WIN_MULTIPLIER;
-          batch.update(betDoc.ref, { status: "win", payout: payout, matches: 2 });
-          batch.update(userRef, { wallet: admin.firestore.FieldValue.increment(payout) });
-        } 
-        else if (matches === 1) {
-          const refundAmount = betData.amount * REFUND_PERCENTAGE;
-          batch.update(betDoc.ref, { status: "refunded", payout: refundAmount, matches: 1 });
-          batch.update(userRef, { wallet: admin.firestore.FieldValue.increment(refundAmount) });
-        } 
-        else {
-          batch.update(betDoc.ref, { status: "loss", matches: 0 });
+        // Atomic check-and-settle: if the client already processed this bet, skip it
+        await adminDb.runTransaction(async (tx) => {
+          const freshBet = await tx.get(betDoc.ref);
+          if (freshBet.data()?.status !== "pending") return;
 
-          // REFERRAL LOGIC: Using referrerUid as the primary key
-          if (userData?.referrerUid) {
-            const referrerRef = adminDb.collection("users").doc(userData.referrerUid);
-            const commission = betData.amount * REFERRAL_COMMISSION_RATE;
-            
-            // Modified to update referralBonus balance
-            batch.update(referrerRef, { 
-              referralBonus: admin.firestore.FieldValue.increment(commission) 
-            });
-            
-            const refLogRef = referrerRef.collection("transactions").doc();
-            batch.set(refLogRef, {
-              title: "Referral Commission (Downline Loss)",
-              amount: commission,
-              type: "referral",
-              status: "win",
-              fromUser: userData.username || userData.referredBy || "Player",
-              timestamp: admin.firestore.FieldValue.serverTimestamp()
-            });
+          if (matches === 2) {
+            const payout = parseFloat((betData.amount * WIN_MULTIPLIER).toFixed(2));
+            tx.update(betDoc.ref, { title: "Flyova Win", amount: payout, type: "win", status: "win", matches: 2 });
+            tx.update(userRef, { wallet: admin.firestore.FieldValue.increment(payout) });
+          } else if (matches === 1) {
+            const refundAmount = parseFloat((betData.amount * REFUND_PERCENTAGE).toFixed(2));
+            tx.update(betDoc.ref, { title: "Flyova Partial Refund", amount: refundAmount, type: "win", status: "partial", matches: 1 });
+            tx.update(userRef, { wallet: admin.firestore.FieldValue.increment(refundAmount) });
+          } else {
+            tx.update(betDoc.ref, { status: "loss", matches: 0 });
+
+            const userSnap = await tx.get(userRef);
+            const userData = userSnap.data();
+            if (userData?.referrerUid) {
+              const referrerRef = adminDb.collection("users").doc(userData.referrerUid);
+              const commission = parseFloat((betData.amount * REFERRAL_COMMISSION_RATE).toFixed(2));
+              tx.update(referrerRef, { referralBonus: admin.firestore.FieldValue.increment(commission) });
+            }
           }
-        }
+        }).catch(console.error);
       }
 
-      await batch.commit();
       await gameDoc.ref.update({ status: "completed", completedAt: now });
       await gameRef.update({ status: "settled", winners: winningNums });
       
