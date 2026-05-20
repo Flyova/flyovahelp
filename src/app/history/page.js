@@ -131,13 +131,14 @@ export default function HistoryPage() {
               const isFlyovaStake = docData.title === "Flyova Stake" && !isLegacyRefund;
               const isFlyovaWin = docData.title === "Flyova Win";
               const isFlyovaPartial = docData.title === "Flyova Partial Refund" || isLegacyRefund;
-              const isFlyova = isFlyovaStake || isFlyovaWin || isFlyovaPartial;
+              const isFlyovaLoss = docData.title === "Flyova Loss" || docData.type === "loss";
+              const isFlyova = isFlyovaStake || isFlyovaWin || isFlyovaPartial || isFlyovaLoss;
 
-              // Flyova stakes are debits — negate so they display as -$X (red)
+              // Stakes and losses are debits — negate so they display as -$X (red)
               // Legacy refunds: use stored payout field if available, otherwise calculate 80%
               const displayAmount = isLegacyRefund
                 ? Number(docData.payout || (docData.amount * 0.8) || 0)
-                : isFlyovaStake ? -(Math.abs(Number(docData.amount || 0))) : docData.amount;
+                : (isFlyovaStake || isFlyovaLoss) ? -(Math.abs(Number(docData.amount || 0))) : docData.amount;
 
               if (isTransfer) {
                 mainTitle = "P2P TRANSFER";
@@ -156,6 +157,9 @@ export default function HistoryPage() {
               } else if (isFlyovaPartial) {
                 mainTitle = "FLYOVA TO DOLLARS";
                 subDetail = "Partial Refund · 80%";
+              } else if (isFlyovaLoss) {
+                mainTitle = "FLYOVA TO DOLLARS";
+                subDetail = "Loss · 0%";
               } else if (docData.type === 'win') {
                 mainTitle = "GAME VICTORY";
                 subDetail = "Round Victory";
@@ -330,13 +334,18 @@ export default function HistoryPage() {
               <p className="text-gray-500 font-black uppercase text-[10px] tracking-widest">Syncing Nodes...</p>
             </div>
           ) : renderedData.map((item) => {
-            const amountValue = Number(item.amount || 0);
+            const rawAmount = Number(item.amount || 0);
+            // Losses are always debits — enforce negative at render time so stale mapping data can't show +
+            const amountValue = item.type === 'loss' ? -Math.abs(rawAmount) : rawAmount;
             const isPositive = item.type === "p2p_transfer" ? item.direction === "in" : amountValue > 0;
             const isNegative = item.type === "p2p_transfer" ? item.direction !== "in" : amountValue < 0;
             const iconTone = isPositive ? "bg-green-500/10 text-green-500" : isNegative ? "bg-red-500/10 text-red-500" : "bg-slate-500/10 text-slate-400";
             const dateStr = item.date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            // Loss records have status "completed" in DB — override to show red "loss" badge
             // Partial refund records may have status "win" from old code — always show "partial"
-            const displayStatus = item.subDetail === 'Partial Refund · 80%' ? 'partial' : item.status;
+            const displayStatus = item.type === 'loss' ? 'loss'
+              : item.subDetail === 'Partial Refund · 80%' ? 'partial'
+              : item.status;
             
             return (
               <div 
@@ -346,6 +355,7 @@ export default function HistoryPage() {
                 <div className="flex items-center space-x-4">
                   <div className={`p-4 rounded-2xl shadow-inner ${iconTone}`}>
                     {item.subDetail === 'Partial Refund · 80%' ? <RefreshCw size={20}/> :
+                     item.type === 'loss' ? <XCircle size={20}/> :
                      item.type === 'win' ? <Trophy size={20}/> :
                      item.type === 'stake' ? <Swords size={20}/> :
                      item.type === 'predict_group' ? <Swords size={20}/> :
@@ -356,12 +366,14 @@ export default function HistoryPage() {
                   <div>
                     {/* GRAY Main Category Label */}
                     <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-0.5">
-                      {item.mainTitle}
+                      {(item.type === 'loss' || item.type === 'win' || item.type === 'refund') && item.mainTitle === 'TRANSACTION'
+                        ? 'FLYOVA TO DOLLARS'
+                        : item.mainTitle}
                     </p>
 
                     {/* WHITE Original Title (Larger/Bold) */}
                     <h4 className="font-black text-xs text-white uppercase tracking-tight leading-tight">
-                      {item.subDetail}
+                      {item.type === 'loss' && item.subDetail === item.title ? 'Loss · 0%' : item.subDetail}
                     </h4>
                     
                     <div className="flex items-center gap-2 mt-1">

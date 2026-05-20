@@ -100,26 +100,52 @@ export default function UserActivityPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {txs.map((tx) => (
-              <tr key={tx.id}>
-                <td className="p-4 text-xs font-bold text-slate-700">{tx.title || "-"}</td>
-                <td className="p-4 text-xs font-bold text-slate-500 uppercase">{tx.type || "-"}</td>
-                <td className="p-4 text-xs font-black">
-                  {(() => {
-                    const isDebit = tx.title === "Flyova Stake" || tx.title === "Match Stake" || tx.type === "stake";
-                    const isCredit = tx.type === "win" || tx.type === "deposit" || tx.title === "Flyova Win" || tx.title === "Flyova Win Payout" || tx.title === "Flyova Partial Refund" || tx.direction === "in";
-                    const amt = Number(tx.amount || 0);
-                    return (
-                      <span className={isDebit ? "text-rose-600" : isCredit ? "text-emerald-600" : "text-slate-900"}>
-                        {isDebit ? "-" : isCredit ? "+" : ""}${Math.abs(amt).toFixed(2)}
-                      </span>
-                    );
-                  })()}
-                </td>
-                <td className="p-4 text-xs font-black uppercase text-slate-500">{tx.status || "-"}</td>
-                <td className="p-4 text-xs font-bold text-slate-500">{tx.timestamp?.toDate ? tx.timestamp.toDate().toLocaleString() : "-"}</td>
-              </tr>
-            ))}
+            {txs.map((tx) => {
+              const isFlyovaWin     = tx.title === "Flyova Win"            || (tx.type === "win"    && tx.gameId);
+              const isFlyovaLoss    = tx.title === "Flyova Loss"           || (tx.type === "loss"   && tx.gameId);
+              const isFlyovaPartial = tx.title === "Flyova Partial Refund" || (tx.type === "refund" && tx.gameId);
+              const isFlyovaStake   = tx.title === "Flyova Stake";
+              const isFlyovaOutcome = isFlyovaWin || isFlyovaLoss || isFlyovaPartial;
+
+              // Show the original stake amount for outcome records
+              const amt = Number(tx.amount || 0);
+              const stakeAmt = isFlyovaWin     ? amt / 1.3
+                             : isFlyovaPartial ? amt / 0.8
+                             : amt; // loss and stake already store stake amount
+
+              const isDebit  = isFlyovaStake || tx.title === "Match Stake" || tx.type === "stake";
+              const isCredit = !isFlyovaOutcome && !isFlyovaStake &&
+                               (tx.type === "deposit" || tx.title === "Flyova Win Payout" || tx.direction === "in");
+
+              return (
+                <tr key={tx.id}>
+                  <td className="p-4 text-xs font-bold text-slate-700">
+                    <div>{tx.title || "-"}</div>
+                    {tx.picks && <div className="text-[10px] font-mono text-slate-400 mt-0.5">Picks: {tx.picks.join(", ")}</div>}
+                  </td>
+                  <td className="p-4">
+                    {isFlyovaWin ? (
+                      <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase bg-emerald-100 text-emerald-700">WIN</span>
+                    ) : isFlyovaLoss ? (
+                      <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase bg-rose-100 text-rose-700">LOSS</span>
+                    ) : isFlyovaPartial ? (
+                      <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase bg-amber-100 text-amber-700">PARTIAL</span>
+                    ) : isFlyovaStake ? (
+                      <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase bg-slate-100 text-slate-600">STAKE</span>
+                    ) : (
+                      <span className="text-xs font-bold text-slate-500 uppercase">{tx.type || "-"}</span>
+                    )}
+                  </td>
+                  <td className="p-4 text-xs font-black">
+                    <span className={isFlyovaOutcome ? "text-slate-800" : isDebit ? "text-rose-600" : isCredit ? "text-emerald-600" : "text-slate-900"}>
+                      {isDebit ? "-" : isCredit ? "+" : ""}${Math.abs(isFlyovaOutcome ? stakeAmt : amt).toFixed(2)}
+                    </span>
+                  </td>
+                  <td className="p-4 text-xs font-black uppercase text-slate-500">{tx.status || "-"}</td>
+                  <td className="p-4 text-xs font-bold text-slate-500">{tx.timestamp?.toDate ? tx.timestamp.toDate().toLocaleString() : "-"}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

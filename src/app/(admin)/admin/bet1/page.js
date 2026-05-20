@@ -31,7 +31,7 @@ export default function FlyovaHistory() {
     // 1. Listen for Flyova specific transactions
     const q = query(
       collectionGroup(db, "transactions"),
-      where("title", "in", ["Flyova Stake", "Flyova Win", "Flyova Win Payout", "Flyova Partial Refund"]),
+      where("title", "in", ["Flyova Stake", "Flyova Win", "Flyova Win Payout", "Flyova Partial Refund", "Flyova Loss"]),
       orderBy("timestamp", "desc")
     );
 
@@ -123,68 +123,83 @@ export default function FlyovaHistory() {
                         <p className="text-[10px] font-black uppercase text-slate-400">Loading Flyova Data...</p>
                     </td>
                 </tr>
-            ) : filteredBets.map((bet) => (
-              <tr key={bet.id} className="hover:bg-slate-50/50 transition-colors">
-                <td className="p-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-indigo-50 text-[#613de6] rounded-lg flex items-center justify-center font-black italic text-xs border border-indigo-100">
-                            {(userCache[bet.userId]?.name || "U").charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                        <p className="text-sm font-black italic text-slate-800 uppercase leading-none mb-1">
+            ) : filteredBets.map((bet) => {
+                const isWin     = bet.title === 'Flyova Win' || bet.title === 'Flyova Win Payout' || bet.type === 'win';
+                const isLoss    = bet.title === 'Flyova Loss' || bet.type === 'loss';
+                const isPartial = bet.title === 'Flyova Partial Refund' || bet.type === 'refund';
+                const isStake   = bet.title === 'Flyova Stake';
+                const raw       = Number(bet.amount || 0);
+                const stakeAmt  = isWin ? raw / 1.3 : isPartial ? raw / 0.8 : raw;
+
+                return (
+                  <tr key={bet.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="p-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-indigo-50 text-[#613de6] rounded-lg flex items-center justify-center font-black italic text-xs border border-indigo-100">
+                          {(userCache[bet.userId]?.name || "U").charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-sm font-black italic text-slate-800 uppercase leading-none mb-1">
                             {userCache[bet.userId]?.name || "Resolving..."}
-                        </p>
-                        <p className="text-[9px] font-mono text-slate-400">PIN: {userCache[bet.userId]?.pin || "--------"}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="p-6">
-                    <p className="text-[10px] font-mono font-bold text-slate-400 leading-none mb-1">
+                          </p>
+                          <p className="text-[9px] font-mono text-slate-400">PIN: {userCache[bet.userId]?.pin || "--------"}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-6">
+                      <p className="text-[10px] font-mono font-bold text-slate-400 leading-none mb-1">
                         #{bet.gameId?.slice(-6) || "N/A"}
-                    </p>
-                    <div className="flex gap-1">
+                      </p>
+                      <div className="flex gap-1">
                         {bet.picks?.map((num) => (
-                            <span key={num} className="bg-slate-100 text-slate-600 text-[9px] font-black px-1.5 py-0.5 rounded border border-slate-200">
-                                {num}
-                            </span>
+                          <span key={num} className="bg-slate-100 text-slate-600 text-[9px] font-black px-1.5 py-0.5 rounded border border-slate-200">
+                            {num}
+                          </span>
                         ))}
-                    </div>
-                </td>
-                <td className="p-6 text-center">
-                    <p className={`text-sm font-black italic ${bet.title === 'Flyova Win' || bet.title === 'Flyova Win Payout' ? 'text-emerald-600' : bet.title === 'Flyova Partial Refund' ? 'text-amber-500' : 'text-rose-500'}`}>
-                        {bet.title === 'Flyova Win' || bet.title === 'Flyova Win Payout' ? '+' : '-'}${Number(bet.amount || 0).toFixed(2)}
-                    </p>
-                    <p className="text-[9px] font-bold text-slate-400 mt-0.5 uppercase">{bet.title === 'Flyova Partial Refund' ? 'Partial Refund' : bet.title === 'Flyova Stake' ? 'Stake' : 'Payout'}</p>
-                </td>
-                <td className="p-6 text-center">
-                    <div className="flex justify-center">
-                        {bet.title === 'Flyova Partial Refund' ? (
-                            <div className="flex items-center gap-1 text-amber-500 font-black text-[9px] uppercase">
-                                <RefreshCw size={12} /> Partial
-                            </div>
-                        ) : bet.status === 'win' ? (
-                            <div className="flex items-center gap-1 text-emerald-500 font-black text-[9px] uppercase">
-                                <CheckCircle2 size={12} /> Won
-                            </div>
-                        ) : bet.status === 'loss' ? (
-                            <div className="flex items-center gap-1 text-rose-400 font-black text-[9px] uppercase">
-                                <XCircle size={12} /> Lost
-                            </div>
+                      </div>
+                    </td>
+                    <td className="p-6 text-center">
+                      <p className="text-sm font-black italic text-rose-500">
+                        -${stakeAmt.toFixed(2)}
+                      </p>
+                      <p className="text-[9px] font-bold text-slate-400 mt-0.5 uppercase">
+                        {isStake ? 'Stake' : isWin ? 'Win' : isLoss ? 'Loss' : isPartial ? 'Partial' : 'Stake'}
+                      </p>
+                    </td>
+                    <td className="p-6 text-center">
+                      <div className="flex justify-center">
+                        {isWin ? (
+                          <div className="flex items-center gap-1 text-emerald-500 font-black text-[9px] uppercase">
+                            <CheckCircle2 size={12} /> Win
+                          </div>
+                        ) : isLoss ? (
+                          <div className="flex items-center gap-1 text-rose-400 font-black text-[9px] uppercase">
+                            <XCircle size={12} /> Loss
+                          </div>
+                        ) : isPartial ? (
+                          <div className="flex items-center gap-1 text-amber-500 font-black text-[9px] uppercase">
+                            <RefreshCw size={12} /> Partial
+                          </div>
+                        ) : bet.status === 'settled' ? (
+                          <div className="flex items-center gap-1 text-slate-400 font-black text-[9px] uppercase">
+                            <CheckCircle2 size={12} /> Settled
+                          </div>
                         ) : (
-                            <div className="flex items-center gap-1 text-amber-500 font-black text-[9px] uppercase">
-                                <Timer size={12} className="animate-pulse" /> Pending
-                            </div>
+                          <div className="flex items-center gap-1 text-amber-500 font-black text-[9px] uppercase">
+                            <Timer size={12} className="animate-pulse" /> Pending
+                          </div>
                         )}
-                    </div>
-                </td>
-                <td className="p-6 text-right">
-                    <p className="text-[10px] font-black text-slate-400 uppercase leading-tight">
+                      </div>
+                    </td>
+                    <td className="p-6 text-right">
+                      <p className="text-[10px] font-black text-slate-400 uppercase leading-tight">
                         {bet.timestamp?.toDate().toLocaleTimeString()}<br/>
                         <span className="text-[8px] opacity-60 font-bold">{bet.timestamp?.toDate().toLocaleDateString()}</span>
-                    </p>
-                </td>
-              </tr>
-            ))}
+                      </p>
+                    </td>
+                  </tr>
+                );
+              })}
           </tbody>
         </table>
       </div>

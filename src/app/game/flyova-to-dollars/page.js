@@ -44,6 +44,7 @@ export default function FlyovaToDollars() {
   const [resultType, setResultType] = useState(null); // 'win' | 'partial' | 'lose'
   const [winAmount, setWinAmount] = useState(0);
   const [betResults, setBetResults] = useState([]); // per-bet breakdown for the modal
+  const [modalWinners, setModalWinners] = useState([]); // winning numbers shown inside the modal
 
   const WIN_MULTIPLIER = 1.3;
   const PARTIAL_REFUND = 0.8;
@@ -62,6 +63,7 @@ export default function FlyovaToDollars() {
   const transitioningRef = useRef(false);
   const transitionTimeoutRef = useRef(null);
   const resultTimeoutRef = useRef(null);
+  const winnersTimeoutRef = useRef(null);
 
   // 1. Auth & Wallet Listener
   useEffect(() => {
@@ -175,6 +177,16 @@ export default function FlyovaToDollars() {
     const capturedNumbers = [...(currentGame.numbers || [])]; // freeze grid before game switches
     setLastGameNumbers(capturedNumbers);
 
+    // Show winning numbers green immediately — start 3s timer now so it's anchored to round end,
+    // not to whenever async processing finishes. Upgraded to 7s below if the user has bets.
+    setLastWinners(gameWinners);
+    if (resultTimeoutRef.current) clearTimeout(resultTimeoutRef.current);
+    resultTimeoutRef.current = setTimeout(() => {
+      resultTimeoutRef.current = null;
+      setLastWinners([]);
+      setLastGameNumbers([]);
+    }, 3000);
+
     let hasBets = false;
 
     if (user) {
@@ -282,16 +294,15 @@ export default function FlyovaToDollars() {
             });
           }
 
-          setLastWinners(gameWinners); // set together with the popup so they render in the same batch
           setBetResults(collectedResults);
           setResultType(displayResult);
           setWinAmount(displayPayout);
+          setModalWinners(gameWinners);
           setShowResultAlert(true);
         }
       } catch (err) { console.error(err); }
     }
 
-    setLastWinners(gameWinners); // ensure grid highlights show even if user had no bets
     transitioningRef.current = true; // must be set before updateDoc to close the onSnapshot race
     if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
     transitionTimeoutRef.current = setTimeout(() => {
@@ -302,22 +313,23 @@ export default function FlyovaToDollars() {
     await updateDoc(doc(db, "timed_games", currentGame.id), { status: "completed" });
     generateNewGame();
     if (hasBets) {
-      // Modal is showing — auto-dismiss after 7s and clear everything
+      // Green numbers: show for 1s only, then clear
+      if (resultTimeoutRef.current) clearTimeout(resultTimeoutRef.current);
+      if (winnersTimeoutRef.current) clearTimeout(winnersTimeoutRef.current);
+      winnersTimeoutRef.current = setTimeout(() => {
+        winnersTimeoutRef.current = null;
+        setLastWinners([]);
+        setLastGameNumbers([]);
+      }, 1000);
+      // Modal: auto-dismiss after 7s
       resultTimeoutRef.current = setTimeout(() => {
         resultTimeoutRef.current = null;
         setShowResultAlert(false);
-        setLastWinners([]);
-        setLastGameNumbers([]);
         setBetResults([]);
+        setModalWinners([]);
       }, 7000);
-    } else {
-      // No modal — just flash the winning numbers green for 3s then clear
-      resultTimeoutRef.current = setTimeout(() => {
-        resultTimeoutRef.current = null;
-        setLastWinners([]);
-        setLastGameNumbers([]);
-      }, 3000);
     }
+    // No bets: the 3s timer set at the top of this function handles the clear
   };
 
   const closeModal = () => {
@@ -325,10 +337,15 @@ export default function FlyovaToDollars() {
       clearTimeout(resultTimeoutRef.current);
       resultTimeoutRef.current = null;
     }
+    if (winnersTimeoutRef.current) {
+      clearTimeout(winnersTimeoutRef.current);
+      winnersTimeoutRef.current = null;
+    }
     setShowResultAlert(false);
     setLastWinners([]);
     setLastGameNumbers([]);
     setBetResults([]);
+    setModalWinners([]);
   };
 
   const placeBet = async () => {
@@ -410,11 +427,11 @@ export default function FlyovaToDollars() {
             </div>
 
             {/* Winning numbers strip */}
-            {lastWinners.length > 0 && (
+            {modalWinners.length > 0 && (
               <div className="px-6 py-3 bg-black/20 border-b border-white/5 flex items-center gap-3">
                 <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest shrink-0">Winning</p>
                 <div className="flex gap-2">
-                  {lastWinners.map(n => (
+                  {modalWinners.map(n => (
                     <span key={n} className="w-9 h-9 bg-green-500 rounded-xl flex items-center justify-center font-black italic text-sm shadow-[0_0_12px_rgba(34,197,94,0.5)]">
                       {n}
                     </span>
@@ -436,7 +453,7 @@ export default function FlyovaToDollars() {
                       <span className="text-[9px] font-black uppercase text-slate-500 tracking-wider">Picks</span>
                       {bet.picks.map(p => (
                         <span key={p} className={`w-8 h-8 rounded-lg flex items-center justify-center font-black italic text-xs border ${
-                          lastWinners.includes(p)
+                          modalWinners.includes(p)
                             ? 'bg-green-500 border-green-400 text-white'
                             : 'bg-[#1e293b] border-white/10 text-slate-400'
                         }`}>{p}</span>
