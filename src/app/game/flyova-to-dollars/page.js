@@ -58,8 +58,9 @@ export default function FlyovaToDollars() {
     return (boundary - now < 10000) ? boundary + ROUND_DURATION : boundary;
   };
 
-  const revealedGameRef = useRef(null);   // prevents double-processing the same game
-  const transitioningRef = useRef(false); // true during the 10s gap between rounds
+  const revealedGameRef = useRef(null);
+  const transitioningRef = useRef(false);
+  const transitionTimeoutRef = useRef(null);
 
   // 1. Auth & Wallet Listener
   useEffect(() => {
@@ -87,8 +88,8 @@ export default function FlyovaToDollars() {
       if (!snap.empty) {
         const gameData = { id: snap.docs[0].id, ...snap.docs[0].data() };
 
-        // Discard orphaned games whose endTime is more than 125s away — stale doc from dev/testing
-        if (typeof gameData.endTime === "number" && gameData.endTime - Date.now() > 125000) {
+        // Discard orphaned games whose endTime is more than 135s away — stale doc from dev/testing
+        if (typeof gameData.endTime === "number" && gameData.endTime - Date.now() > 135000) {
           updateDoc(doc(db, "timed_games", gameData.id), { status: "completed" }).catch(console.error);
           return;
         }
@@ -96,13 +97,16 @@ export default function FlyovaToDollars() {
         setCurrentGame(gameData);
         checkIfUserBet(gameData.id);
 
-        if (gameStatus === "results" && Date.now() < gameData.endTime) {
+        if (gameStatus === "results" && gameData.id !== revealedGameRef.current) {
+          if (transitionTimeoutRef.current) {
+            clearTimeout(transitionTimeoutRef.current);
+            transitionTimeoutRef.current = null;
+          }
           revealedGameRef.current = null;
           transitioningRef.current = false;
           setGameStatus("betting");
           setSelectedNumbers([]);
           setActiveBets([]);
-          // popup stays visible for its 7s timeout — don't clear it here
         }
       } else {
         // Only generate a new game on fresh load, not during the post-round transition
@@ -255,9 +259,15 @@ export default function FlyovaToDollars() {
     }
 
     setLastWinners(gameWinners); // ensure grid highlights show even if user had no bets
+    transitioningRef.current = true; // must be set before updateDoc to close the onSnapshot race
+    if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
+    transitionTimeoutRef.current = setTimeout(() => {
+      // Fallback: if the new-game listener never fires (orphan killed, write failed, etc.), unlock
+      transitioningRef.current = false;
+      transitionTimeoutRef.current = null;
+    }, 10000);
     await updateDoc(doc(db, "timed_games", currentGame.id), { status: "completed" });
-    transitioningRef.current = true; // block the else-branch from creating a duplicate
-    generateNewGame(); // next round starts immediately — endTime is the next global boundary
+    generateNewGame();
     setTimeout(() => {
       setShowResultAlert(false);
       setLastWinners([]);
