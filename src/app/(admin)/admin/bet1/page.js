@@ -129,7 +129,7 @@ export default function FlyovaHistory() {
                 const isPartial = bet.title === 'Flyova Partial Refund' || bet.type === 'refund';
                 const isStake   = bet.title === 'Flyova Stake';
                 const raw       = Number(bet.amount || 0);
-                const stakeAmt  = isWin ? raw / 1.3 : isPartial ? raw / 0.8 : raw;
+                const stakeAmt  = raw;
 
                 return (
                   <tr key={bet.id} className="hover:bg-slate-50/50 transition-colors">
@@ -159,8 +159,8 @@ export default function FlyovaHistory() {
                       </div>
                     </td>
                     <td className="p-6 text-center">
-                      <p className="text-sm font-black italic text-rose-500">
-                        -${stakeAmt.toFixed(2)}
+                      <p className={`text-sm font-black italic ${isWin ? 'text-emerald-500' : isPartial ? 'text-amber-400' : 'text-rose-500'}`}>
+                        {isWin ? '+' : '-'}${stakeAmt.toFixed(2)}
                       </p>
                       <p className="text-[9px] font-bold text-slate-400 mt-0.5 uppercase">
                         {isStake ? 'Stake' : isWin ? 'Win' : isLoss ? 'Loss' : isPartial ? 'Partial' : 'Stake'}

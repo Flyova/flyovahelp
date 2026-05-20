@@ -250,7 +250,8 @@ export default function FlyovaToDollars() {
                 tx.update(betDoc.ref, { status: "settled" });
                 tx.set(outcomeRef, {
                   title: "Flyova Partial Refund",
-                  amount: refund,
+                  amount: parseFloat((betStake * (1 - PARTIAL_REFUND)).toFixed(2)),
+                  partialFormat: "debit",
                   picks,
                   gameId: currentGame.id,
                   type: "refund",
@@ -538,28 +539,38 @@ export default function FlyovaToDollars() {
         </p>
 
         {/* 4 Number Grid */}
-        <div className="grid grid-cols-4 gap-4 w-full max-w-sm mb-12">
-          {(lastGameNumbers.length > 0 ? lastGameNumbers : currentGame?.numbers || []).map((num) => {
-            const isSelected = selectedNumbers.includes(num);
-            const isWinner = lastWinners.includes(num);
-            return (
-              <button
-                key={num}
-                disabled={gameStatus === "results" || timeLeft <= 0}
-                onClick={() => toggleNumber(num)}
-                className={`aspect-square rounded-2xl text-xl font-black italic transition-all border-2
-                  ${isWinner ? 'bg-green-500 border-white scale-110 shadow-[0_0_25px_rgba(34,197,94,0.6)]' :
-                    isSelected ? 'bg-[#613de6] border-[#fc7952]' : 'bg-[#1e293b] border-white/5'}`}
-              >{num}</button>
-            );
-          })}
-        </div>
+        {(lastGameNumbers.length > 0 ? lastGameNumbers : currentGame?.numbers || []).length === 0 ? (
+          <div className="grid grid-cols-4 gap-4 w-full max-w-sm mb-12">
+            {[0,1,2,3].map(i => (
+              <div key={i} className="aspect-square rounded-2xl bg-[#1e293b] border-2 border-white/5 flex items-center justify-center">
+                <Loader2 size={20} className="animate-spin text-white/20" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-4 gap-4 w-full max-w-sm mb-12">
+            {(lastGameNumbers.length > 0 ? lastGameNumbers : currentGame?.numbers || []).map((num) => {
+              const isSelected = selectedNumbers.includes(num);
+              const isWinner = lastWinners.includes(num);
+              return (
+                <button
+                  key={num}
+                  disabled={gameStatus === "results" || timeLeft <= 0}
+                  onClick={() => toggleNumber(num)}
+                  className={`aspect-square rounded-2xl text-xl font-black italic transition-all border-2
+                    ${isWinner ? 'bg-green-500 border-white scale-110 shadow-[0_0_25px_rgba(34,197,94,0.6)]' :
+                      isSelected ? 'bg-[#613de6] border-[#fc7952]' : 'bg-[#1e293b] border-white/5'}`}
+                >{num}</button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Betting Panel */}
         <div className="w-full max-w-xs bg-[#1e293b] p-6 rounded-[2.5rem] border border-white/5">
-          {gameStatus === "results" ? (
+          {gameStatus === "results" || !currentGame ? (
             <div className="text-center py-2">
-              <p className="font-black italic uppercase text-sm">Round Ended</p>
+              <p className="font-black italic uppercase text-sm">{!currentGame ? 'Generating Round...' : 'Round Ended'}</p>
               <p className="text-[10px] font-bold opacity-30 mt-1">NEXT ROUND STARTING SOON...</p>
             </div>
           ) : (

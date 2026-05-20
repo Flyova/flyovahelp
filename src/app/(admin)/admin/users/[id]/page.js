@@ -109,9 +109,7 @@ export default function UserActivityPage() {
 
               // Show the original stake amount for outcome records
               const amt = Number(tx.amount || 0);
-              const stakeAmt = isFlyovaWin     ? amt / 1.3
-                             : isFlyovaPartial ? amt / 0.8
-                             : amt; // loss and stake already store stake amount
+              const stakeAmt = isFlyovaWin ? amt / 1.3 : amt;
 
               const isDebit  = isFlyovaStake || tx.title === "Match Stake" || tx.type === "stake";
               const isCredit = !isFlyovaOutcome && !isFlyovaStake &&

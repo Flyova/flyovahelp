@@ -138,7 +138,7 @@ export default function HistoryPage() {
               // Legacy refunds: use stored payout field if available, otherwise calculate 80%
               const displayAmount = isLegacyRefund
                 ? Number(docData.payout || (docData.amount * 0.8) || 0)
-                : (isFlyovaStake || isFlyovaLoss) ? -(Math.abs(Number(docData.amount || 0))) : docData.amount;
+                : (isFlyovaStake || isFlyovaLoss || isFlyovaPartial) ? -(Math.abs(Number(docData.amount || 0))) : docData.amount;
 
               if (isTransfer) {
                 mainTitle = "P2P TRANSFER";
@@ -156,7 +156,7 @@ export default function HistoryPage() {
                 subDetail = "Win · +30%";
               } else if (isFlyovaPartial) {
                 mainTitle = "FLYOVA TO DOLLARS";
-                subDetail = "Partial Refund · 80%";
+                subDetail = "Partial Refund";
               } else if (isFlyovaLoss) {
                 mainTitle = "FLYOVA TO DOLLARS";
                 subDetail = "Loss · 0%";
@@ -335,8 +335,8 @@ export default function HistoryPage() {
             </div>
           ) : renderedData.map((item) => {
             const rawAmount = Number(item.amount || 0);
-            // Losses are always debits — enforce negative at render time so stale mapping data can't show +
-            const amountValue = item.type === 'loss' ? -Math.abs(rawAmount) : rawAmount;
+            // Losses and partial refunds are always debits — enforce negative at render time
+            const amountValue = (item.type === 'loss' || item.type === 'refund') ? -Math.abs(rawAmount) : rawAmount;
             const isPositive = item.type === "p2p_transfer" ? item.direction === "in" : amountValue > 0;
             const isNegative = item.type === "p2p_transfer" ? item.direction !== "in" : amountValue < 0;
             const iconTone = isPositive ? "bg-green-500/10 text-green-500" : isNegative ? "bg-red-500/10 text-red-500" : "bg-slate-500/10 text-slate-400";
@@ -344,7 +344,7 @@ export default function HistoryPage() {
             // Loss records have status "completed" in DB — override to show red "loss" badge
             // Partial refund records may have status "win" from old code — always show "partial"
             const displayStatus = item.type === 'loss' ? 'loss'
-              : item.subDetail === 'Partial Refund · 80%' ? 'partial'
+              : item.type === 'refund' ? 'partial'
               : item.status;
             
             return (
@@ -354,7 +354,7 @@ export default function HistoryPage() {
               >
                 <div className="flex items-center space-x-4">
                   <div className={`p-4 rounded-2xl shadow-inner ${iconTone}`}>
-                    {item.subDetail === 'Partial Refund · 80%' ? <RefreshCw size={20}/> :
+                    {item.type === 'refund' ? <RefreshCw size={20}/> :
                      item.type === 'loss' ? <XCircle size={20}/> :
                      item.type === 'win' ? <Trophy size={20}/> :
                      item.type === 'stake' ? <Swords size={20}/> :
