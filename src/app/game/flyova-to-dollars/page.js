@@ -199,17 +199,28 @@ export default function FlyovaToDollars() {
           for (const betDoc of betsSnap.docs) {
             const { picks = [], amount: betStake } = betDoc.data();
             const matchCount = currentGame.winners.filter(w => picks.includes(w)).length;
+            const outcomeRef = doc(collection(db, "users", user.uid, "transactions"));
 
             if (matchCount === 2) {
               const payout = parseFloat((betStake * WIN_MULTIPLIER).toFixed(2));
               displayPayout += payout;
               displayResult = "win";
               collectedResults.push({ picks, stake: betStake, result: "win", payout, matchCount });
-              // Atomic: only credit if bet is still pending (cron may have already settled it)
               await runTransaction(db, async (tx) => {
                 const fresh = await tx.get(betDoc.ref);
                 if (fresh.data()?.status !== "pending") return;
-                tx.update(betDoc.ref, { title: "Flyova Win", amount: payout, type: "win", status: "win" });
+                // Keep stake debit record intact; just mark it settled
+                tx.update(betDoc.ref, { status: "settled" });
+                // Separate outcome record
+                tx.set(outcomeRef, {
+                  title: "Flyova Win",
+                  amount: payout,
+                  picks,
+                  gameId: currentGame.id,
+                  type: "win",
+                  status: "completed",
+                  timestamp: serverTimestamp(),
+                });
                 tx.update(userRef, { wallet: increment(payout) });
               }).catch(console.error);
             } else if (matchCount === 1) {
@@ -220,7 +231,16 @@ export default function FlyovaToDollars() {
               await runTransaction(db, async (tx) => {
                 const fresh = await tx.get(betDoc.ref);
                 if (fresh.data()?.status !== "pending") return;
-                tx.update(betDoc.ref, { title: "Flyova Partial Refund", amount: refund, type: "win", status: "partial" });
+                tx.update(betDoc.ref, { status: "settled" });
+                tx.set(outcomeRef, {
+                  title: "Flyova Partial Refund",
+                  amount: refund,
+                  picks,
+                  gameId: currentGame.id,
+                  type: "refund",
+                  status: "completed",
+                  timestamp: serverTimestamp(),
+                });
                 tx.update(userRef, { wallet: increment(refund) });
               }).catch(console.error);
             } else {
@@ -229,7 +249,16 @@ export default function FlyovaToDollars() {
               await runTransaction(db, async (tx) => {
                 const fresh = await tx.get(betDoc.ref);
                 if (fresh.data()?.status !== "pending") return;
-                tx.update(betDoc.ref, { status: "loss" });
+                tx.update(betDoc.ref, { status: "settled" });
+                tx.set(outcomeRef, {
+                  title: "Flyova Loss",
+                  amount: betStake,
+                  picks,
+                  gameId: currentGame.id,
+                  type: "loss",
+                  status: "completed",
+                  timestamp: serverTimestamp(),
+                });
               }).catch(console.error);
             }
           }
