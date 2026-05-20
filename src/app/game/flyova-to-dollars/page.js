@@ -61,6 +61,7 @@ export default function FlyovaToDollars() {
   const revealedGameRef = useRef(null);
   const transitioningRef = useRef(false);
   const transitionTimeoutRef = useRef(null);
+  const resultTimeoutRef = useRef(null);
 
   // 1. Auth & Wallet Listener
   useEffect(() => {
@@ -174,6 +175,8 @@ export default function FlyovaToDollars() {
     const capturedNumbers = [...(currentGame.numbers || [])]; // freeze grid before game switches
     setLastGameNumbers(capturedNumbers);
 
+    let hasBets = false;
+
     if (user) {
       try {
         // Only fetch bets that haven't been processed yet (status === "pending")
@@ -186,6 +189,7 @@ export default function FlyovaToDollars() {
         const betsSnap = await getDocs(q);
 
         if (!betsSnap.empty) {
+          hasBets = true;
           // Get user's referrer once
           const userSnap = await getDoc(doc(db, "users", user.uid));
           const referrerUid = userSnap.data()?.referrerUid;
@@ -297,15 +301,30 @@ export default function FlyovaToDollars() {
     }, 10000);
     await updateDoc(doc(db, "timed_games", currentGame.id), { status: "completed" });
     generateNewGame();
-    setTimeout(() => {
-      setShowResultAlert(false);
-      setLastWinners([]);
-      setLastGameNumbers([]);
-      setBetResults([]);
-    }, 7000);
+    if (hasBets) {
+      // Modal is showing — auto-dismiss after 7s and clear everything
+      resultTimeoutRef.current = setTimeout(() => {
+        resultTimeoutRef.current = null;
+        setShowResultAlert(false);
+        setLastWinners([]);
+        setLastGameNumbers([]);
+        setBetResults([]);
+      }, 7000);
+    } else {
+      // No modal — just flash the winning numbers green for 3s then clear
+      resultTimeoutRef.current = setTimeout(() => {
+        resultTimeoutRef.current = null;
+        setLastWinners([]);
+        setLastGameNumbers([]);
+      }, 3000);
+    }
   };
 
   const closeModal = () => {
+    if (resultTimeoutRef.current) {
+      clearTimeout(resultTimeoutRef.current);
+      resultTimeoutRef.current = null;
+    }
     setShowResultAlert(false);
     setLastWinners([]);
     setLastGameNumbers([]);
