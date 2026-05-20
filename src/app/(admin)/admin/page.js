@@ -83,7 +83,7 @@ export default function AdminDashboard() {
 
     let unsubFly = null;
     if (accessRole !== "support") {
-      const qF = query(collection(db, "timed_games"), orderBy("createdAt", "desc"), limit(1));
+      const qF = query(collection(db, "timed_games"), where("status", "==", "active"), limit(1));
       unsubFly = onSnapshot(qF, (snap) => {
         if (!snap.empty) {
           const data = snap.docs[0].data();
