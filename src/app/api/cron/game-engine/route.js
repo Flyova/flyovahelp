@@ -94,21 +94,38 @@ export async function GET() {
 
       const randomizedDisplay = shuffleArray([...pool]);
 
-      const newGameRef = await adminDb.collection("timed_games").add({
-        status: "active",
-        endTime: endTime,
-        winners: winners,
-        allGenerated: pool,
-        numbers: randomizedDisplay, 
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+      // Deterministic doc ID — same key used by clients. Admin create() throws if already exists,
+      // so only one writer (cron or any client) ever creates this round's document.
+      const gameDocId = `round_${endTime}`;
+      const gameDocRef = adminDb.collection("timed_games").doc(gameDocId);
+
+      let finalWinners = winners;
+      let finalNumbers = randomizedDisplay;
+
+      try {
+        await gameDocRef.create({
+          status: "active",
+          endTime: endTime,
+          winners: winners,
+          allGenerated: pool,
+          numbers: randomizedDisplay,
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      } catch {
+        // A client already created this round — read its data so RTDB stays consistent
+        const existingSnap = await gameDocRef.get();
+        if (existingSnap.exists) {
+          finalWinners = existingSnap.data().winners;
+          finalNumbers = existingSnap.data().numbers;
+        }
+      }
 
       await gameRef.set({
-        gameId: newGameRef.id,
+        gameId: gameDocId,
         status: "active",
         endTime: endTime,
-        winners: winners,
-        numbers: randomizedDisplay 
+        winners: finalWinners,
+        numbers: finalNumbers
       });
 
       return NextResponse.json({ message: settlementLog + "1-90 Game Started" });

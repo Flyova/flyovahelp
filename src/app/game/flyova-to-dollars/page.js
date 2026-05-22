@@ -181,29 +181,39 @@ export default function FlyovaToDollars() {
   };
 
   const generateNewGame = async (prevEndTime = null) => {
-    // Guard against race: if another client or the cron already created a new active game, bail out
-    const existingSnap = await getDocs(query(collection(db, "timed_games"), where("status", "==", "active"), limit(1)));
-    if (!existingSnap.empty) return;
-
-    const numbers = [];
-    while (numbers.length < 4) {
-      const r = Math.floor(Math.random() * 90) + 1;
-      if (!numbers.includes(r)) numbers.push(r);
-    }
-    const winners = [numbers[0], numbers[1]];
-    const shuffled = [...numbers].sort(() => Math.random() - 0.5);
-
     // Chain from previous game's endTime to guarantee exactly 120-second rounds.
     // Only fall back to boundary-alignment when there's no previous game (fresh start).
     const endTime = prevEndTime != null ? prevEndTime + ROUND_DURATION : getNextRoundEnd();
 
-    await addDoc(collection(db, "timed_games"), {
-      numbers: shuffled,
-      winners,
-      endTime,
-      status: "active",
-      createdAt: serverTimestamp()
-    });
+    // Deterministic doc ID: every actor (cron, every client) targets the SAME document for
+    // this round. Firestore's transaction guarantees exactly one writer succeeds — all others
+    // see the doc already exists and bail. This is the only race-safe solution.
+    const gameDocRef = doc(db, "timed_games", `round_${endTime}`);
+
+    try {
+      await runTransaction(db, async (tx) => {
+        const existing = await tx.get(gameDocRef);
+        if (existing.exists()) return; // cron or another client already created this round
+
+        const numbers = [];
+        while (numbers.length < 4) {
+          const r = Math.floor(Math.random() * 90) + 1;
+          if (!numbers.includes(r)) numbers.push(r);
+        }
+        const winners = [numbers[0], numbers[1]];
+        const shuffled = [...numbers].sort(() => Math.random() - 0.5);
+
+        tx.set(gameDocRef, {
+          numbers: shuffled,
+          winners,
+          endTime,
+          status: "active",
+          createdAt: serverTimestamp()
+        });
+      });
+    } catch {
+      // Transaction conflict means another writer won the race — that's fine
+    }
   };
 
   const revealResults = async () => {
