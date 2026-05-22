@@ -18,6 +18,8 @@ import {
   runTransaction
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { rtdb } from "@/lib/firebase";
+import { ref as rtdbRef, onValue as rtdbOnValue } from "firebase/database";
 import { Timer, CheckCircle2, Trophy, History, XCircle, RefreshCw, Loader2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -53,7 +55,7 @@ export default function FlyovaToDollars() {
 
   // Returns the next 2-minute UTC boundary so all clients agree on the same endTime
   const getNextRoundEnd = () => {
-    const now = Date.now();
+    const now = serverNow();
     const boundary = Math.ceil(now / ROUND_DURATION) * ROUND_DURATION;
     // If we're within 10s of a boundary, skip to the following one
     return (boundary - now < 10000) ? boundary + ROUND_DURATION : boundary;
@@ -66,6 +68,19 @@ export default function FlyovaToDollars() {
   const winnersTimeoutRef = useRef(null);
   // Mirrors gameStatus so effects that shouldn't re-subscribe on every status change can still read it
   const gameStatusRef = useRef("betting");
+  // Firebase RTDB serverTimeOffset: server_time = Date.now() + offset
+  // Keeps all clients in sync regardless of local clock accuracy
+  const serverTimeOffsetRef = useRef(0);
+  const serverNow = () => Date.now() + serverTimeOffsetRef.current;
+
+  // 0. Sync client clock with Firebase server clock
+  useEffect(() => {
+    const offsetRef = rtdbRef(rtdb, ".info/serverTimeOffset");
+    const unsub = rtdbOnValue(offsetRef, (snap) => {
+      serverTimeOffsetRef.current = snap.val() || 0;
+    });
+    return () => unsub();
+  }, []);
 
   // 1. Auth & Wallet Listener
   useEffect(() => {
@@ -97,7 +112,7 @@ export default function FlyovaToDollars() {
         const gameData = { id: snap.docs[0].id, ...snap.docs[0].data() };
 
         // Discard orphaned games whose endTime is more than 135s away — stale doc from dev/testing
-        if (typeof gameData.endTime === "number" && gameData.endTime - Date.now() > 135000) {
+        if (typeof gameData.endTime === "number" && gameData.endTime - serverNow() > 135000) {
           updateDoc(doc(db, "timed_games", gameData.id), { status: "completed" }).catch(console.error);
           return;
         }
@@ -142,7 +157,7 @@ export default function FlyovaToDollars() {
   useEffect(() => {
     if (!currentGame) return;
     const interval = setInterval(() => {
-      const diff = Math.max(0, Math.floor((currentGame.endTime - Date.now()) / 1000));
+      const diff = Math.max(0, Math.floor((currentGame.endTime - serverNow()) / 1000));
       setTimeLeft(diff);
       // Use ref so changing gameStatus doesn't recreate this interval (avoids intermediate-state double-fire)
       if (diff === 0 && gameStatusRef.current === "betting") revealResults();
@@ -192,7 +207,7 @@ export default function FlyovaToDollars() {
     if (revealedGameRef.current === currentGame.id) return;
     // Guard 2: only process games that have genuinely ended — prevents stale closure
     // from firing for a fresh game that still has ~120s remaining
-    if (currentGame.endTime - Date.now() > 5000) return;
+    if (currentGame.endTime - serverNow() > 5000) return;
     revealedGameRef.current = currentGame.id;
 
     setGameStatus("results");
