@@ -132,18 +132,24 @@ export default function HistoryPage() {
               const isFlyovaPartialStake = docData.title === "Flyova Stake" && docData.status === "partial";
               // New loss: stake record marked status:"loss" — no separate outcome doc
               const isFlyovaLossStake = docData.title === "Flyova Stake" && docData.status === "loss";
-              const isFlyovaStake = docData.title === "Flyova Stake" && !isLegacyRefund && !isFlyovaPartialStake && !isFlyovaLossStake;
+              // New win: stake record updated with payout amount and status:"win"
+              const isFlyovaWinStake = docData.title === "Flyova Stake" && docData.status === "win";
+              // Old settled stakes are the negative half of legacy 2-doc win pairs — hide them
+              const isFlyovaSettledStake = docData.title === "Flyova Stake" && docData.status === "settled";
+              if (isFlyovaSettledStake) return null;
+              const isFlyovaStake = docData.title === "Flyova Stake" && !isLegacyRefund && !isFlyovaPartialStake && !isFlyovaLossStake && !isFlyovaWinStake;
               const isFlyovaWin = docData.title === "Flyova Win";
               const isFlyovaPartial = docData.title === "Flyova Partial Refund" || isLegacyRefund; // kept for old records
               // Old separate "Flyova Loss" outcome docs are misleading double-debits — hide them
               if (docData.title === "Flyova Loss") return null;
               const isFlyovaLoss = docData.type === "loss";
-              const isFlyova = isFlyovaStake || isFlyovaWin || isFlyovaPartial || isFlyovaLoss || isFlyovaPartialStake || isFlyovaLossStake;
+              const isFlyova = isFlyovaStake || isFlyovaWin || isFlyovaPartial || isFlyovaLoss || isFlyovaPartialStake || isFlyovaLossStake || isFlyovaWinStake;
 
               // Stakes and losses are debits — negate so they display as -$X (red)
               // Legacy refunds: use stored payout field if available, otherwise calculate 80%
               const displayAmount = isLegacyRefund
                 ? Number(docData.payout || (docData.amount * 0.8) || 0)
+                : isFlyovaWinStake ? Math.abs(Number(docData.amount || 0))
                 : (isFlyovaStake || isFlyovaLoss || isFlyovaPartial || isFlyovaPartialStake || isFlyovaLossStake) ? -(Math.abs(Number(docData.amount || 0))) : docData.amount;
 
               if (isTransfer) {
@@ -160,6 +166,9 @@ export default function HistoryPage() {
               } else if (isFlyovaPartialStake) {
                 mainTitle = "FLYOVA TO DOLLARS";
                 subDetail = "Round Stake";
+              } else if (isFlyovaWinStake) {
+                mainTitle = "FLYOVA TO DOLLARS";
+                subDetail = "Win · +30%";
               } else if (isFlyovaWin) {
                 mainTitle = "FLYOVA TO DOLLARS";
                 subDetail = "Win · +30%";
@@ -193,6 +202,7 @@ export default function HistoryPage() {
                 subDetail,
                 isPartialStake: isFlyovaPartialStake,
                 isLossStake: isFlyovaLossStake,
+                isWinStake: isFlyovaWinStake,
                 category: isFlyova ? 'games' : isFinance ? 'finance' : 'games',
                 date: docData.timestamp?.toDate() || new Date()
               };
@@ -357,8 +367,10 @@ export default function HistoryPage() {
             const dateStr = item.date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
             // Loss records have status "completed" in DB — override to show red "loss" badge
             // Partial refund records may have status "win" from old code — always show "partial"
+            // Win stakes and old "Flyova Win" docs (status:"completed") both show "win" badge
             const displayStatus = item.type === 'loss' || item.isLossStake ? 'loss'
               : item.type === 'refund' ? 'partial'
+              : item.isWinStake || (item.status === 'completed' && item.type === 'win') ? 'win'
               : item.status;
             
             return (

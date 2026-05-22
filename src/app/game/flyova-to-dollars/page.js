@@ -255,18 +255,8 @@ export default function FlyovaToDollars() {
               await runTransaction(db, async (tx) => {
                 const fresh = await tx.get(betDoc.ref);
                 if (fresh.data()?.status !== "pending") return;
-                // Keep stake debit record intact; just mark it settled
-                tx.update(betDoc.ref, { status: "settled" });
-                // Separate outcome record
-                tx.set(outcomeRef, {
-                  title: "Flyova Win",
-                  amount: payout,
-                  picks,
-                  gameId: currentGame.id,
-                  type: "win",
-                  status: "completed",
-                  timestamp: serverTimestamp(),
-                });
+                // Update stake record with payout — no separate win doc
+                tx.update(betDoc.ref, { amount: payout, status: "win", type: "win" });
                 tx.update(userRef, { wallet: increment(payout) });
               }).catch(console.error);
             } else if (matchCount === 1) {

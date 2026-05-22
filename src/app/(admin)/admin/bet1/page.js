@@ -124,12 +124,13 @@ export default function FlyovaHistory() {
                     </td>
                 </tr>
             ) : filteredBets.map((bet) => {
-                const isWin     = bet.title === 'Flyova Win' || bet.title === 'Flyova Win Payout' || bet.type === 'win';
+                const isWin     = bet.title === 'Flyova Win' || bet.title === 'Flyova Win Payout' || bet.type === 'win'
+                               || (bet.title === 'Flyova Stake' && bet.status === 'win');
                 const isLoss    = bet.title === 'Flyova Loss' || bet.type === 'loss'
                                || (bet.title === 'Flyova Stake' && bet.status === 'loss');
                 const isPartial = bet.title === 'Flyova Partial Refund' || bet.type === 'refund'
                                || (bet.title === 'Flyova Stake' && bet.status === 'partial');
-                const isStake   = bet.title === 'Flyova Stake' && bet.status !== 'partial' && bet.status !== 'loss';
+                const isStake   = bet.title === 'Flyova Stake' && bet.status !== 'partial' && bet.status !== 'loss' && bet.status !== 'win' && bet.status !== 'settled';
                 const raw       = Number(bet.amount || 0);
                 const stakeAmt  = raw;
 
