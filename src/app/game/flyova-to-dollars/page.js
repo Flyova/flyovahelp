@@ -181,6 +181,10 @@ export default function FlyovaToDollars() {
   };
 
   const generateNewGame = async (prevEndTime = null) => {
+    // Guard against race: if another client or the cron already created a new active game, bail out
+    const existingSnap = await getDocs(query(collection(db, "timed_games"), where("status", "==", "active"), limit(1)));
+    if (!existingSnap.empty) return;
+
     const numbers = [];
     while (numbers.length < 4) {
       const r = Math.floor(Math.random() * 90) + 1;

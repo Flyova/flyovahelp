@@ -99,7 +99,7 @@ export async function GET() {
         endTime: endTime,
         winners: winners,
         allGenerated: pool,
-        displayNumbers: randomizedDisplay, 
+        numbers: randomizedDisplay, 
         createdAt: admin.firestore.FieldValue.serverTimestamp()
       });
 
@@ -108,7 +108,7 @@ export async function GET() {
         status: "active",
         endTime: endTime,
         winners: winners,
-        displayNumbers: randomizedDisplay 
+        numbers: randomizedDisplay 
       });
 
       return NextResponse.json({ message: settlementLog + "1-90 Game Started" });
