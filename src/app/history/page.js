@@ -23,6 +23,8 @@ export default function HistoryPage() {
   const [filter, setFilter] = useState("all");
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const FLYOVA_WIN_MULTIPLIER = 1.3;
+  const FLYOVA_PARTIAL_REFUND_RATE = 0.8;
 
   const getDayKey = (date) => `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
   const isPredictRoundTx = (item) =>
@@ -145,12 +147,24 @@ export default function HistoryPage() {
               const isFlyovaLoss = docData.type === "loss";
               const isFlyova = isFlyovaStake || isFlyovaWin || isFlyovaPartial || isFlyovaLoss || isFlyovaPartialStake || isFlyovaLossStake || isFlyovaWinStake;
 
-              // Stakes and losses are debits — negate so they display as -$X (red)
-              // Legacy refunds: use stored payout field if available, otherwise calculate 80%
-              const displayAmount = isLegacyRefund
-                ? Number(docData.payout || (docData.amount * 0.8) || 0)
-                : isFlyovaWinStake ? Math.abs(Number(docData.amount || 0))
-                : (isFlyovaStake || isFlyovaLoss || isFlyovaPartial || isFlyovaPartialStake || isFlyovaLossStake) ? -(Math.abs(Number(docData.amount || 0))) : docData.amount;
+              // For Flyova outcomes, keep history as stake-debit only.
+              // For legacy standalone win/partial docs, reconstruct stake-equivalent amount.
+              const storedAbs = Math.abs(Number(docData.amount || 0));
+              const explicitStake = Math.abs(Number(docData.stakeAmount || 0));
+              const flyovaStakeEquivalent = explicitStake > 0
+                ? explicitStake
+                : isFlyovaWinStake
+                  // Legacy rows wrote payout into stake.amount; convert back to stake for display.
+                  ? storedAbs / FLYOVA_WIN_MULTIPLIER
+                  : isFlyovaPartialStake
+                    // Legacy rows wrote net-loss (20%) into stake.amount; convert back to full stake.
+                    ? storedAbs / (1 - FLYOVA_PARTIAL_REFUND_RATE)
+                    : isFlyovaWin
+                      ? storedAbs / FLYOVA_WIN_MULTIPLIER
+                      : docData.title === "Flyova Partial Refund"
+                        ? storedAbs / FLYOVA_PARTIAL_REFUND_RATE
+                        : storedAbs;
+              const displayAmount = isFlyova ? flyovaStakeEquivalent : Number(docData.amount || 0);
 
               if (isTransfer) {
                 mainTitle = "P2P TRANSFER";
@@ -165,22 +179,22 @@ export default function HistoryPage() {
                 subDetail = "Round Stake";
               } else if (isFlyovaPartialStake) {
                 mainTitle = "FLYOVA TO DOLLARS";
-                subDetail = "Round Stake";
+                subDetail = "Partial";
               } else if (isFlyovaWinStake) {
                 mainTitle = "FLYOVA TO DOLLARS";
-                subDetail = "Win · +30%";
+                subDetail = "Win";
               } else if (isFlyovaWin) {
                 mainTitle = "FLYOVA TO DOLLARS";
-                subDetail = "Win · +30%";
+                subDetail = "Win";
               } else if (isFlyovaPartial) {
                 mainTitle = "FLYOVA TO DOLLARS";
-                subDetail = "Partial Refund";
+                subDetail = "Partial";
               } else if (isFlyovaLossStake) {
                 mainTitle = "FLYOVA TO DOLLARS";
-                subDetail = "Loss · 0%";
+                subDetail = "Loss";
               } else if (isFlyovaLoss) {
                 mainTitle = "FLYOVA TO DOLLARS";
-                subDetail = "Loss · 0%";
+                subDetail = "Loss";
               } else if (docData.type === 'win') {
                 mainTitle = "GAME VICTORY";
                 subDetail = "Round Victory";
@@ -203,6 +217,8 @@ export default function HistoryPage() {
                 isPartialStake: isFlyovaPartialStake,
                 isLossStake: isFlyovaLossStake,
                 isWinStake: isFlyovaWinStake,
+                isFlyova,
+                isFlyovaOutcome: isFlyovaWinStake || isFlyovaPartialStake || isFlyovaLossStake || isFlyovaWin || isFlyovaPartial || isFlyovaLoss,
                 category: isFlyova ? 'games' : isFinance ? 'finance' : 'games',
                 date: docData.timestamp?.toDate() || new Date()
               };
@@ -360,7 +376,9 @@ export default function HistoryPage() {
           ) : renderedData.map((item) => {
             const rawAmount = Number(item.amount || 0);
             // Losses and partial refunds are always debits — enforce negative at render time
-            const amountValue = (item.type === 'loss' || item.type === 'refund') ? -Math.abs(rawAmount) : rawAmount;
+            const amountValue = item.isFlyova
+              ? -Math.abs(rawAmount)
+              : (item.type === 'loss' || item.type === 'refund') ? -Math.abs(rawAmount) : rawAmount;
             const isPositive = item.type === "p2p_transfer" ? item.direction === "in" : amountValue > 0;
             const isNegative = item.type === "p2p_transfer" ? item.direction !== "in" : amountValue < 0;
             const iconTone = isPositive ? "bg-green-500/10 text-green-500" : isNegative ? "bg-red-500/10 text-red-500" : "bg-slate-500/10 text-slate-400";
@@ -382,7 +400,7 @@ export default function HistoryPage() {
                   <div className={`p-4 rounded-2xl shadow-inner ${iconTone}`}>
                     {(item.type === 'refund' || item.isPartialStake) ? <RefreshCw size={20}/> :
                      (item.type === 'loss' || item.isLossStake) ? <XCircle size={20}/> :
-                     item.type === 'win' ? <Trophy size={20}/> :
+                     (item.type === 'win' || item.isWinStake) ? <Trophy size={20}/> :
                      item.type === 'stake' ? <Swords size={20}/> :
                      item.type === 'predict_group' ? <Swords size={20}/> :
                      item.type === 'p2p_transfer' ? <Send size={20}/> :
@@ -441,7 +459,13 @@ export default function HistoryPage() {
                     {isPositive ? '+' : isNegative ? '-' : ''}${Math.abs(amountValue).toFixed(2)}
                   </p>
                   <span className="text-[8px] font-black uppercase opacity-30 tracking-widest">
-                    {item.type === 'p2p_transfer' ? 'P2P Transfer' : item.type === 'predict_group' ? 'Prediction Summary' : (item.type || 'Transaction')}
+                    {item.type === 'p2p_transfer'
+                      ? 'P2P Transfer'
+                      : item.type === 'predict_group'
+                        ? 'Prediction Summary'
+                        : item.isFlyovaOutcome
+                          ? String(displayStatus || 'stake').toUpperCase()
+                          : (item.type || 'Transaction')}
                   </span>
                 </div>
               </div>

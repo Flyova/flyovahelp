@@ -167,22 +167,22 @@ export default function FlyovaToDollars() {
               await runTransaction(db, async (tx) => {
                 const fresh = await tx.get(betDoc.ref);
                 if (fresh.data()?.status !== "pending") return;
-                // Update stake record with payout — no separate win doc
-                tx.update(betDoc.ref, { amount: payout, status: "win", type: "win" });
+                const stakeAmount = Math.abs(Number(fresh.data()?.stakeAmount || fresh.data()?.amount || betStake || 0));
+                // Keep the original stake amount as debit; only set the win status.
+                tx.update(betDoc.ref, { status: "win", stakeAmount });
                 tx.update(userRef, { wallet: increment(payout) });
               }).catch(console.error);
             } else if (matchCount === 1) {
               const refund = parseFloat((betStake * PARTIAL_REFUND).toFixed(2));
-              const netLoss = parseFloat((betStake * (1 - PARTIAL_REFUND)).toFixed(2));
               displayPayout += refund;
               if (displayResult !== "win") displayResult = "partial";
               collectedResults.push({ picks, stake: betStake, result: "partial", payout: refund, matchCount });
               await runTransaction(db, async (tx) => {
                 const fresh = await tx.get(betDoc.ref);
                 if (fresh.data()?.status !== "pending") return;
-                // Shrink the original stake record to just the net loss (20%).
-                // No separate outcome doc — the stake card itself reflects the real cost.
-                tx.update(betDoc.ref, { amount: netLoss, status: "partial" });
+                const stakeAmount = Math.abs(Number(fresh.data()?.stakeAmount || fresh.data()?.amount || betStake || 0));
+                // Keep original stake amount untouched; outcome is shown via status tag only.
+                tx.update(betDoc.ref, { status: "partial", stakeAmount });
                 tx.update(userRef, { wallet: increment(refund) });
               }).catch(console.error);
             } else {
@@ -191,8 +191,9 @@ export default function FlyovaToDollars() {
               await runTransaction(db, async (tx) => {
                 const fresh = await tx.get(betDoc.ref);
                 if (fresh.data()?.status !== "pending") return;
+                const stakeAmount = Math.abs(Number(fresh.data()?.stakeAmount || fresh.data()?.amount || betStake || 0));
                 // Mark the original stake as "loss" — no separate outcome doc needed
-                tx.update(betDoc.ref, { status: "loss" });
+                tx.update(betDoc.ref, { status: "loss", stakeAmount });
               }).catch(console.error);
             }
           }

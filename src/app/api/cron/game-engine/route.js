@@ -113,17 +113,20 @@ export async function GET() {
         await adminDb.runTransaction(async (tx) => {
           const freshBet = await tx.get(betDoc.ref);
           if (freshBet.data()?.status !== "pending") return;
+          const stakeAmount = Math.abs(Number(freshBet.data()?.stakeAmount || freshBet.data()?.amount || betData.amount || 0));
 
           if (matches === 2) {
             const payout = parseFloat((betData.amount * WIN_MULTIPLIER).toFixed(2));
-            tx.update(betDoc.ref, { title: "Flyova Win", amount: payout, type: "win", status: "win", matches: 2 });
+            // Keep original stake record as a debit; only mark outcome via status tag.
+            tx.update(betDoc.ref, { status: "win", matches: 2, stakeAmount });
             tx.update(userRef, { wallet: admin.firestore.FieldValue.increment(payout) });
           } else if (matches === 1) {
             const refundAmount = parseFloat((betData.amount * REFUND_PERCENTAGE).toFixed(2));
-            tx.update(betDoc.ref, { title: "Flyova Partial Refund", amount: refundAmount, type: "win", status: "partial", matches: 1 });
+            // Keep original stake amount untouched; partial outcome is represented by status only.
+            tx.update(betDoc.ref, { status: "partial", matches: 1, stakeAmount });
             tx.update(userRef, { wallet: admin.firestore.FieldValue.increment(refundAmount) });
           } else {
-            tx.update(betDoc.ref, { status: "loss", matches: 0 });
+            tx.update(betDoc.ref, { status: "loss", matches: 0, stakeAmount });
 
             const userSnap = await tx.get(userRef);
             const userData = userSnap.data();
