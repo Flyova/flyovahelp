@@ -40,8 +40,6 @@ export default function FlyovaToDollars() {
   const [activeBets, setActiveBets] = useState([]);
   const [placingBet, setPlacingBet] = useState(false);
   const [lastGameNumbers, setLastGameNumbers] = useState([]);
-
-  // Break state (driven by RTDB active_game_flyova)
   const [breakEndsAt, setBreakEndsAt] = useState(null);
 
   // Alert States
@@ -60,6 +58,7 @@ export default function FlyovaToDollars() {
   const revealedGameRef = useRef(null);
   const resultTimeoutRef = useRef(null);
   const winnersTimeoutRef = useRef(null);
+  const engineKickRef = useRef({ inFlight: false, lastRunAt: 0 });
   // Mirrors gameStatus so effects that shouldn't re-subscribe on every status change can still read it
   const gameStatusRef = useRef("betting");
   // Firebase RTDB serverTimeOffset: server_time = Date.now() + offset
@@ -67,118 +66,27 @@ export default function FlyovaToDollars() {
   const serverTimeOffsetRef = useRef(0);
   const serverNow = () => Date.now() + serverTimeOffsetRef.current;
 
-  // 0. Sync client clock with Firebase server clock
-  useEffect(() => {
-    const offsetRef = rtdbRef(rtdb, ".info/serverTimeOffset");
-    const unsub = rtdbOnValue(offsetRef, (snap) => {
-      serverTimeOffsetRef.current = snap.val() || 0;
-    });
-    return () => unsub();
-  }, []);
+  async function maybeKickGameEngine(reason = "heartbeat") {
+    const now = Date.now();
+    if (engineKickRef.current.inFlight) return;
+    if (now - engineKickRef.current.lastRunAt < 12000) return;
 
-  // 1. Auth & Wallet Listener
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      if (!u) return router.push("/login");
-      setUser(u);
-      const unsubWallet = onSnapshot(doc(db, "users", u.uid), (snap) => {
-        if (snap.exists()) setMyWallet(snap.data().wallet || 0);
+    engineKickRef.current.inFlight = true;
+    engineKickRef.current.lastRunAt = now;
+    try {
+      await fetch(`/api/cron/game-engine?r=${encodeURIComponent(reason)}&t=${now}`, {
+        method: "GET",
+        cache: "no-store",
+        keepalive: true
       });
-      setLoading(false);
-      return () => unsubWallet();
-    });
-    return () => unsub();
-  }, [router]);
+    } catch {
+      // Ignore transient network errors; next heartbeat retries.
+    } finally {
+      engineKickRef.current.inFlight = false;
+    }
+  }
 
-  // Keep gameStatusRef in sync so effects don't need gameStatus as a dep
-  useEffect(() => { gameStatusRef.current = gameStatus; }, [gameStatus]);
-
-  // 1b. RTDB break-state listener — cron writes status:"break" after round 3
-  useEffect(() => {
-    const gameStateRef = rtdbRef(rtdb, "active_game_flyova");
-    const unsub = rtdbOnValue(gameStateRef, (snap) => {
-      const data = snap.val();
-      if (data?.status === "break" && data.breakEndTime > serverNow()) {
-        setBreakEndsAt(data.breakEndTime);
-        setGameStatus("break");
-      } else if (gameStatusRef.current === "break") {
-        setBreakEndsAt(null);
-        setGameStatus("betting");
-      }
-    });
-    return () => unsub();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // 2. Global Game & History Listener
-  useEffect(() => {
-    // Only listen to active games — avoids picking up completed games with future endTimes
-    const qActive = query(
-      collection(db, "timed_games"),
-      where("status", "==", "active"),
-      limit(1)
-    );
-    const unsubActive = onSnapshot(qActive, (snap) => {
-      if (!snap.empty) {
-        const gameData = { id: snap.docs[0].id, ...snap.docs[0].data() };
-
-        // Discard orphaned games whose endTime is more than 135s away — stale doc from dev/testing
-        if (typeof gameData.endTime === "number" && gameData.endTime - serverNow() > 135000) {
-          // Lifecycle is server-owned (cron). Client should never mark rounds completed.
-          return;
-        }
-
-        setCurrentGame(gameData);
-        setBreakEndsAt(null); // new game means break is over
-        checkIfUserBet(gameData.id);
-
-        if (gameStatusRef.current === "results" && gameData.id !== revealedGameRef.current) {
-          // Clear pending winner display immediately — new game is confirmed
-          if (resultTimeoutRef.current) { clearTimeout(resultTimeoutRef.current); resultTimeoutRef.current = null; }
-          if (winnersTimeoutRef.current) { clearTimeout(winnersTimeoutRef.current); winnersTimeoutRef.current = null; }
-          setLastWinners([]);
-          setLastGameNumbers([]);
-          setGameStatus("betting");
-          setSelectedNumbers([]);
-          setActiveBets([]);
-        }
-      } else {
-        // No active game — the cron will create the next one. Nothing to do here.
-      }
-    });
-
-    const qHistory = query(collection(db, "timed_games"), where("status", "==", "completed"), orderBy("endTime", "desc"), limit(5));
-    const unsubHistory = onSnapshot(qHistory, (snap) => {
-      setPastGames(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-
-    return () => { unsubActive(); unsubHistory(); };
-  // gameStatus intentionally excluded — use gameStatusRef.current inside to avoid re-subscribing
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
-
-  // 3. Sync Countdown (rounds + break)
-  useEffect(() => {
-    if (!currentGame && !breakEndsAt) return;
-    const interval = setInterval(() => {
-      if (currentGame) {
-        const diff = Math.max(0, Math.floor((currentGame.endTime - serverNow()) / 1000));
-        setTimeLeft(diff);
-        if (diff === 0 && gameStatusRef.current === "betting") revealResults();
-      } else if (breakEndsAt) {
-        const diff = Math.max(0, Math.floor((breakEndsAt - serverNow()) / 1000));
-        setTimeLeft(diff);
-        if (diff === 0) {
-          setBreakEndsAt(null);
-          setGameStatus("betting");
-        }
-      }
-    }, 1000);
-    return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentGame, breakEndsAt]);
-
-  const checkIfUserBet = async (gameId) => {
+  async function checkIfUserBet(gameId) {
     if (!user) return;
     const q = query(
       collection(db, "users", user.uid, "transactions"),
@@ -189,15 +97,16 @@ export default function FlyovaToDollars() {
     if (!snap.empty) {
       setActiveBets(snap.docs.map(d => ({ picks: d.data().picks || [], amount: d.data().amount })));
     }
-  };
+  }
 
-  const revealResults = async () => {
+  async function revealResults() {
     // Guard 1: ensure we only process each game once
     if (revealedGameRef.current === currentGame.id) return;
     // Guard 2: only process games that have genuinely ended — prevents stale closure
     // from firing for a fresh game that still has ~120s remaining
     if (currentGame.endTime - serverNow() > 5000) return;
     revealedGameRef.current = currentGame.id;
+    maybeKickGameEngine("reveal-results");
 
     setGameStatus("results");
     const gameWinners = [...(currentGame.winners || [])]; // capture before any awaits
@@ -249,7 +158,6 @@ export default function FlyovaToDollars() {
           for (const betDoc of betsSnap.docs) {
             const { picks = [], amount: betStake } = betDoc.data();
             const matchCount = currentGame.winners.filter(w => picks.includes(w)).length;
-            const outcomeRef = doc(collection(db, "users", user.uid, "transactions"));
 
             if (matchCount === 2) {
               const payout = parseFloat((betStake * WIN_MULTIPLIER).toFixed(2));
@@ -343,7 +251,152 @@ export default function FlyovaToDollars() {
         setResultType(null);
       }, 4000);
     }
-  };
+  }
+
+  // 0. Sync client clock with Firebase server clock
+  useEffect(() => {
+    const offsetRef = rtdbRef(rtdb, ".info/serverTimeOffset");
+    const unsub = rtdbOnValue(offsetRef, (snap) => {
+      serverTimeOffsetRef.current = snap.val() || 0;
+    });
+    return () => unsub();
+  }, []);
+
+  // 1. Auth & Wallet Listener
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      if (!u) return router.push("/login");
+      setUser(u);
+      const unsubWallet = onSnapshot(doc(db, "users", u.uid), (snap) => {
+        if (snap.exists()) setMyWallet(snap.data().wallet || 0);
+      });
+      setLoading(false);
+      return () => unsubWallet();
+    });
+    return () => unsub();
+  }, [router]);
+
+  // Keep gameStatusRef in sync so effects don't need gameStatus as a dep
+  useEffect(() => { gameStatusRef.current = gameStatus; }, [gameStatus]);
+
+  // Break-state listener (cron writes status:"break" to RTDB after round 3).
+  useEffect(() => {
+    const gameStateRef = rtdbRef(rtdb, "active_game_flyova");
+    const unsub = rtdbOnValue(gameStateRef, (snap) => {
+      const data = snap.val();
+      if (data?.status === "break" && data.breakEndTime > serverNow()) {
+        setBreakEndsAt(data.breakEndTime);
+        setGameStatus("break");
+      } else if (gameStatusRef.current === "break") {
+        setBreakEndsAt(null);
+        setGameStatus("betting");
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // 2. Global Game & History Listener
+  useEffect(() => {
+    // Listen to all active docs and choose the freshest by endTime.
+    // This prevents stale duplicate-active docs from pinning users at 0:00.
+    const qActive = query(
+      collection(db, "timed_games"),
+      where("status", "==", "active")
+    );
+    const unsubActive = onSnapshot(qActive, (snap) => {
+      if (!snap.empty) {
+        const gameData = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => Number(b.endTime || 0) - Number(a.endTime || 0))[0];
+
+        // Discard orphaned games whose endTime is more than 135s away — stale doc from dev/testing
+        if (typeof gameData.endTime === "number" && gameData.endTime - serverNow() > 135000) {
+          // Lifecycle is server-owned (cron). Client should never mark rounds completed.
+          setCurrentGame(null);
+          maybeKickGameEngine("orphan-active");
+          return;
+        }
+
+        setCurrentGame(gameData);
+        setBreakEndsAt(null);
+        checkIfUserBet(gameData.id);
+
+        if (gameStatusRef.current === "results" && gameData.id !== revealedGameRef.current) {
+          // Clear pending winner display immediately — new game is confirmed
+          if (resultTimeoutRef.current) { clearTimeout(resultTimeoutRef.current); resultTimeoutRef.current = null; }
+          if (winnersTimeoutRef.current) { clearTimeout(winnersTimeoutRef.current); winnersTimeoutRef.current = null; }
+          setLastWinners([]);
+          setLastGameNumbers([]);
+          setGameStatus("betting");
+          setSelectedNumbers([]);
+          setActiveBets([]);
+        }
+      } else {
+        setCurrentGame(null);
+        maybeKickGameEngine("no-active-game");
+      }
+    });
+
+    const qHistory = query(collection(db, "timed_games"), where("status", "==", "completed"), orderBy("endTime", "desc"), limit(5));
+    const unsubHistory = onSnapshot(qHistory, (snap) => {
+      setPastGames(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    return () => { unsubActive(); unsubHistory(); };
+  // gameStatus intentionally excluded — use gameStatusRef.current inside to avoid re-subscribing
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  // 2b. Engine heartbeat for stuck states (no active round / round ended at 0:00).
+  useEffect(() => {
+    if (!user) return;
+
+    const tick = () => {
+      const now = serverNow();
+
+      if (gameStatusRef.current === "break") {
+        if (breakEndsAt && breakEndsAt - now <= 3000) maybeKickGameEngine("break-ending");
+        return;
+      }
+
+      if (!currentGame) {
+        maybeKickGameEngine("missing-current-game");
+        return;
+      }
+
+      const msLeft = Number(currentGame.endTime || 0) - now;
+      if (msLeft <= 2000) {
+        maybeKickGameEngine("round-ending");
+      }
+    };
+
+    tick();
+    const id = setInterval(tick, 5000);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, currentGame?.id, currentGame?.endTime, breakEndsAt]);
+
+  // 3. Sync Countdown
+  useEffect(() => {
+    if (!currentGame && !breakEndsAt) return;
+    const interval = setInterval(() => {
+      if (currentGame) {
+        const diff = Math.max(0, Math.floor((currentGame.endTime - serverNow()) / 1000));
+        setTimeLeft(diff);
+        if (diff === 0 && gameStatusRef.current === "betting") revealResults();
+      } else if (breakEndsAt) {
+        const diff = Math.max(0, Math.floor((breakEndsAt - serverNow()) / 1000));
+        setTimeLeft(diff);
+        if (diff === 0) {
+          setBreakEndsAt(null);
+          setGameStatus("betting");
+          maybeKickGameEngine("break-finished");
+        }
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentGame, breakEndsAt]);
 
   const closeModal = () => {
     if (resultTimeoutRef.current) {
@@ -395,7 +448,7 @@ export default function FlyovaToDollars() {
   };
 
   const toggleNumber = (num) => {
-    if (gameStatus !== "betting" || timeLeft <= 0) return;
+    if (gameStatus !== "betting" || !currentGame || timeLeft <= 0) return;
     if (selectedNumbers.includes(num)) {
       setSelectedNumbers(selectedNumbers.filter(n => n !== num));
     } else if (selectedNumbers.length < 2) {
@@ -461,7 +514,7 @@ export default function FlyovaToDollars() {
             <div className="p-4 space-y-3 max-h-60 overflow-y-auto">
               {resultType === 'noStake' && (
                 <div className="py-6 flex flex-col items-center justify-center gap-2">
-                  <p className="text-base font-black italic uppercase text-slate-300">You didn't Stake!</p>
+                  <p className="text-base font-black italic uppercase text-slate-300">You Did Not Stake!</p>
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Place a bet before the timer runs out next round</p>
                 </div>
               )}

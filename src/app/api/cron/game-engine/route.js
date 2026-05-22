@@ -73,7 +73,6 @@ export async function GET() {
     const REFUND_PERCENTAGE = 0.8;
     const REFERRAL_COMMISSION_RATE = 0.025;
     const ROUND_DURATION = 120000; // 2 min per round
-    const BREAK_DURATION = 120000; // 2 min break after every 3 rounds
     let settlementLog = "";
 
     const gameRef = rtdb.ref("active_game_flyova");
@@ -137,26 +136,15 @@ export async function GET() {
         }).catch(console.error);
       }
 
-      const settledRound = gameDoc.data().roundInSession || 1;
-      const settledEndTime = gameDoc.data().endTime;
-
       await gameDoc.ref.update({ status: "completed", completedAt: now });
       await gameRef.update({ status: "settled", winners: winningNums });
       await roundGuardRef.set({
         status: "settled",
         gameId,
-        endTime: settledEndTime,
-        roundInSession: settledRound,
+        endTime: gameDoc.data().endTime,
         updatedAt: now
       }, { merge: true });
-      settlementLog = `Round ${settledRound}/3 Settled. `;
-
-      // After round 3, enter break — the next cron tick will create round 1
-      if (settledRound >= 3) {
-        const breakEndTime = settledEndTime + BREAK_DURATION;
-        await gameRef.set({ status: "break", breakEndTime, roundInSession: 3 });
-        return NextResponse.json({ message: settlementLog + "Session break started." });
-      }
+      settlementLog = "Settled. ";
     }
 
     // 2. START NEW GAME
@@ -164,27 +152,8 @@ export async function GET() {
       .where("status", "==", "active").limit(1).get();
 
     if (runningSnap.empty) {
-      // Read RTDB to decide whether we're still in a break
-      const rtdbSnap = await gameRef.get();
-      const rtdbData = rtdbSnap.val() || {};
-
-      const isAfterBreak = rtdbData.status === "break";
-
-      if (isAfterBreak && now < rtdbData.breakEndTime) {
-        return NextResponse.json({ message: `Break – ${Math.floor((rtdbData.breakEndTime - now) / 1000)}s remaining` });
-      }
-
-      // Determine next round number and endTime
-      let nextRound, endTime;
-      if (isAfterBreak) {
-        nextRound = 1;
-        endTime = rtdbData.breakEndTime + ROUND_DURATION;
-      } else {
-        const lastRound = activeSnap.empty ? 0 : (activeSnap.docs[0]?.data()?.roundInSession || 1);
-        const lastEndTime = activeSnap.empty ? null : activeSnap.docs[0]?.data()?.endTime;
-        nextRound = lastRound >= 3 ? 1 : lastRound + 1;
-        endTime = lastEndTime ? lastEndTime + ROUND_DURATION : now + ROUND_DURATION;
-      }
+      const lastEndTime = activeSnap.empty ? null : activeSnap.docs[0]?.data()?.endTime;
+      const endTime = lastEndTime ? lastEndTime + ROUND_DURATION : now + ROUND_DURATION;
 
       const pool = [];
       while (pool.length < 4) {
@@ -210,8 +179,7 @@ export async function GET() {
             gameId: liveDoc.id,
             winners: liveData.winners || [],
             numbers: liveData.numbers || [],
-            endTime: liveData.endTime || endTime,
-            roundInSession: liveData.roundInSession || 1
+            endTime: liveData.endTime || endTime
           };
         }
 
@@ -231,8 +199,7 @@ export async function GET() {
                 gameId: guardedRef.id,
                 winners: guardedData.winners || [],
                 numbers: guardedData.numbers || [],
-                endTime: guardedEndTime,
-                roundInSession: guardedData.roundInSession || 1
+                endTime: guardedEndTime
               };
             }
           }
@@ -252,7 +219,6 @@ export async function GET() {
             status: "active",
             endTime,
             winners,
-            roundInSession: nextRound,
             allGenerated: pool,
             numbers: randomizedDisplay,
             createdAt: admin.firestore.FieldValue.serverTimestamp()
@@ -264,7 +230,6 @@ export async function GET() {
           status: "active",
           gameId: gameDocId,
           endTime,
-          roundInSession: nextRound,
           updatedAt: now,
           lockOwnerId
         }, { merge: true });
@@ -274,8 +239,7 @@ export async function GET() {
           gameId: gameDocId,
           winners: finalWinners,
           numbers: finalNumbers,
-          endTime,
-          roundInSession: nextRound
+          endTime
         };
       });
 
@@ -284,12 +248,11 @@ export async function GET() {
         status: "active",
         endTime: createResult.endTime,
         winners: createResult.winners,
-        numbers: createResult.numbers,
-        roundInSession: createResult.roundInSession
+        numbers: createResult.numbers
       });
 
       return NextResponse.json({
-        message: settlementLog + (createResult.created ? `Round ${nextRound}/3 Started` : "Round already active")
+        message: settlementLog + (createResult.created ? "Round started" : "Round already active")
       });
     }
 
