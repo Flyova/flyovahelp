@@ -223,6 +223,13 @@ export default function FlyovaToDollars() {
         );
         const betsSnap = await getDocs(q);
 
+        if (betsSnap.empty) {
+          // No stake this round — show winning numbers with a missed message
+          setResultType("noStake");
+          setModalWinners(gameWinners);
+          setShowResultAlert(true);
+        }
+
         if (!betsSnap.empty) {
           hasBets = true;
           // Get user's referrer once
@@ -282,16 +289,8 @@ export default function FlyovaToDollars() {
               await runTransaction(db, async (tx) => {
                 const fresh = await tx.get(betDoc.ref);
                 if (fresh.data()?.status !== "pending") return;
-                tx.update(betDoc.ref, { status: "settled" });
-                tx.set(outcomeRef, {
-                  title: "Flyova Loss",
-                  amount: betStake,
-                  picks,
-                  gameId: currentGame.id,
-                  type: "loss",
-                  status: "completed",
-                  timestamp: serverTimestamp(),
-                });
+                // Mark the original stake as "loss" — no separate outcome doc needed
+                tx.update(betDoc.ref, { status: "loss" });
               }).catch(console.error);
             }
           }
@@ -345,9 +344,18 @@ export default function FlyovaToDollars() {
         setShowResultAlert(false);
         setBetResults([]);
         setModalWinners([]);
+        setResultType(null);
       }, 7000);
+    } else {
+      // No-stake modal: auto-dismiss after 4s (green numbers cleared by the 3s timer above)
+      if (resultTimeoutRef.current) clearTimeout(resultTimeoutRef.current);
+      resultTimeoutRef.current = setTimeout(() => {
+        resultTimeoutRef.current = null;
+        setShowResultAlert(false);
+        setModalWinners([]);
+        setResultType(null);
+      }, 4000);
     }
-    // No bets: the 3s timer set at the top of this function handles the clear
   };
 
   const closeModal = () => {
@@ -364,6 +372,7 @@ export default function FlyovaToDollars() {
     setLastGameNumbers([]);
     setBetResults([]);
     setModalWinners([]);
+    setResultType(null);
   };
 
   const placeBet = async () => {
@@ -424,17 +433,20 @@ export default function FlyovaToDollars() {
             {/* Header */}
             <div className={`px-6 pt-6 pb-5 flex items-center justify-between border-b border-white/5 ${
               resultType === 'win' ? 'bg-green-500/10' :
-              resultType === 'partial' ? 'bg-amber-500/10' : 'bg-red-500/10'
+              resultType === 'partial' ? 'bg-amber-500/10' :
+              resultType === 'noStake' ? 'bg-slate-500/10' : 'bg-red-500/10'
             }`}>
               <div className="flex items-center gap-3">
                 {resultType === 'win'
                   ? <Trophy size={24} className="text-green-400 animate-bounce" />
                   : resultType === 'partial'
                   ? <RefreshCw size={24} className="text-amber-400 animate-spin" />
+                  : resultType === 'noStake'
+                  ? <Timer size={24} className="text-slate-400" />
                   : <XCircle size={24} className="text-red-400 animate-pulse" />}
                 <div>
                   <h2 className="text-lg font-black italic uppercase text-white leading-none">
-                    {resultType === 'win' ? 'You Won!' : resultType === 'partial' ? 'Partial Refund!' : 'No Luck!'}
+                    {resultType === 'win' ? 'You Won!' : resultType === 'partial' ? 'Partial Refund!' : resultType === 'noStake' ? 'Round Ended!' : 'No Luck!'}
                   </h2>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Round Results</p>
                 </div>
@@ -458,8 +470,14 @@ export default function FlyovaToDollars() {
               </div>
             )}
 
-            {/* Per-bet list */}
+            {/* Per-bet list / no-stake message */}
             <div className="p-4 space-y-3 max-h-60 overflow-y-auto">
+              {resultType === 'noStake' && (
+                <div className="py-6 flex flex-col items-center justify-center gap-2">
+                  <p className="text-base font-black italic uppercase text-slate-300">You didn't Stake!</p>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Place a bet before the timer runs out next round</p>
+                </div>
+              )}
               {betResults.map((bet, i) => (
                 <div key={i} className={`p-4 rounded-2xl border ${
                   bet.result === 'win' ? 'bg-green-500/5 border-green-500/20' :
@@ -500,21 +518,23 @@ export default function FlyovaToDollars() {
 
             {/* Footer summary + close */}
             <div className="px-6 py-5 border-t border-white/5 flex items-center justify-between">
-              <div>
-                <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest">
-                  {resultType === 'lose' ? 'Total Lost' : 'Total Received'}
-                </p>
-                <p className={`text-2xl font-black italic tracking-tighter ${
-                  resultType === 'lose' ? 'text-red-400' : 'text-green-400'
-                }`}>
-                  {resultType === 'lose'
-                    ? `-$${betResults.reduce((s, b) => s + b.stake, 0).toFixed(2)}`
-                    : `+$${winAmount.toFixed(2)}`}
-                </p>
-              </div>
+              {resultType !== 'noStake' && (
+                <div>
+                  <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest">
+                    {resultType === 'lose' ? 'Total Lost' : 'Total Received'}
+                  </p>
+                  <p className={`text-2xl font-black italic tracking-tighter ${
+                    resultType === 'lose' ? 'text-red-400' : 'text-green-400'
+                  }`}>
+                    {resultType === 'lose'
+                      ? `-$${betResults.reduce((s, b) => s + b.stake, 0).toFixed(2)}`
+                      : `+$${winAmount.toFixed(2)}`}
+                  </p>
+                </div>
+              )}
               <button
                 onClick={closeModal}
-                className="bg-[#613de6] hover:bg-[#7c5ce6] text-white font-black uppercase text-xs px-7 py-3 rounded-2xl transition-all active:scale-95"
+                className={`bg-[#613de6] hover:bg-[#7c5ce6] text-white font-black uppercase text-xs px-7 py-3 rounded-2xl transition-all active:scale-95 ${resultType === 'noStake' ? 'ml-auto' : ''}`}
               >
                 Close
               </button>

@@ -130,17 +130,21 @@ export default function HistoryPage() {
               const isLegacyRefund = docData.title === "Flyova Stake" && docData.status === "refunded";
               // New partial: stake record whose amount was shrunk to the 20% net loss
               const isFlyovaPartialStake = docData.title === "Flyova Stake" && docData.status === "partial";
-              const isFlyovaStake = docData.title === "Flyova Stake" && !isLegacyRefund && !isFlyovaPartialStake;
+              // New loss: stake record marked status:"loss" — no separate outcome doc
+              const isFlyovaLossStake = docData.title === "Flyova Stake" && docData.status === "loss";
+              const isFlyovaStake = docData.title === "Flyova Stake" && !isLegacyRefund && !isFlyovaPartialStake && !isFlyovaLossStake;
               const isFlyovaWin = docData.title === "Flyova Win";
               const isFlyovaPartial = docData.title === "Flyova Partial Refund" || isLegacyRefund; // kept for old records
-              const isFlyovaLoss = docData.title === "Flyova Loss" || docData.type === "loss";
-              const isFlyova = isFlyovaStake || isFlyovaWin || isFlyovaPartial || isFlyovaLoss || isFlyovaPartialStake;
+              // Old separate "Flyova Loss" outcome docs are misleading double-debits — hide them
+              if (docData.title === "Flyova Loss") return null;
+              const isFlyovaLoss = docData.type === "loss";
+              const isFlyova = isFlyovaStake || isFlyovaWin || isFlyovaPartial || isFlyovaLoss || isFlyovaPartialStake || isFlyovaLossStake;
 
               // Stakes and losses are debits — negate so they display as -$X (red)
               // Legacy refunds: use stored payout field if available, otherwise calculate 80%
               const displayAmount = isLegacyRefund
                 ? Number(docData.payout || (docData.amount * 0.8) || 0)
-                : (isFlyovaStake || isFlyovaLoss || isFlyovaPartial || isFlyovaPartialStake) ? -(Math.abs(Number(docData.amount || 0))) : docData.amount;
+                : (isFlyovaStake || isFlyovaLoss || isFlyovaPartial || isFlyovaPartialStake || isFlyovaLossStake) ? -(Math.abs(Number(docData.amount || 0))) : docData.amount;
 
               if (isTransfer) {
                 mainTitle = "P2P TRANSFER";
@@ -162,6 +166,9 @@ export default function HistoryPage() {
               } else if (isFlyovaPartial) {
                 mainTitle = "FLYOVA TO DOLLARS";
                 subDetail = "Partial Refund";
+              } else if (isFlyovaLossStake) {
+                mainTitle = "FLYOVA TO DOLLARS";
+                subDetail = "Loss · 0%";
               } else if (isFlyovaLoss) {
                 mainTitle = "FLYOVA TO DOLLARS";
                 subDetail = "Loss · 0%";
@@ -185,6 +192,7 @@ export default function HistoryPage() {
                 mainTitle,
                 subDetail,
                 isPartialStake: isFlyovaPartialStake,
+                isLossStake: isFlyovaLossStake,
                 category: isFlyova ? 'games' : isFinance ? 'finance' : 'games',
                 date: docData.timestamp?.toDate() || new Date()
               };
@@ -349,7 +357,7 @@ export default function HistoryPage() {
             const dateStr = item.date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
             // Loss records have status "completed" in DB — override to show red "loss" badge
             // Partial refund records may have status "win" from old code — always show "partial"
-            const displayStatus = item.type === 'loss' ? 'loss'
+            const displayStatus = item.type === 'loss' || item.isLossStake ? 'loss'
               : item.type === 'refund' ? 'partial'
               : item.status;
             
@@ -361,7 +369,7 @@ export default function HistoryPage() {
                 <div className="flex items-center space-x-4">
                   <div className={`p-4 rounded-2xl shadow-inner ${iconTone}`}>
                     {(item.type === 'refund' || item.isPartialStake) ? <RefreshCw size={20}/> :
-                     item.type === 'loss' ? <XCircle size={20}/> :
+                     (item.type === 'loss' || item.isLossStake) ? <XCircle size={20}/> :
                      item.type === 'win' ? <Trophy size={20}/> :
                      item.type === 'stake' ? <Swords size={20}/> :
                      item.type === 'predict_group' ? <Swords size={20}/> :
