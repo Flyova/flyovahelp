@@ -200,15 +200,15 @@ export default function FlyovaToDollars() {
     const capturedNumbers = [...(currentGame.numbers || [])]; // freeze grid before game switches
     setLastGameNumbers(capturedNumbers);
 
-    // Show winning numbers green immediately — start 3s timer now so it's anchored to round end,
-    // not to whenever async processing finishes. Upgraded to 7s below if the user has bets.
+    // Show winning numbers green immediately — start 6s timer now so it's anchored to round end,
+    // not to whenever async processing finishes.
     setLastWinners(gameWinners);
     if (resultTimeoutRef.current) clearTimeout(resultTimeoutRef.current);
     resultTimeoutRef.current = setTimeout(() => {
       resultTimeoutRef.current = null;
       setLastWinners([]);
       setLastGameNumbers([]);
-    }, 3000);
+    }, 6000);
 
     let hasBets = false;
 
@@ -320,14 +320,14 @@ export default function FlyovaToDollars() {
     await updateDoc(doc(db, "timed_games", currentGame.id), { status: "completed" });
     generateNewGame(prevEndTime); // chain endTime → next game always starts exactly 120s after previous ended
     if (hasBets) {
-      // Green numbers: show for 1s only, then clear
+      // Green numbers: show for 6s, then clear
       if (resultTimeoutRef.current) clearTimeout(resultTimeoutRef.current);
       if (winnersTimeoutRef.current) clearTimeout(winnersTimeoutRef.current);
       winnersTimeoutRef.current = setTimeout(() => {
         winnersTimeoutRef.current = null;
         setLastWinners([]);
         setLastGameNumbers([]);
-      }, 1000);
+      }, 6000);
       // Modal: auto-dismiss after 7s
       resultTimeoutRef.current = setTimeout(() => {
         resultTimeoutRef.current = null;
