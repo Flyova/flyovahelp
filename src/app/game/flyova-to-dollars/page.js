@@ -64,6 +64,8 @@ export default function FlyovaToDollars() {
   const transitionTimeoutRef = useRef(null);
   const resultTimeoutRef = useRef(null);
   const winnersTimeoutRef = useRef(null);
+  // Mirrors gameStatus so effects that shouldn't re-subscribe on every status change can still read it
+  const gameStatusRef = useRef("betting");
 
   // 1. Auth & Wallet Listener
   useEffect(() => {
@@ -78,6 +80,9 @@ export default function FlyovaToDollars() {
     });
     return () => unsub();
   }, [router]);
+
+  // Keep gameStatusRef in sync so effects don't need gameStatus as a dep
+  useEffect(() => { gameStatusRef.current = gameStatus; }, [gameStatus]);
 
   // 2. Global Game & History Listener
   useEffect(() => {
@@ -100,12 +105,18 @@ export default function FlyovaToDollars() {
         setCurrentGame(gameData);
         checkIfUserBet(gameData.id);
 
-        if (gameStatus === "results" && gameData.id !== revealedGameRef.current) {
+        if (gameStatusRef.current === "results" && gameData.id !== revealedGameRef.current) {
           if (transitionTimeoutRef.current) {
             clearTimeout(transitionTimeoutRef.current);
             transitionTimeoutRef.current = null;
           }
-          revealedGameRef.current = null;
+          // Clear pending winner display immediately — new game is confirmed
+          if (resultTimeoutRef.current) { clearTimeout(resultTimeoutRef.current); resultTimeoutRef.current = null; }
+          if (winnersTimeoutRef.current) { clearTimeout(winnersTimeoutRef.current); winnersTimeoutRef.current = null; }
+          setLastWinners([]);
+          setLastGameNumbers([]);
+          // Do NOT reset revealedGameRef here — the guard must stay active to block
+          // any stale timer interval that fires in the same tick
           transitioningRef.current = false;
           setGameStatus("betting");
           setSelectedNumbers([]);
@@ -123,7 +134,9 @@ export default function FlyovaToDollars() {
     });
 
     return () => { unsubActive(); unsubHistory(); };
-  }, [user, gameStatus]);
+  // gameStatus intentionally excluded — use gameStatusRef.current inside to avoid re-subscribing
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   // 3. Sync Countdown
   useEffect(() => {
@@ -131,10 +144,13 @@ export default function FlyovaToDollars() {
     const interval = setInterval(() => {
       const diff = Math.max(0, Math.floor((currentGame.endTime - Date.now()) / 1000));
       setTimeLeft(diff);
-      if (diff === 0 && gameStatus === "betting") revealResults();
+      // Use ref so changing gameStatus doesn't recreate this interval (avoids intermediate-state double-fire)
+      if (diff === 0 && gameStatusRef.current === "betting") revealResults();
     }, 1000);
     return () => clearInterval(interval);
-  }, [currentGame, gameStatus]);
+  // gameStatus intentionally excluded — use gameStatusRef.current inside
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentGame]);
 
   const checkIfUserBet = async (gameId) => {
     if (!user) return;
@@ -149,7 +165,7 @@ export default function FlyovaToDollars() {
     }
   };
 
-  const generateNewGame = async () => {
+  const generateNewGame = async (prevEndTime = null) => {
     const numbers = [];
     while (numbers.length < 4) {
       const r = Math.floor(Math.random() * 90) + 1;
@@ -158,18 +174,25 @@ export default function FlyovaToDollars() {
     const winners = [numbers[0], numbers[1]];
     const shuffled = [...numbers].sort(() => Math.random() - 0.5);
 
+    // Chain from previous game's endTime to guarantee exactly 120-second rounds.
+    // Only fall back to boundary-alignment when there's no previous game (fresh start).
+    const endTime = prevEndTime != null ? prevEndTime + ROUND_DURATION : getNextRoundEnd();
+
     await addDoc(collection(db, "timed_games"), {
       numbers: shuffled,
       winners,
-      endTime: getNextRoundEnd(),
+      endTime,
       status: "active",
       createdAt: serverTimestamp()
     });
   };
 
   const revealResults = async () => {
-    // Guard: the interval fires every second — ensure we only process each game once
+    // Guard 1: ensure we only process each game once
     if (revealedGameRef.current === currentGame.id) return;
+    // Guard 2: only process games that have genuinely ended — prevents stale closure
+    // from firing for a fresh game that still has ~120s remaining
+    if (currentGame.endTime - Date.now() > 5000) return;
     revealedGameRef.current = currentGame.id;
 
     setGameStatus("results");
@@ -241,23 +264,16 @@ export default function FlyovaToDollars() {
               }).catch(console.error);
             } else if (matchCount === 1) {
               const refund = parseFloat((betStake * PARTIAL_REFUND).toFixed(2));
+              const netLoss = parseFloat((betStake * (1 - PARTIAL_REFUND)).toFixed(2));
               displayPayout += refund;
               if (displayResult !== "win") displayResult = "partial";
               collectedResults.push({ picks, stake: betStake, result: "partial", payout: refund, matchCount });
               await runTransaction(db, async (tx) => {
                 const fresh = await tx.get(betDoc.ref);
                 if (fresh.data()?.status !== "pending") return;
-                tx.update(betDoc.ref, { status: "settled" });
-                tx.set(outcomeRef, {
-                  title: "Flyova Partial Refund",
-                  amount: parseFloat((betStake * (1 - PARTIAL_REFUND)).toFixed(2)),
-                  partialFormat: "debit",
-                  picks,
-                  gameId: currentGame.id,
-                  type: "refund",
-                  status: "completed",
-                  timestamp: serverTimestamp(),
-                });
+                // Shrink the original stake record to just the net loss (20%).
+                // No separate outcome doc — the stake card itself reflects the real cost.
+                tx.update(betDoc.ref, { amount: netLoss, status: "partial" });
                 tx.update(userRef, { wallet: increment(refund) });
               }).catch(console.error);
             } else {
@@ -311,8 +327,9 @@ export default function FlyovaToDollars() {
       transitioningRef.current = false;
       transitionTimeoutRef.current = null;
     }, 10000);
+    const prevEndTime = currentGame.endTime; // capture before await
     await updateDoc(doc(db, "timed_games", currentGame.id), { status: "completed" });
-    generateNewGame();
+    generateNewGame(prevEndTime); // chain endTime → next game always starts exactly 120s after previous ended
     if (hasBets) {
       // Green numbers: show for 1s only, then clear
       if (resultTimeoutRef.current) clearTimeout(resultTimeoutRef.current);

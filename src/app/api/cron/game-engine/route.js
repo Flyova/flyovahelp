@@ -88,7 +88,9 @@ export async function GET() {
       }
       
       const winners = [pool[0], pool[1]].sort((a,b) => a-b);
-      const endTime = now + 120000; 
+      // Chain from the settled game's endTime so rounds stay exactly 120s apart
+      const lastEndTime = activeSnap.empty ? null : activeSnap.docs[0]?.data()?.endTime;
+      const endTime = lastEndTime ? lastEndTime + 120000 : now + 120000;
 
       const randomizedDisplay = shuffleArray([...pool]);
 

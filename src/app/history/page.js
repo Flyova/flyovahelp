@@ -128,17 +128,19 @@ export default function HistoryPage() {
                 docData.title === "Match Stake" || docData.title === "Match Settlement";
               // Old cron settled partial refunds by setting status:"refunded" without updating title
               const isLegacyRefund = docData.title === "Flyova Stake" && docData.status === "refunded";
-              const isFlyovaStake = docData.title === "Flyova Stake" && !isLegacyRefund;
+              // New partial: stake record whose amount was shrunk to the 20% net loss
+              const isFlyovaPartialStake = docData.title === "Flyova Stake" && docData.status === "partial";
+              const isFlyovaStake = docData.title === "Flyova Stake" && !isLegacyRefund && !isFlyovaPartialStake;
               const isFlyovaWin = docData.title === "Flyova Win";
-              const isFlyovaPartial = docData.title === "Flyova Partial Refund" || isLegacyRefund;
+              const isFlyovaPartial = docData.title === "Flyova Partial Refund" || isLegacyRefund; // kept for old records
               const isFlyovaLoss = docData.title === "Flyova Loss" || docData.type === "loss";
-              const isFlyova = isFlyovaStake || isFlyovaWin || isFlyovaPartial || isFlyovaLoss;
+              const isFlyova = isFlyovaStake || isFlyovaWin || isFlyovaPartial || isFlyovaLoss || isFlyovaPartialStake;
 
               // Stakes and losses are debits — negate so they display as -$X (red)
               // Legacy refunds: use stored payout field if available, otherwise calculate 80%
               const displayAmount = isLegacyRefund
                 ? Number(docData.payout || (docData.amount * 0.8) || 0)
-                : (isFlyovaStake || isFlyovaLoss || isFlyovaPartial) ? -(Math.abs(Number(docData.amount || 0))) : docData.amount;
+                : (isFlyovaStake || isFlyovaLoss || isFlyovaPartial || isFlyovaPartialStake) ? -(Math.abs(Number(docData.amount || 0))) : docData.amount;
 
               if (isTransfer) {
                 mainTitle = "P2P TRANSFER";
@@ -149,6 +151,9 @@ export default function HistoryPage() {
                 mainTitle = "PLAY WITH FRIENDS";
                 subDetail = docData.title;
               } else if (isFlyovaStake) {
+                mainTitle = "FLYOVA TO DOLLARS";
+                subDetail = "Round Stake";
+              } else if (isFlyovaPartialStake) {
                 mainTitle = "FLYOVA TO DOLLARS";
                 subDetail = "Round Stake";
               } else if (isFlyovaWin) {
@@ -179,6 +184,7 @@ export default function HistoryPage() {
                 amount: displayAmount,
                 mainTitle,
                 subDetail,
+                isPartialStake: isFlyovaPartialStake,
                 category: isFlyova ? 'games' : isFinance ? 'finance' : 'games',
                 date: docData.timestamp?.toDate() || new Date()
               };
@@ -354,7 +360,7 @@ export default function HistoryPage() {
               >
                 <div className="flex items-center space-x-4">
                   <div className={`p-4 rounded-2xl shadow-inner ${iconTone}`}>
-                    {item.type === 'refund' ? <RefreshCw size={20}/> :
+                    {(item.type === 'refund' || item.isPartialStake) ? <RefreshCw size={20}/> :
                      item.type === 'loss' ? <XCircle size={20}/> :
                      item.type === 'win' ? <Trophy size={20}/> :
                      item.type === 'stake' ? <Swords size={20}/> :
