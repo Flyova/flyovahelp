@@ -41,6 +41,9 @@ export default function FlyovaToDollars() {
   const [placingBet, setPlacingBet] = useState(false);
   const [lastGameNumbers, setLastGameNumbers] = useState([]);
 
+  // Break state (driven by RTDB active_game_flyova)
+  const [breakEndsAt, setBreakEndsAt] = useState(null);
+
   // Alert States
   const [showResultAlert, setShowResultAlert] = useState(false);
   const [resultType, setResultType] = useState(null); // 'win' | 'partial' | 'lose'
@@ -51,7 +54,8 @@ export default function FlyovaToDollars() {
   const WIN_MULTIPLIER = 1.3;
   const PARTIAL_REFUND = 0.8;
   const REFERRAL_RATE = 0.025;
-  const ROUND_DURATION = 120000; // 2 minutes in ms
+  const ROUND_DURATION = 120000;
+  const BREAK_DURATION = 120000;
 
   const revealedGameRef = useRef(null);
   const resultTimeoutRef = useRef(null);
@@ -89,6 +93,23 @@ export default function FlyovaToDollars() {
   // Keep gameStatusRef in sync so effects don't need gameStatus as a dep
   useEffect(() => { gameStatusRef.current = gameStatus; }, [gameStatus]);
 
+  // 1b. RTDB break-state listener — cron writes status:"break" after round 3
+  useEffect(() => {
+    const gameStateRef = rtdbRef(rtdb, "active_game_flyova");
+    const unsub = rtdbOnValue(gameStateRef, (snap) => {
+      const data = snap.val();
+      if (data?.status === "break" && data.breakEndTime > serverNow()) {
+        setBreakEndsAt(data.breakEndTime);
+        setGameStatus("break");
+      } else if (gameStatusRef.current === "break") {
+        setBreakEndsAt(null);
+        setGameStatus("betting");
+      }
+    });
+    return () => unsub();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // 2. Global Game & History Listener
   useEffect(() => {
     // Only listen to active games — avoids picking up completed games with future endTimes
@@ -103,11 +124,12 @@ export default function FlyovaToDollars() {
 
         // Discard orphaned games whose endTime is more than 135s away — stale doc from dev/testing
         if (typeof gameData.endTime === "number" && gameData.endTime - serverNow() > 135000) {
-          updateDoc(doc(db, "timed_games", gameData.id), { status: "completed" }).catch(console.error);
+          // Lifecycle is server-owned (cron). Client should never mark rounds completed.
           return;
         }
 
         setCurrentGame(gameData);
+        setBreakEndsAt(null); // new game means break is over
         checkIfUserBet(gameData.id);
 
         if (gameStatusRef.current === "results" && gameData.id !== revealedGameRef.current) {
@@ -135,19 +157,26 @@ export default function FlyovaToDollars() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // 3. Sync Countdown
+  // 3. Sync Countdown (rounds + break)
   useEffect(() => {
-    if (!currentGame) return;
+    if (!currentGame && !breakEndsAt) return;
     const interval = setInterval(() => {
-      const diff = Math.max(0, Math.floor((currentGame.endTime - serverNow()) / 1000));
-      setTimeLeft(diff);
-      // Use ref so changing gameStatus doesn't recreate this interval (avoids intermediate-state double-fire)
-      if (diff === 0 && gameStatusRef.current === "betting") revealResults();
+      if (currentGame) {
+        const diff = Math.max(0, Math.floor((currentGame.endTime - serverNow()) / 1000));
+        setTimeLeft(diff);
+        if (diff === 0 && gameStatusRef.current === "betting") revealResults();
+      } else if (breakEndsAt) {
+        const diff = Math.max(0, Math.floor((breakEndsAt - serverNow()) / 1000));
+        setTimeLeft(diff);
+        if (diff === 0) {
+          setBreakEndsAt(null);
+          setGameStatus("betting");
+        }
+      }
     }, 1000);
     return () => clearInterval(interval);
-  // gameStatus intentionally excluded — use gameStatusRef.current inside
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentGame]);
+  }, [currentGame, breakEndsAt]);
 
   const checkIfUserBet = async (gameId) => {
     if (!user) return;
@@ -503,14 +532,33 @@ export default function FlyovaToDollars() {
 
       {/* Real-time Timer */}
       <div className="p-8 text-center bg-[#1e293b] border-b border-white/5 relative">
-        <div className="absolute top-0 left-0 h-1 bg-[#fc7952] transition-all duration-1000" style={{ width: `${(timeLeft / (ROUND_DURATION / 1000)) * 100}%` }} />
+        <div className="absolute top-0 left-0 h-1 transition-all duration-1000"
+          style={{
+            width: `${gameStatus === "break"
+              ? (timeLeft / (BREAK_DURATION / 1000)) * 100
+              : (timeLeft / (ROUND_DURATION / 1000)) * 100}%`,
+            backgroundColor: gameStatus === "break" ? "#64748b" : "#fc7952"
+          }}
+        />
         <h1 className="lg:text-xl text-lg font-black italic uppercase text-[#fc7952] mb-1">Flyova to Dollars</h1>
-        <div className="inline-flex items-center space-x-3 bg-black/20 px-8 py-4 rounded-4xl border border-white/5 mt-4">
-          <Timer size={24} className="text-[#613de6]" />
+        {currentGame?.roundInSession && gameStatus !== "break" && (
+          <p className="text-[10px] font-black uppercase tracking-widest text-white/30 mt-1">
+            Round {currentGame.roundInSession} / 3
+          </p>
+        )}
+        <div className={`inline-flex items-center space-x-3 px-8 py-4 rounded-4xl border mt-4 ${
+          gameStatus === "break" ? "bg-slate-800/50 border-slate-600/30" : "bg-black/20 border-white/5"
+        }`}>
+          <Timer size={24} className={gameStatus === "break" ? "text-slate-400" : "text-[#613de6]"} />
           <span className="text-4xl font-black italic font-mono">
             {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
           </span>
         </div>
+        {gameStatus === "break" && (
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-3">
+            Session Break — Next session starting soon
+          </p>
+        )}
       </div>
 
       <div className="flex-1 p-6 flex flex-col items-center justify-center">
@@ -550,7 +598,7 @@ export default function FlyovaToDollars() {
               return (
                 <button
                   key={num}
-                  disabled={gameStatus === "results" || timeLeft <= 0}
+                  disabled={gameStatus === "results" || gameStatus === "break" || timeLeft <= 0}
                   onClick={() => toggleNumber(num)}
                   className={`aspect-square rounded-2xl text-xl font-black italic transition-all border-2
                     ${isWinner ? 'bg-green-500 border-white scale-110 shadow-[0_0_25px_rgba(34,197,94,0.6)]' :
@@ -563,9 +611,14 @@ export default function FlyovaToDollars() {
 
         {/* Betting Panel */}
         <div className="w-full max-w-xs bg-[#1e293b] p-6 rounded-[2.5rem] border border-white/5">
-          {gameStatus === "results" || !currentGame ? (
+          {gameStatus === "break" ? (
             <div className="text-center py-2">
-              <p className="font-black italic uppercase text-sm">{!currentGame ? 'Generating Round...' : 'Round Ended'}</p>
+              <p className="font-black italic uppercase text-sm text-slate-400">Session Break</p>
+              <p className="text-[10px] font-bold opacity-30 mt-1">3 ROUNDS COMPLETE — RESUMING SHORTLY</p>
+            </div>
+          ) : gameStatus === "results" || !currentGame ? (
+            <div className="text-center py-2">
+              <p className="font-black italic uppercase text-sm">{!currentGame ? 'Waiting for Round...' : 'Round Ended'}</p>
               <p className="text-[10px] font-bold opacity-30 mt-1">NEXT ROUND STARTING SOON...</p>
             </div>
           ) : (
