@@ -53,17 +53,7 @@ export default function FlyovaToDollars() {
   const REFERRAL_RATE = 0.025;
   const ROUND_DURATION = 120000; // 2 minutes in ms
 
-  // Returns the next 2-minute UTC boundary so all clients agree on the same endTime
-  const getNextRoundEnd = () => {
-    const now = serverNow();
-    const boundary = Math.ceil(now / ROUND_DURATION) * ROUND_DURATION;
-    // If we're within 10s of a boundary, skip to the following one
-    return (boundary - now < 10000) ? boundary + ROUND_DURATION : boundary;
-  };
-
   const revealedGameRef = useRef(null);
-  const transitioningRef = useRef(false);
-  const transitionTimeoutRef = useRef(null);
   const resultTimeoutRef = useRef(null);
   const winnersTimeoutRef = useRef(null);
   // Mirrors gameStatus so effects that shouldn't re-subscribe on every status change can still read it
@@ -121,25 +111,17 @@ export default function FlyovaToDollars() {
         checkIfUserBet(gameData.id);
 
         if (gameStatusRef.current === "results" && gameData.id !== revealedGameRef.current) {
-          if (transitionTimeoutRef.current) {
-            clearTimeout(transitionTimeoutRef.current);
-            transitionTimeoutRef.current = null;
-          }
           // Clear pending winner display immediately — new game is confirmed
           if (resultTimeoutRef.current) { clearTimeout(resultTimeoutRef.current); resultTimeoutRef.current = null; }
           if (winnersTimeoutRef.current) { clearTimeout(winnersTimeoutRef.current); winnersTimeoutRef.current = null; }
           setLastWinners([]);
           setLastGameNumbers([]);
-          // Do NOT reset revealedGameRef here — the guard must stay active to block
-          // any stale timer interval that fires in the same tick
-          transitioningRef.current = false;
           setGameStatus("betting");
           setSelectedNumbers([]);
           setActiveBets([]);
         }
       } else {
-        // Only generate a new game on fresh load, not during the post-round transition
-        if (!transitioningRef.current) generateNewGame();
+        // No active game — the cron will create the next one. Nothing to do here.
       }
     });
 
@@ -177,42 +159,6 @@ export default function FlyovaToDollars() {
     const snap = await getDocs(q);
     if (!snap.empty) {
       setActiveBets(snap.docs.map(d => ({ picks: d.data().picks || [], amount: d.data().amount })));
-    }
-  };
-
-  const generateNewGame = async (prevEndTime = null) => {
-    // Chain from previous game's endTime to guarantee exactly 120-second rounds.
-    // Only fall back to boundary-alignment when there's no previous game (fresh start).
-    const endTime = prevEndTime != null ? prevEndTime + ROUND_DURATION : getNextRoundEnd();
-
-    // Deterministic doc ID: every actor (cron, every client) targets the SAME document for
-    // this round. Firestore's transaction guarantees exactly one writer succeeds — all others
-    // see the doc already exists and bail. This is the only race-safe solution.
-    const gameDocRef = doc(db, "timed_games", `round_${endTime}`);
-
-    try {
-      await runTransaction(db, async (tx) => {
-        const existing = await tx.get(gameDocRef);
-        if (existing.exists()) return; // cron or another client already created this round
-
-        const numbers = [];
-        while (numbers.length < 4) {
-          const r = Math.floor(Math.random() * 90) + 1;
-          if (!numbers.includes(r)) numbers.push(r);
-        }
-        const winners = [numbers[0], numbers[1]];
-        const shuffled = [...numbers].sort(() => Math.random() - 0.5);
-
-        tx.set(gameDocRef, {
-          numbers: shuffled,
-          winners,
-          endTime,
-          status: "active",
-          createdAt: serverTimestamp()
-        });
-      });
-    } catch {
-      // Transaction conflict means another writer won the race — that's fine
     }
   };
 
@@ -338,16 +284,9 @@ export default function FlyovaToDollars() {
       } catch (err) { console.error(err); }
     }
 
-    transitioningRef.current = true; // must be set before updateDoc to close the onSnapshot race
-    if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
-    transitionTimeoutRef.current = setTimeout(() => {
-      // Fallback: if the new-game listener never fires (orphan killed, write failed, etc.), unlock
-      transitioningRef.current = false;
-      transitionTimeoutRef.current = null;
-    }, 10000);
-    const prevEndTime = currentGame.endTime; // capture before await
-    await updateDoc(doc(db, "timed_games", currentGame.id), { status: "completed" });
-    generateNewGame(prevEndTime); // chain endTime → next game always starts exactly 120s after previous ended
+    // Game lifecycle (mark completed, create next game) is the cron's job — not the client's.
+    // The client only settles the current user's bets and shows the results UI.
+    // We wait here for the cron to push a new active game via qActive.
     if (hasBets) {
       // Green numbers: show for 6s, then clear
       if (resultTimeoutRef.current) clearTimeout(resultTimeoutRef.current);
