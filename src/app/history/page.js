@@ -121,7 +121,14 @@ export default function HistoryPage() {
               if (isPendingUsdt && (isLinkedDuplicate || hasLegacyTwin)) return null;
               
               const isTransfer = docData.type === 'p2p_transfer';
-              const isFinance = docData.type === 'withdrawal' || docData.category === 'finance' || isTransfer;
+              const isWithdrawalRefund =
+                docData.type === "refund" &&
+                String(docData.title || "").toLowerCase().includes("withdrawal");
+              const isFinance =
+                docData.type === "withdrawal" ||
+                isWithdrawalRefund ||
+                docData.category === "finance" ||
+                isTransfer;
               
               let mainTitle = "";
               let subDetail = docData.title || "";
@@ -144,7 +151,7 @@ export default function HistoryPage() {
               const isFlyovaPartial = docData.title === "Flyova Partial Refund" || isLegacyRefund; // kept for old records
               // Old separate "Flyova Loss" outcome docs are misleading double-debits — hide them
               if (docData.title === "Flyova Loss") return null;
-              const isFlyovaLoss = docData.type === "loss";
+              const isFlyovaLoss = docData.type === "loss" && Boolean(docData.gameId);
               const isFlyova = isFlyovaStake || isFlyovaWin || isFlyovaPartial || isFlyovaLoss || isFlyovaPartialStake || isFlyovaLossStake || isFlyovaWinStake;
 
               // For Flyova outcomes, keep history as stake-debit only.
@@ -204,6 +211,9 @@ export default function HistoryPage() {
               } else if (docData.type === 'withdrawal') {
                 mainTitle = "WITHDRAWAL";
                 subDetail = "USDT Payout";
+              } else if (isWithdrawalRefund) {
+                mainTitle = "WITHDRAWAL";
+                subDetail = "Withdrawal Refund";
               } else {
                 mainTitle = "TRANSACTION";
               }
@@ -375,10 +385,10 @@ export default function HistoryPage() {
             </div>
           ) : renderedData.map((item) => {
             const rawAmount = Number(item.amount || 0);
-            // Losses and partial refunds are always debits — enforce negative at render time
+            // Flyova outcomes are always debit-side in this ledger view; other tx keep stored sign.
             const amountValue = item.isFlyova
               ? -Math.abs(rawAmount)
-              : (item.type === 'loss' || item.type === 'refund') ? -Math.abs(rawAmount) : rawAmount;
+              : item.type === 'loss' ? -Math.abs(rawAmount) : rawAmount;
             const isPositive = item.type === "p2p_transfer" ? item.direction === "in" : amountValue > 0;
             const isNegative = item.type === "p2p_transfer" ? item.direction !== "in" : amountValue < 0;
             const iconTone = isPositive ? "bg-green-500/10 text-green-500" : isNegative ? "bg-red-500/10 text-red-500" : "bg-slate-500/10 text-slate-400";
@@ -387,7 +397,7 @@ export default function HistoryPage() {
             // Partial refund records may have status "win" from old code — always show "partial"
             // Win stakes and old "Flyova Win" docs (status:"completed") both show "win" badge
             const displayStatus = item.type === 'loss' || item.isLossStake ? 'loss'
-              : item.type === 'refund' ? 'partial'
+              : (item.type === 'refund' && item.isFlyovaOutcome) ? 'partial'
               : item.isWinStake || (item.status === 'completed' && item.type === 'win') ? 'win'
               : item.status;
             
@@ -410,7 +420,7 @@ export default function HistoryPage() {
                   <div>
                     {/* GRAY Main Category Label */}
                     <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-0.5">
-                      {(item.type === 'loss' || item.type === 'win' || item.type === 'refund') && item.mainTitle === 'TRANSACTION'
+                      {item.isFlyovaOutcome && item.mainTitle === 'TRANSACTION'
                         ? 'FLYOVA TO DOLLARS'
                         : item.mainTitle}
                     </p>
