@@ -1,16 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
 import DesktopSidebar from "@/components/DesktopSidebar";
+
+const ENGINE_HEARTBEAT_MS = 45000;
+const ENGINE_HEARTBEAT_KEY = "flyova_engine_last_kick_at";
 
 export default function ClientLayoutShell({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [hasSession, setHasSession] = useState(false);
 
   const isAuthPage =
     pathname === "/" ||
@@ -26,6 +32,46 @@ export default function ClientLayoutShell({ children }) {
 
   const sidebarNavPaths = ["/dashboard", "/history", "/deposit", "/settings", "/support", "/faq", "/about"];
   const showDesktopBack = !isAuthPage && !sidebarNavPaths.includes(pathname);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      setHasSession(Boolean(user));
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    if (isAuthPage || !hasSession) return;
+
+    const maybeKickGameEngine = async (reason) => {
+      const now = Date.now();
+
+      try {
+        const lastKick = Number(localStorage.getItem(ENGINE_HEARTBEAT_KEY) || 0);
+        if (now - lastKick < ENGINE_HEARTBEAT_MS) return;
+        localStorage.setItem(ENGINE_HEARTBEAT_KEY, String(now));
+      } catch {
+        // If localStorage is unavailable, continue without cross-tab throttling.
+      }
+
+      try {
+        await fetch(`/api/cron/game-engine?r=${encodeURIComponent(reason)}&t=${now}`, {
+          method: "GET",
+          cache: "no-store",
+          keepalive: true
+        });
+      } catch {
+        // Ignore transient errors; next heartbeat retries.
+      }
+    };
+
+    maybeKickGameEngine("shell-mount");
+    const timer = setInterval(() => {
+      maybeKickGameEngine("shell-heartbeat");
+    }, ENGINE_HEARTBEAT_MS);
+
+    return () => clearInterval(timer);
+  }, [isAuthPage, hasSession]);
 
   return (
     <>
