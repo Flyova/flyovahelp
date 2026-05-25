@@ -204,7 +204,7 @@ const backfillStalePendingBets = async ({
   return { staleSettled, staleScanned };
 };
 
-export async function GET() {
+export async function runGameEngine() {
   let adminDb;
   let lockOwnerId = "";
 
@@ -401,4 +401,8 @@ export async function GET() {
       await releaseEngineLock(adminDb, lockOwnerId).catch(() => {});
     }
   }
+}
+
+export async function GET() {
+  return runGameEngine();
 }
