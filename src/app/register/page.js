@@ -32,6 +32,7 @@ function RegisterForm() {
   const [loading, setLoading] = useState(false);
   const [claimBonus, setClaimBonus] = useState(true);
   const [referrerName, setReferrerName] = useState("");
+  const [resolvedReferrerUid, setResolvedReferrerUid] = useState(null);
   const [showPw, setShowPw] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -58,13 +59,26 @@ function RegisterForm() {
   }, []);
 
   useEffect(() => {
-    if (!referralCode) return;
+    if (!referralCode) {
+      setReferrerName("");
+      setResolvedReferrerUid(null);
+      return;
+    }
     getDoc(doc(db, "users", referralCode))
       .then((snap) => {
+        if (!snap.exists()) {
+          setReferrerName("Invalid referral code");
+          setResolvedReferrerUid(null);
+          return;
+        }
         const d = snap.data();
-        setReferrerName(snap.exists() ? (d.fullName || d.username || "Flyova Member") : "Flyova Member");
+        setReferrerName(d.fullName || d.username || "Flyova Member");
+        setResolvedReferrerUid(snap.id);
       })
-      .catch(() => setReferrerName("Flyova Member"));
+      .catch(() => {
+        setReferrerName("Invalid referral code");
+        setResolvedReferrerUid(null);
+      });
   }, [referralCode]);
 
   const handleCountryChange = (e) => {
@@ -148,8 +162,8 @@ function RegisterForm() {
         createdAt: serverTimestamp(),
         verified: false,
         otp: otpCode,
-        referredBy: referralCode ? referrerName : null,
-        referrerUid: referralCode || null,
+        referredBy: resolvedReferrerUid ? referrerName : null,
+        referrerUid: resolvedReferrerUid || null,
       });
 
       try {
@@ -201,7 +215,11 @@ function RegisterForm() {
           <div className="flex items-center gap-3 bg-[#fc7952]/10 border border-[#fc7952]/20 rounded-2xl px-4 py-3">
             <UserCheck size={16} className="text-[#fc7952] shrink-0" />
             <span className="text-xs font-black text-[#fc7952] uppercase tracking-wide">
-              {referrerName ? `Referred by: ${referrerName}` : "Identifying referrer…"}
+              {!referrerName
+                ? "Identifying referrer…"
+                : resolvedReferrerUid
+                  ? `Referred by: ${referrerName}`
+                  : referrerName}
             </span>
           </div>
         )}

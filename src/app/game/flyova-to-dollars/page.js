@@ -4,7 +4,6 @@ import { db, auth } from "@/lib/firebase";
 import {
   doc,
   onSnapshot,
-  updateDoc,
   increment,
   collection,
   query,
@@ -13,7 +12,6 @@ import {
   serverTimestamp,
   orderBy,
   limit,
-  getDoc,
   getDocs,
   runTransaction
 } from "firebase/firestore";
@@ -51,7 +49,6 @@ export default function FlyovaToDollars() {
 
   const WIN_MULTIPLIER = 1.3;
   const PARTIAL_REFUND = 0.8;
-  const REFERRAL_RATE = 0.025;
   const ROUND_DURATION = 120000;
   const BREAK_DURATION = 120000;
 
@@ -127,12 +124,12 @@ export default function FlyovaToDollars() {
 
     if (user) {
       try {
-        // Only fetch bets that haven't been processed yet (status === "pending")
+        // Fetch all stake rows for this round. Server-side settlement may have
+        // already flipped status by the time this client reveals results.
         const q = query(
           collection(db, "users", user.uid, "transactions"),
           where("gameId", "==", currentGame.id),
-          where("type", "==", "stake"),
-          where("status", "==", "pending")
+          where("type", "==", "stake")
         );
         const betsSnap = await getDocs(q);
 
@@ -145,14 +142,9 @@ export default function FlyovaToDollars() {
 
         if (!betsSnap.empty) {
           hasBets = true;
-          // Get user's referrer once
-          const userSnap = await getDoc(doc(db, "users", user.uid));
-          const referrerUid = userSnap.data()?.referrerUid;
 
           let displayPayout = 0;
           let displayResult = "lose"; // 'win' | 'partial' | 'lose'
-          let totalLost = 0;
-          const userRef = doc(db, "users", user.uid);
           const collectedResults = [];
 
           for (const betDoc of betsSnap.docs) {
@@ -164,53 +156,14 @@ export default function FlyovaToDollars() {
               displayPayout += payout;
               displayResult = "win";
               collectedResults.push({ picks, stake: betStake, result: "win", payout, matchCount });
-              await runTransaction(db, async (tx) => {
-                const fresh = await tx.get(betDoc.ref);
-                if (fresh.data()?.status !== "pending") return;
-                const stakeAmount = Math.abs(Number(fresh.data()?.stakeAmount || fresh.data()?.amount || betStake || 0));
-                // Keep the original stake amount as debit; only set the win status.
-                tx.update(betDoc.ref, { status: "win", stakeAmount });
-                tx.update(userRef, { wallet: increment(payout) });
-              }).catch(console.error);
             } else if (matchCount === 1) {
               const refund = parseFloat((betStake * PARTIAL_REFUND).toFixed(2));
               displayPayout += refund;
               if (displayResult !== "win") displayResult = "partial";
               collectedResults.push({ picks, stake: betStake, result: "partial", payout: refund, matchCount });
-              await runTransaction(db, async (tx) => {
-                const fresh = await tx.get(betDoc.ref);
-                if (fresh.data()?.status !== "pending") return;
-                const stakeAmount = Math.abs(Number(fresh.data()?.stakeAmount || fresh.data()?.amount || betStake || 0));
-                // Keep original stake amount untouched; outcome is shown via status tag only.
-                tx.update(betDoc.ref, { status: "partial", stakeAmount });
-                tx.update(userRef, { wallet: increment(refund) });
-              }).catch(console.error);
             } else {
-              totalLost += betStake;
               collectedResults.push({ picks, stake: betStake, result: "loss", payout: 0, matchCount });
-              await runTransaction(db, async (tx) => {
-                const fresh = await tx.get(betDoc.ref);
-                if (fresh.data()?.status !== "pending") return;
-                const stakeAmount = Math.abs(Number(fresh.data()?.stakeAmount || fresh.data()?.amount || betStake || 0));
-                // Mark the original stake as "loss" — no separate outcome doc needed
-                tx.update(betDoc.ref, { status: "loss", stakeAmount });
-              }).catch(console.error);
             }
-          }
-
-          // Referral commission: 2.5% of total lost stake goes to referrer's bonus
-          if (totalLost > 0 && referrerUid) {
-            const commission = parseFloat((totalLost * REFERRAL_RATE).toFixed(2));
-            await updateDoc(doc(db, "users", referrerUid), {
-              referralBonus: increment(commission)
-            });
-            await addDoc(collection(db, "users", referrerUid, "transactions"), {
-              title: "Referral Commission",
-              amount: commission,
-              type: "commission",
-              status: "completed",
-              timestamp: serverTimestamp()
-            });
           }
 
           setBetResults(collectedResults);
@@ -222,9 +175,8 @@ export default function FlyovaToDollars() {
       } catch (err) { console.error(err); }
     }
 
-    // Game lifecycle (mark completed, create next game) is the cron's job — not the client's.
-    // The client only settles the current user's bets and shows the results UI.
-    // We wait here for the cron to push a new active game via qActive.
+    // Game lifecycle and bet settlement are server-owned (cron).
+    // The client only renders the result UI while waiting for the next active round.
     if (hasBets) {
       // Green numbers: show for 6s, then clear
       if (resultTimeoutRef.current) clearTimeout(resultTimeoutRef.current);
