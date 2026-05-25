@@ -56,6 +56,7 @@ export default function FlyovaToDollars() {
   const resultTimeoutRef = useRef(null);
   const winnersTimeoutRef = useRef(null);
   const engineKickRef = useRef({ inFlight: false, lastRunAt: 0 });
+  const activeBetsReqIdRef = useRef(0);
   // Mirrors gameStatus so effects that shouldn't re-subscribe on every status change can still read it
   const gameStatusRef = useRef("betting");
   // Firebase RTDB serverTimeOffset: server_time = Date.now() + offset
@@ -84,15 +85,29 @@ export default function FlyovaToDollars() {
   }
 
   async function checkIfUserBet(gameId) {
-    if (!user) return;
-    const q = query(
-      collection(db, "users", user.uid, "transactions"),
-      where("gameId", "==", gameId),
-      where("type", "==", "stake")
-    );
-    const snap = await getDocs(q);
-    if (!snap.empty) {
+    if (!user || !gameId) {
+      setActiveBets([]);
+      return;
+    }
+
+    const reqId = ++activeBetsReqIdRef.current;
+    // Clear stale round bets immediately while we fetch this round's state.
+    setActiveBets([]);
+
+    try {
+      const q = query(
+        collection(db, "users", user.uid, "transactions"),
+        where("gameId", "==", gameId),
+        where("type", "==", "stake")
+      );
+      const snap = await getDocs(q);
+      // Ignore late async responses from older rounds.
+      if (reqId !== activeBetsReqIdRef.current) return;
+
       setActiveBets(snap.docs.map(d => ({ picks: d.data().picks || [], amount: d.data().amount })));
+    } catch (error) {
+      console.error("Failed to load active bets:", error);
+      if (reqId === activeBetsReqIdRef.current) setActiveBets([]);
     }
   }
 
@@ -286,6 +301,7 @@ export default function FlyovaToDollars() {
         }
       } else {
         setCurrentGame(null);
+        setActiveBets([]);
         maybeKickGameEngine("no-active-game");
       }
     });
