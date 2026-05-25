@@ -142,7 +142,6 @@ const settlePendingForGame = async ({
 }) => {
   const pendingSnap = await adminDb.collectionGroup("transactions")
     .where("gameId", "==", gameId)
-    .where("type", "==", "stake")
     .where("status", "==", "pending")
     .get();
 
