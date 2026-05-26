@@ -59,6 +59,8 @@ export default function FlyovaToDollars() {
   const activeBetsReqIdRef = useRef(0);
   // Mirrors gameStatus so effects that shouldn't re-subscribe on every status change can still read it
   const gameStatusRef = useRef("betting");
+  // Guards against stale async "my bets" reads leaking previous-round chips into a new round
+  const currentRoundIdRef = useRef(null);
   // Firebase RTDB serverTimeOffset: server_time = Date.now() + offset
   // Keeps all clients in sync regardless of local clock accuracy
   const serverTimeOffsetRef = useRef(0);
@@ -103,6 +105,12 @@ export default function FlyovaToDollars() {
       const snap = await getDocs(q);
       // Ignore late async responses from older rounds.
       if (reqId !== activeBetsReqIdRef.current) return;
+      if (currentRoundIdRef.current !== gameId) return;
+
+      if (snap.empty) {
+        setActiveBets([]);
+        return;
+      }
 
       setActiveBets(snap.docs.map(d => ({ picks: d.data().picks || [], amount: d.data().amount })));
     } catch (error) {
@@ -285,6 +293,15 @@ export default function FlyovaToDollars() {
           return;
         }
 
+        const isNewRound = currentRoundIdRef.current !== gameData.id;
+        if (isNewRound) {
+          currentRoundIdRef.current = gameData.id;
+          // Invalidate old reads and clear chips immediately while new-round bets are fetched.
+          activeBetsReqIdRef.current += 1;
+          setActiveBets([]);
+          setSelectedNumbers([]);
+        }
+
         setCurrentGame(gameData);
         setBreakEndsAt(null);
         checkIfUserBet(gameData.id);
@@ -300,8 +317,10 @@ export default function FlyovaToDollars() {
           setActiveBets([]);
         }
       } else {
-        setCurrentGame(null);
+        currentRoundIdRef.current = null;
+        activeBetsReqIdRef.current += 1;
         setActiveBets([]);
+        setCurrentGame(null);
         maybeKickGameEngine("no-active-game");
       }
     });
