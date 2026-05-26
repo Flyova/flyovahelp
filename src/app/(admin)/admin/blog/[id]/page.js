@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import {
-  Save, Globe, EyeOff, ArrowLeft, Upload, X, Loader2, Image as ImageIcon, CheckCircle2, Hash, Search
+  Save, Globe, EyeOff, ArrowLeft, Upload, X, Loader2, Image as ImageIcon, CheckCircle2, Hash, Search, Keyboard
 } from "lucide-react";
 
 const RichTextEditor = dynamic(() => import("@/components/RichTextEditor"), { ssr: false, loading: () => (
@@ -178,6 +178,31 @@ function BlogEditorContent() {
     }
   };
 
+  // Global editor shortcuts:
+  // - Cmd/Ctrl+S: save draft
+  // - Cmd/Ctrl+Enter: publish/unpublish
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.defaultPrevented) return;
+      if (!(e.metaKey || e.ctrlKey)) return;
+
+      const key = e.key.toLowerCase();
+      if (key === "s") {
+        e.preventDefault();
+        if (!saving) handleSave(null);
+        return;
+      }
+
+      if (key === "enter") {
+        e.preventDefault();
+        if (!saving) handleSave(!published);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [saving, published, handleSave]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -223,6 +248,12 @@ function BlogEditorContent() {
             {published ? <><EyeOff size={14} /> Unpublish</> : <><Globe size={14} /> Publish</>}
           </button>
         </div>
+      </div>
+      <div className="mb-5 flex items-center justify-end gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
+        <Keyboard size={12} />
+        <span>Ctrl/Cmd+S Save</span>
+        <span>·</span>
+        <span>Ctrl/Cmd+Enter Publish</span>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-6">
@@ -352,10 +383,13 @@ function BlogEditorContent() {
               value={keywordInput}
               onChange={(e) => setKeywordInput(e.target.value)}
               onKeyDown={(e) => {
-                if ((e.key === "Enter" || e.key === ",") && keywordInput.trim()) {
+                if ((e.key === "Enter" || e.key === "," || e.key === "Tab") && keywordInput.trim()) {
                   e.preventDefault();
                   const kw = normalizeHashtag(keywordInput);
                   if (kw && !keywords.includes(kw)) setKeywords([...keywords, kw]);
+                  setKeywordInput("");
+                } else if (e.key === "Escape" && keywordInput) {
+                  e.preventDefault();
                   setKeywordInput("");
                 } else if (e.key === "Backspace" && !keywordInput && keywords.length) {
                   setKeywords(keywords.slice(0, -1));
@@ -364,7 +398,7 @@ function BlogEditorContent() {
               placeholder="Type hashtag, press Enter…"
               className="w-full bg-slate-900 border border-slate-800 focus:border-[#613de6]/40 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-200 placeholder:text-slate-500 outline-none transition-colors"
             />
-            <p className="text-[10px] text-slate-500 font-bold">Auto-formats to #hashtag · Press Enter/comma to add</p>
+            <p className="text-[10px] text-slate-500 font-bold">Auto-formats to #hashtag · Enter/comma/Tab adds · Esc clears input</p>
           </div>
 
           {/* SEO / Meta Tags */}
