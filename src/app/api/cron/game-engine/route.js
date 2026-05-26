@@ -16,7 +16,7 @@ const ENGINE_LOCK_COLLECTION = "system_locks";
 const ENGINE_LOCK_DOC_ID = "flyova_game_engine_lock";
 const ROUND_GUARD_COLLECTION = "system_state";
 const ROUND_GUARD_DOC_ID = "flyova_round_guard";
-const MAX_BACKFILL_GAMES = 5;
+const MAX_PENDING_SWEEP_DOCS = 500;
 
 const acquireEngineLock = async (adminDb, ownerId) => {
   const lockRef = adminDb.collection(ENGINE_LOCK_COLLECTION).doc(ENGINE_LOCK_DOC_ID);
@@ -147,6 +147,9 @@ const settlePendingForGame = async ({
 
   let settledCount = 0;
   for (const betDoc of pendingSnap.docs) {
+    const betData = betDoc.data() || {};
+    if (betData.type !== "stake") continue;
+
     try {
       const outcome = await settleBetDoc({
         adminDb,
@@ -166,41 +169,68 @@ const settlePendingForGame = async ({
   return { settledCount, scanned: pendingSnap.size };
 };
 
-const backfillStalePendingBets = async ({
+const sweepPendingStakeSettlements = async ({
   adminDb,
   now,
   WIN_MULTIPLIER,
   REFUND_PERCENTAGE,
   REFERRAL_COMMISSION_RATE,
 }) => {
-  const staleGamesSnap = await adminDb.collection("timed_games")
-    .where("status", "==", "completed")
-    .orderBy("endTime", "desc")
-    .limit(MAX_BACKFILL_GAMES)
+  const pendingSnap = await adminDb.collectionGroup("transactions")
+    .where("status", "==", "pending")
+    .limit(MAX_PENDING_SWEEP_DOCS)
     .get();
 
-  let staleSettled = 0;
-  let staleScanned = 0;
+  let pendingScanned = 0;
+  let pendingSettled = 0;
+  let pendingEligible = 0;
+  const gameCache = new Map();
 
-  for (const gameDoc of staleGamesSnap.docs) {
-    const winningNums = Array.isArray(gameDoc.data()?.winners) ? gameDoc.data().winners : [];
-    if (winningNums.length < 2) continue;
+  for (const betDoc of pendingSnap.docs) {
+    const betData = betDoc.data() || {};
+    if (betData.type !== "stake" || !betData.gameId) continue;
+    pendingScanned += 1;
 
-    const result = await settlePendingForGame({
-      adminDb,
-      gameId: gameDoc.id,
-      winningNums,
-      now,
-      WIN_MULTIPLIER,
-      REFUND_PERCENTAGE,
-      REFERRAL_COMMISSION_RATE,
-    });
+    const gameId = String(betData.gameId || "").trim();
+    if (!gameId) continue;
 
-    staleSettled += result.settledCount;
-    staleScanned += result.scanned;
+    if (!gameCache.has(gameId)) {
+      try {
+        const gameSnap = await adminDb.collection("timed_games").doc(gameId).get();
+        gameCache.set(gameId, gameSnap.exists ? gameSnap.data() : null);
+      } catch (error) {
+        console.error("Failed to read game during pending sweep", { gameId, error: error?.message || error });
+        gameCache.set(gameId, null);
+      }
+    }
+
+    const gameData = gameCache.get(gameId);
+    if (!gameData) continue;
+
+    const winners = Array.isArray(gameData.winners) ? gameData.winners : [];
+    const ended = Number(gameData.endTime || 0) > 0 && Number(gameData.endTime || 0) <= now;
+    const completed = String(gameData.status || "") === "completed";
+    if (winners.length < 2 || (!ended && !completed)) continue;
+
+    pendingEligible += 1;
+
+    try {
+      const outcome = await settleBetDoc({
+        adminDb,
+        betDoc,
+        winningNums: winners,
+        now,
+        WIN_MULTIPLIER,
+        REFUND_PERCENTAGE,
+        REFERRAL_COMMISSION_RATE,
+      });
+      if (outcome?.settled) pendingSettled += 1;
+    } catch (error) {
+      console.error("Failed to settle pending stake in sweep", { gameId, betId: betDoc.id, error: error?.message || error });
+    }
   }
 
-  return { staleSettled, staleScanned };
+  return { pendingScanned, pendingSettled, pendingEligible };
 };
 
 export async function runGameEngine() {
@@ -264,8 +294,9 @@ export async function runGameEngine() {
       }, { merge: true });
     }
 
-    // 1b. BACKFILL ANY STALE PENDING STAKES FOR OLDER COMPLETED ROUNDS
-    const staleResult = await backfillStalePendingBets({
+    // 1b. Sweep remaining pending stake records. This covers offline users whose
+    // stake rows were missed by previous engine runs and unlocks referral loss credit.
+    const pendingSweep = await sweepPendingStakeSettlements({
       adminDb,
       now,
       WIN_MULTIPLIER,
@@ -382,16 +413,18 @@ export async function runGameEngine() {
       return NextResponse.json({
         message: createResult.created ? "Round started" : "Round already active",
         settledNow: settledNowCount,
-        stalePendingScanned: staleResult.staleScanned,
-        stalePendingSettled: staleResult.staleSettled,
+        stalePendingScanned: pendingSweep.pendingScanned,
+        stalePendingSettled: pendingSweep.pendingSettled,
+        pendingStakeEligible: pendingSweep.pendingEligible,
       });
     }
 
     return NextResponse.json({
       message: "Running",
       settledNow: settledNowCount,
-      stalePendingScanned: staleResult.staleScanned,
-      stalePendingSettled: staleResult.staleSettled,
+      stalePendingScanned: pendingSweep.pendingScanned,
+      stalePendingSettled: pendingSweep.pendingSettled,
+      pendingStakeEligible: pendingSweep.pendingEligible,
     });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
