@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import {
-  Save, Globe, EyeOff, ArrowLeft, Upload, X, Loader2, Image as ImageIcon, CheckCircle2, Tag, Search
+  Save, Globe, EyeOff, ArrowLeft, Upload, X, Loader2, Image as ImageIcon, CheckCircle2, Hash, Search
 } from "lucide-react";
 
 const RichTextEditor = dynamic(() => import("@/components/RichTextEditor"), { ssr: false, loading: () => (
@@ -22,6 +22,21 @@ function calcReadTime(html) {
   const text = html.replace(/<[^>]*>/g, " ");
   const words = text.trim().split(/\s+/).filter(Boolean).length;
   return Math.max(1, Math.round(words / 200));
+}
+
+function normalizeHashtag(value) {
+  const base = String(value || "")
+    .trim()
+    .replace(/^#+/, "")
+    .replace(/,/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9_-]/g, "");
+  return base ? `#${base}` : "";
+}
+
+function normalizeHashtagList(values) {
+  return [...new Set((values || []).map(normalizeHashtag).filter(Boolean))];
 }
 
 function BlogEditorContent() {
@@ -63,7 +78,7 @@ function BlogEditorContent() {
       setAuthor(d.author ?? "Flyovahelp Team");
       setCoverImage(d.coverImage ?? "");
       setCoverImagePath(d.coverImagePath ?? "");
-      setKeywords(d.keywords ?? []);
+      setKeywords(normalizeHashtagList(d.keywords ?? []));
       setMetaTitle(d.metaTitle ?? "");
       setMetaDescription(d.metaDescription ?? "");
       setLoading(false);
@@ -129,6 +144,7 @@ function BlogEditorContent() {
   const handleSave = async (publish) => {
     if (!title.trim()) { alert("Post title is required."); return; }
     setSaving(true);
+    const normalizedKeywords = normalizeHashtagList(keywords);
     const data = {
       title: title.trim(),
       slug: slug || slugify(title),
@@ -137,7 +153,7 @@ function BlogEditorContent() {
       author: author.trim() || "Flyovahelp Team",
       coverImage,
       coverImagePath,
-      keywords,
+      keywords: normalizedKeywords,
       metaTitle: metaTitle.trim(),
       metaDescription: metaDescription.trim(),
       published: publish ?? published,
@@ -311,11 +327,11 @@ function BlogEditorContent() {
             />
           </div>
 
-          {/* Keywords */}
+          {/* Hashtags */}
           <div className="bg-[#0f172a] border border-slate-800 rounded-2xl p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <Tag size={13} className="text-slate-400" />
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Keywords</p>
+              <Hash size={13} className="text-slate-400" />
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Hashtags</p>
             </div>
             <div className="flex flex-wrap gap-1.5 min-h-7">
               {keywords.map((kw) => (
@@ -338,17 +354,17 @@ function BlogEditorContent() {
               onKeyDown={(e) => {
                 if ((e.key === "Enter" || e.key === ",") && keywordInput.trim()) {
                   e.preventDefault();
-                  const kw = keywordInput.trim().replace(/,/g, "").toLowerCase();
+                  const kw = normalizeHashtag(keywordInput);
                   if (kw && !keywords.includes(kw)) setKeywords([...keywords, kw]);
                   setKeywordInput("");
                 } else if (e.key === "Backspace" && !keywordInput && keywords.length) {
                   setKeywords(keywords.slice(0, -1));
                 }
               }}
-              placeholder="Type keyword, press Enter…"
+              placeholder="Type hashtag, press Enter…"
               className="w-full bg-slate-900 border border-slate-800 focus:border-[#613de6]/40 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-200 placeholder:text-slate-500 outline-none transition-colors"
             />
-            <p className="text-[10px] text-slate-500 font-bold">Press Enter or comma to add · Backspace to remove last</p>
+            <p className="text-[10px] text-slate-500 font-bold">Auto-formats to #hashtag · Press Enter/comma to add</p>
           </div>
 
           {/* SEO / Meta Tags */}
