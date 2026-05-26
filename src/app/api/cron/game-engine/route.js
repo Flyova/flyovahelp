@@ -16,7 +16,7 @@ const ENGINE_LOCK_COLLECTION = "system_locks";
 const ENGINE_LOCK_DOC_ID = "flyova_game_engine_lock";
 const ROUND_GUARD_COLLECTION = "system_state";
 const ROUND_GUARD_DOC_ID = "flyova_round_guard";
-const MAX_BACKFILL_GAMES = 5;
+const MAX_SWEEP_COMPLETED_GAMES = 120;
 
 const acquireEngineLock = async (adminDb, ownerId) => {
   const lockRef = adminDb.collection(ENGINE_LOCK_COLLECTION).doc(ENGINE_LOCK_DOC_ID);
@@ -147,6 +147,9 @@ const settlePendingForGame = async ({
 
   let settledCount = 0;
   for (const betDoc of pendingSnap.docs) {
+    const betData = betDoc.data() || {};
+    if (betData.type !== "stake") continue;
+
     try {
       const outcome = await settleBetDoc({
         adminDb,
@@ -166,41 +169,51 @@ const settlePendingForGame = async ({
   return { settledCount, scanned: pendingSnap.size };
 };
 
-const backfillStalePendingBets = async ({
+const sweepPendingStakeSettlements = async ({
   adminDb,
   now,
   WIN_MULTIPLIER,
   REFUND_PERCENTAGE,
   REFERRAL_COMMISSION_RATE,
 }) => {
-  const staleGamesSnap = await adminDb.collection("timed_games")
+  const completedGamesSnap = await adminDb.collection("timed_games")
     .where("status", "==", "completed")
     .orderBy("endTime", "desc")
-    .limit(MAX_BACKFILL_GAMES)
+    .limit(MAX_SWEEP_COMPLETED_GAMES)
     .get();
 
-  let staleSettled = 0;
-  let staleScanned = 0;
+  let pendingScanned = 0;
+  let pendingSettled = 0;
+  let pendingEligible = 0;
 
-  for (const gameDoc of staleGamesSnap.docs) {
-    const winningNums = Array.isArray(gameDoc.data()?.winners) ? gameDoc.data().winners : [];
-    if (winningNums.length < 2) continue;
+  for (const gameDoc of completedGamesSnap.docs) {
+    const gameData = gameDoc.data() || {};
+    const winners = Array.isArray(gameData.winners) ? gameData.winners : [];
+    if (winners.length < 2) continue;
 
-    const result = await settlePendingForGame({
-      adminDb,
-      gameId: gameDoc.id,
-      winningNums,
-      now,
-      WIN_MULTIPLIER,
-      REFUND_PERCENTAGE,
-      REFERRAL_COMMISSION_RATE,
-    });
+    pendingEligible += 1;
 
-    staleSettled += result.settledCount;
-    staleScanned += result.scanned;
+    try {
+      const result = await settlePendingForGame({
+        adminDb,
+        gameId: gameDoc.id,
+        winningNums: winners,
+        now,
+        WIN_MULTIPLIER,
+        REFUND_PERCENTAGE,
+        REFERRAL_COMMISSION_RATE,
+      });
+      pendingScanned += result.scanned;
+      pendingSettled += result.settledCount;
+    } catch (error) {
+      console.error("Failed pending sweep on completed game", {
+        gameId: gameDoc.id,
+        error: error?.message || error,
+      });
+    }
   }
 
-  return { staleSettled, staleScanned };
+  return { pendingScanned, pendingSettled, pendingEligible };
 };
 
 export async function runGameEngine() {
@@ -264,8 +277,9 @@ export async function runGameEngine() {
       }, { merge: true });
     }
 
-    // 1b. BACKFILL ANY STALE PENDING STAKES FOR OLDER COMPLETED ROUNDS
-    const staleResult = await backfillStalePendingBets({
+    // 1b. Sweep remaining pending stake records. This covers offline users whose
+    // stake rows were missed by previous engine runs and unlocks referral loss credit.
+    const pendingSweep = await sweepPendingStakeSettlements({
       adminDb,
       now,
       WIN_MULTIPLIER,
@@ -382,16 +396,18 @@ export async function runGameEngine() {
       return NextResponse.json({
         message: createResult.created ? "Round started" : "Round already active",
         settledNow: settledNowCount,
-        stalePendingScanned: staleResult.staleScanned,
-        stalePendingSettled: staleResult.staleSettled,
+        stalePendingScanned: pendingSweep.pendingScanned,
+        stalePendingSettled: pendingSweep.pendingSettled,
+        pendingStakeEligible: pendingSweep.pendingEligible,
       });
     }
 
     return NextResponse.json({
       message: "Running",
       settledNow: settledNowCount,
-      stalePendingScanned: staleResult.staleScanned,
-      stalePendingSettled: staleResult.staleSettled,
+      stalePendingScanned: pendingSweep.pendingScanned,
+      stalePendingSettled: pendingSweep.pendingSettled,
+      pendingStakeEligible: pendingSweep.pendingEligible,
     });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
