@@ -1,4 +1,5 @@
 import "./globals.css";
+import Script from "next/script";
 import ClientLayoutShell from "./ClientLayoutShell";
 
 const SITE_URL = "https://flyovahelp.com";
@@ -23,6 +24,8 @@ const organizationJsonLd = {
     "https://x.com/flyovahelp",
   ],
 };
+
+const GA_MEASUREMENT_ID = "G-CQJ8Q6NRDD";
 
 export const metadata = {
   metadataBase: new URL(SITE_URL),
@@ -79,6 +82,18 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body className="bg-[#0f172a] antialiased">
+        <Script
+          src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '${GA_MEASUREMENT_ID}');
+          `}
+        </Script>
         <ClientLayoutShell>{children}</ClientLayoutShell>
       </body>
     </html>
