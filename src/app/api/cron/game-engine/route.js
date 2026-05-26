@@ -16,7 +16,7 @@ const ENGINE_LOCK_COLLECTION = "system_locks";
 const ENGINE_LOCK_DOC_ID = "flyova_game_engine_lock";
 const ROUND_GUARD_COLLECTION = "system_state";
 const ROUND_GUARD_DOC_ID = "flyova_round_guard";
-const MAX_PENDING_SWEEP_DOCS = 500;
+const MAX_SWEEP_COMPLETED_GAMES = 120;
 
 const acquireEngineLock = async (adminDb, ownerId) => {
   const lockRef = adminDb.collection(ENGINE_LOCK_COLLECTION).doc(ENGINE_LOCK_DOC_ID);
@@ -176,57 +176,40 @@ const sweepPendingStakeSettlements = async ({
   REFUND_PERCENTAGE,
   REFERRAL_COMMISSION_RATE,
 }) => {
-  const pendingSnap = await adminDb.collectionGroup("transactions")
-    .where("status", "==", "pending")
-    .limit(MAX_PENDING_SWEEP_DOCS)
+  const completedGamesSnap = await adminDb.collection("timed_games")
+    .where("status", "==", "completed")
+    .orderBy("endTime", "desc")
+    .limit(MAX_SWEEP_COMPLETED_GAMES)
     .get();
 
   let pendingScanned = 0;
   let pendingSettled = 0;
   let pendingEligible = 0;
-  const gameCache = new Map();
 
-  for (const betDoc of pendingSnap.docs) {
-    const betData = betDoc.data() || {};
-    if (betData.type !== "stake" || !betData.gameId) continue;
-    pendingScanned += 1;
-
-    const gameId = String(betData.gameId || "").trim();
-    if (!gameId) continue;
-
-    if (!gameCache.has(gameId)) {
-      try {
-        const gameSnap = await adminDb.collection("timed_games").doc(gameId).get();
-        gameCache.set(gameId, gameSnap.exists ? gameSnap.data() : null);
-      } catch (error) {
-        console.error("Failed to read game during pending sweep", { gameId, error: error?.message || error });
-        gameCache.set(gameId, null);
-      }
-    }
-
-    const gameData = gameCache.get(gameId);
-    if (!gameData) continue;
-
+  for (const gameDoc of completedGamesSnap.docs) {
+    const gameData = gameDoc.data() || {};
     const winners = Array.isArray(gameData.winners) ? gameData.winners : [];
-    const ended = Number(gameData.endTime || 0) > 0 && Number(gameData.endTime || 0) <= now;
-    const completed = String(gameData.status || "") === "completed";
-    if (winners.length < 2 || (!ended && !completed)) continue;
+    if (winners.length < 2) continue;
 
     pendingEligible += 1;
 
     try {
-      const outcome = await settleBetDoc({
+      const result = await settlePendingForGame({
         adminDb,
-        betDoc,
+        gameId: gameDoc.id,
         winningNums: winners,
         now,
         WIN_MULTIPLIER,
         REFUND_PERCENTAGE,
         REFERRAL_COMMISSION_RATE,
       });
-      if (outcome?.settled) pendingSettled += 1;
+      pendingScanned += result.scanned;
+      pendingSettled += result.settledCount;
     } catch (error) {
-      console.error("Failed to settle pending stake in sweep", { gameId, betId: betDoc.id, error: error?.message || error });
+      console.error("Failed pending sweep on completed game", {
+        gameId: gameDoc.id,
+        error: error?.message || error,
+      });
     }
   }
 
