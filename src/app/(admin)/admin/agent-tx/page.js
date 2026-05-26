@@ -137,8 +137,9 @@ export default function AgentTransactions() {
       const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       const agentIds = docs.map(t => t.agentId);
       const senderIds = docs.map(t => t.senderId);
+      const profileIds = [...senderIds, ...agentIds];
       await fetchAgentNames(agentIds);
-      await fetchUserProfiles(senderIds);
+      await fetchUserProfiles(profileIds);
       setTrades(docs);
       setLastDoc(snap.docs[snap.docs.length - 1]);
       setHasMore(snap.docs.length === PAGE_SIZE);
@@ -184,8 +185,9 @@ export default function AgentTransactions() {
         const newDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         const agentIds = newDocs.map(t => t.agentId);
         const senderIds = newDocs.map(t => t.senderId);
+        const profileIds = [...senderIds, ...agentIds];
         await fetchAgentNames(agentIds);
-        await fetchUserProfiles(senderIds);
+        await fetchUserProfiles(profileIds);
         setTrades(prev => [...prev, ...newDocs]);
         setLastDoc(snap.docs[snap.docs.length - 1]);
         setHasMore(snap.docs.length === PAGE_SIZE);
@@ -288,11 +290,16 @@ export default function AgentTransactions() {
     const senderName = t.senderName || profile.name || "";
     const senderPin = profile.pin || "";
     const senderEmail = profile.email || "";
+    const agentProfile = userProfiles[t.agentId] || {};
+    const agentPin = agentProfile.pin || "";
+    const agentEmail = agentProfile.email || "";
     return (
       t.id?.toLowerCase?.().includes(term) || // Transaction ID / Trade ID
       t.senderId?.toLowerCase?.().includes(term) ||
       senderPin.toLowerCase().includes(term) || // Account PIN
       senderEmail.toLowerCase().includes(term) ||
+      agentPin.toLowerCase().includes(term) ||
+      agentEmail.toLowerCase().includes(term) ||
       name.toLowerCase().includes(term) ||
       senderName.toLowerCase().includes(term) ||
       t.type?.toLowerCase().includes(term)
@@ -393,9 +400,17 @@ export default function AgentTransactions() {
                     <td className="p-6">
                       <div className="flex items-center gap-2">
                         <ShieldCheck size={14} className="text-indigo-600" />
-                        <p className="text-sm font-black text-slate-800 italic">
-                          {agentNames[trade.agentId] || trade.agentName || "Unknown Agent"}
-                        </p>
+                        <div>
+                          <p className="text-sm font-black text-slate-800 italic">
+                            {agentNames[trade.agentId] || trade.agentName || "Unknown Agent"}
+                          </p>
+                          <p className="text-[9px] font-mono text-slate-400">
+                            PIN: {userProfiles[trade.agentId]?.pin || "--------"}
+                          </p>
+                          <p className="text-[9px] text-slate-400">
+                            {userProfiles[trade.agentId]?.email || "-"}
+                          </p>
+                        </div>
                       </div>
                     </td>
                     <td className="p-6">
