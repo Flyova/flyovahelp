@@ -39,6 +39,7 @@ export default function FlyovaToDollars() {
   const [placingBet, setPlacingBet] = useState(false);
   const [lastGameNumbers, setLastGameNumbers] = useState([]);
   const [breakEndsAt, setBreakEndsAt] = useState(null);
+  const [engineIssue, setEngineIssue] = useState(null);
 
   // Alert States
   const [showResultAlert, setShowResultAlert] = useState(false);
@@ -51,6 +52,8 @@ export default function FlyovaToDollars() {
   const PARTIAL_REFUND = 0.8;
   const ROUND_DURATION = 120000;
   const BREAK_DURATION = 120000;
+  const CLIENT_ENGINE_KICK_ENABLED = process.env.NEXT_PUBLIC_FLYOVA_CLIENT_ENGINE_KICK === "1";
+  const ENGINE_KICK_COOLDOWN_MS = 60000;
 
   const revealedGameRef = useRef(null);
   const resultTimeoutRef = useRef(null);
@@ -67,21 +70,35 @@ export default function FlyovaToDollars() {
   const serverNow = () => Date.now() + serverTimeOffsetRef.current;
 
   async function maybeKickGameEngine(reason = "heartbeat") {
+    if (!CLIENT_ENGINE_KICK_ENABLED) return;
+
     const now = Date.now();
     if (engineKickRef.current.inFlight) return;
-    if (now - engineKickRef.current.lastRunAt < 12000) return;
+    if (now - engineKickRef.current.lastRunAt < ENGINE_KICK_COOLDOWN_MS) return;
 
     engineKickRef.current.inFlight = true;
     engineKickRef.current.lastRunAt = now;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     try {
-      await fetch(`/api/cron/game-engine?r=${encodeURIComponent(reason)}&t=${now}`, {
+      const response = await fetch(`/api/cron/game-engine?r=${encodeURIComponent(reason)}&t=${now}`, {
         method: "GET",
         cache: "no-store",
-        keepalive: true
+        signal: controller.signal
       });
-    } catch {
-      // Ignore transient network errors; next heartbeat retries.
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || `Game engine failed with HTTP ${response.status}`);
+      }
+      setEngineIssue(null);
+    } catch (error) {
+      const message = error?.name === "AbortError"
+        ? "Game engine request timed out."
+        : error?.message || "Game engine is unavailable.";
+      console.warn("Flyova game engine heartbeat failed:", message);
+      setEngineIssue(message);
     } finally {
+      clearTimeout(timeoutId);
       engineKickRef.current.inFlight = false;
     }
   }
@@ -303,6 +320,7 @@ export default function FlyovaToDollars() {
         }
 
         setCurrentGame(gameData);
+        setEngineIssue(null);
         setBreakEndsAt(null);
         checkIfUserBet(gameData.id);
 
@@ -659,8 +677,12 @@ export default function FlyovaToDollars() {
             </div>
           ) : gameStatus === "results" || !currentGame ? (
             <div className="text-center py-2">
-              <p className="font-black italic uppercase text-sm">{!currentGame ? 'Waiting for Round...' : 'Round Ended'}</p>
-              <p className="text-[10px] font-bold opacity-30 mt-1">NEXT ROUND STARTING SOON...</p>
+              <p className="font-black italic uppercase text-sm">
+                {!currentGame && engineIssue ? 'Round Engine Unavailable' : !currentGame ? 'Waiting for Round...' : 'Round Ended'}
+              </p>
+              <p className="text-[10px] font-bold opacity-30 mt-1">
+                {!currentGame && engineIssue ? 'RETRYING SHORTLY...' : 'NEXT ROUND STARTING SOON...'}
+              </p>
             </div>
           ) : (
             <>

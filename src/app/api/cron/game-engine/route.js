@@ -17,6 +17,29 @@ const ENGINE_LOCK_DOC_ID = "flyova_game_engine_lock";
 const ROUND_GUARD_COLLECTION = "system_state";
 const ROUND_GUARD_DOC_ID = "flyova_round_guard";
 const MAX_SWEEP_COMPLETED_GAMES = 120;
+const ENGINE_STEP_TIMEOUT_MS = 8000;
+const emptyPendingSweep = (skipped = false) => ({
+  pendingScanned: 0,
+  pendingSettled: 0,
+  pendingEligible: 0,
+  skipped,
+});
+
+const withEngineTimeout = (label, operation, timeoutMs = ENGINE_STEP_TIMEOUT_MS) => {
+  let timer;
+  const task = Promise.resolve().then(operation);
+  task.catch(() => {});
+
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error(`${label} timed out`);
+      error.code = "ENGINE_TIMEOUT";
+      reject(error);
+    }, timeoutMs);
+  });
+
+  return Promise.race([task, timeout]).finally(() => clearTimeout(timer));
+};
 
 const acquireEngineLock = async (adminDb, ownerId) => {
   const lockRef = adminDb.collection(ENGINE_LOCK_COLLECTION).doc(ENGINE_LOCK_DOC_ID);
@@ -216,9 +239,11 @@ const sweepPendingStakeSettlements = async ({
   return { pendingScanned, pendingSettled, pendingEligible };
 };
 
-export async function runGameEngine() {
+export async function runGameEngine({ includePendingSweep = false } = {}) {
   let adminDb;
   let lockOwnerId = "";
+  let lockAcquired = false;
+  let engineFailed = false;
 
   try {
     adminDb = getAdminDb();
@@ -233,7 +258,10 @@ export async function runGameEngine() {
     const roundGuardRef = adminDb.collection(ROUND_GUARD_COLLECTION).doc(ROUND_GUARD_DOC_ID);
     lockOwnerId = `engine_${now}_${Math.random().toString(36).slice(2, 10)}`;
 
-    const lockState = await acquireEngineLock(adminDb, lockOwnerId);
+    const lockState = await withEngineTimeout(
+      "Flyova game engine lock",
+      () => acquireEngineLock(adminDb, lockOwnerId)
+    );
     if (!lockState.acquired) {
       return NextResponse.json({
         message: "Skipped: game engine already running",
@@ -241,15 +269,19 @@ export async function runGameEngine() {
         lockExpiresAt: lockState.expiresAt || null,
       });
     }
+    lockAcquired = true;
 
     let settledNowCount = 0;
 
     // 1. SETTLE EXPIRED GAMES
-    const activeSnap = await adminDb.collection("timed_games")
-      .where("status", "==", "active")
-      .where("endTime", "<=", now)
-      .limit(1)
-      .get();
+    const activeSnap = await withEngineTimeout(
+      "Expired Flyova round lookup",
+      () => adminDb.collection("timed_games")
+        .where("status", "==", "active")
+        .where("endTime", "<=", now)
+        .limit(1)
+        .get()
+    );
 
     if (!activeSnap.empty) {
       const gameDoc = activeSnap.docs[0];
@@ -277,21 +309,26 @@ export async function runGameEngine() {
       }, { merge: true });
     }
 
-    // 1b. Sweep remaining pending stake records. This covers offline users whose
-    // stake rows were missed by previous engine runs and unlocks referral loss credit.
-    const pendingSweep = await sweepPendingStakeSettlements({
-      adminDb,
-      now,
-      WIN_MULTIPLIER,
-      REFUND_PERCENTAGE,
-      REFERRAL_COMMISSION_RATE,
-    });
+    // Historical sweep is intentionally opt-in. Running it on every player heartbeat
+    // can fan out into hundreds of reads before a new round is even created.
+    const pendingSweep = includePendingSweep
+      ? await sweepPendingStakeSettlements({
+          adminDb,
+          now,
+          WIN_MULTIPLIER,
+          REFUND_PERCENTAGE,
+          REFERRAL_COMMISSION_RATE,
+        })
+      : emptyPendingSweep(true);
 
     // 2. START NEW GAME
-    const runningSnap = await adminDb.collection("timed_games")
-      .where("status", "==", "active")
-      .limit(1)
-      .get();
+    const runningSnap = await withEngineTimeout(
+      "Active Flyova round lookup",
+      () => adminDb.collection("timed_games")
+        .where("status", "==", "active")
+        .limit(1)
+        .get()
+    );
 
     if (runningSnap.empty) {
       const lastEndTime = activeSnap.empty ? null : activeSnap.docs[0]?.data()?.endTime;
@@ -399,6 +436,7 @@ export async function runGameEngine() {
         stalePendingScanned: pendingSweep.pendingScanned,
         stalePendingSettled: pendingSweep.pendingSettled,
         pendingStakeEligible: pendingSweep.pendingEligible,
+        pendingSweepSkipped: pendingSweep.skipped,
       });
     }
 
@@ -408,16 +446,23 @@ export async function runGameEngine() {
       stalePendingScanned: pendingSweep.pendingScanned,
       stalePendingSettled: pendingSweep.pendingSettled,
       pendingStakeEligible: pendingSweep.pendingEligible,
+      pendingSweepSkipped: pendingSweep.skipped,
     });
   } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    engineFailed = true;
+    console.error("Flyova game engine failed:", err);
+    return NextResponse.json({
+      error: err.message,
+      code: err.code || null,
+    }, { status: 500 });
   } finally {
-    if (adminDb && lockOwnerId) {
+    if (adminDb && lockOwnerId && lockAcquired && !engineFailed) {
       await releaseEngineLock(adminDb, lockOwnerId).catch(() => {});
     }
   }
 }
 
-export async function GET() {
-  return runGameEngine();
+export async function GET(request) {
+  const includePendingSweep = request?.nextUrl?.searchParams?.get("sweep") === "1";
+  return runGameEngine({ includePendingSweep });
 }

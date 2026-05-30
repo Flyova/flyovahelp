@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/game-engine",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/cron/cleanup-chats",
       "schedule": "0 3 * * *"
     }
