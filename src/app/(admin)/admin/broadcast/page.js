@@ -1,41 +1,80 @@
 "use client";
-import { useState, useEffect } from "react";
-import { db } from "@/lib/firebase";
+import { useCallback, useState, useEffect } from "react";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import { 
-  collection, 
-  addDoc, 
-  serverTimestamp, 
-  query, 
-  orderBy, 
-  onSnapshot, 
-  deleteDoc, 
-  doc,
-  setDoc
-} from "firebase/firestore";
-import { 
-  Send, 
   Megaphone, 
   Trash2, 
   Clock, 
   AlertTriangle,
   Info,
-  CheckCircle2
+  CheckCircle2,
+  Loader2
 } from "lucide-react";
+
+const formatTimestamp = (value) => {
+  if (!value) return "Just now";
+  if (typeof value?.toDate === "function") return value.toDate().toLocaleString();
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Just now" : date.toLocaleString();
+};
+
+const getAdminToken = async () => {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error("You are logged out. Please sign in again.");
+  return currentUser.getIdToken();
+};
 
 export default function AdminBroadcast() {
   const [message, setMessage] = useState("");
   const [type, setType] = useState("info"); // info, warning, success
   const [sending, setSending] = useState(false);
   const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  const loadAnnouncements = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLoading(true);
+      setLoadError("");
+    }
+
+    try {
+      const token = await getAdminToken();
+      const response = await fetch("/api/admin/announcements", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Could not load announcements.");
+      }
+
+      setHistory(Array.isArray(payload.announcements) ? payload.announcements : []);
+      setLoadError("");
+    } catch (error) {
+      console.error("Announcements fetch error:", error);
+      if (!silent) setLoadError(error?.message || "Could not load announcements.");
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    // Listen for broadcasts - limited to last 10 for performance
-    const q = query(collection(db, "broadcasts"), orderBy("timestamp", "desc"));
-    const unsub = onSnapshot(q, (snap) => {
-      setHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (!currentUser) {
+        setLoading(false);
+        setLoadError("You are logged out. Please sign in again.");
+        setHistory([]);
+        return;
+      }
+
+      loadAnnouncements();
     });
-    return () => unsub();
-  }, []);
+
+    return () => unsubscribe();
+  }, [loadAnnouncements]);
 
   const sendBroadcast = async (e) => {
     e.preventDefault();
@@ -43,21 +82,35 @@ export default function AdminBroadcast() {
     
     setSending(true);
     try {
-      // Using setDoc with a manual ID creation so the ID is stored INSIDE the document
-      const newBroadcastRef = doc(collection(db, "broadcasts"));
-      await setDoc(newBroadcastRef, {
-        id: newBroadcastRef.id,
-        message: message,
-        type: type,
-        timestamp: serverTimestamp(),
-        active: true
+      const token = await getAdminToken();
+      const response = await fetch("/api/admin/announcements", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ message, type }),
       });
-      
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to send announcement.");
+      }
+
+      if (payload.announcement) {
+        setHistory((current) => [
+          payload.announcement,
+          ...current.filter((post) => post.id !== payload.announcement.id),
+        ]);
+      } else {
+        await loadAnnouncements({ silent: true });
+      }
+
       setMessage("");
       alert("Announcement sent to all users!");
     } catch (error) {
-      console.error(error);
-      alert("Failed to send broadcast.");
+      console.error("Announcement send error:", error);
+      alert(error?.message || "Failed to send announcement.");
     } finally {
       setSending(false);
     }
@@ -66,9 +119,21 @@ export default function AdminBroadcast() {
   const deleteBroadcast = async (id) => {
     if (confirm("Remove this announcement? It will disappear for all users.")) {
       try {
-        await deleteDoc(doc(db, "broadcasts", id));
+        const token = await getAdminToken();
+        const response = await fetch(`/api/admin/announcements?id=${encodeURIComponent(id)}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(payload?.error || "Failed to delete announcement.");
+        }
+
+        setHistory((current) => current.filter((post) => post.id !== id));
       } catch (err) {
-        alert("Failed to delete.");
+        console.error("Announcement delete error:", err);
+        alert(err?.message || "Failed to delete announcement.");
       }
     }
   };
@@ -135,12 +200,23 @@ export default function AdminBroadcast() {
       <div className="space-y-4">
         <h3 className="text-[10px] font-black uppercase text-slate-300 ml-4 tracking-[0.2em]">Recent Broadcasts</h3>
         <div className="space-y-3">
-          {history.length === 0 && (
+          {loading && (
+            <div className="text-center py-10 bg-[#0f172a] rounded-[2rem] border border-dashed border-white/10">
+              <Loader2 className="mx-auto mb-3 animate-spin text-[#613de6]" size={24} />
+              <p className="text-[10px] font-black uppercase text-slate-400">Loading announcements</p>
+            </div>
+          )}
+          {!loading && loadError && (
+            <div className="text-center py-10 bg-rose-500/10 rounded-[2rem] border border-rose-500/20">
+              <p className="text-[10px] font-black uppercase text-rose-200">{loadError}</p>
+            </div>
+          )}
+          {!loading && !loadError && history.length === 0 && (
             <div className="text-center py-10 bg-[#0f172a] rounded-[2rem] border border-dashed border-white/10">
                <p className="text-[10px] font-black uppercase text-slate-400">No active broadcasts</p>
             </div>
           )}
-          {history.map((post) => (
+          {!loading && !loadError && history.map((post) => (
             <div key={post.id} className="bg-[#0f172a] p-6 rounded-[2rem] border border-white/10 flex items-start justify-between gap-4 group hover:border-white/20 transition-all">
               <div className="flex items-start gap-4">
                 <div className={`p-3 rounded-xl shrink-0 mt-1 ${
@@ -154,7 +230,7 @@ export default function AdminBroadcast() {
                   <div className="flex items-center gap-3 text-[9px] font-black uppercase text-slate-300">
                     <span className="flex items-center gap-1">
                       <Clock size={12}/> 
-                      {post.timestamp ? post.timestamp.toDate().toLocaleString() : 'Just now'}
+                      {formatTimestamp(post.timestamp)}
                     </span>
                     <span className={`px-2 py-0.5 rounded-md font-bold ${
                       post.type === 'warning' ? 'bg-amber-50 text-amber-500' : 
