@@ -13,7 +13,7 @@ import {
   getDocs,
   documentId
 } from "firebase/firestore";
-import { Send, Search, ArrowRight, User, Hash, Loader2, ChevronDown } from "lucide-react";
+import { Send, Search, User, Hash, Loader2, ChevronDown } from "lucide-react";
 
 export default function AdminTransfers() {
   const [transfers, setTransfers] = useState([]);
@@ -147,7 +147,7 @@ export default function AdminTransfers() {
             <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
                 <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-tighter">Sender</th>
-                <th className="p-6 text-center text-[10px] font-black uppercase text-slate-400">Flow</th>
+                <th className="p-6 text-center text-[10px] font-black uppercase text-slate-400">TXID</th>
                 <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-tighter">Receiver</th>
                 <th className="p-6 text-[10px] font-black uppercase text-slate-400">Amount & Fee</th>
                 <th className="p-6 text-right text-[10px] font-black uppercase text-slate-400">Status</th>
@@ -183,8 +183,14 @@ export default function AdminTransfers() {
                     </td>
 
                     <td className="p-6 text-center">
-                      <div className="inline-flex p-2 bg-emerald-50 text-emerald-600 rounded-full">
-                        <ArrowRight size={14} />
+                      <div className="inline-flex max-w-[220px] flex-col items-center gap-1 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700">
+                        <div className="flex items-center gap-1 text-[9px] font-black uppercase text-slate-400">
+                          <Hash size={11} />
+                          Transaction ID
+                        </div>
+                        <span className="max-w-full break-all font-mono text-[10px] font-black leading-tight text-slate-900" title={tx.txId || tx.id || ""}>
+                          {tx.txId || tx.id || "---"}
+                        </span>
                       </div>
                     </td>
 

@@ -494,32 +494,32 @@ export default function AgentTransactions() {
       {chatTrade && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 md:p-8">
           <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => setChatTrade(null)} />
-          <div className="relative z-10 w-full max-w-4xl bg-white rounded-[2rem] border border-slate-200 shadow-2xl overflow-hidden">
-            <div className="p-5 md:p-6 border-b border-slate-100 flex items-center justify-between">
+          <div className="relative z-10 w-full max-w-4xl bg-[#0f172a] rounded-[2rem] border border-white/10 shadow-2xl overflow-hidden text-white">
+            <div className="p-5 md:p-6 border-b border-white/10 flex items-center justify-between bg-[#111827]">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Trade Chat Monitor</p>
-                <h3 className="text-lg font-black italic uppercase tracking-tight text-slate-800">
+                <h3 className="text-lg font-black italic uppercase tracking-tight text-white">
                   Trade ID: {chatTrade.id}
                 </h3>
-                <p className="text-[11px] font-bold text-slate-500 mt-1">
+                <p className="text-[11px] font-bold text-slate-300 mt-1">
                   Agent: {agentNames[chatTrade.agentId] || chatTrade.agentName || "Agent"} · Client: {chatTrade.senderName || userProfiles[chatTrade.senderId]?.name || "Client"}
                 </p>
               </div>
               <button
                 onClick={() => setChatTrade(null)}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="max-h-[70vh] overflow-y-auto p-5 md:p-6 bg-slate-50/70 space-y-3">
+            <div className="max-h-[70vh] overflow-y-auto p-5 md:p-6 bg-[#020617] space-y-3">
               {chatLoading ? (
                 <div className="h-40 flex items-center justify-center">
                   <Loader2 size={28} className="animate-spin text-indigo-600" />
                 </div>
               ) : tradeMessages.length === 0 ? (
-                <div className="h-40 flex items-center justify-center text-[11px] font-black uppercase tracking-widest text-slate-400">
+                <div className="h-40 flex items-center justify-center text-[11px] font-black uppercase tracking-widest text-slate-300">
                   No chat messages for this trade yet.
                 </div>
               ) : (
@@ -532,19 +532,19 @@ export default function AgentTransactions() {
                     <div
                       key={msg.id}
                       className={`rounded-2xl p-4 border ${
-                        sender.isAgent ? "bg-indigo-50 border-indigo-100" : "bg-white border-slate-200"
+                        sender.isAgent ? "bg-[#111827] border-indigo-500/30" : "bg-[#1e293b] border-white/10"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2">
                           <span
                             className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
-                              sender.isAgent ? "bg-indigo-600 text-white" : "bg-slate-200 text-slate-700"
+                              sender.isAgent ? "bg-indigo-600 text-white" : "bg-slate-700 text-white"
                             }`}
                           >
                             {sender.role}
                           </span>
-                          <span className="text-[11px] font-black text-slate-700">{sender.name}</span>
+                          <span className="text-[11px] font-black text-slate-100">{sender.name}</span>
                         </div>
                         <span className="text-[10px] font-bold text-slate-400">{msgTime}</span>
                       </div>
@@ -561,7 +561,7 @@ export default function AgentTransactions() {
                           />
                         </a>
                       ) : (
-                        <p className="text-sm font-bold text-slate-700 leading-relaxed whitespace-pre-wrap">
+                        <p className="text-sm font-bold text-slate-100 leading-relaxed whitespace-pre-wrap">
                           {msg.text || "—"}
                         </p>
                       )}

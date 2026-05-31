@@ -256,7 +256,7 @@ export default function AdminSupport() {
           </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input placeholder="Search users..." className="w-full bg-gray-100 border-none rounded-xl py-2.5 pl-10 pr-4 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+            <input placeholder="Search users..." className="w-full bg-white border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-sm font-semibold text-slate-900 placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500 outline-none" />
           </div>
         </div>
 
@@ -343,7 +343,7 @@ export default function AdminSupport() {
                       : 'bg-white text-slate-700 border border-gray-100 rounded-bl-none'
                     }`}>
                       <p className="font-medium leading-relaxed">{msg.text}</p>
-                      <p className={`text-[9px] mt-2 font-bold uppercase tracking-widest ${isAdmin ? 'text-blue-100' : 'text-gray-300'}`}>
+                      <p className={`text-[9px] mt-2 font-bold uppercase tracking-widest ${isAdmin ? 'text-blue-100' : 'text-slate-500'}`}>
                         {isAdmin ? 'Admin • 10:25 AM' : 'User • 10:24 AM'}
                       </p>
                     </div>
@@ -355,12 +355,12 @@ export default function AdminSupport() {
             {/* INPUT AREA */}
             <div className="p-6 bg-white border-t border-gray-100">
               <form onSubmit={handleSendReply} className="flex items-center gap-4 max-w-5xl mx-auto">
-                <div className="flex-1 bg-gray-100 rounded-2xl px-4 py-3 flex items-center border border-transparent focus-within:border-blue-500 transition-all">
+                <div className="flex-1 bg-white rounded-2xl px-4 py-3 flex items-center border border-slate-300 focus-within:border-blue-500 transition-all">
                   <input 
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
                     placeholder="Write your response..."
-                    className="flex-1 bg-transparent outline-none text-sm font-medium text-slate-700 placeholder:text-gray-400"
+                    className="flex-1 bg-transparent outline-none text-sm font-semibold text-slate-950 placeholder:text-slate-500"
                   />
                 </div>
                 <button 

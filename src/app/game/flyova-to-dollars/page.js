@@ -736,7 +736,6 @@ export default function FlyovaToDollars() {
               <div className="flex space-x-2">
                 {pg.winners?.map(w => <span key={w} className="text-[#fc7952] font-black italic">{w}</span>)}
               </div>
-              <p className="text-[8px] font-bold opacity-20 uppercase mt-1">Round #{pg.id.slice(-4)}</p>
             </div>
           ))}
         </div>

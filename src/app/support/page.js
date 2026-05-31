@@ -240,7 +240,7 @@ export default function SupportChat() {
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               placeholder="Type a message..."
-              className="w-full bg-black/40 border border-white/5 rounded-2xl py-4 px-6 text-sm font-bold text-white outline-none focus:border-[#613de6] transition-all"
+              className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 px-6 text-sm font-bold text-white placeholder:text-slate-500 outline-none focus:border-[#613de6] transition-all"
             />
           </div>
           <button 

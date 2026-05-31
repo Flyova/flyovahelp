@@ -74,22 +74,22 @@ export default function AdminBroadcast() {
   };
 
   return (
-    <div className="max-w-4xl space-y-8 p-4">
+    <div className="max-w-4xl space-y-8 p-4 text-white">
       <div>
-        <h1 className="text-2xl font-black italic uppercase text-slate-800">Global Broadcast</h1>
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Send real-time alerts to every user dashboard</p>
+        <h1 className="text-2xl font-black italic uppercase text-white">Global Broadcast</h1>
+        <p className="text-xs font-bold text-slate-300 uppercase tracking-widest">Send real-time alerts to every user dashboard</p>
       </div>
 
       {/* Composer */}
-      <div className="bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-sm">
+      <div className="bg-[#0f172a] rounded-[2.5rem] border border-white/10 p-8 shadow-sm">
         <form onSubmit={sendBroadcast} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Message Content</label>
+            <label className="text-[10px] font-black uppercase text-slate-300 ml-2 tracking-widest">Message Content</label>
             <textarea 
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Enter your announcement here..."
-              className="w-full bg-slate-50 border text-stone-900 border-slate-100 rounded-[2rem] p-6 text-sm font-bold outline-none focus:border-[#613de6] transition-all min-h-[120px] resize-none"
+              className="w-full bg-[#020617] border text-white placeholder:text-slate-500 border-white/10 rounded-[2rem] p-6 text-sm font-bold outline-none focus:border-[#613de6] transition-all min-h-[120px] resize-none"
               required
             />
           </div>
@@ -98,21 +98,21 @@ export default function AdminBroadcast() {
             <button 
               type="button"
               onClick={() => setType("info")}
-              className={`flex items-center justify-center gap-2 p-4 rounded-2xl border font-black uppercase text-[10px] transition-all ${type === 'info' ? 'bg-blue-50 border-blue-400 text-blue-600' : 'bg-white border-slate-100 text-slate-400 opacity-60'}`}
+              className={`flex items-center justify-center gap-2 p-4 rounded-2xl border font-black uppercase text-[10px] transition-all ${type === 'info' ? 'bg-blue-500/20 border-blue-400 text-blue-200' : 'bg-[#020617] border-white/10 text-slate-300'}`}
             >
               <Info size={16} /> Info
             </button>
             <button 
               type="button"
               onClick={() => setType("warning")}
-              className={`flex items-center justify-center gap-2 p-4 rounded-2xl border font-black uppercase text-[10px] transition-all ${type === 'warning' ? 'bg-amber-50 border-amber-400 text-amber-600' : 'bg-white border-slate-100 text-slate-400 opacity-60'}`}
+              className={`flex items-center justify-center gap-2 p-4 rounded-2xl border font-black uppercase text-[10px] transition-all ${type === 'warning' ? 'bg-amber-500/20 border-amber-400 text-amber-200' : 'bg-[#020617] border-white/10 text-slate-300'}`}
             >
               <AlertTriangle size={16} /> Warning
             </button>
             <button 
               type="button"
               onClick={() => setType("success")}
-              className={`flex items-center justify-center gap-2 p-4 rounded-2xl border font-black uppercase text-[10px] transition-all ${type === 'success' ? 'bg-emerald-50 border-emerald-400 text-emerald-600' : 'bg-white border-slate-100 text-slate-400 opacity-60'}`}
+              className={`flex items-center justify-center gap-2 p-4 rounded-2xl border font-black uppercase text-[10px] transition-all ${type === 'success' ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200' : 'bg-[#020617] border-white/10 text-slate-300'}`}
             >
               <CheckCircle2 size={16} /> Success
             </button>
@@ -133,15 +133,15 @@ export default function AdminBroadcast() {
 
       {/* History */}
       <div className="space-y-4">
-        <h3 className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-[0.2em]">Recent Broadcasts</h3>
+        <h3 className="text-[10px] font-black uppercase text-slate-300 ml-4 tracking-[0.2em]">Recent Broadcasts</h3>
         <div className="space-y-3">
           {history.length === 0 && (
-            <div className="text-center py-10 bg-slate-50 rounded-[2rem] border border-dashed border-slate-200">
-               <p className="text-[10px] font-black uppercase text-slate-300">No active broadcasts</p>
+            <div className="text-center py-10 bg-[#0f172a] rounded-[2rem] border border-dashed border-white/10">
+               <p className="text-[10px] font-black uppercase text-slate-400">No active broadcasts</p>
             </div>
           )}
           {history.map((post) => (
-            <div key={post.id} className="bg-white p-6 rounded-[2rem] border border-slate-200 flex items-start justify-between gap-4 group hover:shadow-md transition-all">
+            <div key={post.id} className="bg-[#0f172a] p-6 rounded-[2rem] border border-white/10 flex items-start justify-between gap-4 group hover:border-white/20 transition-all">
               <div className="flex items-start gap-4">
                 <div className={`p-3 rounded-xl shrink-0 mt-1 ${
                   post.type === 'warning' ? 'bg-amber-100 text-amber-600' : 
@@ -150,8 +150,8 @@ export default function AdminBroadcast() {
                   <Megaphone size={18} />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-slate-700 leading-relaxed mb-2">{post.message}</p>
-                  <div className="flex items-center gap-3 text-[9px] font-black uppercase text-slate-400">
+                  <p className="text-sm font-bold text-slate-100 leading-relaxed mb-2">{post.message}</p>
+                  <div className="flex items-center gap-3 text-[9px] font-black uppercase text-slate-300">
                     <span className="flex items-center gap-1">
                       <Clock size={12}/> 
                       {post.timestamp ? post.timestamp.toDate().toLocaleString() : 'Just now'}
@@ -167,7 +167,7 @@ export default function AdminBroadcast() {
               {/* DELETE BUTTON */}
             <button 
                 onClick={() => deleteBroadcast(post.id)}
-                className="flex items-center gap-2 px-4 py-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all border border-transparent hover:border-rose-100"
+                className="flex items-center gap-2 px-4 py-2 text-rose-300 hover:bg-rose-500/10 rounded-xl transition-all border border-transparent hover:border-rose-500/20"
                 title="Delete Broadcast"
               >
                 <Trash2 size={16} />

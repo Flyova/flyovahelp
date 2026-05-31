@@ -614,7 +614,7 @@ export default function TradeRoom() {
                 <button onClick={() => fileInputRef.current.click()} disabled={uploading} className="bg-[#1e293b] p-4 rounded-2xl text-[#613de6] shadow-inner">
                   {uploading ? <Loader2 className="animate-spin" size={20} /> : <ImageIcon size={20} />}
                 </button>
-                <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} placeholder="Type a message..." className="flex-1 bg-[#1e293b] border border-white/5 p-4 rounded-2xl outline-none focus:border-[#613de6] text-sm font-bold shadow-inner" />
+                <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} placeholder="Type a message..." className="flex-1 bg-[#1e293b] border border-white/10 p-4 rounded-2xl outline-none focus:border-[#613de6] text-sm font-bold text-white placeholder:text-slate-500 shadow-inner" />
                 <button onClick={() => sendMessage()} className="bg-[#613de6] p-4 rounded-2xl shadow-lg active:scale-95 transition-all"><Send size={20} /></button>
              </div>
         )}
@@ -642,7 +642,7 @@ function StatusBadge({ status }) {
 function MessageBubble({ msg, isMe }) {
     return (
         <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}>
-            <div className={`max-w-[80%] p-4 rounded-2xl text-[13px] font-bold ${isMe ? 'bg-[#613de6] text-white rounded-tr-none shadow-lg' : 'bg-[#1e293b] text-gray-300 rounded-tl-none border border-white/5 shadow-inner'}`}>
+            <div className={`max-w-[80%] p-4 rounded-2xl text-[13px] font-bold ${isMe ? 'bg-[#613de6] text-white rounded-tr-none shadow-lg' : 'bg-[#1e293b] text-slate-100 rounded-tl-none border border-white/10 shadow-inner'}`}>
                 {msg.image ? (
                   <div className="space-y-2">
                     <img src={msg.image} alt="Proof" className="max-w-full rounded-lg cursor-pointer" onClick={() => window.open(msg.image, '_blank')} />
