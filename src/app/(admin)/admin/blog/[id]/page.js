@@ -2,8 +2,7 @@
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { auth } from "@/lib/firebase";
 import {
   Save, Globe, EyeOff, ArrowLeft, Upload, X, Loader2, Image as ImageIcon, CheckCircle2, Hash, Search, Keyboard
 } from "lucide-react";
@@ -22,6 +21,23 @@ function calcReadTime(html) {
   const text = html.replace(/<[^>]*>/g, " ");
   const words = text.trim().split(/\s+/).filter(Boolean).length;
   return Math.max(1, Math.round(words / 200));
+}
+
+async function adminBlogRequest(path, options = {}) {
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) throw new Error("Admin session expired. Please sign in again.");
+
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(options.headers || {}),
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Blog request failed.");
+  return data;
 }
 
 function normalizeHashtag(value) {
@@ -63,32 +79,41 @@ function BlogEditorContent() {
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(!isNew);
   const [slugManual, setSlugManual] = useState(false);
+  const displaySlug = slugManual ? slug : slugify(title);
 
   // Load existing post
   useEffect(() => {
     if (isNew) return;
-    getDoc(doc(db, "blog_posts", params.id)).then((snap) => {
-      if (!snap.exists()) { router.push("/admin/blog"); return; }
-      const d = snap.data();
-      setTitle(d.title ?? "");
-      setSlug(d.slug ?? "");
-      setExcerpt(d.excerpt ?? "");
-      setContent(d.content ?? "");
-      setPublished(d.published ?? false);
-      setAuthor(d.author ?? "Flyovahelp Team");
-      setCoverImage(d.coverImage ?? "");
-      setCoverImagePath(d.coverImagePath ?? "");
-      setKeywords(normalizeHashtagList(d.keywords ?? []));
-      setMetaTitle(d.metaTitle ?? "");
-      setMetaDescription(d.metaDescription ?? "");
-      setLoading(false);
-    });
-  }, [isNew, params.id, router]);
+    let cancelled = false;
 
-  // Auto-slug from title
-  useEffect(() => {
-    if (!slugManual && title) setSlug(slugify(title));
-  }, [title, slugManual]);
+    const loadPost = async () => {
+      try {
+        const result = await adminBlogRequest(`/api/admin/blog-posts?id=${encodeURIComponent(params.id)}`);
+        if (cancelled) return;
+
+        const d = result.post || {};
+        setTitle(d.title ?? "");
+        setSlug(d.slug ?? "");
+        setSlugManual(Boolean(d.slug));
+        setExcerpt(d.excerpt ?? "");
+        setContent(d.content ?? "");
+        setPublished(d.published ?? false);
+        setAuthor(d.author ?? "Flyovahelp Team");
+        setCoverImage(d.coverImage ?? "");
+        setCoverImagePath(d.coverImagePath ?? "");
+        setKeywords(normalizeHashtagList(d.keywords ?? []));
+        setMetaTitle(d.metaTitle ?? "");
+        setMetaDescription(d.metaDescription ?? "");
+        setLoading(false);
+      } catch (error) {
+        console.error("Failed to load blog post:", error);
+        if (!cancelled) router.push("/admin/blog");
+      }
+    };
+
+    loadPost();
+    return () => { cancelled = true; };
+  }, [isNew, params.id, router]);
 
   const handleCoverUpload = useCallback(async (file) => {
     if (!file) return;
@@ -141,13 +166,13 @@ function BlogEditorContent() {
     setCoverImagePath("");
   };
 
-  const handleSave = async (publish) => {
+  const handleSave = useCallback(async (publish) => {
     if (!title.trim()) { alert("Post title is required."); return; }
     setSaving(true);
     const normalizedKeywords = normalizeHashtagList(keywords);
     const data = {
       title: title.trim(),
-      slug: slug || slugify(title),
+      slug: displaySlug || slugify(title),
       excerpt: excerpt.trim(),
       content,
       author: author.trim() || "Flyovahelp Team",
@@ -157,26 +182,46 @@ function BlogEditorContent() {
       metaTitle: metaTitle.trim(),
       metaDescription: metaDescription.trim(),
       published: publish ?? published,
-      updatedAt: serverTimestamp(),
       readTime: calcReadTime(content),
-      ...(publish != null && publish && !published ? { publishedAt: serverTimestamp() } : {}),
-      ...(!isNew ? {} : { createdAt: serverTimestamp() }),
     };
 
     try {
+      const result = await adminBlogRequest("/api/admin/blog-posts", {
+        method: "POST",
+        body: JSON.stringify({ id: params.id, data }),
+      });
+      const savedPost = result.post || {};
+
       if (isNew) {
-        await setDoc(doc(db, "blog_posts", params.id), data);
         router.replace(`/admin/blog/${params.id}`);
       } else {
-        await updateDoc(doc(db, "blog_posts", params.id), data);
-        if (publish != null) setPublished(publish);
+        setPublished(savedPost.published ?? data.published);
       }
+      if (publish != null) setPublished(savedPost.published ?? publish);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
+    } catch (error) {
+      console.error("Failed to save blog post:", error);
+      alert(error?.message || "Could not save blog post.");
     } finally {
       setSaving(false);
     }
-  };
+  }, [
+    author,
+    content,
+    coverImage,
+    coverImagePath,
+    displaySlug,
+    excerpt,
+    isNew,
+    keywords,
+    metaDescription,
+    metaTitle,
+    params.id,
+    published,
+    router,
+    title,
+  ]);
 
   // Global editor shortcuts:
   // - Cmd/Ctrl+S: save draft
@@ -275,7 +320,7 @@ function BlogEditorContent() {
             </span>
             <input
               type="text"
-              value={slug}
+              value={displaySlug}
               onChange={(e) => { setSlug(slugify(e.target.value)); setSlugManual(true); }}
               placeholder="post-url-slug"
               className="flex-1 bg-transparent text-sm font-bold text-slate-200 placeholder:text-slate-500 outline-none"

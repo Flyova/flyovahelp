@@ -1,16 +1,28 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { db, storage } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 import {
-  collection, query, orderBy, onSnapshot,
-  deleteDoc, doc, updateDoc, serverTimestamp
-} from "firebase/firestore";
-import { ref, deleteObject } from "firebase/storage";
-import {
-  Plus, Edit2, Trash2, Eye, EyeOff, Loader2,
+  Plus, Edit2, Trash2, EyeOff, Loader2,
   FileText, Globe, Clock, Calendar
 } from "lucide-react";
+
+async function adminBlogRequest(path, options = {}) {
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) throw new Error("Admin session expired. Please sign in again.");
+
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(options.headers || {}),
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Blog request failed.");
+  return data;
+}
 
 export default function AdminBlogList() {
   const router = useRouter();
@@ -18,14 +30,28 @@ export default function AdminBlogList() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(null);
   const [toggling, setToggling] = useState(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const q = query(collection(db, "blog_posts"), orderBy("createdAt", "desc"));
-    const unsub = onSnapshot(q, (snap) => {
-      setPosts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      setLoading(false);
-    });
-    return unsub;
+    let cancelled = false;
+
+    const loadPosts = async () => {
+      try {
+        const data = await adminBlogRequest("/api/admin/blog-posts");
+        if (cancelled) return;
+        setPosts(data.posts || []);
+      } catch (err) {
+        if (cancelled) return;
+        console.error("Failed to load blog posts:", err);
+        setError(err?.message || "Could not load blog posts.");
+        setPosts([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadPosts();
+    return () => { cancelled = true; };
   }, []);
 
   const handleDelete = async (post) => {
@@ -33,9 +59,18 @@ export default function AdminBlogList() {
     setDeleting(post.id);
     try {
       if (post.coverImagePath) {
-        await deleteObject(ref(storage, post.coverImagePath)).catch(() => {});
+        await fetch("/api/cloudinary", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ publicId: post.coverImagePath }),
+        }).catch(() => {});
       }
-      await deleteDoc(doc(db, "blog_posts", post.id));
+      await adminBlogRequest(`/api/admin/blog-posts?id=${encodeURIComponent(post.id)}`, {
+        method: "DELETE",
+      });
+      setPosts((current) => current.filter((item) => item.id !== post.id));
+    } catch (err) {
+      alert(err?.message || "Could not delete post.");
     } finally {
       setDeleting(null);
     }
@@ -43,17 +78,26 @@ export default function AdminBlogList() {
 
   const handleTogglePublish = async (post) => {
     setToggling(post.id);
-    await updateDoc(doc(db, "blog_posts", post.id), {
-      published: !post.published,
-      publishedAt: !post.published ? serverTimestamp() : null,
-      updatedAt: serverTimestamp(),
-    });
-    setToggling(null);
+    try {
+      const data = await adminBlogRequest("/api/admin/blog-posts", {
+        method: "PATCH",
+        body: JSON.stringify({ id: post.id, published: !post.published }),
+      });
+      setPosts((current) => current.map((item) => (
+        item.id === post.id ? data.post : item
+      )));
+    } catch (err) {
+      alert(err?.message || "Could not update post.");
+    } finally {
+      setToggling(null);
+    }
   };
 
   const formatDate = (ts) => {
     if (!ts) return "—";
-    return ts.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    const date = typeof ts?.toDate === "function" ? ts.toDate() : new Date(ts);
+    if (Number.isNaN(date.getTime())) return "—";
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   };
 
   return (
@@ -77,7 +121,11 @@ export default function AdminBlogList() {
       </div>
 
       {/* List */}
-      {loading ? (
+      {error ? (
+        <div className="bg-red-500/10 border border-red-500/20 text-red-300 rounded-2xl px-5 py-4 text-xs font-bold">
+          {error}
+        </div>
+      ) : loading ? (
         <div className="flex items-center justify-center h-60">
           <Loader2 size={28} className="animate-spin text-[#613de6]" />
         </div>
