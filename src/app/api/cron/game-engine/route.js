@@ -332,7 +332,10 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
 
     if (runningSnap.empty) {
       const lastEndTime = activeSnap.empty ? null : activeSnap.docs[0]?.data()?.endTime;
-      const endTime = lastEndTime ? lastEndTime + ROUND_DURATION : now + ROUND_DURATION;
+      const endTime = Math.max(
+        now + ROUND_DURATION,
+        lastEndTime ? Number(lastEndTime) + ROUND_DURATION : 0
+      );
 
       const pool = [];
       while (pool.length < 4) {
