@@ -355,12 +355,12 @@ export default function AdminSupport() {
             {/* INPUT AREA */}
             <div className="p-6 bg-white border-t border-gray-100">
               <form onSubmit={handleSendReply} className="flex items-center gap-4 max-w-5xl mx-auto">
-                <div className="flex-1 bg-white rounded-2xl px-4 py-3 flex items-center border border-slate-300 focus-within:border-blue-500 transition-all">
+                <div className="flex-1 bg-[#020617] rounded-2xl px-4 py-3 flex items-center border border-white/10 focus-within:border-blue-500 transition-all">
                   <input 
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
                     placeholder="Write your response..."
-                    className="flex-1 bg-transparent outline-none text-sm font-semibold text-slate-950 placeholder:text-slate-500"
+                    className="flex-1 bg-transparent outline-none text-sm font-semibold text-white placeholder:text-slate-400 caret-white"
                   />
                 </div>
                 <button 
