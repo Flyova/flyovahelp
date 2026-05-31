@@ -18,12 +18,21 @@ const ROUND_GUARD_COLLECTION = "system_state";
 const ROUND_GUARD_DOC_ID = "flyova_round_guard";
 const MAX_SWEEP_COMPLETED_GAMES = 120;
 const ENGINE_STEP_TIMEOUT_MS = 8000;
+const ROUND_DURATION_MS = 120000; // 2 min per round
 const emptyPendingSweep = (skipped = false) => ({
   pendingScanned: 0,
   pendingSettled: 0,
   pendingEligible: 0,
   skipped,
 });
+
+const getGlobalRoundWindow = (now) => {
+  const startTime = Math.floor(now / ROUND_DURATION_MS) * ROUND_DURATION_MS;
+  return {
+    startTime,
+    endTime: startTime + ROUND_DURATION_MS,
+  };
+};
 
 const withEngineTimeout = (label, operation, timeoutMs = ENGINE_STEP_TIMEOUT_MS) => {
   let timer;
@@ -252,7 +261,6 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
     const WIN_MULTIPLIER = 1.3;
     const REFUND_PERCENTAGE = 0.8;
     const REFERRAL_COMMISSION_RATE = 0.025;
-    const ROUND_DURATION = 120000; // 2 min per round
 
     const gameRef = rtdb.ref("active_game_flyova");
     const roundGuardRef = adminDb.collection(ROUND_GUARD_COLLECTION).doc(ROUND_GUARD_DOC_ID);
@@ -331,11 +339,7 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
     );
 
     if (runningSnap.empty) {
-      const lastEndTime = activeSnap.empty ? null : activeSnap.docs[0]?.data()?.endTime;
-      const endTime = Math.max(
-        now + ROUND_DURATION,
-        lastEndTime ? Number(lastEndTime) + ROUND_DURATION : 0
-      );
+      const { startTime, endTime } = getGlobalRoundWindow(now);
 
       const pool = [];
       while (pool.length < 4) {
@@ -361,6 +365,7 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
             gameId: liveDoc.id,
             winners: liveData.winners || [],
             numbers: liveData.numbers || [],
+            startTime: liveData.startTime || (Number(liveData.endTime || endTime) - ROUND_DURATION_MS),
             endTime: liveData.endTime || endTime,
           };
         }
@@ -381,6 +386,7 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
                 gameId: guardedRef.id,
                 winners: guardedData.winners || [],
                 numbers: guardedData.numbers || [],
+                startTime: guardedData.startTime || (guardedEndTime - ROUND_DURATION_MS),
                 endTime: guardedEndTime,
               };
             }
@@ -399,7 +405,9 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
         } else {
           tx.create(gameDocRef, {
             status: "active",
+            startTime,
             endTime,
+            roundDuration: ROUND_DURATION_MS,
             winners,
             allGenerated: pool,
             numbers: randomizedDisplay,
@@ -411,7 +419,9 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
         tx.set(roundGuardRef, {
           status: "active",
           gameId: gameDocId,
+          startTime,
           endTime,
+          roundDuration: ROUND_DURATION_MS,
           updatedAt: now,
           lockOwnerId,
         }, { merge: true });
@@ -421,6 +431,7 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
           gameId: gameDocId,
           winners: finalWinners,
           numbers: finalNumbers,
+          startTime,
           endTime,
         };
       });
@@ -428,7 +439,9 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
       await gameRef.set({
         gameId: createResult.gameId,
         status: "active",
+        startTime: createResult.startTime,
         endTime: createResult.endTime,
+        roundDuration: ROUND_DURATION_MS,
         winners: createResult.winners,
         numbers: createResult.numbers,
       });

@@ -387,7 +387,11 @@ export default function FlyovaToDollars() {
     if (!currentGame && !breakEndsAt) return;
     const interval = setInterval(() => {
       if (currentGame) {
-        const diff = Math.max(0, Math.floor((currentGame.endTime - serverNow()) / 1000));
+        const roundSeconds = ROUND_DURATION / 1000;
+        const diff = Math.min(
+          roundSeconds,
+          Math.max(0, Math.floor((currentGame.endTime - serverNow()) / 1000))
+        );
         setTimeLeft(diff);
         if (diff === 0 && gameStatusRef.current === "betting") revealResults();
       } else if (breakEndsAt) {
