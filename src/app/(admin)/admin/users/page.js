@@ -11,6 +11,14 @@ const formatJoinedDate = (timestamp) => {
 };
 
 const normalizePin = (value) => String(value || "").replace(/\D/g, "").slice(0, 8);
+const WELCOME_BONUS_AMOUNT = 3;
+
+const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
+
+const getWelcomeBonusAmount = (user) => {
+  const amount = Number(user.welcomeBonusAmount || 0);
+  return amount > 0 ? amount : WELCOME_BONUS_AMOUNT;
+};
 
 const getWelcomeBonusMeta = (user) => {
   const status = user.welcomeBonusStatus;
@@ -23,7 +31,7 @@ const getWelcomeBonusMeta = (user) => {
   );
 
   if (!claimed) {
-    return { claimed: false, paid: false, label: "Not Claimed", tone: "bg-slate-100 text-slate-500" };
+    return { claimed: false, paid: false, recovered: false, label: "Not Claimed", tone: "bg-slate-100 text-slate-500" };
   }
 
   const paid =
@@ -32,15 +40,15 @@ const getWelcomeBonusMeta = (user) => {
       : Boolean(user.bonusClaimed || user.bonusDeducted);
 
   if (!paid) {
-    return { claimed: true, paid: false, label: "Not Paid", tone: "bg-rose-100 text-rose-600" };
+    return { claimed: true, paid: false, recovered: false, label: "Not Paid", tone: "bg-rose-100 text-rose-600" };
   }
 
   const recovered = status === "recovered" || user.bonusDeducted === true;
   if (recovered) {
-    return { claimed: true, paid: true, label: "Paid (Recovered)", tone: "bg-amber-100 text-amber-700" };
+    return { claimed: true, paid: true, recovered: true, label: "Recovered", tone: "bg-amber-100 text-amber-700" };
   }
 
-  return { claimed: true, paid: true, label: "Paid", tone: "bg-emerald-100 text-emerald-700" };
+  return { claimed: true, paid: true, recovered: false, label: "Paid", tone: "bg-emerald-100 text-emerald-700" };
 };
 
 export default function UserManagement() {
@@ -191,10 +199,28 @@ export default function UserManagement() {
   );
 
   const paidBonusCount = useMemo(
-    () => bonusClaimants.filter((u) => getWelcomeBonusMeta(u).paid).length,
+    () => bonusClaimants.filter((u) => {
+      const bonusMeta = getWelcomeBonusMeta(u);
+      return bonusMeta.paid && !bonusMeta.recovered;
+    }).length,
     [bonusClaimants]
   );
-  const unpaidBonusCount = bonusClaimants.length - paidBonusCount;
+  const recoveredBonusStats = useMemo(
+    () =>
+      bonusClaimants.reduce(
+        (stats, u) => {
+          const bonusMeta = getWelcomeBonusMeta(u);
+          if (!bonusMeta.recovered) return stats;
+          return {
+            count: stats.count + 1,
+            amount: stats.amount + getWelcomeBonusAmount(u),
+          };
+        },
+        { count: 0, amount: 0 }
+      ),
+    [bonusClaimants]
+  );
+  const unpaidBonusCount = bonusClaimants.filter((u) => !getWelcomeBonusMeta(u).paid).length;
   const normalizedEditingPin = normalizePin(editForm.pin);
   const pinConflictUser = useMemo(
     () =>
@@ -335,9 +361,10 @@ export default function UserManagement() {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+            <div className="flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-widest">
               <span className="px-3 py-2 rounded-full bg-slate-100 text-slate-500">Claimed: {bonusClaimants.length}</span>
               <span className="px-3 py-2 rounded-full bg-emerald-100 text-emerald-700">Paid: {paidBonusCount}</span>
+              <span className="px-3 py-2 rounded-full bg-amber-100 text-amber-700">Recovered: {recoveredBonusStats.count} · {formatMoney(recoveredBonusStats.amount)}</span>
               <span className="px-3 py-2 rounded-full bg-rose-100 text-rose-600">Not Paid: {unpaidBonusCount}</span>
             </div>
           </div>
@@ -370,8 +397,13 @@ export default function UserManagement() {
                         <td className="p-6 text-[10px] font-mono font-black text-indigo-600">{u.pin || "--------"}</td>
                         <td className="p-6">
                           <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${bonusMeta.tone}`}>
-                            {bonusMeta.paid ? "Paid" : "Not Paid"}
+                            {bonusMeta.label}
                           </span>
+                          {bonusMeta.recovered && (
+                            <p className="mt-1 text-[9px] font-black uppercase tracking-wider text-amber-600">
+                              {formatMoney(getWelcomeBonusAmount(u))} recovered
+                            </p>
+                          )}
                         </td>
                         <td className="p-6 text-[10px] font-bold uppercase text-slate-400">{formatJoinedDate(u.createdAt)}</td>
                       </tr>

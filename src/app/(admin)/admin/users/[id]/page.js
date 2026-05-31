@@ -8,6 +8,7 @@ import { Loader2 } from "lucide-react";
 export default function UserActivityPage() {
   const { id } = useParams();
   const [user, setUser] = useState(null);
+  const [referrerProfile, setReferrerProfile] = useState(null);
   const [txs, setTxs] = useState([]);
   const [downline, setDownline] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,6 +22,13 @@ export default function UserActivityPage() {
       if (snap.exists()) {
         const selfData = { id: snap.id, ...snap.data() };
         setUser(selfData);
+
+        if (selfData.referrerUid) {
+          const referrerSnap = await getDoc(doc(db, "users", selfData.referrerUid));
+          setReferrerProfile(referrerSnap.exists() ? { id: referrerSnap.id, ...referrerSnap.data() } : null);
+        } else {
+          setReferrerProfile(null);
+        }
 
         const referralMap = new Map();
 
@@ -48,6 +56,12 @@ export default function UserActivityPage() {
   }, [id]);
 
   const referralLink = useMemo(() => (id ? `https://flyovahelp.com/register?ref=${id}` : ""), [id]);
+  const referrerUid = user?.referrerUid;
+  const referrerPin = !referrerUid
+    ? "N/A"
+    : referrerProfile?.id === referrerUid
+      ? referrerProfile?.pin || "--------"
+      : "--------";
 
   if (loading) {
     return (
@@ -65,7 +79,10 @@ export default function UserActivityPage() {
         <div className="grid md:grid-cols-3 gap-3 mt-4 text-xs font-bold text-slate-600">
           <div>PIN: <span className="font-mono text-indigo-600">{user?.pin || "--------"}</span></div>
           <div>Referred By: {user?.referredBy || "N/A"}</div>
-          <div>Referrer UID: {user?.referrerUid || "N/A"}</div>
+          <div className="space-y-1">
+            <div>Referrer UID: <span className="font-mono">{user?.referrerUid || "N/A"}</span></div>
+            <div>Referrer PIN: <span className="font-mono text-indigo-600">{referrerPin}</span></div>
+          </div>
           <div>Total Referrals: {downline.length}</div>
           <div className="md:col-span-3">Referral Link: <span className="font-mono break-all">{referralLink}</span></div>
         </div>
