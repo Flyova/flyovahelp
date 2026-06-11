@@ -9,7 +9,9 @@
       "Bash(echo ' *)",
       "Bash(npx tsc *)",
       "WebFetch(domain:docs.pvadeals.com)",
-      "Bash(grep -n \"gameDocId\\\\|gameDocRef\\\\|doc\\(\\\\`\\\\|Date.now\\\\|timestamp\" \"src/app/api/cron/game-engine/route.js\")"
+      "Bash(grep -n \"gameDocId\\\\|gameDocRef\\\\|doc\\(\\\\`\\\\|Date.now\\\\|timestamp\" \"src/app/api/cron/game-engine/route.js\")",
+      "Bash(rm -rf /tmp/claude-501/*/tasks/*)",
+      "Read(//private/tmp/claude-501/**)"
     ],
     "additionalDirectories": [
       "/Users/mac/Desktop/Client projects/flyovahelp/src/app/(admin)/admin/blog",

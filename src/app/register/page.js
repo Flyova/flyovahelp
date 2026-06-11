@@ -10,7 +10,7 @@ import {
 import { auth, db } from "@/lib/firebase";
 import { createUserWithEmailAndPassword, updateProfile, signOut } from "firebase/auth";
 import {
-  doc, setDoc, serverTimestamp, getDoc,
+  doc, setDoc, serverTimestamp,
   collection, query, where, getDocs
 } from "firebase/firestore";
 
@@ -127,32 +127,26 @@ function RegisterForm() {
       return;
     }
     const code = referralCode.trim();
-    getDoc(doc(db, "users", code))
-      .then(async (snap) => {
-        if (snap.exists()) {
-          const d = snap.data();
-          setReferrerName(d.fullName || d.username || "Flyova Member");
-          setResolvedReferrerUid(snap.id);
+    fetch(`/api/referral/resolve?code=${encodeURIComponent(code)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.valid) {
+          setReferrerName(data.name || "Flyova Member");
+          setResolvedReferrerUid(data.uid);
           return;
         }
-
-        // Fallback: older referral links shared a username instead of a uid.
-        const usernameSnap = await getDocs(
-          query(collection(db, "users"), where("username", "==", code))
-        );
-        if (!usernameSnap.empty) {
-          const refDoc = usernameSnap.docs[0];
-          const d = refDoc.data();
-          setReferrerName(d.fullName || d.username || "Flyova Member");
-          setResolvedReferrerUid(refDoc.id);
+        if (data?.error) {
+          // Resolution failed (not a "code doesn't exist" result) - don't
+          // block registration or wrongly label a valid code as invalid.
+          setReferrerName("");
+          setResolvedReferrerUid(null);
           return;
         }
-
         setReferrerName("Invalid referral code");
         setResolvedReferrerUid(null);
       })
       .catch(() => {
-        setReferrerName("Invalid referral code");
+        setReferrerName("");
         setResolvedReferrerUid(null);
       });
   }, [referralCode]);

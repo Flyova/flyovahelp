@@ -377,9 +377,24 @@ export default function GamePage() {
         const winAmount = activeGame.stakePerRound;
         const nextPicker = activeGame.picker === activeGame.player1 ? activeGame.player2 : activeGame.player1;
         const completedRound = Number(activeGame?.round || 0);
-        const isGameOver = completedRound >= MAX_ROUNDS;
         const pickerRoundsKey =
           activeGame.picker === activeGame.player1 ? "roundsPlayed.p1" : "roundsPlayed.p2";
+
+        // Project scores/rounds-played after this guess to check for a "mercy rule"
+        // early finish: if the trailing player can no longer catch up even by
+        // winning every one of their remaining guessing rounds, end the match now
+        // instead of playing out the rest of the 30 rounds.
+        const newScoreP1 = (activeGame.scores?.p1 || 0) + (wasCorrect && isP1 ? 1 : 0);
+        const newScoreP2 = (activeGame.scores?.p2 || 0) + (wasCorrect && !isP1 ? 1 : 0);
+        const newRoundsPlayedP1 = (activeGame.roundsPlayed?.p1 || 0) + (activeGame.picker === activeGame.player1 ? 1 : 0);
+        const newRoundsPlayedP2 = (activeGame.roundsPlayed?.p2 || 0) + (activeGame.picker === activeGame.player2 ? 1 : 0);
+        const remainingGuessesP1 = ROUNDS_PER_PLAYER - newRoundsPlayedP2;
+        const remainingGuessesP2 = ROUNDS_PER_PLAYER - newRoundsPlayedP1;
+        const p2CanCatchUp = newScoreP2 + remainingGuessesP2 >= newScoreP1;
+        const p1CanCatchUp = newScoreP1 + remainingGuessesP1 >= newScoreP2;
+        const decisiveWin = !p1CanCatchUp || !p2CanCatchUp;
+
+        const isGameOver = completedRound >= MAX_ROUNDS || decisiveWin;
 
         const updatePayload = {
           gameState: "picking", turn: nextPicker, picker: nextPicker, round: isGameOver ? MAX_ROUNDS : increment(1),
