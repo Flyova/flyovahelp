@@ -5,6 +5,7 @@ import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, query, where, onSnapshot, orderBy, limit, doc, getDoc, updateDoc } from "firebase/firestore";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
+import { shortGameId } from "@/lib/gameId";
 import {
   Users,
   ArrowDownCircle,
@@ -90,7 +91,7 @@ export default function AdminDashboard() {
           setFlyovaResult({
             n1: data.winners?.[0] ?? "--",
             n2: data.winners?.[1] ?? "--",
-            gameId: snap.docs[0].id
+            gameId: shortGameId(snap.docs[0].id)
           });
         }
       });
