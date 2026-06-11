@@ -208,16 +208,17 @@ export default function AgentTransactions() {
       return;
     }
     const targetLabel = trade.type === "deposit" ? "agent balance" : `${trade.senderName || "client"} wallet`;
-    if (!window.confirm(`Refund $${(Number(trade.amount) + Number(trade.fee || 0)).toFixed(2)} to ${targetLabel}?`)) return;
+    // Rule:
+    // - Deposit refunds go to AGENT balance and include the admin fee
+    // - Withdrawal refunds go to CLIENT wallet and exclude the admin fee
+    const totalRefund = trade.type === "deposit"
+      ? Number(trade.amount) + Number(trade.fee || 0)
+      : Number(trade.amount);
+    if (!window.confirm(`Refund $${totalRefund.toFixed(2)} to ${targetLabel}?`)) return;
     setActionLoading(trade.id + "_ref");
     const batch = writeBatch(db);
     try {
-      const totalRefund = Number(trade.amount) + Number(trade.fee || 0);
       const tradeRef = doc(db, "trades", trade.id);
-
-      // Rule:
-      // - Deposit refunds go to AGENT balance
-      // - Withdrawal refunds go to CLIENT wallet
       if (trade.type === "deposit") {
         const agentRef = doc(db, "agents", trade.agentId);
         const agentSnap = await getDoc(agentRef);
