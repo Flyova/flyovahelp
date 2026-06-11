@@ -211,8 +211,9 @@ export default function AgentTransactions() {
     // Rule:
     // - Deposit refunds go to AGENT balance and include the admin fee
     // - Withdrawal refunds go to CLIENT wallet and exclude the admin fee
+    const adminFee = Number(trade.fee || trade.feeCharged || trade.finalFee || 0);
     const totalRefund = trade.type === "deposit"
-      ? Number(trade.amount) + Number(trade.fee || 0)
+      ? Number(trade.amount) + adminFee
       : Number(trade.amount);
     if (!window.confirm(`Refund $${totalRefund.toFixed(2)} to ${targetLabel}?`)) return;
     setActionLoading(trade.id + "_ref");
