@@ -96,6 +96,34 @@ export default function AgentApply() {
       // Mark user profile
       await setDoc(doc(db, "users", user.uid), { hasApplied: true }, { merge: true });
 
+      // --- ADMIN NOTIFICATION ---
+      try {
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: "arbie1877@gmail.com",
+            subject: "New Agent Application Submitted",
+            html: `
+              <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
+                <h2 style="color: #000; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">New Agent Application</h2>
+                <p style="margin: 10px 0;"><strong>Name:</strong> ${formData.fullName}</p>
+                <p style="margin: 10px 0;"><strong>Email:</strong> ${formData.email}</p>
+                <p style="margin: 10px 0;"><strong>Phone:</strong> ${formData.phone}</p>
+                <p style="margin: 10px 0;"><strong>Country:</strong> ${formData.country}</p>
+                <p style="margin: 10px 0;"><strong>Age:</strong> ${formData.age}</p>
+                <p style="margin: 10px 0;"><strong>User ID:</strong> ${user.uid}</p>
+                <div style="margin-top: 30px; font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
+                  Please review this application in the Flyova Admin Panel.
+                </div>
+              </div>
+            `
+          })
+        });
+      } catch (emailErr) {
+        console.error("Admin notification failed:", emailErr);
+      }
+
     } catch (err) {
       console.error(err);
       alert("Submission Error: Check your internet or Cloudinary preset name.");

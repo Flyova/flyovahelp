@@ -150,8 +150,8 @@ export default function FlyovaHistory() {
                       </div>
                     </td>
                     <td className="p-6">
-                      <p className="text-[10px] font-mono font-bold text-slate-400 leading-none mb-1">
-                        #{bet.gameId?.slice(-6) || "N/A"}
+                      <p className="text-[10px] font-mono font-bold text-slate-400 leading-none mb-1" title={bet.gameId || "N/A"}>
+                        #{bet.gameId || "N/A"}
                       </p>
                       <div className="flex gap-1">
                         {bet.picks?.map((num) => (

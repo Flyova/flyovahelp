@@ -25,7 +25,9 @@ import {
   Clock,
   UserCheck,
   Wallet,
-  ArrowRight
+  ArrowRight,
+  Cake,
+  Landmark
 } from "lucide-react";
 
 export default function AdminAgentManagement() {
@@ -207,6 +209,7 @@ export default function AdminAgentManagement() {
                                 <InfoBadge icon={Globe} label={selectedAgent.country} />
                                 <InfoBadge icon={Mail} label={selectedAgent.email} />
                                 <InfoBadge icon={Clock} label={`Joined: ${formatJoinedDate(selectedAgent)}`} />
+                                <InfoBadge icon={Cake} label={`Age: ${selectedAgent.age || "N/A"}`} />
                             </div>
                         </div>
                         <div className="flex gap-3 w-full md:w-auto">
@@ -230,6 +233,14 @@ export default function AdminAgentManagement() {
                           <StatBox label="Deposit Rate" value={`${selectedAgent.deposit_rate || 0}`} sub="per 1 USD" />
                           <StatBox label="Withdraw Rate" value={`${selectedAgent.withdrawal_rate || 0}`} sub="per 1 USD" />
                           <StatBox label="Status" value={selectedAgent.banned ? 'Banned' : 'Active'} color={selectedAgent.banned ? 'text-rose-500' : 'text-emerald-500'} />
+                      </div>
+                      <div className="space-y-4">
+                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Landmark size={14} className="text-[#613de6]" /> Bank Details</p>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                              <StatBox label="Bank Name" value={selectedAgent.bankName || "Not Provided"} />
+                              <StatBox label="Account Name" value={selectedAgent.accountName || "Not Provided"} />
+                              <StatBox label="Account Number" value={selectedAgent.accountNumber || "Not Provided"} />
+                          </div>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                           <DocumentCard label="Passport" url={selectedAgent.passport_photo} />
