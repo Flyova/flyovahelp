@@ -14,6 +14,62 @@ import {
   collection, query, where, getDocs
 } from "firebase/firestore";
 
+// Fallback list used when the live restcountries.com lookup is blocked or
+// slow on the user's network/device, so the country selector is never empty.
+const isoToFlag = (iso) =>
+  iso.toUpperCase().replace(/./g, (c) => String.fromCodePoint(127397 + c.charCodeAt(0)));
+
+const FALLBACK_COUNTRIES = [
+  ["United Kingdom", "GB", "44"],
+  ["United States", "US", "1"],
+  ["Nigeria", "NG", "234"],
+  ["Ghana", "GH", "233"],
+  ["South Africa", "ZA", "27"],
+  ["Kenya", "KE", "254"],
+  ["Egypt", "EG", "20"],
+  ["Cameroon", "CM", "237"],
+  ["Canada", "CA", "1"],
+  ["Australia", "AU", "61"],
+  ["India", "IN", "91"],
+  ["Pakistan", "PK", "92"],
+  ["Bangladesh", "BD", "880"],
+  ["Philippines", "PH", "63"],
+  ["Indonesia", "ID", "62"],
+  ["Malaysia", "MY", "60"],
+  ["Singapore", "SG", "65"],
+  ["United Arab Emirates", "AE", "971"],
+  ["Saudi Arabia", "SA", "966"],
+  ["Germany", "DE", "49"],
+  ["France", "FR", "33"],
+  ["Spain", "ES", "34"],
+  ["Italy", "IT", "39"],
+  ["Portugal", "PT", "351"],
+  ["Netherlands", "NL", "31"],
+  ["Belgium", "BE", "32"],
+  ["Ireland", "IE", "353"],
+  ["Sweden", "SE", "46"],
+  ["Norway", "NO", "47"],
+  ["Poland", "PL", "48"],
+  ["Brazil", "BR", "55"],
+  ["Mexico", "MX", "52"],
+  ["Argentina", "AR", "54"],
+  ["China", "CN", "86"],
+  ["Japan", "JP", "81"],
+  ["South Korea", "KR", "82"],
+  ["New Zealand", "NZ", "64"],
+  ["Ethiopia", "ET", "251"],
+  ["Tanzania", "TZ", "255"],
+  ["Uganda", "UG", "256"],
+  ["Zambia", "ZM", "260"],
+  ["Zimbabwe", "ZW", "263"],
+  ["Rwanda", "RW", "250"],
+  ["Senegal", "SN", "221"],
+  ["Ivory Coast", "CI", "225"],
+  ["Morocco", "MA", "212"],
+  ["Algeria", "DZ", "213"],
+].map(([name, iso, code]) => ({ name, flag: isoToFlag(iso), code: `+${code}` }))
+  .sort((a, b) => a.name.localeCompare(b.name));
+
 function SectionLabel({ children }) {
   return (
     <div className="flex items-center gap-3 mb-3">
@@ -36,7 +92,7 @@ function RegisterForm() {
   const [showPw, setShowPw] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const [countries, setCountries] = useState([]);
+  const [countries, setCountries] = useState(FALLBACK_COUNTRIES);
   const [selectedCountry, setSelectedCountry] = useState({ name: "United Kingdom", flag: "🇬🇧", code: "+44" });
 
   const [formData, setFormData] = useState({
@@ -53,9 +109,15 @@ function RegisterForm() {
         const sorted = data
           .map((c) => ({ name: c.name.common, flag: c.flag, code: c.idd.root + (c.idd.suffixes?.[0] ?? "") }))
           .sort((a, b) => a.name.localeCompare(b.name));
-        setCountries(sorted);
+        // Only replace the fallback list if the live lookup returned a full list -
+        // some networks return an empty/partial response, which would otherwise
+        // leave the selector with no usable options.
+        if (sorted.length > FALLBACK_COUNTRIES.length) setCountries(sorted);
       })
-      .catch(console.error);
+      .catch((err) => {
+        console.error(err);
+        // Keep using FALLBACK_COUNTRIES so the selector remains usable.
+      });
   }, []);
 
   useEffect(() => {
