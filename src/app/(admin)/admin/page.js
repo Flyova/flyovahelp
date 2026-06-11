@@ -90,7 +90,7 @@ export default function AdminDashboard() {
           setFlyovaResult({
             n1: data.winners?.[0] ?? "--",
             n2: data.winners?.[1] ?? "--",
-            gameId: snap.docs[0].id.slice(-6).toUpperCase()
+            gameId: snap.docs[0].id
           });
         }
       });
