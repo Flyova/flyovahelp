@@ -126,16 +126,30 @@ function RegisterForm() {
       setResolvedReferrerUid(null);
       return;
     }
-    getDoc(doc(db, "users", referralCode))
-      .then((snap) => {
-        if (!snap.exists()) {
-          setReferrerName("Invalid referral code");
-          setResolvedReferrerUid(null);
+    const code = referralCode.trim();
+    getDoc(doc(db, "users", code))
+      .then(async (snap) => {
+        if (snap.exists()) {
+          const d = snap.data();
+          setReferrerName(d.fullName || d.username || "Flyova Member");
+          setResolvedReferrerUid(snap.id);
           return;
         }
-        const d = snap.data();
-        setReferrerName(d.fullName || d.username || "Flyova Member");
-        setResolvedReferrerUid(snap.id);
+
+        // Fallback: older referral links shared a username instead of a uid.
+        const usernameSnap = await getDocs(
+          query(collection(db, "users"), where("username", "==", code))
+        );
+        if (!usernameSnap.empty) {
+          const refDoc = usernameSnap.docs[0];
+          const d = refDoc.data();
+          setReferrerName(d.fullName || d.username || "Flyova Member");
+          setResolvedReferrerUid(refDoc.id);
+          return;
+        }
+
+        setReferrerName("Invalid referral code");
+        setResolvedReferrerUid(null);
       })
       .catch(() => {
         setReferrerName("Invalid referral code");
