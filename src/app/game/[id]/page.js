@@ -2,9 +2,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { db, auth } from "@/lib/firebase";
-import { 
-  doc, onSnapshot, updateDoc, increment, collection, 
-  query, where, setDoc, addDoc, deleteDoc, 
+import {
+  doc, getDoc, onSnapshot, updateDoc, increment, collection,
+  query, where, setDoc, addDoc, deleteDoc,
   serverTimestamp, or, orderBy, limit, runTransaction
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
@@ -40,10 +40,27 @@ export default function GamePage() {
   const [stakeAmount, setStakeAmount] = useState(1);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [isSettling, setIsSettling] = useState(false);
+  const isSettlingRef = useRef(false);
   const persistedCompletedGameRef = useRef(null);
   const ROUNDS_PER_PLAYER = 15;
   const MAX_ROUNDS = ROUNDS_PER_PLAYER * 2;
   const MATCH_ADMIN_FEE_RATE = 0.25;
+  // Once one friend has won 15 more matches than the other, they can no
+  // longer challenge each other until the gap narrows.
+  const HEAD_TO_HEAD_WIN_CAP = 15;
+
+  const getHeadToHeadPairId = (a, b) => [a, b].sort().join("_");
+
+  const checkHeadToHeadCap = async (opponentId) => {
+    const pairId = getHeadToHeadPairId(user.uid, opponentId);
+    const snap = await getDoc(doc(db, "head_to_head", pairId));
+    if (!snap.exists()) return { blocked: false, myWins: 0, oppWins: 0 };
+    const wins = snap.data()?.wins || {};
+    const myWins = Number(wins[user.uid] || 0);
+    const oppWins = Number(wins[opponentId] || 0);
+    return { blocked: Math.abs(myWins - oppWins) >= HEAD_TO_HEAD_WIN_CAP, myWins, oppWins };
+  };
 
   const showNotification = useCallback((type, title, message) => {
     setNotification({ type, title, message, id: Date.now() });
@@ -312,7 +329,16 @@ export default function GamePage() {
         `Insufficient balance. Required: $${Number(totalCost).toFixed(2)} | Available: $${Number(myWallet || 0).toFixed(2)}`
       );
     }
-    
+
+    const { blocked, myWins, oppWins } = await checkHeadToHeadCap(showStakeModal.id);
+    if (blocked) {
+      return showNotification(
+        "warning",
+        "Match Limit Reached",
+        `You can't challenge ${showStakeModal.username} right now — the win gap between you two has reached the ${HEAD_TO_HEAD_WIN_CAP}-match cap (${myWins}-${oppWins}).`
+      );
+    }
+
     await addDoc(collection(db, "challenges"), {
       from: user.uid, fromName: user.displayName || "Player", to: showStakeModal.id, toName: showStakeModal.username, status: "pending",
       stakePerRound: stakeAmount, totalWager, fee: calculatedFee, timestamp: Date.now()
@@ -331,7 +357,17 @@ export default function GamePage() {
         `Insufficient balance to accept challenge. Required: $${Number(totalCost).toFixed(2)} | Available: $${Number(myWallet || 0).toFixed(2)}`
       );
     }
-    
+
+    const { blocked, myWins, oppWins } = await checkHeadToHeadCap(chal.from);
+    if (blocked) {
+      showNotification(
+        "warning",
+        "Match Limit Reached",
+        `You can't accept this challenge — the win gap between you two has reached the ${HEAD_TO_HEAD_WIN_CAP}-match cap (${myWins}-${oppWins}).`
+      );
+      return deleteDoc(doc(db, "challenges", chal.id)).catch(() => {});
+    }
+
     const gameId = `match_${Date.now()}`;
     try {
         await updateDoc(doc(db, "users", user.uid), { wallet: increment(-totalCost) });
@@ -419,28 +455,56 @@ export default function GamePage() {
   };
 
   const finalizeAndRefund = async () => {
-    if (!activeGame) return;
-    const { player1, player2, wagerPool, id } = activeGame;
-    const refund = async (uid, amt) => {
-      if (amt > 0) {
-        await updateDoc(doc(db, "users", uid), { wallet: increment(amt) });
-        await addDoc(collection(db, "users", uid, "transactions"), {
-          title: "Match Settlement", amount: amt, type: "finance", status: "win", timestamp: serverTimestamp()
-        });
+    if (!activeGame || isSettlingRef.current) return;
+    isSettlingRef.current = true;
+    setIsSettling(true);
+
+    try {
+      const historySaved = await persistCompletedGameHistory(activeGame);
+      if (!historySaved) {
+        showNotification("error", "History Not Saved", "Could not save this match history yet. Please try again.");
+        return;
       }
-    };
 
-    const historySaved = await persistCompletedGameHistory(activeGame);
-    if (!historySaved) {
-      showNotification("error", "History Not Saved", "Could not save this match history yet. Please try again.");
-      return;
+      const gameRef = doc(db, "games", activeGame.id);
+
+      // Run the credit + delete as a single atomic transaction so that
+      // duplicate clicks (or retries) can never pay out more than once:
+      // once the doc is gone, a re-entrant call simply finds nothing to settle.
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(gameRef);
+        if (!snap.exists()) return;
+        const data = snap.data();
+        if (data.status !== "completed") return;
+
+        const p1Amt = Number(data.wagerPool?.p1 || 0);
+        const p2Amt = Number(data.wagerPool?.p2 || 0);
+
+        if (p1Amt > 0) {
+          transaction.update(doc(db, "users", data.player1), { wallet: increment(p1Amt) });
+          transaction.set(doc(collection(db, "users", data.player1, "transactions")), {
+            title: "Match Settlement", amount: p1Amt, type: "finance", status: "win", timestamp: serverTimestamp()
+          });
+        }
+        if (p2Amt > 0) {
+          transaction.update(doc(db, "users", data.player2), { wallet: increment(p2Amt) });
+          transaction.set(doc(collection(db, "users", data.player2, "transactions")), {
+            title: "Match Settlement", amount: p2Amt, type: "finance", status: "win", timestamp: serverTimestamp()
+          });
+        }
+
+        transaction.delete(gameRef);
+      });
+
+      setActiveGame(null);
+      router.push('/dashboard');
+    } catch (e) {
+      console.error("Settlement error:", e);
+      showNotification("error", "Settlement Failed", "Could not settle this match. Please try again.");
+    } finally {
+      isSettlingRef.current = false;
+      setIsSettling(false);
     }
-
-    await refund(player1, wagerPool.p1);
-    await refund(player2, wagerPool.p2);
-    await deleteDoc(doc(db, "games", id));
-    setActiveGame(null);
-    router.push('/dashboard');
   };
 
   const filteredPlayers = onlinePlayers.filter(p => 
@@ -469,7 +533,7 @@ export default function GamePage() {
             </div>
             <p className="text-[10px] text-gray-500 font-black uppercase mt-4">Crediting final balance to wallet...</p>
         </div>
-        <button onClick={finalizeAndRefund} className="w-full max-w-sm bg-[#613de6] py-5 rounded-2xl font-black uppercase italic shadow-lg">Claim & Exit</button>
+        <button onClick={finalizeAndRefund} disabled={isSettling} className="w-full max-w-sm bg-[#613de6] py-5 rounded-2xl font-black uppercase italic shadow-lg disabled:opacity-50">{isSettling ? "Settling..." : "Claim & Exit"}</button>
       </div>
     );
   }

@@ -58,30 +58,52 @@ export async function POST(request) {
     const p1Score = Number(game?.scores?.p1 || 0);
     const p2Score = Number(game?.scores?.p2 || 0);
 
-    await adminDb.collection("completed_games").doc(gameId).set(
-      {
-        gameId,
-        amount: Number(game.stakePerRound || 0),
-        player1Id: game.player1,
-        player1Name: p1.fullName || p1.username || "Player 1",
-        player1Email: p1.email || "",
-        player1Pin: p1.pin || "",
-        player1Country: p1.country || "",
-        player2Id: game.player2,
-        player2Name: p2.fullName || p2.username || "Player 2",
-        player2Email: p2.email || "",
-        player2Pin: p2.pin || "",
-        player2Country: p2.country || "",
-        p1RoundsPlayed: p1Score,
-        p2RoundsPlayed: p2Score,
-        p1Score,
-        p2Score,
-        totalRounds,
-        createdAt: game?.createdAt || null,
-        finishedAt: game?.completedAt || admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
+    const completedRef = adminDb.collection("completed_games").doc(gameId);
+    const pairId = [game.player1, game.player2].sort().join("_");
+    const headToHeadRef = adminDb.collection("head_to_head").doc(pairId);
+    const winnerId = p1Score === p2Score ? null : (p1Score > p2Score ? game.player1 : game.player2);
+
+    const archiveData = {
+      gameId,
+      amount: Number(game.stakePerRound || 0),
+      player1Id: game.player1,
+      player1Name: p1.fullName || p1.username || "Player 1",
+      player1Email: p1.email || "",
+      player1Pin: p1.pin || "",
+      player1Country: p1.country || "",
+      player2Id: game.player2,
+      player2Name: p2.fullName || p2.username || "Player 2",
+      player2Email: p2.email || "",
+      player2Pin: p2.pin || "",
+      player2Country: p2.country || "",
+      p1RoundsPlayed: p1Score,
+      p2RoundsPlayed: p2Score,
+      p1Score,
+      p2Score,
+      totalRounds,
+      createdAt: game?.createdAt || null,
+      finishedAt: game?.completedAt || admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    // Gate the head-to-head tally increment on whether this game has already
+    // been archived, so calling this endpoint twice for the same gameId
+    // (e.g. once automatically, once when the player claims) never double-counts.
+    await adminDb.runTransaction(async (tx) => {
+      const existingSnap = await tx.get(completedRef);
+      tx.set(completedRef, archiveData, { merge: true });
+
+      if (!existingSnap.exists && winnerId) {
+        tx.set(
+          headToHeadRef,
+          {
+            players: [game.player1, game.player2].sort(),
+            [`wins.${winnerId}`]: admin.firestore.FieldValue.increment(1),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+      }
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {
