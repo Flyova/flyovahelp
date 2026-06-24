@@ -268,11 +268,12 @@ export default function UserManagement() {
 
         <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1120px] text-left">
+            <table className="w-full min-w-7xl text-left">
               <thead className="bg-slate-50/50">
                 <tr>
                   <th className="p-6 text-[10px] font-black uppercase text-slate-400">Merchant</th>
                   <th className="p-6 text-[10px] font-black uppercase text-slate-400">Wallet</th>
+                  <th className="p-6 text-[10px] font-black uppercase text-slate-400">Referral Balance</th>
                   <th className="p-6 text-[10px] font-black uppercase text-slate-400">PIN</th>
                   <th className="p-6 text-[10px] font-black uppercase text-slate-400">Country</th>
                   <th className="p-6 text-[10px] font-black uppercase text-slate-400">Welcome Bonus</th>
@@ -302,6 +303,7 @@ export default function UserManagement() {
                         </div>
                       </td>
                       <td className="p-6 font-black text-emerald-600">${Number(u.wallet || 0).toFixed(2)}</td>
+                      <td className="p-6 font-black text-green-600">${Number(u.referralBonus || 0).toFixed(2)}</td>
                       <td className="p-6 text-[10px] font-mono font-black text-indigo-600">{u.pin || "--------"}</td>
                       <td className="p-6 text-[10px] font-bold uppercase text-slate-400">{u.country || "N/A"}</td>
                       <td className="p-6">
