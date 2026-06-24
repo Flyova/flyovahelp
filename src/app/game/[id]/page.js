@@ -53,13 +53,20 @@ export default function GamePage() {
   const getHeadToHeadPairId = (a, b) => [a, b].sort().join("_");
 
   const checkHeadToHeadCap = async (opponentId) => {
-    const pairId = getHeadToHeadPairId(user.uid, opponentId);
-    const snap = await getDoc(doc(db, "head_to_head", pairId));
-    if (!snap.exists()) return { blocked: false, myWins: 0, oppWins: 0 };
-    const wins = snap.data()?.wins || {};
-    const myWins = Number(wins[user.uid] || 0);
-    const oppWins = Number(wins[opponentId] || 0);
-    return { blocked: Math.abs(myWins - oppWins) >= HEAD_TO_HEAD_WIN_CAP, myWins, oppWins };
+    try {
+      const pairId = getHeadToHeadPairId(user.uid, opponentId);
+      const snap = await getDoc(doc(db, "head_to_head", pairId));
+      if (!snap.exists()) return { blocked: false, myWins: 0, oppWins: 0 };
+      const wins = snap.data()?.wins || {};
+      const myWins = Number(wins[user.uid] || 0);
+      const oppWins = Number(wins[opponentId] || 0);
+      return { blocked: Math.abs(myWins - oppWins) >= HEAD_TO_HEAD_WIN_CAP, myWins, oppWins };
+    } catch (e) {
+      // Fail open: a missing/misconfigured security rule for "head_to_head"
+      // should never block challenges outright.
+      console.error("Head-to-head cap check failed:", e);
+      return { blocked: false, myWins: 0, oppWins: 0 };
+    }
   };
 
   const showNotification = useCallback((type, title, message) => {
