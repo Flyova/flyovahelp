@@ -421,9 +421,12 @@ export default function GamePage() {
         const chalSnap = await transaction.get(challengeRef);
         if (!chalSnap.exists() || chalSnap.data().status !== "pending") return false;
 
-        const gameSnap = await transaction.get(gameRef);
-        if (gameSnap.exists()) return false;
-
+        // No need to read gameRef first: it can only exist if a prior run of
+        // this exact transaction already committed, but that would have also
+        // flipped/deleted the challenge doc above, so the pending check alone
+        // already guarantees this game doesn't exist yet. (Reading a
+        // not-yet-existent doc can also trip security rules that dereference
+        // resource.data on a null resource.)
         transaction.update(doc(db, "users", user.uid), { wallet: increment(-totalCost) });
         transaction.update(doc(db, "users", chal.from), { wallet: increment(-totalCost) });
 
