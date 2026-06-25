@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { db, auth } from "@/lib/firebase";
 import {
-  doc, getDoc, onSnapshot, updateDoc, increment, collection,
+  doc, getDoc, getDocs, onSnapshot, updateDoc, increment, collection,
   query, where, setDoc, addDoc, deleteDoc,
   serverTimestamp, or, orderBy, limit, runTransaction
 } from "firebase/firestore";
@@ -42,6 +42,10 @@ export default function GamePage() {
   const [notification, setNotification] = useState(null);
   const [isSettling, setIsSettling] = useState(false);
   const isSettlingRef = useRef(false);
+  const [isSendingChallenge, setIsSendingChallenge] = useState(false);
+  const isSendingChallengeRef = useRef(false);
+  const [isAcceptingChallenge, setIsAcceptingChallenge] = useState(false);
+  const isAcceptingChallengeRef = useRef(false);
   const persistedCompletedGameRef = useRef(null);
   const ROUNDS_PER_PLAYER = 15;
   const MAX_ROUNDS = ROUNDS_PER_PLAYER * 2;
@@ -325,79 +329,135 @@ export default function GamePage() {
   };
 
   const initiateChallenge = async () => {
-    const totalWager = (stakeAmount * ROUNDS_PER_PLAYER);
-    const calculatedFee = stakeAmount * MATCH_ADMIN_FEE_RATE;
-    const totalCost = totalWager + calculatedFee;
+    if (isSendingChallengeRef.current) return;
+    isSendingChallengeRef.current = true;
+    setIsSendingChallenge(true);
 
-    if (myWallet < totalCost) {
-      return showNotification(
-        "warning",
-        "Low Balance",
-        `Insufficient balance. Required: $${Number(totalCost).toFixed(2)} | Available: $${Number(myWallet || 0).toFixed(2)}`
-      );
+    try {
+      const totalWager = (stakeAmount * ROUNDS_PER_PLAYER);
+      const calculatedFee = stakeAmount * MATCH_ADMIN_FEE_RATE;
+      const totalCost = totalWager + calculatedFee;
+
+      if (myWallet < totalCost) {
+        return showNotification(
+          "warning",
+          "Low Balance",
+          `Insufficient balance. Required: $${Number(totalCost).toFixed(2)} | Available: $${Number(myWallet || 0).toFixed(2)}`
+        );
+      }
+
+      const { blocked, myWins, oppWins } = await checkHeadToHeadCap(showStakeModal.id);
+      if (blocked) {
+        return showNotification(
+          "warning",
+          "Match Limit Reached",
+          `You can't challenge ${showStakeModal.username} right now — the win gap between you two has reached the ${HEAD_TO_HEAD_WIN_CAP}-match cap (${myWins}-${oppWins}).`
+        );
+      }
+
+      // Guard against double-taps firing two pending challenges to the
+      // same target (each one charged a stake on acceptance).
+      const existing = await getDocs(query(
+        collection(db, "challenges"),
+        where("from", "==", user.uid),
+        where("to", "==", showStakeModal.id),
+        where("status", "==", "pending")
+      ));
+      if (!existing.empty) {
+        setShowStakeModal(null);
+        return;
+      }
+
+      await addDoc(collection(db, "challenges"), {
+        from: user.uid, fromName: user.displayName || "Player", to: showStakeModal.id, toName: showStakeModal.username, status: "pending",
+        stakePerRound: stakeAmount, totalWager, fee: calculatedFee, timestamp: Date.now()
+      });
+      setShowStakeModal(null);
+    } catch (e) {
+      console.error("Send challenge error:", e);
+      showNotification("error", "Send Failed", "Could not send challenge. Please try again.");
+    } finally {
+      isSendingChallengeRef.current = false;
+      setIsSendingChallenge(false);
     }
-
-    const { blocked, myWins, oppWins } = await checkHeadToHeadCap(showStakeModal.id);
-    if (blocked) {
-      return showNotification(
-        "warning",
-        "Match Limit Reached",
-        `You can't challenge ${showStakeModal.username} right now — the win gap between you two has reached the ${HEAD_TO_HEAD_WIN_CAP}-match cap (${myWins}-${oppWins}).`
-      );
-    }
-
-    await addDoc(collection(db, "challenges"), {
-      from: user.uid, fromName: user.displayName || "Player", to: showStakeModal.id, toName: showStakeModal.username, status: "pending",
-      stakePerRound: stakeAmount, totalWager, fee: calculatedFee, timestamp: Date.now()
-    });
-    setShowStakeModal(null);
   };
 
   const acceptChallenge = async () => {
     const chal = incomingChallenge;
-    if (!chal) return;
-    const totalCost = chal.totalWager + chal.fee;
-    if (myWallet < totalCost) {
-      return showNotification(
-        "warning",
-        "Low Balance",
-        `Insufficient balance to accept challenge. Required: $${Number(totalCost).toFixed(2)} | Available: $${Number(myWallet || 0).toFixed(2)}`
-      );
-    }
+    if (!chal || isAcceptingChallengeRef.current) return;
+    isAcceptingChallengeRef.current = true;
+    setIsAcceptingChallenge(true);
 
-    const { blocked, myWins, oppWins } = await checkHeadToHeadCap(chal.from);
-    if (blocked) {
-      showNotification(
-        "warning",
-        "Match Limit Reached",
-        `You can't accept this challenge — the win gap between you two has reached the ${HEAD_TO_HEAD_WIN_CAP}-match cap (${myWins}-${oppWins}).`
-      );
-      return deleteDoc(doc(db, "challenges", chal.id)).catch(() => {});
-    }
-
-    const gameId = `match_${Date.now()}`;
     try {
-        await updateDoc(doc(db, "users", user.uid), { wallet: increment(-totalCost) });
-        await updateDoc(doc(db, "users", chal.from), { wallet: increment(-totalCost) });
-        
-        await setDoc(doc(db, "games", gameId), {
+      const totalCost = chal.totalWager + chal.fee;
+      if (myWallet < totalCost) {
+        return showNotification(
+          "warning",
+          "Low Balance",
+          `Insufficient balance to accept challenge. Required: $${Number(totalCost).toFixed(2)} | Available: $${Number(myWallet || 0).toFixed(2)}`
+        );
+      }
+
+      const { blocked, myWins, oppWins } = await checkHeadToHeadCap(chal.from);
+      if (blocked) {
+        showNotification(
+          "warning",
+          "Match Limit Reached",
+          `You can't accept this challenge — the win gap between you two has reached the ${HEAD_TO_HEAD_WIN_CAP}-match cap (${myWins}-${oppWins}).`
+        );
+        return deleteDoc(doc(db, "challenges", chal.id)).catch(() => {});
+      }
+
+      // Tie the game ID to the challenge ID and settle everything (stake
+      // deduction, game creation, challenge close-out) inside one transaction.
+      // A duplicate accept (double-tap, retry, second device) re-reads the
+      // same challenge doc, finds it already non-pending, and is a no-op —
+      // so the stake can never be charged twice for one challenge.
+      const gameId = `match_${chal.id}`;
+      const challengeRef = doc(db, "challenges", chal.id);
+      const gameRef = doc(db, "games", gameId);
+
+      const accepted = await runTransaction(db, async (transaction) => {
+        const chalSnap = await transaction.get(challengeRef);
+        if (!chalSnap.exists() || chalSnap.data().status !== "pending") return false;
+
+        const gameSnap = await transaction.get(gameRef);
+        if (gameSnap.exists()) return false;
+
+        transaction.update(doc(db, "users", user.uid), { wallet: increment(-totalCost) });
+        transaction.update(doc(db, "users", chal.from), { wallet: increment(-totalCost) });
+
+        transaction.set(gameRef, {
           player1: chal.from, player2: user.uid, scores: { p1: 0, p2: 0 },
           roundsPlayed: { p1: 0, p2: 0 },
-          turn: chal.from, round: 1, gameState: "picking", picker: chal.from, 
-          stakePerRound: chal.stakePerRound, 
+          turn: chal.from, round: 1, gameState: "picking", picker: chal.from,
+          stakePerRound: chal.stakePerRound,
           wagerPool: { p1: chal.totalWager, p2: chal.totalWager },
           status: "active", numberPool: [Math.floor(Math.random() * 100), Math.floor(Math.random() * 100)], createdAt: Date.now()
         });
 
         const log = { title: "Match Stake", amount: totalCost, type: "stake", status: "loss", timestamp: serverTimestamp() };
-        await addDoc(collection(db, "users", user.uid, "transactions"), log);
-        await addDoc(collection(db, "users", chal.from, "transactions"), log);
-        await deleteDoc(doc(db, "challenges", chal.id));
-    } catch (e) { console.error(e); }
+        transaction.set(doc(collection(db, "users", user.uid, "transactions")), log);
+        transaction.set(doc(collection(db, "users", chal.from, "transactions")), log);
+        transaction.delete(challengeRef);
+
+        return true;
+      });
+
+      if (!accepted) {
+        showNotification("info", "Already Handled", "This challenge was already accepted or is no longer available.");
+      }
+    } catch (e) {
+      console.error("Accept challenge error:", e);
+      showNotification("error", "Accept Failed", "Could not accept this challenge. Please try again.");
+    } finally {
+      isAcceptingChallengeRef.current = false;
+      setIsAcceptingChallenge(false);
+    }
   };
 
   const handleGameMove = async (num) => {
-    if (!activeGame || activeGame.turn !== user.uid || selectedNumber) return;
+    if (!activeGame || activeGame.status !== "active" || activeGame.turn !== user.uid || selectedNumber) return;
     setSelectedNumber(num);
     
     const isP1 = user.uid === activeGame.player1;
@@ -582,7 +642,7 @@ export default function GamePage() {
                 <div className="flex justify-between text-[10px] font-black uppercase"><span className="opacity-40">Entry Wager ({ROUNDS_PER_PLAYER}x)</span><span>${stakeAmount * ROUNDS_PER_PLAYER}</span></div>
                 <div className="flex justify-between text-[10px] font-black uppercase text-emerald-400"><span>Match Admin Fee (25%)</span><span>${(stakeAmount * MATCH_ADMIN_FEE_RATE).toFixed(2)}</span></div>
               </div>
-              <button onClick={initiateChallenge} className="w-full bg-[#fc7952] py-4 rounded-2xl font-black uppercase text-xs mb-3 shadow-lg">Send Challenge</button>
+              <button onClick={initiateChallenge} disabled={isSendingChallenge} className="w-full bg-[#fc7952] py-4 rounded-2xl font-black uppercase text-xs mb-3 shadow-lg disabled:opacity-50">{isSendingChallenge ? "Sending..." : "Send Challenge"}</button>
               <button onClick={() => setShowStakeModal(null)} className="w-full text-gray-500 font-black uppercase text-[10px]">Cancel</button>
             </div>
           </div>
@@ -636,8 +696,8 @@ export default function GamePage() {
             <p className="text-white font-black italic mb-2 uppercase text-center text-sm">{incomingChallenge.fromName} Challenges You!</p>
             <p className="text-center text-[10px] font-black opacity-60 mb-4 uppercase tracking-widest">Wager: ${(incomingChallenge.totalWager + incomingChallenge.fee).toFixed(2)}</p>
             <div className="grid grid-cols-2 gap-3">
-              <button onClick={acceptChallenge} className="bg-white text-[#613de6] py-3 rounded-2xl font-black uppercase text-xs">Accept</button>
-              <button onClick={() => deleteDoc(doc(db, "challenges", incomingChallenge.id))} className="bg-black/20 py-3 rounded-2xl font-black uppercase text-xs">Decline</button>
+              <button onClick={acceptChallenge} disabled={isAcceptingChallenge} className="bg-white text-[#613de6] py-3 rounded-2xl font-black uppercase text-xs disabled:opacity-50">{isAcceptingChallenge ? "Accepting..." : "Accept"}</button>
+              <button onClick={() => deleteDoc(doc(db, "challenges", incomingChallenge.id))} disabled={isAcceptingChallenge} className="bg-black/20 py-3 rounded-2xl font-black uppercase text-xs disabled:opacity-50">Decline</button>
             </div>
           </div>
         )}

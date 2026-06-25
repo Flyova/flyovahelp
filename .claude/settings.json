@@ -11,7 +11,13 @@
       "WebFetch(domain:docs.pvadeals.com)",
       "Bash(grep -n \"gameDocId\\\\|gameDocRef\\\\|doc\\(\\\\`\\\\|Date.now\\\\|timestamp\" \"src/app/api/cron/game-engine/route.js\")",
       "Bash(rm -rf /tmp/claude-501/*/tasks/*)",
-      "Read(//private/tmp/claude-501/**)"
+      "Read(//private/tmp/claude-501/**)",
+      "Bash(grep -n \"handleGameMove = async\\\\|Send Challenge\\\\|onClick={acceptChallenge}\\\\|onClick={\\(\\) => deleteDoc\\(doc\\(db, \\\\\"challenges\\\\\", incomingChallenge.id\\)\\)}\" \"src/app/game/[id]/page.js\")",
+      "Bash(node scripts/investigate-duplicate-stake.mjs)",
+      "Bash(kill 63700 63698)",
+      "Bash(node scripts/dump-user-history.mjs u_17 u_20)",
+      "Bash(rm -f scripts/investigate-duplicate-stake.mjs scripts/dump-user-history.mjs)",
+      "Bash(rmdir scripts *)"
     ],
     "additionalDirectories": [
       "/Users/mac/Desktop/Client projects/flyovahelp/src/app/(admin)/admin/blog",
