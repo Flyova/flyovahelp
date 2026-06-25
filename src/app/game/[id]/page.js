@@ -423,19 +423,13 @@ export default function GamePage() {
         const pickerRoundsKey =
           activeGame.picker === activeGame.player1 ? "roundsPlayed.p1" : "roundsPlayed.p2";
 
-        // Project scores/rounds-played after this guess to check for a "mercy rule"
-        // early finish: if the trailing player can no longer catch up even by
-        // winning every one of their remaining guessing rounds, end the match now
-        // instead of playing out the rest of the 30 rounds.
+        // The match only ends early if a player sweeps all 15 of their
+        // opponent's cards (guesses every one of their picks correctly).
+        // Otherwise it always runs the full 30 rounds, even if one player
+        // is far ahead on score.
         const newScoreP1 = (activeGame.scores?.p1 || 0) + (wasCorrect && isP1 ? 1 : 0);
         const newScoreP2 = (activeGame.scores?.p2 || 0) + (wasCorrect && !isP1 ? 1 : 0);
-        const newRoundsPlayedP1 = (activeGame.roundsPlayed?.p1 || 0) + (activeGame.picker === activeGame.player1 ? 1 : 0);
-        const newRoundsPlayedP2 = (activeGame.roundsPlayed?.p2 || 0) + (activeGame.picker === activeGame.player2 ? 1 : 0);
-        const remainingGuessesP1 = ROUNDS_PER_PLAYER - newRoundsPlayedP2;
-        const remainingGuessesP2 = ROUNDS_PER_PLAYER - newRoundsPlayedP1;
-        const p2CanCatchUp = newScoreP2 + remainingGuessesP2 >= newScoreP1;
-        const p1CanCatchUp = newScoreP1 + remainingGuessesP1 >= newScoreP2;
-        const decisiveWin = !p1CanCatchUp || !p2CanCatchUp;
+        const decisiveWin = newScoreP1 >= ROUNDS_PER_PLAYER || newScoreP2 >= ROUNDS_PER_PLAYER;
 
         const isGameOver = completedRound >= MAX_ROUNDS || decisiveWin;
 
