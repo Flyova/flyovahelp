@@ -113,7 +113,8 @@ export default function TradeRoom() {
             setOtherPartyName(pData.full_name || pData.fullName || (isAgent ? data.senderName : data.agentName));
         }
 
-        if (data.type === "deposit" && !isAgent && !agentBank) {
+        const isApproved = data.status === "acknowledged" || data.status === "completed";
+        if (data.type === "deposit" && !isAgent && isApproved && !agentBank) {
             const agentSnap = await getDoc(doc(db, "agents", data.agentId));
             if (agentSnap.exists()) {
                 setAgentBank(agentSnap.data());
@@ -478,7 +479,7 @@ export default function TradeRoom() {
                 </div>
             </div>
 
-            {trade.type === "deposit" && agentBank && (
+            {trade.type === "deposit" && agentBank && (trade.status === "acknowledged" || trade.status === "completed") && (
                 <div className="p-5 bg-white text-slate-900 rounded-3xl shadow-2xl space-y-3 border-l-8 border-[#613de6]">
                     <div className="flex justify-between items-start">
                         <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Agent Bank Details</p>
@@ -494,6 +495,12 @@ export default function TradeRoom() {
                            {agentBank.accountName || agentBank.full_name}
                         </p>
                     </div>
+                </div>
+            )}
+
+            {trade.type === "deposit" && trade.status === "pending" && (
+                <div className="p-5 bg-[#1e293b] rounded-3xl border border-white/5 text-center text-[11px] font-bold uppercase text-white/40 tracking-wider">
+                    Waiting for agent to approve the trade. Bank details will appear here once approved.
                 </div>
             )}
         </div>

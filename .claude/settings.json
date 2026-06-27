@@ -17,7 +17,12 @@
       "Bash(kill 63700 63698)",
       "Bash(node scripts/dump-user-history.mjs u_17 u_20)",
       "Bash(rm -f scripts/investigate-duplicate-stake.mjs scripts/dump-user-history.mjs)",
-      "Bash(rmdir scripts *)"
+      "Bash(rmdir scripts *)",
+      "Bash(node -e ' *)",
+      "Bash(node -e \"require\\('@babel/core'\\)\")",
+      "Bash(node --check src/app/page.js)",
+      "Bash(timeout 120 npx next build)",
+      "Bash(git checkout *)"
     ],
     "additionalDirectories": [
       "/Users/mac/Desktop/Client projects/flyovahelp/src/app/(admin)/admin/blog",
