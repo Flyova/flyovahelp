@@ -12,7 +12,8 @@ import {
   Users,
   Clock,
   ExternalLink,
-  ShieldAlert
+  ShieldAlert,
+  AlertCircle
 } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import { 
@@ -38,7 +39,8 @@ export default function DepositPage() {
   const [userData, setUserData] = useState({ main: 0, country: "", uid: "" });
   const [agents, setAgents] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState(null);
-  
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+
   // NEW: Global System States
   const [systemSettings, setSystemSettings] = useState(null);
   const [systemLoading, setSystemLoading] = useState(true);
@@ -411,14 +413,49 @@ export default function DepositPage() {
           </div>
         )}
 
-        <button 
-          onClick={handleDeposit} 
+        <button
+          onClick={() => setShowConfirmModal(true)}
           disabled={loading || !depositAmount || (method === 'agent' && !selectedAgent) || (activeUsdtSession && method === "usdt")}
           className="w-full bg-[#613de6] py-5 rounded-4xl font-black uppercase italic text-sm shadow-2xl flex items-center justify-center gap-3 disabled:opacity-30 active:scale-95 transition-all"
         >
           {loading ? <Loader2 className="animate-spin" /> : <>PROCEED TO TRADE <ArrowRight size={20}/></>}
         </button>
       </div>
+
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#0f172a]/90 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-[#1e293b] w-full max-w-xs rounded-[2.5rem] border border-white/10 p-8 shadow-2xl space-y-6 text-center">
+            <div className="w-16 h-16 bg-[#613de6]/20 text-[#613de6] rounded-3xl flex items-center justify-center mx-auto">
+              <AlertCircle size={32} />
+            </div>
+            <div>
+              <h2 className="text-xl font-black uppercase italic tracking-tighter mb-2">Confirm Deposit</h2>
+              <p className="text-[11px] text-gray-400 font-bold leading-relaxed uppercase">
+                You are about to deposit <span className="text-[#fc7952]">${depositAmount}</span>. Do not proceed if you&apos;re not ready to deposit.
+              </p>
+            </div>
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  handleDeposit();
+                }}
+                disabled={loading}
+                className="w-full bg-[#613de6] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
+              >
+                {loading ? "Processing..." : "CONFIRM & PAY"}
+              </button>
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="w-full py-4 rounded-2xl bg-white/5 font-black uppercase text-[10px] tracking-widest text-gray-500"
+              >
+                CANCEL
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

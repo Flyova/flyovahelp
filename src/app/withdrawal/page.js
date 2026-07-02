@@ -42,6 +42,7 @@ export default function WithdrawalPage() {
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false); // Added for success animation
+  const [resultingBalance, setResultingBalance] = useState(null);
   const [agentsLoading, setAgentsLoading] = useState(false);
   
   // NEW: Global System States
@@ -318,6 +319,7 @@ const handleWithdraw = async () => {
         }
         
         setLoading(false);
+        setResultingBalance(Number(userData.main || 0) - totalDeduct);
         setShowSuccess(true);
         setTimeout(() => router.push("/dashboard"), 3000);
 
@@ -393,6 +395,7 @@ const handleWithdraw = async () => {
         }
         
         setLoading(false);
+        setResultingBalance(Number(userData.main || 0) - withdrawAmount);
         setShowSuccess(true);
         setTimeout(() => router.push(`/trade/${tradeRef.id}`), 3000);
       }
@@ -445,6 +448,12 @@ const handleWithdraw = async () => {
               <h2 className="text-2xl font-black italic uppercase">Withdrawal Submitted!</h2>
               <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mt-1">Redirecting to Dashboard...</p>
             </div>
+            {resultingBalance !== null && (
+              <div className="bg-[#0f172a] border border-white/5 rounded-3xl py-4 px-6">
+                <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest mb-1">Remaining Balance</p>
+                <p className="text-2xl font-black italic text-[#fc7952]">${resultingBalance.toFixed(2)}</p>
+              </div>
+            )}
           </div>
         </div>
       )}

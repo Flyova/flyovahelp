@@ -306,8 +306,14 @@ const buySubscription = async () => {
           });
         } catch (e) { console.error("Activation notification failed", e); }
 
+        const remainingBalance = Number(userData.wallet || 0) - pendingPlan.price;
+        showNotification(
+          "success",
+          "Stake Confirmed",
+          `$${pendingPlan.price.toFixed(2)} deducted. Remaining balance: $${remainingBalance.toFixed(2)}`
+        );
         setShowConfirmModal(false);
-    } catch (e) { 
+    } catch (e) {
         console.error(e);
         showNotification("error", "Transaction Failed", "Please try again.");
     } finally {

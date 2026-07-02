@@ -9,7 +9,7 @@ import { canAccessAdminPath, resolvePrivilegedRole } from "@/lib/adminAccess";
 import {
   LayoutDashboard, ArrowDownCircle, UserCheck, Wallet,
   ArrowUpCircle, Send, Delete, Users, History, Trophy,
-  MessageCircle, X, LogOut, Menu, Loader2, FileText, CheckCircle2
+  MessageCircle, X, LogOut, Menu, Loader2, FileText, CheckCircle2, Phone
 } from "lucide-react";
 
 export default function AdminLayout({ children }) {
@@ -132,6 +132,7 @@ export default function AdminLayout({ children }) {
       { name: "Withdrawals", icon: ArrowUpCircle, path: "/admin/withdrawals" },
       { name: "Announcements", icon: Send, path: "/admin/broadcast" },
       { name: "User Directory", icon: Users, path: "/admin/users" },
+      { name: "Contact List", icon: Phone, path: "/admin/contacts" },
       { name: "Bet 1 History", icon: History, path: "/admin/bet1" },
       { name: "Bet 2 History", icon: History, path: "/admin/bet2" },
       { name: "Bet 3 History", icon: History, path: "/admin/bet3" },
