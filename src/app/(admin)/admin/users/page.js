@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { collection, doc, getDocs, onSnapshot, orderBy, query, updateDoc, where } from "firebase/firestore";
 import { Activity, Ban, CheckCircle, Edit2, Gift, Loader2, Save, Search, Users, X } from "lucide-react";
 import Link from "next/link";
@@ -138,9 +138,15 @@ export default function UserManagement() {
         }
       }
 
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Admin session expired. Please sign in again.");
+
       const res = await fetch("/api/admin/update-user", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           ...editForm,
           username: trimmedUsername,

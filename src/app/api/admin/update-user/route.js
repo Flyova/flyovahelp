@@ -1,9 +1,50 @@
 import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { NextResponse } from "next/server";
+import { resolvePrivilegedRole } from "@/lib/adminAccess";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const ADMIN_ROLES = new Set(["admin"]);
+
+const parseBearerToken = (headerValue) => {
+  const raw = String(headerValue || "").trim();
+  if (!raw.toLowerCase().startsWith("bearer ")) return "";
+  return raw.slice(7).trim();
+};
+
+const getAuthorizedRequester = async (request, adminDb) => {
+  const token = parseBearerToken(request.headers.get("authorization"));
+  if (!token) return { error: "Missing authorization token.", status: 401 };
+
+  let decoded;
+  try {
+    decoded = await admin.auth().verifyIdToken(token);
+  } catch (error) {
+    console.error("Update-user admin token verification failed:", error);
+    return { error: "Invalid or expired authorization token.", status: 401 };
+  }
+
+  const userSnap = await adminDb.collection("users").doc(decoded.uid).get();
+  const userData = userSnap.exists ? userSnap.data() : {};
+  const role = resolvePrivilegedRole(userData?.role, decoded.email);
+
+  if (!role || !ADMIN_ROLES.has(role)) {
+    return { error: "Administrative access required.", status: 403 };
+  }
+
+  return { uid: decoded.uid, email: decoded.email || "", role };
+};
 
 export async function POST(req) {
   try {
     const adminDb = getAdminDb();
+
+    const requester = await getAuthorizedRequester(req, adminDb);
+    if (requester.error) {
+      return NextResponse.json({ error: requester.error }, { status: requester.status });
+    }
+
     const { uid, email, username, fullName, role, wallet, status, phone, dob, country, pin, isban } = await req.json();
 
     if (!uid) {

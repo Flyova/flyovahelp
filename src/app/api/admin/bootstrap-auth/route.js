@@ -6,16 +6,21 @@ export const runtime = "nodejs";
 
 const normalize = (value) => String(value || "").trim().toLowerCase();
 
-const STAFF_PASSWORD = process.env.STAFF_DASHBOARD_PASSWORD || "Flyovastaff@";
-const SUPPORT_PASSWORD = process.env.SUPPORT_DASHBOARD_PASSWORD || "Flyovasupport@";
+const STAFF_PASSWORD = process.env.STAFF_DASHBOARD_PASSWORD || "";
+const SUPPORT_PASSWORD = process.env.SUPPORT_DASHBOARD_PASSWORD || "";
 
 const privilegedCredentials = {
-  [STAFF_ADMIN_EMAIL]: { role: "staff", password: STAFF_PASSWORD },
-  [SUPPORT_ADMIN_EMAIL]: { role: "support", password: SUPPORT_PASSWORD },
+  ...(STAFF_PASSWORD ? { [STAFF_ADMIN_EMAIL]: { role: "staff", password: STAFF_PASSWORD } } : {}),
+  ...(SUPPORT_PASSWORD ? { [SUPPORT_ADMIN_EMAIL]: { role: "support", password: SUPPORT_PASSWORD } } : {}),
 };
 
 export async function POST(req) {
   try {
+    if (!STAFF_PASSWORD && !SUPPORT_PASSWORD) {
+      console.error("Bootstrap Auth Error: STAFF_DASHBOARD_PASSWORD/SUPPORT_DASHBOARD_PASSWORD are not configured.");
+      return NextResponse.json({ error: "Administrative bootstrap is not configured." }, { status: 503 });
+    }
+
     const payload = await req.json().catch(() => ({}));
     const email = normalize(payload.email);
     const password = String(payload.password || "").trim();

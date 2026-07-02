@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { 
   collection, onSnapshot, doc, deleteDoc, updateDoc 
 } from "firebase/firestore";
@@ -25,9 +25,15 @@ export default function AdminDeletions() {
     
     setProcessingId(requestId);
     try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Admin session expired. Please sign in again.");
+
       const res = await fetch("/api/admin/delete-user", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ uid })
       });
 
