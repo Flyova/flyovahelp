@@ -63,11 +63,12 @@ export default function DepositPage() {
         onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
-            setUserData({ 
-              main: data.wallet || 0, 
+            setUserData({
+              main: data.wallet || 0,
               country: data.country || "",
               uid: user.uid,
-              fullName: data.fullName || data.username || "User"
+              fullName: data.fullName || data.username || "User",
+              restrictDeposit: data.restrictDeposit || false
             });
           }
         });
@@ -287,7 +288,28 @@ export default function DepositPage() {
             <p className="text-gray-400 text-xs font-bold uppercase tracking-[0.2em] max-w-70 leading-relaxed">
                 Deposits are temporarily disabled for system maintenance. Please check back shortly.
             </p>
-            <button 
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="mt-12 bg-[#1e293b] text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/5 active:scale-95 transition-all"
+            >
+                Back to Dashboard
+            </button>
+        </div>
+    );
+  }
+
+  // ACCOUNT-LEVEL RESTRICTION VIEW
+  if (userData.restrictDeposit) {
+    return (
+        <div className="min-h-screen bg-[#0f172a] p-6 flex flex-col items-center justify-center text-center">
+            <div className="bg-rose-500/10 p-8 rounded-full mb-8 border border-rose-500/20">
+                <ShieldAlert size={60} className="text-rose-500" />
+            </div>
+            <h2 className="text-3xl font-black italic uppercase text-white mb-3">Deposits Restricted</h2>
+            <p className="text-gray-400 text-xs font-bold uppercase tracking-[0.2em] max-w-70 leading-relaxed">
+                Deposits have been restricted on your account. Please contact support for assistance.
+            </p>
+            <button
               onClick={() => router.push('/dashboard')}
               className="mt-12 bg-[#1e293b] text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/5 active:scale-95 transition-all"
             >

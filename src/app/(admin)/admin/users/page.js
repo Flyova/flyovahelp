@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { auth, db } from "@/lib/firebase";
 import { collection, doc, getDocs, onSnapshot, orderBy, query, updateDoc, where } from "firebase/firestore";
-import { Activity, Ban, CheckCircle, Edit2, Gift, Loader2, Save, Search, Users, X } from "lucide-react";
+import { Activity, Ban, CheckCircle, Edit2, Gift, Loader2, Save, Search, ShieldAlert, Users, X } from "lucide-react";
 import Link from "next/link";
 
 const formatJoinedDate = (timestamp) => {
@@ -12,6 +12,12 @@ const formatJoinedDate = (timestamp) => {
 
 const normalizePin = (value) => String(value || "").replace(/\D/g, "").slice(0, 8);
 const WELCOME_BONUS_AMOUNT = 3;
+
+const RESTRICTION_FIELDS = [
+  { key: "restrictDeposit", label: "Deposits" },
+  { key: "restrictWithdrawal", label: "Withdrawals" },
+  { key: "restrictTransfer", label: "Transfers" },
+];
 
 const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
 
@@ -102,6 +108,17 @@ export default function UserManagement() {
       });
     } catch (err) {
       alert("Failed to update ban status: " + err.message);
+    }
+  };
+
+  const handleToggleRestriction = async (user, field, label) => {
+    const newValue = !user[field];
+    if (!window.confirm(`${newValue ? "Restrict" : "Unrestrict"} ${label} for ${user.username}?`)) return;
+
+    try {
+      await updateDoc(doc(db, "users", user.id), { [field]: newValue });
+    } catch (err) {
+      alert(`Failed to update ${label} restriction: ` + err.message);
     }
   };
 
@@ -237,6 +254,7 @@ export default function UserManagement() {
   );
   const isPinValid = normalizedEditingPin.length === 8;
   const canSaveProfile = !isUpdating && isPinValid && !pinConflictUser;
+  const liveSelectedUser = users.find((u) => u.id === selectedUser?.id) || selectedUser;
 
   if (loading) {
     return (
@@ -306,6 +324,15 @@ export default function UserManagement() {
                             )}
                           </p>
                           <p className="text-[10px] font-bold text-slate-400">{u.email}</p>
+                          {RESTRICTION_FIELDS.some((f) => u[f.key]) && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {RESTRICTION_FIELDS.filter((f) => u[f.key]).map((f) => (
+                                <span key={f.key} className="text-[8px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-black uppercase">
+                                  {f.label} Restricted
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="p-6 font-black text-emerald-600">${Number(u.wallet || 0).toFixed(2)}</td>
@@ -497,6 +524,25 @@ export default function UserManagement() {
                       </>
                     )}
                   </button>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-[10px] font-black uppercase text-slate-400">Account Restrictions</label>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {RESTRICTION_FIELDS.map((f) => {
+                      const restricted = Boolean(liveSelectedUser?.[f.key]);
+                      return (
+                        <button
+                          key={f.key}
+                          type="button"
+                          onClick={() => handleToggleRestriction(liveSelectedUser, f.key, f.label)}
+                          className={`p-4 rounded-2xl text-[10px] font-black uppercase border transition-all flex items-center justify-center gap-2 ${restricted ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-emerald-50 border-emerald-200 text-emerald-600"}`}
+                        >
+                          {restricted ? <ShieldAlert size={14} /> : <CheckCircle size={14} />}
+                          {f.label} {restricted ? "Restricted" : "Allowed"}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 

@@ -16,26 +16,28 @@ import {
   limit
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { 
-  ChevronLeft, 
-  Send, 
-  Wallet, 
-  User, 
-  CheckCircle2, 
-  Loader2, 
+import {
+  ChevronLeft,
+  Send,
+  Wallet,
+  User,
+  CheckCircle2,
+  Loader2,
   Download,
-  Receipt
+  Receipt,
+  ShieldAlert
 } from "lucide-react";
 
 export default function TransferPage() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState({ 
-    wallet: 0, 
-    pin: "", 
+    wallet: 0,
+    pin: "",
     fullName: "",
     bonusClaimed: false,
-    bonusDeducted: false
+    bonusDeducted: false,
+    restrictTransfer: false
   });
   
   const [recipientPin, setRecipientPin] = useState("");
@@ -71,12 +73,13 @@ export default function TransferPage() {
         onSnapshot(doc(db, "users", u.uid), (snap) => {
           if (snap.exists()) {
             const data = snap.data();
-            setUserData({ 
-              wallet: data.wallet || 0, 
+            setUserData({
+              wallet: data.wallet || 0,
               pin: data.pin || "",
               fullName: data.fullName || data.username || "User",
               bonusClaimed: data.bonusClaimed || false,
-              bonusDeducted: data.bonusDeducted || false
+              bonusDeducted: data.bonusDeducted || false,
+              restrictTransfer: data.restrictTransfer || false
             });
           }
         });
@@ -119,6 +122,7 @@ export default function TransferPage() {
     const bonusRepayment = shouldRepayBonus ? 3.00 : 0.00;
     const totalDeduct = val + fee + bonusRepayment;
 
+    if (userData.restrictTransfer) return alert("Transfers have been restricted on your account. Please contact support.");
     if (!val || val < 1) return alert("Minimum transfer is $1.00");
     if (!recipientData) return alert("Please enter a valid recipient PIN");
     
@@ -269,6 +273,26 @@ export default function TransferPage() {
           }
         `}</style>
       </div>
+    );
+  }
+
+  if (userData.restrictTransfer) {
+    return (
+        <div className="min-h-screen bg-[#0f172a] p-6 flex flex-col items-center justify-center text-center">
+            <div className="bg-rose-500/10 p-8 rounded-full mb-8 border border-rose-500/20">
+                <ShieldAlert size={60} className="text-rose-500" />
+            </div>
+            <h2 className="text-3xl font-black italic uppercase text-white mb-3">Transfers Restricted</h2>
+            <p className="text-gray-400 text-xs font-bold uppercase tracking-[0.2em] max-w-70 leading-relaxed">
+                Transfers have been restricted on your account. Please contact support for assistance.
+            </p>
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="mt-12 bg-[#1e293b] text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/5 active:scale-95 transition-all"
+            >
+                Back to Dashboard
+            </button>
+        </div>
     );
   }
 
