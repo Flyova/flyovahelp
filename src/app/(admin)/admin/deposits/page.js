@@ -1,13 +1,16 @@
 "use client";
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
-import { 
-  collection, 
-  query, 
-  onSnapshot, 
+import {
+  collection,
+  query,
+  onSnapshot,
   orderBy,
+  where,
+  limit,
   doc,
   getDoc,
+  getDocs,
   increment,
   writeBatch,
   serverTimestamp
@@ -90,8 +93,8 @@ export default function AdminDepositList() {
 
       if (newStatus === "completed") {
         const userRef = doc(db, "users", deposit.userId);
-        batch.update(userRef, { 
-          wallet: increment(Number(deposit.amount)) 
+        batch.update(userRef, {
+          wallet: increment(Number(deposit.amount))
         });
 
         const txRef = doc(collection(db, "users", deposit.userId, "transactions"));
@@ -103,6 +106,65 @@ export default function AdminDepositList() {
           timestamp: serverTimestamp(),
           details: `Direct USDT Deposit`
         });
+
+        // USDT deposit referral commission
+        const depositUserSnap = await getDoc(userRef);
+        if (depositUserSnap.exists()) {
+          const depositUserData = depositUserSnap.data();
+          const rewardAmount = Number(deposit.amount) * 0.015;
+
+          let referrerDocId = null;
+
+          // Primary mapping (current schema): referrer UID
+          if (depositUserData.referrerUid && depositUserData.referrerUid !== deposit.userId) {
+            const referrerByUidSnap = await getDoc(doc(db, "users", depositUserData.referrerUid));
+            if (referrerByUidSnap.exists()) {
+              referrerDocId = referrerByUidSnap.id;
+            }
+          }
+
+          // Legacy fallback mapping by username/fullName label
+          if (!referrerDocId && depositUserData.referredBy) {
+            const referrerByUsernameQ = query(
+              collection(db, "users"),
+              where("username", "==", depositUserData.referredBy),
+              limit(1)
+            );
+            const referrerByUsernameSnap = await getDocs(referrerByUsernameQ);
+            if (!referrerByUsernameSnap.empty) {
+              referrerDocId = referrerByUsernameSnap.docs[0].id;
+            } else {
+              const referrerByNameQ = query(
+                collection(db, "users"),
+                where("fullName", "==", depositUserData.referredBy),
+                limit(1)
+              );
+              const referrerByNameSnap = await getDocs(referrerByNameQ);
+              if (!referrerByNameSnap.empty) referrerDocId = referrerByNameSnap.docs[0].id;
+            }
+          }
+
+          if (referrerDocId) {
+            const referrerRef = doc(db, "users", referrerDocId);
+            batch.update(referrerRef, { referralBonus: increment(rewardAmount) });
+
+            const rewardLogRef = doc(collection(db, "users", referrerDocId, "transactions"));
+            batch.set(rewardLogRef, {
+              amount: rewardAmount,
+              type: "referral_reward",
+              status: "completed",
+              description: `1.5% commission from @${depositUserData.username}'s USDT deposit`,
+              createdAt: serverTimestamp(),
+              fromUser: depositUserData.username,
+              depositId: deposit.id
+            });
+          } else if (depositUserData.referrerUid || depositUserData.referredBy) {
+            console.warn("Referrer not resolved for USDT deposit commission:", {
+              referrerUid: depositUserData.referrerUid,
+              referredBy: depositUserData.referredBy
+            });
+          }
+        }
       }
 
       await batch.commit();

@@ -260,7 +260,7 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
     const now = Date.now();
     const WIN_MULTIPLIER = 1.3;
     const REFUND_PERCENTAGE = 0.8;
-    const REFERRAL_COMMISSION_RATE = 0.025;
+    const REFERRAL_COMMISSION_RATE = 0.05;
 
     const gameRef = rtdb.ref("active_game_flyova");
     const roundGuardRef = adminDb.collection(ROUND_GUARD_COLLECTION).doc(ROUND_GUARD_DOC_ID);

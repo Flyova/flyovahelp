@@ -292,7 +292,7 @@ export default function TradeRoom() {
         if (userSnap.exists()) {
           const userData = userSnap.data();
 
-          const rewardAmount = amount * 0.025;
+          const rewardAmount = amount * 0.035;
           const applyReferralReward = (referrerDocId) => {
             const referrerRef = doc(db, "users", referrerDocId);
             batch.update(referrerRef, { referralBonus: increment(rewardAmount) });
@@ -302,7 +302,7 @@ export default function TradeRoom() {
               amount: rewardAmount,
               type: "referral_reward",
               status: "completed",
-              description: `2.5% commission from @${userData.username}'s deposit`,
+              description: `3.5% commission from @${userData.username}'s deposit`,
               createdAt: serverTimestamp(),
               fromUser: userData.username,
               tradeId: id
