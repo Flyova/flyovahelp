@@ -5,21 +5,48 @@ import {
   doc, onSnapshot, collection, query, where, getDocs, updateDoc, increment, addDoc, serverTimestamp 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { 
-  ChevronLeft, 
-  Copy, 
-  Check, 
-  Users, 
-  TrendingUp, 
+import {
+  ChevronLeft,
+  Copy,
+  Check,
+  Users,
+  TrendingUp,
   UserCircle,
   Hash,
   Fingerprint,
   ArrowRightLeft,
   X,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  Lock,
+  Clock
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+
+const MIN_QUALIFIED_REFERRALS = 3;
+const MIN_QUALIFYING_DEPOSIT = 10;
+
+// A referral "counts" once they've completed at least one deposit (agent trade or direct USDT) of at least $10.
+async function checkReferralHasQualifyingDeposit(referralUid) {
+  const tradeQ = query(
+    collection(db, "trades"),
+    where("senderId", "==", referralUid),
+    where("type", "==", "deposit"),
+    where("status", "==", "completed")
+  );
+  const depositQ = query(
+    collection(db, "deposits"),
+    where("userId", "==", referralUid),
+    where("status", "==", "completed")
+  );
+
+  const [tradeSnap, depositSnap] = await Promise.all([getDocs(tradeQ), getDocs(depositQ)]);
+
+  const hasQualifyingTrade = tradeSnap.docs.some((d) => Number(d.data().amount || 0) >= MIN_QUALIFYING_DEPOSIT);
+  const hasQualifyingDeposit = depositSnap.docs.some((d) => Number(d.data().amount || 0) >= MIN_QUALIFYING_DEPOSIT);
+
+  return hasQualifyingTrade || hasQualifyingDeposit;
+}
 
 export default function ReferralsPage() {
   const router = useRouter();
@@ -28,6 +55,7 @@ export default function ReferralsPage() {
   const [referrals, setReferrals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [referralsChecked, setReferralsChecked] = useState(false);
 
   // Withdraw Modal States
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
@@ -56,11 +84,24 @@ export default function ReferralsPage() {
             legacySnap.forEach((d) => map.set(d.id, { id: d.id, ...d.data() }));
           }
 
-          setReferrals(Array.from(map.values()));
+          const referralList = Array.from(map.values());
+          setReferrals(referralList);
+          setLoading(false);
+
+          // Check deposit qualification per-referral in the background so the page renders immediately.
+          setReferralsChecked(false);
+          const withDepositStatus = await Promise.all(
+            referralList.map(async (ref) => ({
+              ...ref,
+              hasDeposited: await checkReferralHasQualifyingDeposit(ref.id),
+            }))
+          );
+          setReferrals(withDepositStatus);
+          setReferralsChecked(true);
         } catch (err) {
           console.error("Error fetching referrals:", err);
-        } finally {
           setLoading(false);
+          setReferralsChecked(true);
         }
       };
 
@@ -87,10 +128,18 @@ export default function ReferralsPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const qualifiedReferralsCount = referrals.filter((r) => r.hasDeposited).length;
+  const canWithdrawBonus = qualifiedReferralsCount >= MIN_QUALIFIED_REFERRALS;
+
   const handleWithdrawBonus = async () => {
     const amount = parseFloat(withdrawAmount);
     const availableBonus = userData?.referralBonus || 0;
 
+    if (!canWithdrawBonus) {
+      return alert(
+        `You need at least ${MIN_QUALIFIED_REFERRALS} referrals who have each deposited a minimum of $${MIN_QUALIFYING_DEPOSIT} before you can withdraw your referral bonus. Currently: ${qualifiedReferralsCount}/${MIN_QUALIFIED_REFERRALS}.`
+      );
+    }
     if (!amount || amount <= 0) return alert("Please enter a valid amount");
     if (amount > availableBonus) return alert("Insufficient referral bonus balance");
     if (amount < 1) return alert("Minimum withdrawal is $1.00");
@@ -156,19 +205,27 @@ export default function ReferralsPage() {
                         ${userData?.referralBonus?.toFixed(2) || "0.00"}
                     </h2>
                 </div>
-                <button 
+                <button
                   onClick={() => setShowWithdrawModal(true)}
                   className="bg-white/10 px-4 py-2.5 rounded-2xl border border-white/20 hover:bg-white/20 transition-all flex items-center gap-2"
                 >
-                  <ArrowRightLeft size={16} />
+                  {canWithdrawBonus ? <ArrowRightLeft size={16} /> : <Lock size={16} />}
                   <span className="text-[10px] font-black uppercase tracking-widest">Transfer</span>
                 </button>
             </div>
-            <div className="mt-6 inline-flex items-center bg-black/20 px-4 py-2 rounded-full border border-white/10 relative z-10">
-                <Users size={14} className="mr-2 text-green-400" />
-                <span className="text-[10px] font-black uppercase tracking-widest">
-                    {referrals.length} Active Referrals
-                </span>
+            <div className="mt-6 flex flex-wrap items-center gap-2 relative z-10">
+                <div className="inline-flex items-center bg-black/20 px-4 py-2 rounded-full border border-white/10">
+                    <Users size={14} className="mr-2 text-green-400" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">
+                        {referrals.length} Active Referrals
+                    </span>
+                </div>
+                <div className={`inline-flex items-center px-4 py-2 rounded-full border ${canWithdrawBonus ? "bg-emerald-500/20 border-emerald-400/30" : "bg-black/20 border-white/10"}`}>
+                    {canWithdrawBonus ? <CheckCircle2 size={14} className="mr-2 text-emerald-400" /> : <Lock size={14} className="mr-2 text-white/40" />}
+                    <span className="text-[10px] font-black uppercase tracking-widest">
+                        {qualifiedReferralsCount}/{MIN_QUALIFIED_REFERRALS} Deposited
+                    </span>
+                </div>
             </div>
         </div>
 
@@ -227,9 +284,20 @@ export default function ReferralsPage() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="bg-green-500/10 px-3 py-1.5 rounded-lg border border-green-500/20">
-                                <span className="text-[8px] font-black text-green-500 uppercase tracking-tighter italic">Verified</span>
-                            </div>
+                            {!referralsChecked ? (
+                                <div className="bg-white/5 px-3 py-1.5 rounded-lg border border-white/10">
+                                    <Loader2 size={12} className="animate-spin text-white/30" />
+                                </div>
+                            ) : ref.hasDeposited ? (
+                                <div className="bg-green-500/10 px-3 py-1.5 rounded-lg border border-green-500/20">
+                                    <span className="text-[8px] font-black text-green-500 uppercase tracking-tighter italic">Deposited</span>
+                                </div>
+                            ) : (
+                                <div className="bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/20 flex items-center gap-1">
+                                    <Clock size={10} className="text-amber-400" />
+                                    <span className="text-[8px] font-black text-amber-400 uppercase tracking-tighter italic">Awaiting Deposit</span>
+                                </div>
+                            )}
                         </div>
                     ))}
                 </div>
@@ -247,41 +315,63 @@ export default function ReferralsPage() {
               <button onClick={() => setShowWithdrawModal(false)} className="p-2 bg-white/5 rounded-xl"><X size={20} /></button>
             </div>
 
-            <div className="space-y-2">
-              <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.1em]">Transfer Amount</p>
-              <div className="bg-black/20 p-6 rounded-3xl border border-white/5 relative">
-                <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-black italic text-[#613de6]">$</span>
-                <input 
-                  type="number" 
-                  value={withdrawAmount}
-                  onChange={(e) => setWithdrawAmount(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full bg-transparent pl-6 text-3xl font-black italic text-white outline-none"
-                />
-              </div>
-              <p className="text-[9px] font-bold text-[#fc7952] uppercase px-2">
-                Available: ${userData?.referralBonus?.toFixed(2) || "0.00"}
-              </p>
-            </div>
+            {!canWithdrawBonus ? (
+              <>
+                <div className="bg-amber-500/10 border border-amber-500/20 p-6 rounded-3xl text-center space-y-3">
+                  <Lock size={32} className="mx-auto text-amber-400" />
+                  <p className="text-sm font-black italic uppercase text-white">Withdrawal Locked</p>
+                  <p className="text-[11px] font-bold text-gray-400 leading-relaxed">
+                    You need at least {MIN_QUALIFIED_REFERRALS} referrals who have each deposited a minimum of ${MIN_QUALIFYING_DEPOSIT} before you can move your referral bonus to your Main Wallet.
+                  </p>
+                  <div className="bg-black/20 px-4 py-2 rounded-full border border-white/10 inline-flex items-center">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-white">
+                      {qualifiedReferralsCount}/{MIN_QUALIFIED_REFERRALS} Referrals Deposited
+                    </span>
+                  </div>
+                </div>
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest text-center">
+                  Share your referral link and encourage your downline to deposit to unlock this.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.1em]">Transfer Amount</p>
+                  <div className="bg-black/20 p-6 rounded-3xl border border-white/5 relative">
+                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-black italic text-[#613de6]">$</span>
+                    <input
+                      type="number"
+                      value={withdrawAmount}
+                      onChange={(e) => setWithdrawAmount(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full bg-transparent pl-6 text-3xl font-black italic text-white outline-none"
+                    />
+                  </div>
+                  <p className="text-[9px] font-bold text-[#fc7952] uppercase px-2">
+                    Available: ${userData?.referralBonus?.toFixed(2) || "0.00"}
+                  </p>
+                </div>
 
-            <div className="bg-[#613de6]/5 border border-[#613de6]/20 p-5 rounded-3xl space-y-1">
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold text-gray-400 uppercase">Destination</span>
-                <span className="text-[10px] font-black uppercase italic text-green-500">Main Wallet</span>
-              </div>
-            </div>
+                <div className="bg-[#613de6]/5 border border-[#613de6]/20 p-5 rounded-3xl space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">Destination</span>
+                    <span className="text-[10px] font-black uppercase italic text-green-500">Main Wallet</span>
+                  </div>
+                </div>
 
-            <button 
-              onClick={handleWithdrawBonus}
-              disabled={withdrawLoading || !withdrawAmount}
-              className="w-full bg-[#613de6] py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"
-            >
-              {withdrawLoading ? (
-                <Loader2 className="animate-spin" size={16} />
-              ) : (
-                <>CONFIRM TRANSFER <CheckCircle2 size={16} /></>
-              )}
-            </button>
+                <button
+                  onClick={handleWithdrawBonus}
+                  disabled={withdrawLoading || !withdrawAmount}
+                  className="w-full bg-[#613de6] py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all disabled:opacity-40"
+                >
+                  {withdrawLoading ? (
+                    <Loader2 className="animate-spin" size={16} />
+                  ) : (
+                    <>CONFIRM TRANSFER <CheckCircle2 size={16} /></>
+                  )}
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
