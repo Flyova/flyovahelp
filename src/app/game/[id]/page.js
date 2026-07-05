@@ -47,9 +47,16 @@ export default function GamePage() {
   const [isAcceptingChallenge, setIsAcceptingChallenge] = useState(false);
   const isAcceptingChallengeRef = useRef(false);
   const persistedCompletedGameRef = useRef(null);
+  const [presenceNow, setPresenceNow] = useState(() => Date.now());
   const ROUNDS_PER_PLAYER = 15;
   const MAX_ROUNDS = ROUNDS_PER_PLAYER * 2;
   const MATCH_ADMIN_FEE_RATE = 0.25;
+  // Firestore has no onDisconnect hook, so a client that closes the tab, force-quits,
+  // or gets killed in the background never runs the cleanup below. A heartbeat plus a
+  // staleness cutoff on read is the standard workaround: anyone whose lastSeen falls
+  // behind gets treated as offline even if their Firestore doc still says "online".
+  const PRESENCE_HEARTBEAT_MS = 15000;
+  const PRESENCE_STALE_MS = 45000;
   // Once one friend has won 15 more matches than the other, they can no
   // longer challenge each other until the gap narrows.
   const HEAD_TO_HEAD_WIN_CAP = 15;
@@ -128,12 +135,20 @@ export default function GamePage() {
     const myId = user.uid;
     const userRef = doc(db, "users", myId);
     
-    setDoc(userRef, { 
-      status: "online", 
+    setDoc(userRef, {
+      status: "online",
       currentPage: "challenge_friends",
       lastSeen: serverTimestamp(),
-      isBusy: !!activeGame 
+      isBusy: !!activeGame
     }, { merge: true });
+
+    // Keep lastSeen fresh while this tab is genuinely open on this page.
+    const heartbeat = setInterval(() => {
+      updateDoc(userRef, { lastSeen: serverTimestamp() }).catch(() => {});
+    }, PRESENCE_HEARTBEAT_MS);
+
+    // Drives re-filtering of stale players even though their docs haven't changed.
+    const staleTicker = setInterval(() => setPresenceNow(Date.now()), 5000);
 
     const unsubPlayers = onSnapshot(
       query(
@@ -175,12 +190,14 @@ export default function GamePage() {
       }
     });
 
-    return () => { 
-        unsubPlayers(); 
+    return () => {
+        clearInterval(heartbeat);
+        clearInterval(staleTicker);
+        unsubPlayers();
         unsubIncoming();
         unsubOutgoing();
-        unsubGame(); 
-        updateDoc(userRef, { status: "offline", currentPage: null, isBusy: false }).catch(() => {}); 
+        unsubGame();
+        updateDoc(userRef, { status: "offline", currentPage: null, isBusy: false }).catch(() => {});
     };
   }, [user, activeGame?.round, activeGame?.turn, !!activeGame]);
 
@@ -571,7 +588,12 @@ export default function GamePage() {
     }
   };
 
-  const filteredPlayers = onlinePlayers.filter(p => 
+  const activePlayers = onlinePlayers.filter((p) => {
+    const lastSeenMs = p.lastSeen?.toMillis?.() ?? 0;
+    return presenceNow - lastSeenMs <= PRESENCE_STALE_MS;
+  });
+
+  const filteredPlayers = activePlayers.filter(p =>
     p.username?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -612,7 +634,7 @@ export default function GamePage() {
             <div className="flex items-center gap-3 mt-1">
                 <div className="flex items-center gap-2">
                   <Users size={12} className="text-[#fc7952]" />
-                  <span className="text-[10px] font-black text-white/40 uppercase">{onlinePlayers.length} Ready To Play</span>
+                  <span className="text-[10px] font-black text-white/40 uppercase">{activePlayers.length} Ready To Play</span>
                 </div>
                 <button onClick={handleManualRefresh} className={`p-1 rounded-full bg-white/5 hover:bg-white/10 transition-all ${isRefreshing ? 'animate-spin' : ''}`}>
                   <RefreshCw size={12} className="text-[#fc7952]" />
