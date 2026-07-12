@@ -93,10 +93,11 @@ export default function SupportChat() {
     setNewMessage(""); 
 
     const messageData = {
+      id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`,
       text: textToSend,
       senderId: user.uid,
       senderType: "user",
-      timestamp: new Date().toISOString(), 
+      timestamp: new Date().toISOString(),
     };
 
     try {

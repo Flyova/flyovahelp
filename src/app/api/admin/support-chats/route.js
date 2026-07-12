@@ -42,6 +42,9 @@ const getAuthorizedRequester = async (request) => {
   };
 };
 
+const makeMessageId = () =>
+  `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+
 const normalizeIsoTime = (value) => {
   if (!value) return null;
   if (typeof value === "string") return value;
@@ -64,6 +67,7 @@ const serializeChat = (docSnap) => {
     updatedAt: normalizeIsoTime(data.updatedAt),
     resolvedAt: normalizeIsoTime(data.resolvedAt),
     messages: rawMessages.map((message) => ({
+      id: message?.id || null,
       text: String(message?.text || ""),
       senderId: String(message?.senderId || ""),
       senderType: String(message?.senderType || "user"),
@@ -130,6 +134,7 @@ export async function POST(request) {
         resolved: true,
         resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
         messages: admin.firestore.FieldValue.arrayUnion({
+          id: makeMessageId(),
           text: "Support marked this chat as resolved. Send a new message to reopen it.",
           senderId: "system",
           senderType: "system",
@@ -151,6 +156,7 @@ export async function POST(request) {
 
       await chatRef.update({
         messages: admin.firestore.FieldValue.arrayUnion({
+          id: makeMessageId(),
           text,
           senderId: requester.uid,
           senderType: "admin",
@@ -160,6 +166,45 @@ export async function POST(request) {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         resolved: false,
         unreadByUser: true,
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "delete_message") {
+      // Support chat messages live as entries in a single array field (no
+      // subcollection with its own doc IDs), so "delete for everyone" means
+      // filtering the target entry out of that array. Scoped deliberately to
+      // support_chats only — this never touches any other chat/message
+      // feature (e.g. in-game match chat) in the app.
+      const messageId = String(payload.messageId || "").trim();
+      const targetTimestamp = String(payload.timestamp || "").trim();
+      const targetSenderId = String(payload.senderId || "").trim();
+      const targetText = typeof payload.text === "string" ? payload.text : "";
+
+      if (!messageId && !(targetTimestamp && targetSenderId)) {
+        return NextResponse.json({ error: "Message identifier is required." }, { status: 400 });
+      }
+
+      const currentMessages = Array.isArray(chatSnap.data()?.messages) ? chatSnap.data().messages : [];
+      const matchesTarget = (message) => {
+        if (messageId) return message?.id === messageId;
+        return (
+          String(message?.timestamp || "") === targetTimestamp &&
+          String(message?.senderId || "") === targetSenderId &&
+          String(message?.text || "") === targetText
+        );
+      };
+
+      const nextMessages = currentMessages.filter((message) => !matchesTarget(message));
+      if (nextMessages.length === currentMessages.length) {
+        return NextResponse.json({ error: "Message not found." }, { status: 404 });
+      }
+
+      const lastMessage = nextMessages.length > 0 ? nextMessages[nextMessages.length - 1].text : "";
+      await chatRef.update({
+        messages: nextMessages,
+        lastMessage,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       return NextResponse.json({ ok: true });
     }

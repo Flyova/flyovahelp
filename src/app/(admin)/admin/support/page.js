@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
-import { 
-  Search, MessageCircle, Send, Loader2, 
-  ChevronLeft, MoreVertical
+import {
+  Search, MessageCircle, Send, Loader2,
+  ChevronLeft, MoreVertical, Trash2
 } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
@@ -19,6 +19,7 @@ export default function AdminSupport() {
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [deletingMessageKey, setDeletingMessageKey] = useState(null);
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -166,6 +167,54 @@ export default function AdminSupport() {
       setSelectedChat((prev) => (prev ? { ...prev, resolved: true } : prev));
     } catch (err) {
       console.error("Resolve Error:", err);
+    }
+  };
+
+  const deleteMessage = async (msg) => {
+    if (!selectedChat) return;
+    const messageKey = msg.id || `${msg.senderId}_${msg.timestamp}`;
+    if (deletingMessageKey === messageKey) return;
+
+    if (!window.confirm("Delete this message for everyone? This can't be undone.")) return;
+
+    setDeletingMessageKey(messageKey);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("You are logged out. Please sign in again.");
+
+      const response = await fetch("/api/admin/support-chats", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: "delete_message",
+          chatId: selectedChat.id,
+          messageId: msg.id || undefined,
+          timestamp: msg.timestamp,
+          senderId: msg.senderId,
+          text: msg.text,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || "Could not delete message.");
+      }
+
+      setSelectedChat((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          messages: prev.messages.filter((m) => m !== msg),
+        };
+      });
+    } catch (err) {
+      console.error("Delete message error:", err);
+      alert(err?.message || "Could not delete message.");
+    } finally {
+      setDeletingMessageKey(null);
     }
   };
 
@@ -335,11 +384,22 @@ export default function AdminSupport() {
             <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 space-y-6 bg-gray-50/30">
               {selectedChat.messages.map((msg, i) => {
                 const isAdmin = msg.senderType === 'admin';
+                const messageKey = msg.id || `${msg.senderId}_${msg.timestamp}`;
                 return (
-                  <div key={i} className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
+                  <div key={i} className={`group flex items-center gap-2 ${isAdmin ? 'justify-end' : 'justify-start'}`}>
+                    {isAdmin && (
+                      <button
+                        onClick={() => deleteMessage(msg)}
+                        disabled={deletingMessageKey === messageKey}
+                        title="Delete for everyone"
+                        className="p-1.5 rounded-full text-gray-300 opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 transition-all disabled:opacity-50"
+                      >
+                        {deletingMessageKey === messageKey ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                      </button>
+                    )}
                     <div className={`max-w-[75%] p-4 rounded-2xl shadow-sm text-sm ${
-                      isAdmin 
-                      ? 'bg-blue-600 text-white rounded-br-none' 
+                      isAdmin
+                      ? 'bg-blue-600 text-white rounded-br-none'
                       : 'bg-white text-slate-700 border border-gray-100 rounded-bl-none'
                     }`}>
                       <p className="font-medium leading-relaxed">{msg.text}</p>
@@ -347,6 +407,16 @@ export default function AdminSupport() {
                         {isAdmin ? 'Admin • 10:25 AM' : 'User • 10:24 AM'}
                       </p>
                     </div>
+                    {!isAdmin && (
+                      <button
+                        onClick={() => deleteMessage(msg)}
+                        disabled={deletingMessageKey === messageKey}
+                        title="Delete for everyone"
+                        className="p-1.5 rounded-full text-gray-300 opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 transition-all disabled:opacity-50"
+                      >
+                        {deletingMessageKey === messageKey ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                      </button>
+                    )}
                   </div>
                 );
               })}

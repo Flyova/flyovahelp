@@ -10,6 +10,7 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { User, Zap, Wallet, ShieldCheck, Trophy, Ghost, MessageSquare, Send, X as CloseIcon, Search, Users, Timer as TimerIcon, RefreshCw, Loader2 } from "lucide-react";
 import ToastNotification from "@/components/ToastNotification";
+import { generateDistinctNumberPool } from "@/lib/gameNumbers";
 
 export default function GamePage() {
   const { id } = useParams();
@@ -35,6 +36,20 @@ export default function GamePage() {
   const [newMessage, setNewMessage] = useState("");
   const [hasNewMsg, setHasNewMsg] = useState(false);
   const chatEndRef = useRef(null);
+  const showChatRef = useRef(false);
+  const lastSeenMessageIdRef = useRef(null);
+
+  const openChat = () => {
+    showChatRef.current = true;
+    lastSeenMessageIdRef.current = messages[messages.length - 1]?.id ?? lastSeenMessageIdRef.current;
+    setShowChat(true);
+    setHasNewMsg(false);
+  };
+
+  const closeChat = () => {
+    showChatRef.current = false;
+    setShowChat(false);
+  };
 
   const [showStakeModal, setShowStakeModal] = useState(null);
   const [stakeAmount, setStakeAmount] = useState(1);
@@ -51,6 +66,10 @@ export default function GamePage() {
   const ROUNDS_PER_PLAYER = 15;
   const MAX_ROUNDS = ROUNDS_PER_PLAYER * 2;
   const MATCH_ADMIN_FEE_RATE = 0.25;
+  // Turn countdown is anchored to the server-stored turnStartedAt instead of a
+  // local counter, so navigating away and back (or a re-render) recomputes the
+  // true remaining time instead of restarting the clock at 60s.
+  const TURN_DURATION_MS = 60000;
   // Firestore has no onDisconnect hook, so a client that closes the tab, force-quits,
   // or gets killed in the background never runs the cleanup below. A heartbeat plus a
   // staleness cutoff on read is the standard workaround: anyone whose lastSeen falls
@@ -183,7 +202,6 @@ export default function GamePage() {
         if (data.numberPool && (numbers.length === 0 || data.round !== activeGame?.round || data.turn !== activeGame?.turn)) {
           setNumbers(data.numberPool);
           setSelectedNumber(null);
-          setGameTimer(60); 
         }
       } else {
         setActiveGame(null);
@@ -259,8 +277,9 @@ export default function GamePage() {
           turn: nextPicker,
           picker: nextPicker,
           gameState: "picking",
-          numberPool: [Math.floor(Math.random() * 100), Math.floor(Math.random() * 100)],
+          numberPool: generateDistinctNumberPool(),
           status: isGameOver ? "completed" : "active",
+          turnStartedAt: Date.now(),
         };
 
         if (isGameOver) {
@@ -281,25 +300,35 @@ export default function GamePage() {
   }, [MAX_ROUNDS]);
 
   // 4. Game Timer Logic
+  // Anchored off the server-recorded turn start time rather than a locally
+  // counted-down number, so a remount (tab backgrounded, page revisited)
+  // recovers the true remaining time instead of restarting the full 60s
+  // window. The tick is scheduled (setTimeout/setInterval) rather than called
+  // directly in the effect body, so state updates only ever happen from
+  // those deferred callbacks, not synchronously during the effect itself.
   useEffect(() => {
     if (!activeGame || activeGame.status !== "active") return;
-    
-    const interval = setInterval(() => {
-      setGameTimer((prev) => {
-        if (prev <= 1) {
-          handleForfeit({
-            gameId: activeGame?.id,
-            expectedRound: activeGame?.round,
-            expectedTurn: activeGame?.turn,
-          });
-          return 60;
-        }
-        return prev - 1;
-      });
-    }, 1000);
 
-    return () => clearInterval(interval);
-  }, [activeGame?.turn, activeGame?.round, activeGame?.id, activeGame?.status, handleForfeit]);
+    const tick = () => {
+      const turnStartedAt = Number(activeGame.turnStartedAt || Date.now());
+      const remainingMs = Math.max(0, TURN_DURATION_MS - (Date.now() - turnStartedAt));
+      setGameTimer(Math.ceil(remainingMs / 1000));
+      if (remainingMs <= 0) {
+        handleForfeit({
+          gameId: activeGame?.id,
+          expectedRound: activeGame?.round,
+          expectedTurn: activeGame?.turn,
+        });
+      }
+    };
+
+    const immediate = setTimeout(tick, 0);
+    const interval = setInterval(tick, 1000);
+    return () => {
+      clearTimeout(immediate);
+      clearInterval(interval);
+    };
+  }, [activeGame?.turn, activeGame?.round, activeGame?.id, activeGame?.status, activeGame?.turnStartedAt, handleForfeit]);
 
   useEffect(() => {
     if (!activeGame || activeGame.status !== "completed") return;
@@ -319,19 +348,30 @@ export default function GamePage() {
   };
 
   // 5. Chat Logic
+  // Reads showChat via a ref (not a dependency) so this subscription doesn't
+  // tear down and re-fire every time the chat panel opens/closes. Previously
+  // toggling showChat re-ran this effect and re-evaluated "is the last
+  // message unread" against whatever message currently happened to be last,
+  // which could re-flag an opponent message the user had already viewed as
+  // soon as they closed the chat again.
   useEffect(() => {
     if (!activeGame?.id) return;
     const q = query(collection(db, "games", activeGame.id, "messages"), orderBy("timestamp", "asc"), limit(50));
     const unsubChat = onSnapshot(q, (snap) => {
       const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setMessages(msgs);
-      if (!showChat && msgs.length > 0 && msgs[msgs.length - 1].senderId !== user?.uid) {
-        setHasNewMsg(true);
+      const lastMsg = msgs[msgs.length - 1];
+      if (lastMsg) {
+        if (showChatRef.current) {
+          lastSeenMessageIdRef.current = lastMsg.id;
+        } else if (lastMsg.id !== lastSeenMessageIdRef.current && lastMsg.senderId !== user?.uid) {
+          setHasNewMsg(true);
+        }
       }
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     });
     return () => unsubChat();
-  }, [activeGame?.id, showChat, user?.uid]);
+  }, [activeGame?.id, user?.uid]);
 
   const sendMessage = async (e) => {
     e.preventDefault();
@@ -453,7 +493,8 @@ export default function GamePage() {
           turn: chal.from, round: 1, gameState: "picking", picker: chal.from,
           stakePerRound: chal.stakePerRound,
           wagerPool: { p1: chal.totalWager, p2: chal.totalWager },
-          status: "active", numberPool: [Math.floor(Math.random() * 100), Math.floor(Math.random() * 100)], createdAt: Date.now()
+          status: "active", numberPool: generateDistinctNumberPool(), createdAt: Date.now(),
+          turnStartedAt: Date.now()
         });
 
         const log = { title: "Match Stake", amount: totalCost, type: "stake", status: "loss", timestamp: serverTimestamp() };
@@ -488,7 +529,8 @@ export default function GamePage() {
         await updateDoc(doc(db, "games", activeGame.id), {
           gameState: "guessing",
           turn: opponentId,
-          hiddenPick: num
+          hiddenPick: num,
+          turnStartedAt: Date.now()
         });
       } else if (activeGame?.gameState === "guessing") {
         const wasCorrect = num === activeGame.hiddenPick;
@@ -517,8 +559,9 @@ export default function GamePage() {
           gameState: "picking", turn: nextPicker, picker: nextPicker, round: isGameOver ? MAX_ROUNDS : increment(1),
           [scoreKey]: wasCorrect ? increment(1) : increment(0),
           [pickerRoundsKey]: increment(1),
-          numberPool: [Math.floor(Math.random() * 100), Math.floor(Math.random() * 100)],
-          status: isGameOver ? "completed" : "active"
+          numberPool: generateDistinctNumberPool(),
+          status: isGameOver ? "completed" : "active",
+          turnStartedAt: Date.now()
         };
 
         if (isGameOver) {
@@ -782,8 +825,8 @@ export default function GamePage() {
         </div>
       </div>
 
-      <button 
-        onClick={() => { setShowChat(true); setHasNewMsg(false); }}
+      <button
+        onClick={openChat}
         className="fixed bottom-[100px] right-6 w-14 h-14 bg-[#fc7952] rounded-2xl flex items-center justify-center shadow-2xl z-40 transition-transform active:scale-90"
       >
         <MessageSquare size={24} className="text-white" />
@@ -793,7 +836,7 @@ export default function GamePage() {
       <div className={`fixed inset-y-0 right-0 w-80 bg-[#1e293b] shadow-2xl z-[500] transform transition-transform duration-300 ease-in-out border-l border-white/5 flex flex-col ${showChat ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="p-4 bg-[#613de6] flex justify-between items-center shadow-md">
           <span className="font-black italic uppercase text-xs tracking-widest">Match Chat</span>
-          <button onClick={() => setShowChat(false)} className="opacity-60 hover:opacity-100 transition-opacity">
+          <button onClick={closeChat} className="opacity-60 hover:opacity-100 transition-opacity">
             <CloseIcon size={20} />
           </button>
         </div>
