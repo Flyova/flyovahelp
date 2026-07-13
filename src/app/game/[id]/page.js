@@ -279,7 +279,7 @@ export default function GamePage() {
           gameState: "picking",
           numberPool: generateDistinctNumberPool(),
           status: isGameOver ? "completed" : "active",
-          turnStartedAt: Date.now(),
+          turnStartedAt: serverTimestamp(),
         };
 
         if (isGameOver) {
@@ -306,11 +306,25 @@ export default function GamePage() {
   // window. The tick is scheduled (setTimeout/setInterval) rather than called
   // directly in the effect body, so state updates only ever happen from
   // those deferred callbacks, not synchronously during the effect itself.
+  //
+  // turnStartedAt is written as a Firestore serverTimestamp() (not a raw
+  // Date.now()) precisely so both players race against the same clock.
+  // Writing a client-supplied Date.now() would anchor the countdown to
+  // whichever device's turn-change action fired the update, so any clock
+  // drift between the two players' devices made the timer run out at
+  // different moments (and out of step with the server-enforced deadline)
+  // on each screen.
   useEffect(() => {
     if (!activeGame || activeGame.status !== "active") return;
 
     const tick = () => {
-      const turnStartedAt = Number(activeGame.turnStartedAt || Date.now());
+      const startedAtValue = activeGame.turnStartedAt;
+      const turnStartedAt =
+        typeof startedAtValue === "number"
+          ? startedAtValue
+          : typeof startedAtValue?.toMillis === "function"
+          ? startedAtValue.toMillis()
+          : Date.now(); // sentinel still pending ack on the writer's own client
       const remainingMs = Math.max(0, TURN_DURATION_MS - (Date.now() - turnStartedAt));
       setGameTimer(Math.ceil(remainingMs / 1000));
       if (remainingMs <= 0) {
@@ -494,7 +508,7 @@ export default function GamePage() {
           stakePerRound: chal.stakePerRound,
           wagerPool: { p1: chal.totalWager, p2: chal.totalWager },
           status: "active", numberPool: generateDistinctNumberPool(), createdAt: Date.now(),
-          turnStartedAt: Date.now()
+          turnStartedAt: serverTimestamp()
         });
 
         const log = { title: "Match Stake", amount: totalCost, type: "stake", status: "loss", timestamp: serverTimestamp() };
@@ -530,7 +544,7 @@ export default function GamePage() {
           gameState: "guessing",
           turn: opponentId,
           hiddenPick: num,
-          turnStartedAt: Date.now()
+          turnStartedAt: serverTimestamp()
         });
       } else if (activeGame?.gameState === "guessing") {
         const wasCorrect = num === activeGame.hiddenPick;
@@ -561,7 +575,7 @@ export default function GamePage() {
           [pickerRoundsKey]: increment(1),
           numberPool: generateDistinctNumberPool(),
           status: isGameOver ? "completed" : "active",
-          turnStartedAt: Date.now()
+          turnStartedAt: serverTimestamp()
         };
 
         if (isGameOver) {

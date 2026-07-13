@@ -18,6 +18,14 @@ const TURN_DURATION_MS = 60000;
 // them, so an actively-watching winner isn't yanked back to the lobby mid-view.
 const COMPLETED_CLAIM_GRACE_MS = 3 * 60 * 1000;
 
+// turnStartedAt is written two different ways: a live turn change sets it via
+// client serverTimestamp() (arrives here as a Timestamp), while the
+// catch-up loop below advances it by a fixed +TURN_DURATION_MS offset (a
+// plain number), since it's synthesizing evenly-spaced past turns rather
+// than anchoring to "now". Both shapes have to be accepted when reading it.
+const toMillis = (value) =>
+  Number(typeof value?.toMillis === "function" ? value.toMillis() : value || 0);
+
 const forfeitOneStaleTurn = async (adminDb, gameId) => {
   const gameRef = adminDb.collection("games").doc(gameId);
 
@@ -28,7 +36,7 @@ const forfeitOneStaleTurn = async (adminDb, gameId) => {
     const game = snap.data() || {};
     if (game.status !== "active") return { advanced: false, done: true };
 
-    const turnStartedAt = Number(game.turnStartedAt || game.createdAt || 0);
+    const turnStartedAt = toMillis(game.turnStartedAt) || toMillis(game.createdAt);
     const now = Date.now();
     if (now - turnStartedAt < TURN_DURATION_MS) {
       return { advanced: false, done: false };
@@ -215,7 +223,7 @@ export async function runFriendsGameEngine() {
 
   for (const gameDoc of activeSnap.docs) {
     const game = gameDoc.data() || {};
-    const turnStartedAt = Number(game.turnStartedAt || game.createdAt || 0);
+    const turnStartedAt = toMillis(game.turnStartedAt) || toMillis(game.createdAt);
     if (now - turnStartedAt < TURN_DURATION_MS) continue;
 
     gamesTouched += 1;

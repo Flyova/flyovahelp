@@ -2,10 +2,10 @@
 import { useState, useEffect, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
-import { doc, updateDoc, serverTimestamp, getDoc } from "firebase/firestore";
-import { 
-  Timer, Copy, CheckCircle, AlertTriangle, 
-  Loader2, QrCode, ImageIcon, Hash, UploadCloud, X 
+import { doc, updateDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
+import {
+  Timer, Copy, CheckCircle, AlertTriangle,
+  Loader2, QrCode, ImageIcon, Hash, UploadCloud, X, Clock, XCircle
 } from "lucide-react";
 import QRCode from "react-qr-code";
 
@@ -14,10 +14,11 @@ function DirectDepositContent() {
   const searchParams = useSearchParams();
   const amount = searchParams.get("amount") || "0";
   const depositId = searchParams.get("id"); // Get the ID created on the main deposit page
-  
+
   const [timeLeft, setTimeLeft] = useState(1800); // Default 30 Minutes
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showProofForm, setShowProofForm] = useState(false);
+  const [depositData, setDepositData] = useState(null);
   
   // Proof Form States
   const [hashId, setHashId] = useState("");
@@ -32,31 +33,37 @@ function DirectDepositContent() {
   const UPLOAD_PRESET = "p_trade_proof"; 
   const API_KEY = "823961819667685";
 
-  // SYNC TIMER WITH FIRESTORE CREATION TIME
+  // SYNC WITH FIRESTORE: live-listen so the deposit's real status (proof
+  // already submitted / admin already confirmed or rejected) is always
+  // reflected here, instead of a one-time read that goes stale the moment
+  // the user leaves and comes back to this same session.
   useEffect(() => {
     if (!depositId) return;
 
-    const syncTimer = async () => {
-      try {
-        const docSnap = await getDoc(doc(db, "deposits", depositId));
-        if (docSnap.exists()) {
-          const createdAt = docSnap.data().createdAt?.toDate().getTime();
-          if (createdAt) {
-            const elapsed = Math.floor((Date.now() - createdAt) / 1000);
-            const remaining = 1800 - elapsed;
-            if (remaining <= 0) {
-              alert("Payment Session Expired");
-              router.push("/deposit");
-            } else {
-              setTimeLeft(remaining);
-            }
-          }
+    const unsub = onSnapshot(doc(db, "deposits", depositId), (docSnap) => {
+      if (!docSnap.exists()) return;
+      const data = docSnap.data();
+      setDepositData(data);
+
+      const createdAt = data.createdAt?.toDate().getTime();
+      if (createdAt) {
+        const elapsed = Math.floor((Date.now() - createdAt) / 1000);
+        const remaining = 1800 - elapsed;
+        // A session that's already been submitted or resolved by admin
+        // shouldn't be kicked out just because the 30-minute payment
+        // window has since elapsed.
+        if (remaining <= 0 && !data.submittedAt && !data.transactionHash && data.status === "pending") {
+          alert("Payment Session Expired");
+          router.push("/deposit");
+        } else {
+          setTimeLeft(Math.max(remaining, 0));
         }
-      } catch (err) {
-        console.error("Timer Sync Error:", err);
       }
-    };
-    syncTimer();
+    }, (err) => {
+      console.error("Timer Sync Error:", err);
+    });
+
+    return () => unsub();
   }, [depositId, router]);
 
   useEffect(() => {
@@ -163,20 +170,97 @@ function DirectDepositContent() {
     }
   };
 
+  // Whether the user already sent their transaction hash/screenshot for this
+  // deposit. The Firestore doc's `status` stays "pending" both before AND
+  // after proof is submitted (admin still needs to confirm it), so proof
+  // presence — not status — is what tells us the payment step is done.
+  const proofAlreadySubmitted = Boolean(depositData?.submittedAt || depositData?.transactionHash);
+  const depositStatus = depositData?.status;
+
   return (
     <div className="min-h-screen bg-[#0f172a] text-white p-6 flex flex-col items-center">
       <div className="max-w-md w-full space-y-8 pt-10">
-        
+
         {/* Header & Timer */}
         <div className="text-center space-y-2">
-          <h1 className="text-3xl font-black italic uppercase text-white">Complete Deposit</h1>
-          <div className="flex items-center justify-center gap-2 text-[#fc7952] font-bold">
-            <Timer size={20} />
-            <span className="text-2xl tabular-nums">{formatTime(timeLeft)}</span>
-          </div>
+          <h1 className="text-3xl font-black italic uppercase text-white">
+            {depositStatus === "completed"
+              ? "Deposit Confirmed"
+              : depositStatus === "rejected"
+              ? "Deposit Rejected"
+              : proofAlreadySubmitted
+              ? "Awaiting Confirmation"
+              : "Complete Deposit"}
+          </h1>
+          {!proofAlreadySubmitted && depositStatus !== "completed" && depositStatus !== "rejected" && (
+            <div className="flex items-center justify-center gap-2 text-[#fc7952] font-bold">
+              <Timer size={20} />
+              <span className="text-2xl tabular-nums">{formatTime(timeLeft)}</span>
+            </div>
+          )}
         </div>
 
-        {!showProofForm ? (
+        {depositStatus === "completed" ? (
+          <div className="bg-[#1e293b] p-8 rounded-[2.5rem] border border-emerald-500/20 shadow-2xl space-y-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="w-16 h-16 mx-auto bg-emerald-500/10 text-emerald-400 rounded-3xl flex items-center justify-center">
+              <CheckCircle size={32} />
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-black uppercase text-emerald-400">Funds credited</p>
+              <p className="text-[11px] font-bold text-gray-400 leading-relaxed uppercase">
+                Your deposit of ${amount} USDT has been confirmed and added to your balance.
+              </p>
+            </div>
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="w-full bg-[#613de6] hover:bg-[#7251ed] py-5 rounded-3xl font-black uppercase text-xs tracking-widest active:scale-95 transition-all"
+            >
+              Back to Dashboard
+            </button>
+          </div>
+        ) : depositStatus === "rejected" ? (
+          <div className="bg-[#1e293b] p-8 rounded-[2.5rem] border border-rose-500/20 shadow-2xl space-y-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="w-16 h-16 mx-auto bg-rose-500/10 text-rose-400 rounded-3xl flex items-center justify-center">
+              <XCircle size={32} />
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-black uppercase text-rose-400">Proof rejected</p>
+              <p className="text-[11px] font-bold text-gray-400 leading-relaxed uppercase">
+                {depositData?.rejectionReason || "Support could not verify this payment. Please contact support for help."}
+              </p>
+            </div>
+            <button
+              onClick={() => router.push("/support")}
+              className="w-full bg-[#613de6] hover:bg-[#7251ed] py-5 rounded-3xl font-black uppercase text-xs tracking-widest active:scale-95 transition-all"
+            >
+              Contact Support
+            </button>
+          </div>
+        ) : proofAlreadySubmitted ? (
+          <div className="bg-[#1e293b] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="w-16 h-16 mx-auto bg-[#fc7952]/10 text-[#fc7952] rounded-3xl flex items-center justify-center">
+              <Clock size={32} />
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-black uppercase text-[#fc7952]">Pending admin confirmation</p>
+              <p className="text-[11px] font-bold text-gray-400 leading-relaxed uppercase">
+                We received your payment proof for ${amount} USDT. An admin is reviewing it now — this page will update automatically once it&apos;s confirmed.
+              </p>
+            </div>
+            {depositData?.transactionHash && (
+              <div className="bg-[#0f172a] p-4 rounded-2xl border border-white/5 text-left">
+                <p className="text-[9px] font-black text-gray-500 uppercase mb-1">Transaction Hash</p>
+                <p className="text-[10px] font-bold break-all text-gray-300">{depositData.transactionHash}</p>
+              </div>
+            )}
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="w-full bg-white/5 hover:bg-white/10 py-5 rounded-3xl font-black uppercase text-xs tracking-widest active:scale-95 transition-all"
+            >
+              Back to Dashboard
+            </button>
+          </div>
+        ) : !showProofForm ? (
           <div className="bg-[#1e293b] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="space-y-1 text-center">
               <p className="text-[10px] font-black text-gray-500 uppercase">Amount to Send</p>
@@ -269,9 +353,11 @@ function DirectDepositContent() {
           </div>
         )}
 
-        <p className="text-center text-[10px] font-bold text-gray-600 uppercase tracking-widest">
-            Automatic confirmation within 10 minutes
-        </p>
+        {!proofAlreadySubmitted && depositStatus !== "completed" && depositStatus !== "rejected" && (
+          <p className="text-center text-[10px] font-bold text-gray-600 uppercase tracking-widest">
+              Automatic confirmation within 10 minutes
+          </p>
+        )}
       </div>
     </div>
   );

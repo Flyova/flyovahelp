@@ -120,9 +120,23 @@ export default function AdminSupport() {
     }
   }, [selectedChat?.messages]);
 
-  const selectChat = async (chat) => {
+  const selectChat = (chat) => {
     setSelectedChat(chat);
-    if (chat.unreadByAdmin) {
+  };
+
+  // Marks the open conversation read whenever it's carrying an unread flag —
+  // covers both the initial click AND a new message arriving from the user
+  // while the admin already has this same chat open. Previously only the
+  // click handler cleared unreadByAdmin, so a message arriving into an
+  // already-open chat left the sidebar badge stuck on "unread" even though
+  // the admin could see it right there on screen, and the badge only ever
+  // cleared once (not on every subsequent message) since there was nothing
+  // to re-trigger it.
+  useEffect(() => {
+    if (!selectedChat?.id || !selectedChat.unreadByAdmin) return;
+    const chatId = selectedChat.id;
+
+    const markRead = async () => {
       try {
         const token = await auth.currentUser?.getIdToken();
         if (!token) return;
@@ -134,14 +148,18 @@ export default function AdminSupport() {
           },
           body: JSON.stringify({
             action: "mark_read",
-            chatId: chat.id,
+            chatId,
           }),
         });
+        setChats((prev) => prev.map((c) => (c.id === chatId ? { ...c, unreadByAdmin: false } : c)));
+        setSelectedChat((prev) => (prev && prev.id === chatId ? { ...prev, unreadByAdmin: false } : prev));
       } catch (error) {
         console.error("Mark read failed:", error);
       }
-    }
-  };
+    };
+
+    markRead();
+  }, [selectedChat?.id, selectedChat?.unreadByAdmin]);
 
   const markResolved = async () => {
     if (!selectedChat) return;
