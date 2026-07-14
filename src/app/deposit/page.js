@@ -30,6 +30,9 @@ import {
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 
+const DEPOSIT_CLEANUP_STORAGE_KEY = "deposit_cleanup_last_run";
+const DEPOSIT_CLEANUP_INTERVAL_MS = 15 * 60 * 1000;
+
 export default function DepositPage() {
   const router = useRouter();
   const [depositAmount, setDepositAmount] = useState("");
@@ -47,6 +50,20 @@ export default function DepositPage() {
   
   // State for active USDT session
   const [activeUsdtSession, setActiveUsdtSession] = useState(null);
+
+  useEffect(() => {
+    // Safety net for deposits whose 30-minute payment window expired while
+    // nobody was on the /deposit/direct page to flip them to "cancelled"
+    // themselves (tab closed, app backgrounded, etc). Gated the same way as
+    // the support chat cleanup trigger so this isn't hit on every page view.
+    const now = Date.now();
+    const lastRun = Number(localStorage.getItem(DEPOSIT_CLEANUP_STORAGE_KEY) || 0);
+    if (now - lastRun >= DEPOSIT_CLEANUP_INTERVAL_MS) {
+      fetch("/api/cron/cleanup-expired-deposits")
+        .then(() => localStorage.setItem(DEPOSIT_CLEANUP_STORAGE_KEY, String(now)))
+        .catch((err) => console.error("Deposit cleanup trigger failed:", err));
+    }
+  }, []);
 
   useEffect(() => {
     // NEW: Listen to Global Toggle Settings

@@ -232,6 +232,7 @@ export default function AdminDepositList() {
   const renderStatus = (status) => {
     if (status === "completed") return <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase bg-emerald-50 text-emerald-600">Completed</span>;
     if (status === "rejected") return <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase bg-rose-50 text-rose-600">Rejected</span>;
+    if (status === "cancelled") return <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase bg-slate-100 text-slate-500">Cancelled</span>;
     return <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase bg-amber-50 text-amber-600">Pending</span>;
   };
 

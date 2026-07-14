@@ -53,7 +53,15 @@ const forfeitOneStaleTurn = async (adminDb, gameId) => {
     const winnerPoolKey = loserIsP1 ? "wagerPool.p2" : "wagerPool.p1";
 
     const liveRound = Number(game.round || 0);
-    const isGameOver = liveRound >= MAX_ROUNDS;
+    // Mirrors the decisiveWin check in handleForfeit/handleGameMove on the
+    // client: a forfeited round still counts as a won round, so it has to
+    // be capped at ROUNDS_PER_PLAYER wins too. Otherwise an abandoned match
+    // being caught up turn-by-turn here would keep forfeiting the same
+    // player all the way to MAX_ROUNDS instead of stopping once they'd
+    // already swept.
+    const currentWinnerScore = Number((loserIsP1 ? game?.scores?.p2 : game?.scores?.p1) || 0);
+    const decisiveWin = currentWinnerScore + 1 >= ROUNDS_PER_PLAYER;
+    const isGameOver = liveRound >= MAX_ROUNDS || decisiveWin;
     const nextPicker = game.picker === game.player1 ? game.player2 : game.player1;
     // Same stake transferred per forfeited round as a normal loss, so a
     // player can never end up with more than double what they staked

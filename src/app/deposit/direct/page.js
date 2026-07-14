@@ -19,7 +19,8 @@ function DirectDepositContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showProofForm, setShowProofForm] = useState(false);
   const [depositData, setDepositData] = useState(null);
-  
+  const cancelledRef = useRef(false);
+
   // Proof Form States
   const [hashId, setHashId] = useState("");
   const [image, setImage] = useState(null);
@@ -30,8 +31,15 @@ function DirectDepositContent() {
 
   // Cloudinary Config (Based on your TradeRoom setup)
   const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dq9o866sc/image/upload";
-  const UPLOAD_PRESET = "p_trade_proof"; 
+  const UPLOAD_PRESET = "p_trade_proof";
   const API_KEY = "823961819667685";
+
+  // Whether the user already sent their transaction hash/screenshot for this
+  // deposit. The Firestore doc's `status` stays "pending" both before AND
+  // after proof is submitted (admin still needs to confirm it), so proof
+  // presence — not status — is what tells us the payment step is done.
+  const proofAlreadySubmitted = Boolean(depositData?.submittedAt || depositData?.transactionHash);
+  const depositStatus = depositData?.status;
 
   // SYNC WITH FIRESTORE: live-listen so the deposit's real status (proof
   // already submitted / admin already confirmed or rejected) is always
@@ -49,28 +57,43 @@ function DirectDepositContent() {
       if (createdAt) {
         const elapsed = Math.floor((Date.now() - createdAt) / 1000);
         const remaining = 1800 - elapsed;
-        // A session that's already been submitted or resolved by admin
-        // shouldn't be kicked out just because the 30-minute payment
-        // window has since elapsed.
-        if (remaining <= 0 && !data.submittedAt && !data.transactionHash && data.status === "pending") {
-          alert("Payment Session Expired");
-          router.push("/deposit");
-        } else {
-          setTimeLeft(Math.max(remaining, 0));
-        }
+        setTimeLeft(Math.max(remaining, 0));
       }
     }, (err) => {
       console.error("Timer Sync Error:", err);
     });
 
     return () => unsub();
-  }, [depositId, router]);
+  }, [depositId]);
 
   useEffect(() => {
     if (timeLeft <= 0) return;
     const timer = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
     return () => clearInterval(timer);
   }, [timeLeft]);
+
+  // AUTO-CANCEL: if the 30-minute payment window runs out and the user never
+  // submitted proof, the deposit needs to actually flip to "cancelled" in
+  // Firestore — previously this just bounced the user back to /deposit with
+  // an alert, leaving the record stuck on "pending" forever for both the
+  // user's history and the admin queue.
+  useEffect(() => {
+    if (timeLeft > 0) return;
+    if (!depositId || !depositData) return;
+    if (proofAlreadySubmitted) return;
+    if (depositData.status !== "pending") return;
+    if (cancelledRef.current) return;
+    cancelledRef.current = true;
+
+    updateDoc(doc(db, "deposits", depositId), {
+      status: "cancelled",
+      cancelledAt: serverTimestamp(),
+      cancelReason: "expired",
+    }).catch((err) => {
+      console.error("Auto-cancel expired deposit failed:", err);
+      cancelledRef.current = false;
+    });
+  }, [timeLeft, depositId, depositData, proofAlreadySubmitted]);
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -170,13 +193,6 @@ function DirectDepositContent() {
     }
   };
 
-  // Whether the user already sent their transaction hash/screenshot for this
-  // deposit. The Firestore doc's `status` stays "pending" both before AND
-  // after proof is submitted (admin still needs to confirm it), so proof
-  // presence — not status — is what tells us the payment step is done.
-  const proofAlreadySubmitted = Boolean(depositData?.submittedAt || depositData?.transactionHash);
-  const depositStatus = depositData?.status;
-
   return (
     <div className="min-h-screen bg-[#0f172a] text-white p-6 flex flex-col items-center">
       <div className="max-w-md w-full space-y-8 pt-10">
@@ -188,11 +204,13 @@ function DirectDepositContent() {
               ? "Deposit Confirmed"
               : depositStatus === "rejected"
               ? "Deposit Rejected"
+              : depositStatus === "cancelled"
+              ? "Deposit Cancelled"
               : proofAlreadySubmitted
               ? "Awaiting Confirmation"
               : "Complete Deposit"}
           </h1>
-          {!proofAlreadySubmitted && depositStatus !== "completed" && depositStatus !== "rejected" && (
+          {!proofAlreadySubmitted && !["completed", "rejected", "cancelled"].includes(depositStatus) && (
             <div className="flex items-center justify-center gap-2 text-[#fc7952] font-bold">
               <Timer size={20} />
               <span className="text-2xl tabular-nums">{formatTime(timeLeft)}</span>
@@ -200,7 +218,25 @@ function DirectDepositContent() {
           )}
         </div>
 
-        {depositStatus === "completed" ? (
+        {depositStatus === "cancelled" ? (
+          <div className="bg-[#1e293b] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="w-16 h-16 mx-auto bg-gray-500/10 text-gray-400 rounded-3xl flex items-center justify-center">
+              <XCircle size={32} />
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-black uppercase text-gray-400">Session expired</p>
+              <p className="text-[11px] font-bold text-gray-500 leading-relaxed uppercase">
+                This deposit was cancelled because payment proof wasn&apos;t submitted within the 30-minute window. Start a new deposit if you still want to fund your wallet.
+              </p>
+            </div>
+            <button
+              onClick={() => router.push("/deposit")}
+              className="w-full bg-[#613de6] hover:bg-[#7251ed] py-5 rounded-3xl font-black uppercase text-xs tracking-widest active:scale-95 transition-all"
+            >
+              Start New Deposit
+            </button>
+          </div>
+        ) : depositStatus === "completed" ? (
           <div className="bg-[#1e293b] p-8 rounded-[2.5rem] border border-emerald-500/20 shadow-2xl space-y-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="w-16 h-16 mx-auto bg-emerald-500/10 text-emerald-400 rounded-3xl flex items-center justify-center">
               <CheckCircle size={32} />
@@ -353,7 +389,7 @@ function DirectDepositContent() {
           </div>
         )}
 
-        {!proofAlreadySubmitted && depositStatus !== "completed" && depositStatus !== "rejected" && (
+        {!proofAlreadySubmitted && !["completed", "rejected", "cancelled"].includes(depositStatus) && (
           <p className="text-center text-[10px] font-bold text-gray-600 uppercase tracking-widest">
               Automatic confirmation within 10 minutes
           </p>

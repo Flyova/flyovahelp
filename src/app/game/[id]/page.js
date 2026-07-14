@@ -262,7 +262,17 @@ export default function GamePage() {
         const loserPoolKey = loserIsP1 ? "wagerPool.p1" : "wagerPool.p2";
         const winnerPoolKey = loserIsP1 ? "wagerPool.p2" : "wagerPool.p1";
 
-        const isGameOver = liveRound >= MAX_ROUNDS;
+        // A forfeited round is still a won round for the opponent, so it has
+        // to count toward the same 15-win sweep cap as a correctly-guessed
+        // round (see the decisiveWin check in handleGameMove). Without this,
+        // a string of timeouts against an AFK opponent could push a player's
+        // score past ROUNDS_PER_PLAYER while the match kept running all the
+        // way to MAX_ROUNDS.
+        const currentWinnerScore = Number(
+          (loserIsP1 ? liveGame?.scores?.p2 : liveGame?.scores?.p1) || 0
+        );
+        const decisiveWin = currentWinnerScore + 1 >= ROUNDS_PER_PLAYER;
+        const isGameOver = liveRound >= MAX_ROUNDS || decisiveWin;
 
         const nextPicker =
           liveGame.picker === liveGame.player1 ? liveGame.player2 : liveGame.player1;
@@ -297,7 +307,7 @@ export default function GamePage() {
     } catch (e) {
       console.error("Forfeit error:", e);
     }
-  }, [MAX_ROUNDS]);
+  }, [MAX_ROUNDS, ROUNDS_PER_PLAYER]);
 
   // 4. Game Timer Logic
   // Anchored off the server-recorded turn start time rather than a locally
