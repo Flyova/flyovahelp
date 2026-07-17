@@ -575,7 +575,7 @@ const handleWithdraw = async () => {
             
             {isEligibleForBonusDeduction && (
                 <p className="text-[9px] font-bold text-amber-500/60 leading-tight uppercase tracking-tighter pt-1">
-                    * The $3.00 signup bonus is deducted from your first USDT withdrawal.
+                    * The $3.00 signup bonus is deducted from your first {method === "usdt" ? "USDT" : "Agent"} withdrawal.
                 </p>
             )}
           </div>
