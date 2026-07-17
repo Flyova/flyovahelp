@@ -75,8 +75,9 @@ export default function FlyovaHistory() {
     const profile = userCache[b.userId] || {};
     const fullName = profile.name || "";
     const search = searchTerm.toLowerCase();
-    return fullName.toLowerCase().includes(search) || 
+    return fullName.toLowerCase().includes(search) ||
            b.gameId?.toLowerCase().includes(search) ||
+           shortGameId(b.gameId)?.toLowerCase().includes(search) ||
            b.userId.toLowerCase().includes(search) ||
            profile.pin?.toLowerCase?.().includes(search) ||
            profile.email?.toLowerCase?.().includes(search) ||

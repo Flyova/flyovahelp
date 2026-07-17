@@ -22,7 +22,8 @@
       "Bash(node -e \"require\\('@babel/core'\\)\")",
       "Bash(node --check src/app/page.js)",
       "Bash(timeout 120 npx next build)",
-      "Bash(git checkout *)"
+      "Bash(git checkout *)",
+      "Bash(git show *)"
     ],
     "additionalDirectories": [
       "/Users/mac/Desktop/Client projects/flyovahelp/src/app/(admin)/admin/blog",

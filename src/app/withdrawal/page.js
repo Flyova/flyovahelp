@@ -166,7 +166,15 @@ export default function WithdrawalPage() {
     return 0.00;
   };
 
-  const isEligibleForBonusDeduction = method === "usdt" && userData.bonusClaimed && !userData.bonusDeducted;
+  const isValidAccountName = (name) => {
+    if (!name) return false;
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length < 2) return false;
+    // Reject initials like "P." or "P" — each part needs to be a real name, not an abbreviation
+    return parts.every((p) => p.replace(/\./g, "").length > 1);
+  };
+
+  const isEligibleForBonusDeduction = userData.bonusClaimed && !userData.bonusDeducted;
   const bonusDeduction = isEligibleForBonusDeduction ? 3.00 : 0.00;
   
   const currentFee = calculateWithdrawalFee(amount);
@@ -177,6 +185,9 @@ const handleWithdraw = async () => {
     const fee = calculateWithdrawalFee(withdrawAmount);
     const totalDeduct = withdrawAmount + fee + bonusDeduction;
 
+    if (!isValidAccountName(userData.fullName)) {
+      return alert("Your account name is incomplete or invalid for withdrawals. Please ensure your registered name includes a full first and last name (e.g. John Doe) — single names or initials (e.g. John, Peter P.) are not accepted. Contact support to update your account name.");
+    }
     if (!withdrawAmount || withdrawAmount <= 0) return alert("Enter a valid amount");
     if (totalDeduct > userData.main) return alert(`Insufficient balance. You need $${totalDeduct.toFixed(2)} total (including fees/bonus recovery).`);
     if (withdrawAmount < 10) return alert("Minimum withdrawal is $10.00");
@@ -338,13 +349,32 @@ const handleWithdraw = async () => {
         const agentDoc = await getDoc(doc(db, "agents", selectedAgent.id));
         const agentEmail = agentDoc.exists() ? agentDoc.data().email : null;
 
-        await updateDoc(doc(db, "users", user.uid), { wallet: increment(-withdrawAmount) });
+        if (isEligibleForBonusDeduction) {
+          await updateDoc(doc(db, "users", user.uid), {
+            wallet: increment(-totalDeduct),
+            bonusDeducted: true,
+            welcomeBonusStatus: "recovered",
+            welcomeBonusRecoveredAt: serverTimestamp()
+          });
+
+          await addDoc(collection(db, "users", user.uid, "transactions"), {
+            title: "Bonus Recovery",
+            amount: -3.00,
+            type: "adjustment",
+            status: "completed",
+            timestamp: serverTimestamp(),
+            details: "Signup bonus recovery"
+          });
+        } else {
+          await updateDoc(doc(db, "users", user.uid), { wallet: increment(-totalDeduct) });
+        }
 
         const tradeRef = await addDoc(collection(db, "trades"), {
           senderId: auth.currentUser.uid,
           agentId: selectedAgent.id,
           amount: withdrawAmount,
           fee: 0,
+          bonusRecovered: bonusDeduction,
           rate: Number(selectedAgent.exchange_rate),
           type: "withdrawal",
           status: "pending",
@@ -355,6 +385,7 @@ const handleWithdraw = async () => {
         await addDoc(collection(db, "users", user.uid, "transactions"), {
           amount: -withdrawAmount,
           fee: 0,
+          bonusRecovered: bonusDeduction,
           type: "withdrawal",
           method: "agent",
           agentName: selectedAgent.full_name,
@@ -396,7 +427,7 @@ const handleWithdraw = async () => {
         }
         
         setLoading(false);
-        setResultingBalance(Number(userData.main || 0) - withdrawAmount);
+        setResultingBalance(Number(userData.main || 0) - totalDeduct);
         setShowSuccess(true);
         setTimeout(() => router.push(`/trade/${tradeRef.id}`), 3000);
       }
@@ -513,17 +544,19 @@ const handleWithdraw = async () => {
             className="w-full bg-transparent font-black text-4xl text-white outline-none" />
         </div>
 
-        {parseFloat(amount) >= 10 && method === "usdt" && (
+        {parseFloat(amount) >= 10 && (method === "usdt" || isEligibleForBonusDeduction) && (
           <div className="bg-[#613de6]/5 border border-[#613de6]/20 p-5 rounded-3xl space-y-3 animate-in fade-in slide-in-from-top-2">
             <div className="flex items-center gap-2 mb-1">
                <Receipt size={14} className="text-[#613de6]" />
                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Transaction Summary</span>
             </div>
-            
-            <div className="flex justify-between items-center">
-               <span className="text-[11px] font-bold text-gray-500">Service Fee</span>
-               <span className="text-[11px] font-black text-rose-500">+ ${currentFee.toFixed(2)}</span>
-            </div>
+
+            {method === "usdt" && (
+              <div className="flex justify-between items-center">
+                 <span className="text-[11px] font-bold text-gray-500">Service Fee</span>
+                 <span className="text-[11px] font-black text-rose-500">+ ${currentFee.toFixed(2)}</span>
+              </div>
+            )}
 
             {isEligibleForBonusDeduction && (
               <div className="flex justify-between items-center text-amber-500">

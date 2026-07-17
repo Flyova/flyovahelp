@@ -47,9 +47,9 @@ export default function PredictAndWin() {
   const PLANS = [
     { id: "3h", name: "3 Hours", price: 12, duration: 3 * 60 * 60 * 1000 },
     { id: "5h", name: "5 Hours", price: 20, duration: 5 * 60 * 60 * 1000 },
-    { id: "12h", name: "12 Hours", price: 48, duration: 12 * 60 * 60 * 1000 },
-    { id: "1d", name: "1 Day", price: 95, duration: 24 * 60 * 60 * 1000 },
-    { id: "1w", name: "1 Week", price: 650, duration: 7 * 24 * 60 * 60 * 1000 },
+    { id: "12h", name: "12 Hours", price: 45, duration: 12 * 60 * 60 * 1000 },
+    { id: "1d", name: "1 Day", price: 88, duration: 24 * 60 * 60 * 1000 },
+    { id: "1w", name: "1 Week", price: 600, duration: 7 * 24 * 60 * 60 * 1000 },
   ];
 
   const showNotification = (type, title, message) => {
