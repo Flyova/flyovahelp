@@ -20,13 +20,9 @@ import {
 
 const FONTS = [
   { label: "Default", value: "" },
+  { label: "Montserrat", value: "Montserrat, sans-serif" },
   { label: "Serif", value: "Georgia, serif" },
   { label: "Mono", value: "ui-monospace, monospace" },
-  { label: "Inter", value: "Inter, sans-serif" },
-  { label: "Playfair", value: "'Playfair Display', serif" },
-  { label: "Roboto", value: "Roboto, sans-serif" },
-  { label: "Lato", value: "Lato, sans-serif" },
-  { label: "Merriweather", value: "Merriweather, serif" },
 ];
 
 function ToolBtn({ onClick, active, title, disabled, children }) {
@@ -54,7 +50,7 @@ function ToolBtn({ onClick, active, title, disabled, children }) {
       title={title}
       className={`p-1.5 rounded-lg transition-all disabled:opacity-30 ${
         active
-          ? "bg-[#613de6] text-white"
+          ? "bg-[#2457D6] text-white"
           : "text-gray-400 hover:bg-white/10 hover:text-white"
       }`}
     >
@@ -116,9 +112,9 @@ export default function RichTextEditor({ content, onChange, placeholder = "Start
   const canRedo = editor.can().redo();
 
   return (
-    <div className="border border-white/8 rounded-2xl overflow-hidden bg-[#0f172a]">
+    <div className="border border-white/8 rounded-2xl overflow-hidden bg-[#0B1220]">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-0.5 p-2 border-b border-white/8 bg-[#1e293b]">
+      <div className="flex flex-wrap items-center gap-0.5 p-2 border-b border-white/8 bg-[#142036]">
         {/* History */}
         <ToolBtn title="Undo" onClick={() => editor.chain().focus().undo().run()} disabled={!canUndo}>
           <Undo2 size={15} />
@@ -147,7 +143,7 @@ export default function RichTextEditor({ content, onChange, placeholder = "Start
             style={{ fontFamily: editor.getAttributes("textStyle").fontFamily || "inherit" }}
           >
             {FONTS.map((f) => (
-              <option key={f.value} value={f.value} style={{ fontFamily: f.value || "inherit", background: "#1e293b", color: "white" }}>
+              <option key={f.value} value={f.value} style={{ fontFamily: f.value || "inherit", background: "#142036", color: "white" }}>
                 {f.label}
               </option>
             ))}

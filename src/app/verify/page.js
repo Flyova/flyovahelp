@@ -52,8 +52,8 @@ function OtpInput({ value, onChange }) {
           onChange={(e) => handleChange(i, e.target.value)}
           onKeyDown={(e) => handleKey(i, e)}
           onPaste={handlePaste}
-          className="w-12 h-14 text-center text-xl font-black rounded-2xl bg-[#0f172a] border-2 text-white outline-none transition-all"
-          style={{ borderColor: d ? "#613de6" : "rgba(255,255,255,0.07)" }}
+          className="w-12 h-14 text-center text-xl font-black rounded-2xl bg-[#0B1220] border-2 text-white outline-none transition-all"
+          style={{ borderColor: d ? "#2457D6" : "rgba(255,255,255,0.07)" }}
         />
       ))}
     </div>
@@ -189,36 +189,36 @@ function VerifyContent() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white flex flex-col">
+    <div className="min-h-screen bg-[#0B1220] text-white flex flex-col">
       {/* Background */}
       <div className="fixed inset-0 pointer-events-none select-none overflow-hidden">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-150 h-75 bg-[#613de6] rounded-full opacity-[0.12] blur-[100px]" />
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-100 h-75 bg-[#fc7952] rounded-full opacity-[0.07] blur-[110px]" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-150 h-75 bg-[#2457D6] rounded-full opacity-[0.12] blur-[100px]" />
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-100 h-75 bg-[#8B1E3F] rounded-full opacity-[0.07] blur-[110px]" />
         <div className="absolute inset-0 flex items-center justify-center">
           <span className="text-[22vw] font-black italic uppercase tracking-tighter text-white/[0.022] whitespace-nowrap leading-none">
-            FLYOVAHELP
+            STRAWINS
           </span>
         </div>
       </div>
 
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-5 py-12">
         <Link href="/" className="mb-10">
-          <Image src="/logo.svg" alt="Flyovahelp" width={120} height={30} />
+          <Image src="/logo.svg" alt="StraWins" width={120} height={30} />
         </Link>
 
         {!success ? (
           <div className="w-full max-w-105 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Icon */}
             <div className="flex justify-center mb-6">
-              <div className="w-20 h-20 rounded-3xl bg-[#613de6]/20 border border-[#613de6]/30 flex items-center justify-center">
-                <ShieldCheck size={36} className="text-[#613de6]" />
+              <div className="w-20 h-20 rounded-3xl bg-[#2457D6]/20 border border-[#2457D6]/30 flex items-center justify-center">
+                <ShieldCheck size={36} className="text-[#2457D6]" />
               </div>
             </div>
 
             {/* Heading */}
             <div className="text-center mb-8">
               <h1 className="text-4xl font-black italic uppercase tracking-tighter leading-none mb-2">
-                Verify <span className="text-[#613de6]">Identity</span>
+                Verify <span className="text-[#2457D6]">Identity</span>
               </h1>
               <p className="text-[10px] font-black uppercase tracking-[0.25em] text-gray-500 leading-relaxed">
                 6-digit code sent to
@@ -226,7 +226,7 @@ function VerifyContent() {
               <p className="text-sm font-black text-white mt-0.5">{email}</p>
             </div>
 
-            <div className="bg-[#1e293b] border border-white/5 rounded-3xl p-7 shadow-2xl shadow-black/50 space-y-5">
+            <div className="bg-[#142036] border border-white/5 rounded-3xl p-7 shadow-2xl shadow-black/50 space-y-5">
               {error && (
                 <div className="flex items-center gap-2.5 bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-2xl text-xs font-bold">
                   <AlertCircle size={14} className="shrink-0" /> {error}
@@ -239,7 +239,7 @@ function VerifyContent() {
                 <button
                   type="submit"
                   disabled={loading || otp.length < 6}
-                  className="w-full flex items-center justify-center gap-2 bg-[#613de6] hover:brightness-110 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-[#613de6]/25 active:scale-95 transition-all disabled:opacity-40"
+                  className="w-full flex items-center justify-center gap-2 bg-[#2457D6] hover:brightness-110 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-[#2457D6]/25 active:scale-95 transition-all disabled:opacity-40"
                 >
                   {loading ? <Loader2 size={18} className="animate-spin" /> : <>Verify Account <ArrowRight size={16} /></>}
                 </button>
@@ -247,7 +247,7 @@ function VerifyContent() {
 
               {/* Info */}
               <div className="flex items-start gap-3 bg-white/4 border border-white/5 rounded-2xl p-4">
-                <Mail size={15} className="text-[#613de6] shrink-0 mt-0.5" />
+                <Mail size={15} className="text-[#2457D6] shrink-0 mt-0.5" />
                 <p className="text-[10px] font-bold text-gray-400 uppercase leading-relaxed">
                   Check your <span className="text-white">inbox or spam</span>. The code is required to activate your account.
                 </p>
@@ -258,7 +258,7 @@ function VerifyContent() {
                   type="button"
                   onClick={handleResendCode}
                   disabled={resending || resendCooldown > 0}
-                  className="w-full flex items-center justify-center gap-2 bg-[#0f172a] border border-white/10 hover:border-[#613de6]/50 text-white py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-40"
+                  className="w-full flex items-center justify-center gap-2 bg-[#0B1220] border border-white/10 hover:border-[#2457D6]/50 text-white py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-40"
                 >
                   {resending ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
                   {resendCooldown > 0 ? `Re-send in ${resendCooldown}s` : "Re-send Code"}
@@ -308,8 +308,8 @@ export default function VerifyPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
-          <Loader2 size={28} className="animate-spin text-[#613de6]" />
+        <div className="min-h-screen bg-[#0B1220] flex items-center justify-center">
+          <Loader2 size={28} className="animate-spin text-[#2457D6]" />
         </div>
       }
     >

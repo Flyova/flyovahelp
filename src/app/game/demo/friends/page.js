@@ -119,7 +119,7 @@ export default function DemoPlayWithFriends() {
   const progressWidth = useMemo(() => `${(timer / TURN_SECONDS) * 100}%`, [timer]);
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white pb-24">
+    <div className="min-h-screen bg-[#0B1220] text-white pb-24">
       <div className="w-full bg-amber-500/20 border-b border-amber-500/40 px-4 py-2 flex items-center justify-between">
         <span className="text-amber-400 text-xs font-black uppercase tracking-widest">Tutorial Simulator - Play with Friends</span>
         <div className="flex items-center gap-2">
@@ -136,10 +136,10 @@ export default function DemoPlayWithFriends() {
       </div>
 
       <div className="max-w-md mx-auto px-4 pt-4 space-y-4">
-        <div className="bg-[#1e293b] rounded-3xl border border-white/10 p-5">
+        <div className="bg-[#142036] rounded-3xl border border-white/10 p-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Users size={18} className="text-[#a78bfa]" />
+              <Users size={18} className="text-[#7A9BEE]" />
               <h1 className="text-lg font-black italic uppercase tracking-tight">Play with Friends Tutorial</h1>
             </div>
             <button
@@ -159,11 +159,11 @@ export default function DemoPlayWithFriends() {
           <div className="grid grid-cols-2 gap-3 mt-4">
             <div className="bg-black/20 rounded-2xl p-3">
               <p className="text-[10px] text-white/45 font-black uppercase tracking-widest">You</p>
-              <p className="text-2xl font-black text-[#fc7952]">{scores.you}</p>
+              <p className="text-2xl font-black text-[#8B1E3F]">{scores.you}</p>
             </div>
             <div className="bg-black/20 rounded-2xl p-3 text-right">
               <p className="text-[10px] text-white/45 font-black uppercase tracking-widest">Opponent</p>
-              <p className="text-2xl font-black text-[#a78bfa]">{scores.bot}</p>
+              <p className="text-2xl font-black text-[#7A9BEE]">{scores.bot}</p>
             </div>
           </div>
 
@@ -181,9 +181,9 @@ export default function DemoPlayWithFriends() {
           </div>
         </div>
 
-        <div className="bg-[#1e293b] rounded-3xl border border-white/10 p-5">
+        <div className="bg-[#142036] rounded-3xl border border-white/10 p-5">
           <div className="flex items-start gap-3">
-            <Info size={16} className="text-[#a78bfa] mt-0.5" />
+            <Info size={16} className="text-[#7A9BEE] mt-0.5" />
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-white/50">Coach Tip</p>
               <p className="text-sm font-bold text-white/85 mt-1">{tip}</p>
@@ -192,7 +192,7 @@ export default function DemoPlayWithFriends() {
           </div>
         </div>
 
-        <div className="bg-[#1e293b] rounded-3xl border border-white/10 p-5">
+        <div className="bg-[#142036] rounded-3xl border border-white/10 p-5">
           <p className="text-[10px] font-black uppercase tracking-widest text-white/50 mb-3">
             {phase === "pick" ? "Step 1 - Hide a Number" : phase === "guess" ? "Step 2 - Guess Opponent Number" : "Round Summary"}
           </p>
@@ -208,9 +208,9 @@ export default function DemoPlayWithFriends() {
                 disabled={phase !== "pick" && phase !== "guess"}
                 className={`rounded-2xl border px-4 py-5 text-2xl font-black transition-all ${
                   myHidden === num
-                    ? "border-[#fc7952] bg-[#fc7952]/15 text-[#fc7952]"
+                    ? "border-[#8B1E3F] bg-[#8B1E3F]/15 text-[#8B1E3F]"
                     : myGuess === num
-                      ? "border-[#a78bfa] bg-[#a78bfa]/15 text-[#d8ccff]"
+                      ? "border-[#7A9BEE] bg-[#7A9BEE]/15 text-[#D7E2FF]"
                       : "border-white/10 bg-black/20 text-white/90 hover:bg-white/5"
                 } disabled:opacity-60`}
               >
@@ -226,7 +226,7 @@ export default function DemoPlayWithFriends() {
                   setRound((r) => r + 1);
                   startRound();
                 }}
-                className="flex-1 bg-[#613de6] hover:bg-[#7251ed] rounded-2xl py-3 text-[11px] font-black uppercase tracking-widest transition-all active:scale-95"
+                className="flex-1 bg-[#2457D6] hover:bg-[#1D4FC4] rounded-2xl py-3 text-[11px] font-black uppercase tracking-widest transition-all active:scale-95"
               >
                 Next Round
               </button>
@@ -242,7 +242,7 @@ export default function DemoPlayWithFriends() {
                 </div>
                 <button
                   onClick={() => router.push(nextPath)}
-                  className="w-full bg-[#fc7952] hover:brightness-110 rounded-2xl py-3 text-[11px] font-black uppercase tracking-widest transition-all active:scale-95"
+                  className="w-full bg-[#8B1E3F] hover:brightness-110 rounded-2xl py-3 text-[11px] font-black uppercase tracking-widest transition-all active:scale-95"
                 >
                   Start Real Game
                 </button>

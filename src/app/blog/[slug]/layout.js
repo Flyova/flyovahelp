@@ -1,4 +1,4 @@
-const SITE_URL = "https://flyovahelp.com";
+const SITE_URL = "https://strawins.com";
 
 function slugToTitle(slug = "") {
   return slug
@@ -16,13 +16,13 @@ export async function generateMetadata({ params }) {
 
   return {
     title: prettyTitle,
-    description: `Read ${prettyTitle} on Flyovahelp Blog for gaming tips, strategies, and updates.`,
+    description: `Read ${prettyTitle} on StraWins Blog for gaming tips, strategies, and updates.`,
     alternates: {
       canonical,
     },
     openGraph: {
-      title: `${prettyTitle} | Flyovahelp Blog`,
-      description: `Read ${prettyTitle} on Flyovahelp Blog.`,
+      title: `${prettyTitle} | StraWins Blog`,
+      description: `Read ${prettyTitle} on StraWins Blog.`,
       url: canonical,
       type: "article",
     },

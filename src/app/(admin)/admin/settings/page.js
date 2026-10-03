@@ -48,7 +48,7 @@ export default function AdminSettings() {
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-white">
-      <Loader2 className="animate-spin text-[#613de6]" size={30} />
+      <Loader2 className="animate-spin text-[#2457D6]" size={30} />
     </div>
   );
 
@@ -56,7 +56,7 @@ export default function AdminSettings() {
     <div className="max-w-3xl p-6 space-y-8">
       <div>
         <h1 className="text-2xl font-black italic uppercase text-slate-800 flex items-center gap-2">
-          <Settings size={24} className="text-[#613de6]" /> 
+          <Settings size={24} className="text-[#2457D6]" /> 
           Gateways
         </h1>
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Enable or disable global financial transactions</p>
@@ -94,14 +94,14 @@ export default function AdminSettings() {
         {/* Withdrawal Row */}
         <div className={`flex items-center justify-between p-6 rounded-[2rem] border-2 transition-all ${settings?.withdrawalEnabled ? 'bg-white border-slate-100' : 'bg-slate-50 border-slate-200 opacity-60'}`}>
           <div className="flex items-center gap-4">
-            <div className={`p-3 rounded-xl ${settings?.withdrawalEnabled ? 'bg-[#613de6]/10 text-[#613de6]' : 'bg-slate-200 text-slate-400'}`}>
+            <div className={`p-3 rounded-xl ${settings?.withdrawalEnabled ? 'bg-[#2457D6]/10 text-[#2457D6]' : 'bg-slate-200 text-slate-400'}`}>
               <Banknote size={20} />
             </div>
             <div>
               <h3 className="text-sm font-black italic uppercase text-slate-800">Withdrawal System</h3>
               <div className="flex items-center gap-1">
-                {settings?.withdrawalEnabled ? <ShieldCheck size={10} className="text-blue-500"/> : <ShieldAlert size={10} className="text-rose-500"/>}
-                <span className={`text-[9px] font-black uppercase tracking-tighter ${settings?.withdrawalEnabled ? 'text-blue-500' : 'text-rose-500'}`}>
+                {settings?.withdrawalEnabled ? <ShieldCheck size={10} className="text-[#2457D6]"/> : <ShieldAlert size={10} className="text-rose-500"/>}
+                <span className={`text-[9px] font-black uppercase tracking-tighter ${settings?.withdrawalEnabled ? 'text-[#2457D6]' : 'text-rose-500'}`}>
                     {settings?.withdrawalEnabled ? 'Payouts Enabled' : 'Disabled'}
                 </span>
               </div>
@@ -112,7 +112,7 @@ export default function AdminSettings() {
             onClick={() => toggleSetting('withdrawalEnabled', settings?.withdrawalEnabled)}
           >
             {settings?.withdrawalEnabled ? (
-              <ToggleRight size={44} className="text-[#613de6]" />
+              <ToggleRight size={44} className="text-[#2457D6]" />
             ) : (
               <ToggleLeft size={44} className="text-slate-300" />
             )}

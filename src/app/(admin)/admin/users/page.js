@@ -269,7 +269,7 @@ export default function UserManagement() {
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12 bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100">
           <div className="flex items-center gap-5">
-            <div className="p-4 bg-[#613de6]/10 text-[#613de6] rounded-3xl">
+            <div className="p-4 bg-[#2457D6]/10 text-[#2457D6] rounded-3xl">
               <Users size={32} />
             </div>
             <div>
@@ -285,7 +285,7 @@ export default function UserManagement() {
               placeholder="SEARCH USERNAME / EMAIL / COUNTRY / PIN..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-100 pl-12 pr-6 py-4 rounded-2xl text-[10px] font-black uppercase outline-none focus:border-[#613de6]"
+              className="w-full bg-slate-50 border border-slate-100 pl-12 pr-6 py-4 rounded-2xl text-[10px] font-black uppercase outline-none focus:border-[#2457D6]"
             />
           </div>
         </div>
@@ -337,7 +337,7 @@ export default function UserManagement() {
                       </td>
                       <td className="p-6 font-black text-emerald-600">${Number(u.wallet || 0).toFixed(2)}</td>
                       <td className="p-6 font-black text-green-600">${Number(u.referralBonus || 0).toFixed(2)}</td>
-                      <td className="p-6 text-[10px] font-mono font-black text-indigo-600">{u.pin || "--------"}</td>
+                      <td className="p-6 text-[10px] font-mono font-black text-[#2457D6]">{u.pin || "--------"}</td>
                       <td className="p-6 text-[10px] font-bold uppercase text-slate-400">{u.country || "N/A"}</td>
                       <td className="p-6">
                         <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${bonusMeta.tone}`}>
@@ -350,7 +350,7 @@ export default function UserManagement() {
                       <td className="p-6 text-right whitespace-nowrap space-x-2">
                         <Link
                           href={`/admin/users/${u.id}`}
-                          className="px-4 py-3 rounded-xl transition-all font-black uppercase text-[10px] inline-flex items-center gap-2 bg-indigo-100 text-indigo-600 hover:bg-indigo-600 hover:text-white"
+                          className="px-4 py-3 rounded-xl transition-all font-black uppercase text-[10px] inline-flex items-center gap-2 bg-[#D7E2FF] text-[#2457D6] hover:bg-[#2457D6] hover:text-white"
                         >
                           <Activity size={14} /> Activity
                         </Link>
@@ -370,7 +370,7 @@ export default function UserManagement() {
                         </button>
                         <button
                           onClick={() => openEditModal(u)}
-                          className="p-3 bg-slate-100 rounded-xl hover:bg-[#613de6] hover:text-white transition-all"
+                          className="p-3 bg-slate-100 rounded-xl hover:bg-[#2457D6] hover:text-white transition-all"
                         >
                           <Edit2 size={16} />
                         </button>
@@ -429,7 +429,7 @@ export default function UserManagement() {
                       <tr key={`bonus-${u.id}`} className="hover:bg-slate-50/30 transition-colors">
                         <td className="p-6 text-sm font-black uppercase italic text-slate-800">{u.fullName || u.username || "User"}</td>
                         <td className="p-6 text-[10px] font-bold text-slate-500">{u.email || "No email"}</td>
-                        <td className="p-6 text-[10px] font-mono font-black text-indigo-600">{u.pin || "--------"}</td>
+                        <td className="p-6 text-[10px] font-mono font-black text-[#2457D6]">{u.pin || "--------"}</td>
                         <td className="p-6">
                           <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${bonusMeta.tone}`}>
                             {bonusMeta.label}
@@ -463,34 +463,34 @@ export default function UserManagement() {
               <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[60vh] overflow-y-auto">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-slate-400">Username (Unique)</label>
-                  <input value={editForm.username} onChange={(e) => setEditForm({ ...editForm, username: e.target.value })} className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:border-[#613de6]" />
+                  <input value={editForm.username} onChange={(e) => setEditForm({ ...editForm, username: e.target.value })} className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:border-[#2457D6]" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-slate-400">Full Name</label>
-                  <input value={editForm.fullName} onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })} className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:border-[#613de6]" />
+                  <input value={editForm.fullName} onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })} className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:border-[#2457D6]" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-slate-400">Email (Auth Sync)</label>
-                  <input value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:border-[#613de6]" />
+                  <input value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:border-[#2457D6]" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-slate-400">Phone</label>
-                  <input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:border-[#613de6]" />
+                  <input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:border-[#2457D6]" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-slate-400">DOB</label>
-                  <input type="date" value={editForm.dob} onChange={(e) => setEditForm({ ...editForm, dob: e.target.value })} className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:border-[#613de6]" />
+                  <input type="date" value={editForm.dob} onChange={(e) => setEditForm({ ...editForm, dob: e.target.value })} className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:border-[#2457D6]" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-slate-400">Country</label>
-                  <input value={editForm.country} onChange={(e) => setEditForm({ ...editForm, country: e.target.value })} className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:border-[#613de6]" />
+                  <input value={editForm.country} onChange={(e) => setEditForm({ ...editForm, country: e.target.value })} className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none focus:border-[#2457D6]" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-slate-400">Account PIN</label>
                   <input
                     value={editForm.pin}
                     onChange={(e) => setEditForm({ ...editForm, pin: normalizePin(e.target.value) })}
-                    className={`w-full bg-slate-50 border p-4 rounded-2xl text-sm font-bold outline-none focus:border-[#613de6] ${
+                    className={`w-full bg-slate-50 border p-4 rounded-2xl text-sm font-bold outline-none focus:border-[#2457D6] ${
                       pinConflictUser || (editForm.pin && !isPinValid) ? "border-rose-300" : "border-slate-100"
                     }`}
                   />
@@ -506,7 +506,7 @@ export default function UserManagement() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-slate-400">Wallet Balance</label>
-                  <input type="number" value={editForm.wallet} onChange={(e) => setEditForm({ ...editForm, wallet: e.target.value })} className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-black text-emerald-600 outline-none focus:border-[#613de6]" />
+                  <input type="number" value={editForm.wallet} onChange={(e) => setEditForm({ ...editForm, wallet: e.target.value })} className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-black text-emerald-600 outline-none focus:border-[#2457D6]" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-slate-400">Ban Status</label>
@@ -550,7 +550,7 @@ export default function UserManagement() {
                 <button
                   onClick={handleUpdateUser}
                   disabled={!canSaveProfile}
-                  className="w-full bg-[#613de6] text-white py-5 rounded-[2rem] font-black italic uppercase text-sm shadow-xl flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50 transition-all"
+                  className="w-full bg-[#2457D6] text-white py-5 rounded-[2rem] font-black italic uppercase text-sm shadow-xl flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50 transition-all"
                 >
                   {isUpdating ? <Loader2 className="animate-spin" /> : (
                     <>

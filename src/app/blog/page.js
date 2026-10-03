@@ -7,7 +7,7 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 import { Calendar, Clock, ArrowRight, Search, Loader2, FileText, ChevronDown } from "lucide-react";
 
 const PAGE_SIZE = 9;
-const PAGE_URL = "https://flyovahelp.com/blog";
+const PAGE_URL = "https://strawins.com/blog";
 const breadcrumbJsonLd = {
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
@@ -16,7 +16,7 @@ const breadcrumbJsonLd = {
       "@type": "ListItem",
       position: 1,
       name: "Home",
-      item: "https://flyovahelp.com/",
+      item: "https://strawins.com/",
     },
     {
       "@type": "ListItem",
@@ -33,9 +33,9 @@ function PostCard({ post }) {
   }) ?? "";
 
   return (
-    <Link href={`/blog/${post.slug}`} className="group flex flex-col bg-[#1e293b] border border-white/5 rounded-2xl overflow-hidden hover:border-white/15 hover:shadow-xl hover:shadow-black/30 transition-all duration-300">
+    <Link href={`/blog/${post.slug}`} className="group flex flex-col bg-[#142036] border border-white/5 rounded-2xl overflow-hidden hover:border-white/15 hover:shadow-xl hover:shadow-black/30 transition-all duration-300">
       {post.coverImage ? (
-        <div className="relative h-48 overflow-hidden bg-[#0f172a]">
+        <div className="relative h-48 overflow-hidden bg-[#0B1220]">
           <img
             src={post.coverImage}
             alt={post.title}
@@ -43,7 +43,7 @@ function PostCard({ post }) {
           />
         </div>
       ) : (
-        <div className="h-48 bg-gradient-to-br from-[#613de6]/30 to-[#fc7952]/20 flex items-center justify-center">
+        <div className="h-48 bg-gradient-to-br from-[#2457D6]/30 to-[#8B1E3F]/20 flex items-center justify-center">
           <FileText size={32} className="text-white/20" />
         </div>
       )}
@@ -58,7 +58,7 @@ function PostCard({ post }) {
             </span>
           )}
         </div>
-        <h3 className="font-black text-white text-base leading-snug mb-2 group-hover:text-[#a78bfa] transition-colors line-clamp-2">
+        <h3 className="font-black text-white text-base leading-snug mb-2 group-hover:text-[#7A9BEE] transition-colors line-clamp-2">
           {post.title}
         </h3>
         {post.excerpt && (
@@ -66,7 +66,7 @@ function PostCard({ post }) {
             {post.excerpt}
           </p>
         )}
-        <div className="flex items-center gap-1.5 mt-4 text-xs font-black text-[#fc7952] uppercase tracking-wider">
+        <div className="flex items-center gap-1.5 mt-4 text-xs font-black text-[#8B1E3F] uppercase tracking-wider">
           Read More <ArrowRight size={13} className="group-hover:translate-x-1 transition-transform" />
         </div>
       </div>
@@ -108,34 +108,34 @@ export default function BlogPage() {
   const hasMore = !search.trim() && visible < allPosts.length;
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white">
+    <div className="min-h-screen bg-[#0B1220] text-white">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
       {/* Background */}
       <div className="fixed inset-0 pointer-events-none select-none overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-150 h-150 bg-[#613de6] rounded-full opacity-[0.08] blur-[120px]" />
-        <div className="absolute -bottom-40 -left-40 w-100 h-100 bg-[#fc7952] rounded-full opacity-[0.06] blur-[100px]" />
+        <div className="absolute -top-40 -right-40 w-150 h-150 bg-[#2457D6] rounded-full opacity-[0.08] blur-[120px]" />
+        <div className="absolute -bottom-40 -left-40 w-100 h-100 bg-[#8B1E3F] rounded-full opacity-[0.06] blur-[100px]" />
       </div>
 
       {/* Nav */}
-      <div className="relative z-10 sticky top-0 bg-[#0f172a]/90 backdrop-blur-md border-b border-white/5 px-6 py-4 flex items-center justify-between">
+      <div className="relative z-10 sticky top-0 bg-[#0B1220]/90 backdrop-blur-md border-b border-white/5 px-6 py-4 flex items-center justify-between">
         <Link href="/">
-          <Image src="/logo.svg" alt="Flyovahelp" width={110} height={28} />
+          <Image src="/logo.svg" alt="StraWins" width={110} height={28} />
         </Link>
       </div>
 
       {/* Hero */}
       <section className="relative z-10 px-6 pt-16 pb-12 text-center max-w-3xl mx-auto">
-        <div className="inline-flex items-center gap-2 bg-[#613de6]/15 border border-[#613de6]/30 text-[#a78bfa] text-[10px] font-black uppercase tracking-[0.25em] px-4 py-2 rounded-full mb-6">
-          Latest from Flyovahelp
+        <div className="inline-flex items-center gap-2 bg-[#2457D6]/15 border border-[#2457D6]/30 text-[#7A9BEE] text-[10px] font-black uppercase tracking-[0.25em] px-4 py-2 rounded-full mb-6">
+          Latest from StraWins
         </div>
         <h1 className="text-5xl md:text-6xl font-black italic uppercase tracking-tighter leading-none mb-4">
-          The <span className="text-[#613de6]">Blog</span>
+          The <span className="text-[#2457D6]">Blog</span>
         </h1>
         <p className="text-gray-400 font-bold max-w-lg mx-auto text-sm leading-relaxed">
-          Tips, updates, strategies and news from the Flyovahelp Arena.
+          Tips, updates, strategies and news from the StraWins Arena.
         </p>
       </section>
 
@@ -148,7 +148,7 @@ export default function BlogPage() {
             placeholder="Search posts…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-[#1e293b] border border-white/5 focus:border-[#613de6]/40 rounded-2xl pl-11 pr-4 py-3.5 text-sm font-bold text-white placeholder:text-gray-600 outline-none transition-colors"
+            className="w-full bg-[#142036] border border-white/5 focus:border-[#2457D6]/40 rounded-2xl pl-11 pr-4 py-3.5 text-sm font-bold text-white placeholder:text-gray-600 outline-none transition-colors"
           />
         </div>
       </div>
@@ -157,7 +157,7 @@ export default function BlogPage() {
       <section className="relative z-10 max-w-6xl mx-auto px-6 pb-20">
         {loading ? (
           <div className="flex items-center justify-center h-60">
-            <Loader2 size={28} className="animate-spin text-[#613de6]" />
+            <Loader2 size={28} className="animate-spin text-[#2457D6]" />
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-60 gap-4">
@@ -178,7 +178,7 @@ export default function BlogPage() {
               <div className="flex justify-center mt-10">
                 <button
                   onClick={loadMore}
-                  className="flex items-center gap-2 bg-[#1e293b] border border-white/5 hover:border-white/15 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all"
+                  className="flex items-center gap-2 bg-[#142036] border border-white/5 hover:border-white/15 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all"
                 >
                   <ChevronDown size={14} /> Load More
                 </button>

@@ -32,7 +32,7 @@ export default function DesktopSidebar({ collapsed, onToggle }) {
 
   return (
     <aside
-      className={`hidden md:flex fixed left-0 top-14 z-[90] h-[calc(100vh-3.5rem)] bg-[#111827] border-r border-white/10 flex-col transition-all duration-300 ease-in-out ${
+      className={`hidden md:flex fixed left-0 top-14 z-[90] h-[calc(100vh-3.5rem)] bg-[#0B1220] border-r border-[#F5F3EE]/10 flex-col transition-all duration-300 ease-in-out ${
         collapsed ? "w-20" : "w-64"
       }`}
     >
@@ -46,8 +46,8 @@ export default function DesktopSidebar({ collapsed, onToggle }) {
               href={nav.path}
               className={`flex items-center gap-3 rounded-2xl px-3 py-3 transition-all ${
                 isActive
-                  ? "bg-[#613de6] text-white shadow-lg shadow-[#613de6]/20"
-                  : "text-gray-300 hover:bg-white/5 hover:text-white"
+                  ? "bg-[#2457D6] text-[#F5F3EE] shadow-lg shadow-[#2457D6]/20"
+                  : "text-[#F5F3EE]/70 hover:bg-[#F5F3EE]/5 hover:text-[#F5F3EE]"
               }`}
             >
               <Icon size={20} />

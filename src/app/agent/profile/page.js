@@ -74,19 +74,19 @@ export default function AgentProfile() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
-        <Loader2 className="text-[#613de6] animate-spin" size={40} />
+      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center">
+        <Loader2 className="text-[#2457D6] animate-spin" size={40} />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white pb-10">
+    <div className="min-h-screen bg-[#0B1220] text-white pb-10">
       {/* Header */}
       <div className="p-6 pt-12 flex items-center gap-4">
         <button 
           onClick={() => router.back()}
-          className="p-3 bg-[#1e293b] rounded-2xl border border-white/5"
+          className="p-3 bg-[#142036] rounded-2xl border border-white/5"
         >
           <ChevronLeft size={20} />
         </button>
@@ -98,14 +98,14 @@ export default function AgentProfile() {
         {/* PERSONAL INFORMATION (NON-EDITABLE) */}
         <section className="space-y-4">
           <div className="flex items-center gap-2 px-2">
-            <User size={14} className="text-[#613de6]" />
+            <User size={14} className="text-[#2457D6]" />
             <h2 className="text-[10px] font-black uppercase tracking-widest text-gray-500">Identity (Verified)</h2>
           </div>
 
-          <div className="bg-[#1e293b]/50 p-6 rounded-[2.5rem] border border-white/5 space-y-4 shadow-inner">
+          <div className="bg-[#142036]/50 p-6 rounded-[2.5rem] border border-white/5 space-y-4 shadow-inner">
             <div className="space-y-1">
               <label className="text-[9px] font-black uppercase text-gray-600 ml-2 tracking-tighter">Full Name</label>
-              <div className="w-full bg-[#0f172a]/80 p-4 rounded-2xl border border-white/5 font-black text-sm text-gray-400 italic">
+              <div className="w-full bg-[#0B1220]/80 p-4 rounded-2xl border border-white/5 font-black text-sm text-gray-400 italic">
                 {profile.fullName || "Name Not Found"}
               </div>
             </div>
@@ -114,7 +114,7 @@ export default function AgentProfile() {
               <label className="text-[9px] font-black uppercase text-gray-600 ml-2 tracking-tighter">Country</label>
               <div className="relative">
                 <MapPin size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-700" />
-                <div className="w-full bg-[#0f172a]/80 p-4 pl-12 rounded-2xl border border-white/5 font-black text-sm text-gray-400">
+                <div className="w-full bg-[#0B1220]/80 p-4 pl-12 rounded-2xl border border-white/5 font-black text-sm text-gray-400">
                   {profile.country || "Not Set"}
                 </div>
               </div>
@@ -125,37 +125,37 @@ export default function AgentProfile() {
         {/* BANK DETAILS (EDITABLE) */}
         <section className="space-y-4">
           <div className="flex items-center gap-2 px-2">
-            <Building2 size={14} className="text-[#fc7952]" />
+            <Building2 size={14} className="text-[#8B1E3F]" />
             <h2 className="text-[10px] font-black uppercase tracking-widest text-gray-500">Bank Settlement</h2>
           </div>
 
-          <div className="bg-[#1e293b] p-6 rounded-[2.5rem] border border-white/5 space-y-4 shadow-xl">
+          <div className="bg-[#142036] p-6 rounded-[2.5rem] border border-white/5 space-y-4 shadow-xl">
             <div className="space-y-1">
-              <label className="text-[9px] font-black uppercase text-[#fc7952] ml-2">Bank Name</label>
+              <label className="text-[9px] font-black uppercase text-[#8B1E3F] ml-2">Bank Name</label>
               <input 
                 type="text"
                 required
                 placeholder="e.g. Barclays, NatWest, Citibank"
                 value={profile.bankName}
                 onChange={(e) => setProfile({...profile, bankName: e.target.value})}
-                className="w-full bg-[#0f172a] p-4 rounded-2xl border border-white/5 outline-none focus:border-[#fc7952] transition-all font-bold text-sm"
+                className="w-full bg-[#0B1220] p-4 rounded-2xl border border-white/5 outline-none focus:border-[#8B1E3F] transition-all font-bold text-sm"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-[9px] font-black uppercase text-[#fc7952] ml-2">Account Holder Name</label>
+              <label className="text-[9px] font-black uppercase text-[#8B1E3F] ml-2">Account Holder Name</label>
               <input 
                 type="text"
                 required
                 placeholder="Exact name on bank app"
                 value={profile.accountName}
                 onChange={(e) => setProfile({...profile, accountName: e.target.value})}
-                className="w-full bg-[#0f172a] p-4 rounded-2xl border border-white/5 outline-none focus:border-[#fc7952] transition-all font-bold text-sm"
+                className="w-full bg-[#0B1220] p-4 rounded-2xl border border-white/5 outline-none focus:border-[#8B1E3F] transition-all font-bold text-sm"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-[9px] font-black uppercase text-[#fc7952] ml-2">Account Number</label>
+              <label className="text-[9px] font-black uppercase text-[#8B1E3F] ml-2">Account Number</label>
               <div className="relative">
                 <CreditCard size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" />
                 <input 
@@ -164,7 +164,7 @@ export default function AgentProfile() {
                   placeholder="0000000000"
                   value={profile.accountNumber}
                   onChange={(e) => setProfile({...profile, accountNumber: e.target.value})}
-                  className="w-full bg-[#0f172a] p-4 pl-12 rounded-2xl border border-white/5 outline-none focus:border-[#fc7952] transition-all font-bold text-sm tracking-[0.2em]"
+                  className="w-full bg-[#0B1220] p-4 pl-12 rounded-2xl border border-white/5 outline-none focus:border-[#8B1E3F] transition-all font-bold text-sm tracking-[0.2em]"
                 />
               </div>
             </div>
@@ -183,7 +183,7 @@ export default function AgentProfile() {
         <button 
           type="submit"
           disabled={updating}
-          className="w-full bg-[#613de6] py-5 rounded-3xl font-black uppercase italic tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-[#613de6]/20 active:scale-95 transition-all"
+          className="w-full bg-[#2457D6] py-5 rounded-3xl font-black uppercase italic tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-[#2457D6]/20 active:scale-95 transition-all"
         >
           {updating ? <Loader2 className="animate-spin" /> : (
             <>

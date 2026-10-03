@@ -252,14 +252,14 @@ export default function TradeRoom() {
               subject: "Trade Request Accepted",
               html: `
                 <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
-                  <h2 style="color: #613de6; border-bottom: 1px solid #eee; padding-bottom: 10px;">Agent Accepted Trade</h2>
+                  <h2 style="color: #2457D6; border-bottom: 1px solid #eee; padding-bottom: 10px;">Agent Accepted Trade</h2>
                   <p>Hello,</p>
                   <p><strong>Trade ID:</strong> ${id}</p>
                   <p>The agent has accepted your ${trade.type} request for $${trade.amount}.</p>
                   <p>${trade.type === 'deposit' 
                     ? "Please return to the Trade Room to view the agent's bank details and make your payment." 
                     : "The agent is now processing your payout. Please check the trade chat for payment confirmation."}</p>
-                  <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">Flyova Global Network</div>
+                  <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">StraWins Global Network</div>
                 </div>
               `
             })
@@ -396,9 +396,9 @@ export default function TradeRoom() {
                   <p>Hello,</p>
                   <p>Your ${trade.type} of $${trade.amount} has been successfully verified and completed.</p>
                   <p>${trade.type === 'deposit' 
-                    ? "The funds have been credited to your Flyova wallet." 
+                    ? "The funds have been credited to your StraWins wallet." 
                     : "The funds have been sent to your provided account details."}</p>
-                  <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">Flyova Global Network</div>
+                  <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">StraWins Global Network</div>
                 </div>
               `
             })
@@ -424,25 +424,25 @@ export default function TradeRoom() {
   const calculatedFee = Number(trade.amount) * currentFeePercent;
 
   return (
-    <div className="min-h-screen bg-[#0f172a] flex flex-col text-white pb-48"> 
-      <div className="bg-[#1e293b] p-6 pt-12 border-b border-white/5 flex items-center justify-between sticky top-0 z-50">
+    <div className="min-h-screen bg-[#0B1220] flex flex-col text-white pb-48"> 
+      <div className="bg-[#142036] p-6 pt-12 border-b border-white/5 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-4">
           <button onClick={() => router.back()} className="p-2 hover:bg-white/5 rounded-full"><ArrowLeft size={20}/></button>
           <div>
             <h1 className="font-black uppercase italic tracking-tighter text-sm">
               Trade with {otherPartyName || "Loading..."}
             </h1>
-            <p className="text-[10px] font-bold text-[#fc7952] uppercase tracking-widest">${Number(trade.amount).toLocaleString()}</p>
+            <p className="text-[10px] font-bold text-[#8B1E3F] uppercase tracking-widest">${Number(trade.amount).toLocaleString()}</p>
           </div>
         </div>
         <StatusBadge status={trade.status} />
       </div>
 
       {isAgent && (
-        <div className="m-4 p-5 bg-[#613de6]/10 rounded-3xl border border-[#613de6]/20 space-y-3">
+        <div className="m-4 p-5 bg-[#2457D6]/10 rounded-3xl border border-[#2457D6]/20 space-y-3">
             <div className="flex items-center gap-2 mb-1">
-              <Receipt size={14} className="text-[#613de6]" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-[#613de6]">
+              <Receipt size={14} className="text-[#2457D6]" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-[#2457D6]">
                 Agent {trade.type === "deposit" ? "Deduction" : "Earnings"} Summary ({currentFeePercent * 100}%)
               </span>
             </div>
@@ -468,27 +468,27 @@ export default function TradeRoom() {
       {/* Scenario 1: For Normal User (Shows Summary + Bank Details) */}
       {!isAgent && (
         <div className="m-4 space-y-3">
-            <div className="p-5 bg-[#1e293b] rounded-3xl border border-white/5 flex justify-between items-center">
+            <div className="p-5 bg-[#142036] rounded-3xl border border-white/5 flex justify-between items-center">
                 <div>
                     <p className="text-[9px] font-black uppercase opacity-40 mb-1">Trade Amount</p>
-                    <p className="text-xl font-black italic text-[#613de6]">${Number(trade.amount).toLocaleString()}</p>
+                    <p className="text-xl font-black italic text-[#2457D6]">${Number(trade.amount).toLocaleString()}</p>
                 </div>
                 <div className="text-right">
                     <p className="text-[9px] font-black uppercase opacity-40 mb-1">Total to Pay/Receive</p>
-                    <p className="text-xl font-black italic text-[#fc7952]">{(trade.rate * trade.amount).toLocaleString()}</p>
+                    <p className="text-xl font-black italic text-[#8B1E3F]">{(trade.rate * trade.amount).toLocaleString()}</p>
                 </div>
             </div>
 
             {trade.type === "deposit" && agentBank && (trade.status === "acknowledged" || trade.status === "completed") && (
-                <div className="p-5 bg-white text-slate-900 rounded-3xl shadow-2xl space-y-3 border-l-8 border-[#613de6]">
+                <div className="p-5 bg-white text-slate-900 rounded-3xl shadow-2xl space-y-3 border-l-8 border-[#2457D6]">
                     <div className="flex justify-between items-start">
                         <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Agent Bank Details</p>
-                        < Landmark size={16} className="text-[#613de6]" />
+                        < Landmark size={16} className="text-[#2457D6]" />
                     </div>
                     <div className="space-y-1">
                         <p className="text-[11px] font-black uppercase tracking-tighter text-slate-500">{agentBank.bankName}</p>
                         <div className="flex items-center justify-between">
-                            <p className="text-2xl font-black tracking-widest text-[#0f172a]">{agentBank.accountNumber}</p>
+                            <p className="text-2xl font-black tracking-widest text-[#0B1220]">{agentBank.accountNumber}</p>
                             <button onClick={() => {navigator.clipboard.writeText(agentBank.accountNumber); alert("Copied!")}} className="p-2 bg-slate-100 rounded-lg active:scale-90"><Copy size={14}/></button>
                         </div>
                         <p className="text-xs font-bold text-slate-600 uppercase italic">
@@ -499,7 +499,7 @@ export default function TradeRoom() {
             )}
 
             {trade.type === "deposit" && trade.status === "pending" && (
-                <div className="p-5 bg-[#1e293b] rounded-3xl border border-white/5 text-center text-[11px] font-bold uppercase text-white/40 tracking-wider">
+                <div className="p-5 bg-[#142036] rounded-3xl border border-white/5 text-center text-[11px] font-bold uppercase text-white/40 tracking-wider">
                     Waiting for agent to approve the trade. Bank details will appear here once approved.
                 </div>
             )}
@@ -509,14 +509,14 @@ export default function TradeRoom() {
       {/* Scenario 2: For Agent (Shows Summary ONLY) */}
       {isAgent && (
         <div className="m-4 space-y-3">
-            <div className="p-5 bg-[#1e293b] rounded-3xl border border-white/5 flex justify-between items-center">
+            <div className="p-5 bg-[#142036] rounded-3xl border border-white/5 flex justify-between items-center">
                 <div>
                     <p className="text-[9px] font-black uppercase opacity-40 mb-1">Trade Amount</p>
-                    <p className="text-xl font-black italic text-[#613de6]">${Number(trade.amount).toLocaleString()}</p>
+                    <p className="text-xl font-black italic text-[#2457D6]">${Number(trade.amount).toLocaleString()}</p>
                 </div>
                 <div className="text-right">
                     <p className="text-[9px] font-black uppercase opacity-40 mb-1">Total to Pay/Receive</p>
-                    <p className="text-xl font-black italic text-[#fc7952]">{(trade.rate * trade.amount).toLocaleString()}</p>
+                    <p className="text-xl font-black italic text-[#8B1E3F]">{(trade.rate * trade.amount).toLocaleString()}</p>
                 </div>
             </div>
         </div>
@@ -535,7 +535,7 @@ export default function TradeRoom() {
         <div ref={scrollRef} />
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-6 bg-[#0f172a]/95 backdrop-blur-md border-t border-white/5 z-50 pb-20">
+      <div className="fixed bottom-0 left-0 right-0 p-6 bg-[#0B1220]/95 backdrop-blur-md border-t border-white/5 z-50 pb-20">
         {trade.status === 'pending' && isAgent && (
           <div className="flex gap-3 mb-4 max-w-md mx-auto">
             <button 
@@ -590,7 +590,7 @@ export default function TradeRoom() {
                                 <p>${trade.type === 'withdrawal' 
                                   ? "The original trade amount has been refunded to your wallet balance." 
                                   : "This transaction has been cancelled. No funds were charged."}</p>
-                                <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">Flyova Global Network</div>
+                                <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">StraWins Global Network</div>
                               </div>
                             `
                           })
@@ -618,11 +618,11 @@ export default function TradeRoom() {
         {trade.status !== 'completed' && trade.status !== 'cancelled' && (
              <div className="flex gap-2 max-w-md mx-auto w-full mb-4 items-center">
                 <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="image/*" />
-                <button onClick={() => fileInputRef.current.click()} disabled={uploading} className="bg-[#1e293b] p-4 rounded-2xl text-[#613de6] shadow-inner">
+                <button onClick={() => fileInputRef.current.click()} disabled={uploading} className="bg-[#142036] p-4 rounded-2xl text-[#2457D6] shadow-inner">
                   {uploading ? <Loader2 className="animate-spin" size={20} /> : <ImageIcon size={20} />}
                 </button>
-                <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} placeholder="Type a message..." className="flex-1 bg-[#1e293b] border border-white/10 p-4 rounded-2xl outline-none focus:border-[#613de6] text-sm font-bold text-white placeholder:text-slate-500 shadow-inner" />
-                <button onClick={() => sendMessage()} className="bg-[#613de6] p-4 rounded-2xl shadow-lg active:scale-95 transition-all"><Send size={20} /></button>
+                <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} placeholder="Type a message..." className="flex-1 bg-[#142036] border border-white/10 p-4 rounded-2xl outline-none focus:border-[#2457D6] text-sm font-bold text-white placeholder:text-slate-500 shadow-inner" />
+                <button onClick={() => sendMessage()} className="bg-[#2457D6] p-4 rounded-2xl shadow-lg active:scale-95 transition-all"><Send size={20} /></button>
              </div>
         )}
 
@@ -639,7 +639,7 @@ export default function TradeRoom() {
 function StatusBadge({ status }) {
     const colors = { 
         pending: "bg-orange-500/20 text-orange-400", 
-        acknowledged: "bg-blue-500/20 text-blue-400", 
+        acknowledged: "bg-[#2457D6]/20 text-[#7A9BEE]", 
         completed: "bg-green-500/20 text-green-400", 
         cancelled: "bg-rose-500/20 text-rose-400" 
     };
@@ -649,7 +649,7 @@ function StatusBadge({ status }) {
 function MessageBubble({ msg, isMe }) {
     return (
         <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}>
-            <div className={`max-w-[80%] p-4 rounded-2xl text-[13px] font-bold ${isMe ? 'bg-[#613de6] text-white rounded-tr-none shadow-lg' : 'bg-[#1e293b] text-slate-100 rounded-tl-none border border-white/10 shadow-inner'}`}>
+            <div className={`max-w-[80%] p-4 rounded-2xl text-[13px] font-bold ${isMe ? 'bg-[#2457D6] text-white rounded-tr-none shadow-lg' : 'bg-[#142036] text-slate-100 rounded-tl-none border border-white/10 shadow-inner'}`}>
                 {msg.image ? (
                   <div className="space-y-2">
                     <img src={msg.image} alt="Proof" className="max-w-full rounded-lg cursor-pointer" onClick={() => window.open(msg.image, '_blank')} />

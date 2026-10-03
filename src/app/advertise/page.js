@@ -7,8 +7,8 @@ import {
   Target, BarChart2, Mail, CheckCircle2, Globe, Smartphone
 } from "lucide-react";
 
-const CONTACT_EMAIL = "info@flyovahelp.com";
-const PAGE_URL = "https://flyovahelp.com/advertise";
+const CONTACT_EMAIL = "info@strawins.com";
+const PAGE_URL = "https://strawins.com/advertise";
 const breadcrumbJsonLd = {
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
@@ -17,7 +17,7 @@ const breadcrumbJsonLd = {
       "@type": "ListItem",
       position: 1,
       name: "Home",
-      item: "https://flyovahelp.com/",
+      item: "https://strawins.com/",
     },
     {
       "@type": "ListItem",
@@ -37,12 +37,12 @@ const STATS = [
 
 const AD_FORMATS = [
   {
-    icon: <Smartphone size={22} className="text-[#fc7952]" />,
+    icon: <Smartphone size={22} className="text-[#8B1E3F]" />,
     title: "In-App Banner",
     desc: "High-visibility banners placed across the dashboard, game lobbies, and history feed. Seen by every active session.",
   },
   {
-    icon: <Zap size={22} className="text-[#a78bfa]" />,
+    icon: <Zap size={22} className="text-[#7A9BEE]" />,
     title: "Game Sponsorship",
     desc: "Sponsor a game round. Your brand name and logo appear as the round title, seen by all players in that session.",
   },
@@ -73,7 +73,7 @@ export default function AdvertisePage() {
   const handleSend = () => {
     const subject = encodeURIComponent(`Advertising Inquiry — ${form.company || form.name}`);
     const body = encodeURIComponent(
-      `Hi Flyovahelp Team,\n\nName: ${form.name}\nCompany: ${form.company}\nBudget: ${form.budget}\n\n${form.message}\n\nLooking forward to hearing from you.`
+      `Hi StraWins Team,\n\nName: ${form.name}\nCompany: ${form.company}\nBudget: ${form.budget}\n\n${form.message}\n\nLooking forward to hearing from you.`
     );
     window.location.href = `mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`;
   };
@@ -81,23 +81,23 @@ export default function AdvertisePage() {
   const canSend = form.name.trim() && form.message.trim();
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white">
+    <div className="min-h-screen bg-[#0B1220] text-white">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
       {/* NAV */}
-      <div className="sticky top-0 z-50 bg-[#0f172a]/90 backdrop-blur-md border-b border-white/5 px-6 py-4 flex items-center justify-between">
+      <div className="sticky top-0 z-50 bg-[#0B1220]/90 backdrop-blur-md border-b border-white/5 px-6 py-4 flex items-center justify-between">
         <button
           onClick={() => router.back()}
           className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 hover:text-white transition-colors"
         >
           <ArrowLeft size={16} /> Back
         </button>
-        <Image src="/logo.svg" alt="Flyovahelp" width={110} height={28} />
+        <Image src="/logo.svg" alt="StraWins" width={110} height={28} />
         <a
           href={`mailto:${CONTACT_EMAIL}`}
-          className="hidden sm:flex items-center gap-2 bg-[#fc7952] text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider hover:brightness-110 transition-all"
+          className="hidden sm:flex items-center gap-2 bg-[#8B1E3F] text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider hover:brightness-110 transition-all"
         >
           <Mail size={14} /> Email Us
         </a>
@@ -111,19 +111,19 @@ export default function AdvertisePage() {
           </span>
         </div>
         <div className="relative z-10 max-w-2xl mx-auto">
-          <div className="inline-flex items-center gap-2 bg-[#fc7952]/15 border border-[#fc7952]/30 text-[#fc7952] text-[10px] font-black uppercase tracking-[0.25em] px-4 py-2 rounded-full mb-6">
+          <div className="inline-flex items-center gap-2 bg-[#8B1E3F]/15 border border-[#8B1E3F]/30 text-[#8B1E3F] text-[10px] font-black uppercase tracking-[0.25em] px-4 py-2 rounded-full mb-6">
             <BarChart2 size={12} /> Advertise with Us
           </div>
           <h1 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter leading-none mb-4">
             Reach Players<br />
-            <span className="text-[#fc7952]">Where They Play</span>
+            <span className="text-[#8B1E3F]">Where They Play</span>
           </h1>
           <p className="text-gray-400 text-sm md:text-base font-bold max-w-lg mx-auto leading-relaxed">
             Put your brand in front of thousands of active, high-intent gaming enthusiasts across the world. Every session. Every game.
           </p>
           <button
             onClick={() => document.getElementById("contact-form")?.scrollIntoView({ behavior: "smooth" })}
-            className="mt-8 inline-flex items-center gap-2 bg-[#fc7952] text-white px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-wider hover:brightness-110 transition-all shadow-xl shadow-[#fc7952]/20"
+            className="mt-8 inline-flex items-center gap-2 bg-[#8B1E3F] text-white px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-wider hover:brightness-110 transition-all shadow-xl shadow-[#8B1E3F]/20"
           >
             Get Started <ArrowRight size={16} />
           </button>
@@ -131,7 +131,7 @@ export default function AdvertisePage() {
       </section>
 
       {/* STATS BAR */}
-      <section className="bg-[#1e293b] border-y border-white/5 px-6 py-10">
+      <section className="bg-[#142036] border-y border-white/5 px-6 py-10">
         <div className="max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8">
           {STATS.map((s) => (
             <div key={s.label} className="text-center">
@@ -152,7 +152,7 @@ export default function AdvertisePage() {
           {AD_FORMATS.map((f) => (
             <div
               key={f.title}
-              className="bg-[#1e293b] border border-white/5 rounded-2xl p-6 hover:border-white/15 transition-all group"
+              className="bg-[#142036] border border-white/5 rounded-2xl p-6 hover:border-white/15 transition-all group"
             >
               <div className="bg-white/5 w-11 h-11 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 {f.icon}
@@ -165,16 +165,16 @@ export default function AdvertisePage() {
       </section>
 
       {/* WHY ADVERTISE */}
-      <section className="bg-[#1e293b] border-y border-white/5 px-6 py-16">
+      <section className="bg-[#142036] border-y border-white/5 px-6 py-16">
         <div className="max-w-3xl mx-auto">
           <p className="text-[10px] font-black uppercase tracking-[0.25em] text-gray-500 mb-2">Why Us</p>
           <h2 className="text-3xl font-black italic uppercase tracking-tighter mb-8">
-            Why Advertise on<br /><span className="text-[#fc7952]">Flyovahelp?</span>
+            Why Advertise on<br /><span className="text-[#8B1E3F]">StraWins?</span>
           </h2>
           <div className="space-y-4">
             {PERKS.map((perk) => (
               <div key={perk} className="flex items-start gap-3">
-                <CheckCircle2 size={18} className="text-[#fc7952] shrink-0 mt-0.5" />
+                <CheckCircle2 size={18} className="text-[#8B1E3F] shrink-0 mt-0.5" />
                 <p className="text-sm font-bold text-gray-300">{perk}</p>
               </div>
             ))}
@@ -201,7 +201,7 @@ export default function AdvertisePage() {
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder="John Doe"
-                className="w-full bg-[#1e293b] border border-white/5 focus:border-[#fc7952]/50 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none transition-colors placeholder:text-gray-600"
+                className="w-full bg-[#142036] border border-white/5 focus:border-[#8B1E3F]/50 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none transition-colors placeholder:text-gray-600"
               />
             </div>
             <div>
@@ -211,7 +211,7 @@ export default function AdvertisePage() {
                 value={form.company}
                 onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))}
                 placeholder="Acme Corp"
-                className="w-full bg-[#1e293b] border border-white/5 focus:border-[#fc7952]/50 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none transition-colors placeholder:text-gray-600"
+                className="w-full bg-[#142036] border border-white/5 focus:border-[#8B1E3F]/50 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none transition-colors placeholder:text-gray-600"
               />
             </div>
           </div>
@@ -223,7 +223,7 @@ export default function AdvertisePage() {
               value={form.budget}
               onChange={(e) => setForm((f) => ({ ...f, budget: e.target.value }))}
               placeholder="e.g. $500 – $2,000/month"
-              className="w-full bg-[#1e293b] border border-white/5 focus:border-[#fc7952]/50 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none transition-colors placeholder:text-gray-600"
+              className="w-full bg-[#142036] border border-white/5 focus:border-[#8B1E3F]/50 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none transition-colors placeholder:text-gray-600"
             />
           </div>
 
@@ -234,21 +234,21 @@ export default function AdvertisePage() {
               onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
               placeholder="Tell us about your product, target audience, and what you're looking to achieve..."
               rows={5}
-              className="w-full bg-[#1e293b] border border-white/5 focus:border-[#fc7952]/50 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none transition-colors placeholder:text-gray-600 resize-none"
+              className="w-full bg-[#142036] border border-white/5 focus:border-[#8B1E3F]/50 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none transition-colors placeholder:text-gray-600 resize-none"
             />
           </div>
 
           <button
             onClick={handleSend}
             disabled={!canSend}
-            className="w-full flex items-center justify-center gap-2 bg-[#fc7952] hover:brightness-110 disabled:opacity-40 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-wider transition-all shadow-xl shadow-[#fc7952]/20 active:scale-95"
+            className="w-full flex items-center justify-center gap-2 bg-[#8B1E3F] hover:brightness-110 disabled:opacity-40 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-wider transition-all shadow-xl shadow-[#8B1E3F]/20 active:scale-95"
           >
             <Mail size={16} /> Send Inquiry
           </button>
 
           <p className="text-center text-[11px] text-gray-500 font-bold">
             Or email us directly at{" "}
-            <a href={`mailto:${CONTACT_EMAIL}`} className="text-[#fc7952] hover:underline">
+            <a href={`mailto:${CONTACT_EMAIL}`} className="text-[#8B1E3F] hover:underline">
               {CONTACT_EMAIL}
             </a>
           </p>
@@ -258,7 +258,7 @@ export default function AdvertisePage() {
       {/* FOOTER STRIP */}
       <div className="border-t border-white/5 px-6 py-6 text-center">
         <p className="text-[10px] font-black uppercase tracking-widest text-gray-600">
-          © 2026 Flyovahelp Arena · All rights reserved
+          © 2026 StraWins Arena · All rights reserved
         </p>
       </div>
     </div>

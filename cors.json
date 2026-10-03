@@ -1,6 +1,6 @@
 [
   {
-    "origin": ["http://localhost:3000", "https://flyovahelp.com"],
+    "origin": ["http://localhost:3000", "https://strawins.com"],
     "method": ["GET", "POST", "PUT", "DELETE", "HEAD"],
     "responseHeader": ["Content-Type", "Authorization", "Content-Length", "User-Agent"],
     "maxAgeSeconds": 3600

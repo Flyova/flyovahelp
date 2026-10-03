@@ -117,7 +117,7 @@ export default function PlayWithFriendsHistory() {
         <input
           type="text"
           placeholder="Search by player name, ID, or email..."
-          className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:border-[#613de6]"
+          className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:border-[#2457D6]"
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
@@ -139,7 +139,7 @@ export default function PlayWithFriendsHistory() {
               {loading ? (
                 <tr>
                   <td colSpan="6" className="p-12 text-center">
-                    <Loader2 className="animate-spin mx-auto text-[#fc7952] mb-2" />
+                    <Loader2 className="animate-spin mx-auto text-[#8B1E3F] mb-2" />
                     <p className="text-[10px] font-black uppercase text-slate-400">Loading Match History...</p>
                   </td>
                 </tr>

@@ -83,6 +83,11 @@ export default function HistoryPage() {
             );
 
             const data = rows.map(({ id, data: docData }) => {
+              // Rebrand compat: records written before the StraWins rename carry
+              // "Flyova ..." titles. Normalize once so all logic below matches.
+              if (typeof docData.title === "string" && docData.title.startsWith("Flyova ")) {
+                docData.title = docData.title.replace(/^Flyova /, "StraWins ");
+              }
               const isAgentWithdrawalMirror =
                 docData.type === "withdrawal" &&
                 docData.method === "agent" &&
@@ -136,42 +141,42 @@ export default function HistoryPage() {
               const isPlayWithFriends =
                 docData.title === "Match Stake" || docData.title === "Match Settlement";
               // Old cron settled partial refunds by setting status:"refunded" without updating title
-              const isLegacyRefund = docData.title === "Flyova Stake" && docData.status === "refunded";
+              const isLegacyRefund = docData.title === "StraWins Stake" && docData.status === "refunded";
               // New partial: stake record whose amount was shrunk to the 20% net loss
-              const isFlyovaPartialStake = docData.title === "Flyova Stake" && docData.status === "partial";
+              const isStraWinsPartialStake = docData.title === "StraWins Stake" && docData.status === "partial";
               // New loss: stake record marked status:"loss" — no separate outcome doc
-              const isFlyovaLossStake = docData.title === "Flyova Stake" && docData.status === "loss";
+              const isStraWinsLossStake = docData.title === "StraWins Stake" && docData.status === "loss";
               // New win: stake record updated with payout amount and status:"win"
-              const isFlyovaWinStake = docData.title === "Flyova Stake" && docData.status === "win";
+              const isStraWinsWinStake = docData.title === "StraWins Stake" && docData.status === "win";
               // Old settled stakes are the negative half of legacy 2-doc win pairs — hide them
-              const isFlyovaSettledStake = docData.title === "Flyova Stake" && docData.status === "settled";
-              if (isFlyovaSettledStake) return null;
-              const isFlyovaStake = docData.title === "Flyova Stake" && !isLegacyRefund && !isFlyovaPartialStake && !isFlyovaLossStake && !isFlyovaWinStake;
-              const isFlyovaWin = docData.title === "Flyova Win";
-              const isFlyovaPartial = docData.title === "Flyova Partial Refund" || isLegacyRefund; // kept for old records
-              // Old separate "Flyova Loss" outcome docs are misleading double-debits — hide them
-              if (docData.title === "Flyova Loss") return null;
-              const isFlyovaLoss = docData.type === "loss" && Boolean(docData.gameId);
-              const isFlyova = isFlyovaStake || isFlyovaWin || isFlyovaPartial || isFlyovaLoss || isFlyovaPartialStake || isFlyovaLossStake || isFlyovaWinStake;
+              const isStraWinsSettledStake = docData.title === "StraWins Stake" && docData.status === "settled";
+              if (isStraWinsSettledStake) return null;
+              const isStraWinsStake = docData.title === "StraWins Stake" && !isLegacyRefund && !isStraWinsPartialStake && !isStraWinsLossStake && !isStraWinsWinStake;
+              const isStraWinsWin = docData.title === "StraWins Win";
+              const isStraWinsPartial = docData.title === "StraWins Partial Refund" || isLegacyRefund; // kept for old records
+              // Old separate "StraWins Loss" outcome docs are misleading double-debits — hide them
+              if (docData.title === "StraWins Loss") return null;
+              const isStraWinsLoss = docData.type === "loss" && Boolean(docData.gameId);
+              const isStraWins = isStraWinsStake || isStraWinsWin || isStraWinsPartial || isStraWinsLoss || isStraWinsPartialStake || isStraWinsLossStake || isStraWinsWinStake;
 
-              // For Flyova outcomes, keep history as stake-debit only.
+              // For StraWins outcomes, keep history as stake-debit only.
               // For legacy standalone win/partial docs, reconstruct stake-equivalent amount.
               const storedAbs = Math.abs(Number(docData.amount || 0));
               const explicitStake = Math.abs(Number(docData.stakeAmount || 0));
-              const flyovaStakeEquivalent = explicitStake > 0
+              const strawinsStakeEquivalent = explicitStake > 0
                 ? explicitStake
-                : isFlyovaWinStake
+                : isStraWinsWinStake
                   // Legacy rows wrote payout into stake.amount; convert back to stake for display.
                   ? storedAbs / FLYOVA_WIN_MULTIPLIER
-                  : isFlyovaPartialStake
+                  : isStraWinsPartialStake
                     // Legacy rows wrote net-loss (20%) into stake.amount; convert back to full stake.
                     ? storedAbs / (1 - FLYOVA_PARTIAL_REFUND_RATE)
-                    : isFlyovaWin
+                    : isStraWinsWin
                       ? storedAbs / FLYOVA_WIN_MULTIPLIER
-                      : docData.title === "Flyova Partial Refund"
+                      : docData.title === "StraWins Partial Refund"
                         ? storedAbs / FLYOVA_PARTIAL_REFUND_RATE
                         : storedAbs;
-              const displayAmount = isFlyova ? flyovaStakeEquivalent : Number(docData.amount || 0);
+              const displayAmount = isStraWins ? strawinsStakeEquivalent : Number(docData.amount || 0);
 
               if (isTransfer) {
                 mainTitle = "P2P TRANSFER";
@@ -181,26 +186,26 @@ export default function HistoryPage() {
               } else if (isPlayWithFriends) {
                 mainTitle = "PLAY WITH FRIENDS";
                 subDetail = docData.title;
-              } else if (isFlyovaStake) {
-                mainTitle = "FLYOVA TO DOLLARS";
+              } else if (isStraWinsStake) {
+                mainTitle = "STRAWINS TO DOLLARS";
                 subDetail = "Round Stake";
-              } else if (isFlyovaPartialStake) {
-                mainTitle = "FLYOVA TO DOLLARS";
+              } else if (isStraWinsPartialStake) {
+                mainTitle = "STRAWINS TO DOLLARS";
                 subDetail = "Partial";
-              } else if (isFlyovaWinStake) {
-                mainTitle = "FLYOVA TO DOLLARS";
+              } else if (isStraWinsWinStake) {
+                mainTitle = "STRAWINS TO DOLLARS";
                 subDetail = "Win";
-              } else if (isFlyovaWin) {
-                mainTitle = "FLYOVA TO DOLLARS";
+              } else if (isStraWinsWin) {
+                mainTitle = "STRAWINS TO DOLLARS";
                 subDetail = "Win";
-              } else if (isFlyovaPartial) {
-                mainTitle = "FLYOVA TO DOLLARS";
+              } else if (isStraWinsPartial) {
+                mainTitle = "STRAWINS TO DOLLARS";
                 subDetail = "Partial";
-              } else if (isFlyovaLossStake) {
-                mainTitle = "FLYOVA TO DOLLARS";
+              } else if (isStraWinsLossStake) {
+                mainTitle = "STRAWINS TO DOLLARS";
                 subDetail = "Loss";
-              } else if (isFlyovaLoss) {
-                mainTitle = "FLYOVA TO DOLLARS";
+              } else if (isStraWinsLoss) {
+                mainTitle = "STRAWINS TO DOLLARS";
                 subDetail = "Loss";
               } else if (docData.type === 'win') {
                 mainTitle = "GAME VICTORY";
@@ -224,12 +229,12 @@ export default function HistoryPage() {
                 amount: displayAmount,
                 mainTitle,
                 subDetail,
-                isPartialStake: isFlyovaPartialStake,
-                isLossStake: isFlyovaLossStake,
-                isWinStake: isFlyovaWinStake,
-                isFlyova,
-                isFlyovaOutcome: isFlyovaWinStake || isFlyovaPartialStake || isFlyovaLossStake || isFlyovaWin || isFlyovaPartial || isFlyovaLoss,
-                category: isFlyova ? 'games' : isFinance ? 'finance' : 'games',
+                isPartialStake: isStraWinsPartialStake,
+                isLossStake: isStraWinsLossStake,
+                isWinStake: isStraWinsWinStake,
+                isStraWins,
+                isStraWinsOutcome: isStraWinsWinStake || isStraWinsPartialStake || isStraWinsLossStake || isStraWinsWin || isStraWinsPartial || isStraWinsLoss,
+                category: isStraWins ? 'games' : isFinance ? 'finance' : 'games',
                 date: docData.timestamp?.toDate() || new Date()
               };
             }).filter(Boolean);
@@ -345,9 +350,9 @@ export default function HistoryPage() {
   });
 
   return (
-    <div className="min-h-screen bg-[#0f172a] pb-24 text-white">
+    <div className="min-h-screen bg-[#0B1220] pb-24 text-white">
       {/* Header Section */}
-      <div className="bg-[#613de6] p-8 rounded-b-[3.5rem] shadow-2xl text-center border-b-4 border-[#fc7952] relative overflow-hidden">
+      <div className="bg-[#2457D6] p-8 rounded-b-[3.5rem] shadow-2xl text-center border-b-4 border-[#8B1E3F] relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
             <History size={300} className="absolute -top-20 -left-20 rotate-12" />
         </div>
@@ -367,8 +372,8 @@ export default function HistoryPage() {
               onClick={() => setFilter(f)}
               className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase transition-all whitespace-nowrap border-2 ${
                 filter === f 
-                ? 'bg-[#fc7952] border-[#fc7952] text-white shadow-[0_10px_20px_rgba(252,121,82,0.3)]' 
-                : 'bg-[#1e293b] border-white/5 text-gray-500 hover:text-white'
+                ? 'bg-[#8B1E3F] border-[#8B1E3F] text-white shadow-[0_10px_20px_rgba(252,121,82,0.3)]' 
+                : 'bg-[#142036] border-white/5 text-gray-500 hover:text-white'
               }`}
             >
               {f}
@@ -380,13 +385,13 @@ export default function HistoryPage() {
         <div className="space-y-4">
           {loading ? (
             <div className="text-center py-20">
-              <Loader2 className="w-12 h-12 text-[#613de6] animate-spin mx-auto mb-4" />
+              <Loader2 className="w-12 h-12 text-[#2457D6] animate-spin mx-auto mb-4" />
               <p className="text-gray-500 font-black uppercase text-[10px] tracking-widest">Syncing Nodes...</p>
             </div>
           ) : renderedData.map((item) => {
             const rawAmount = Number(item.amount || 0);
-            // Flyova outcomes are always debit-side in this ledger view; other tx keep stored sign.
-            const amountValue = item.isFlyova
+            // StraWins outcomes are always debit-side in this ledger view; other tx keep stored sign.
+            const amountValue = item.isStraWins
               ? -Math.abs(rawAmount)
               : item.type === 'loss' ? -Math.abs(rawAmount) : rawAmount;
             const isPositive = item.type === "p2p_transfer" ? item.direction === "in" : amountValue > 0;
@@ -395,16 +400,16 @@ export default function HistoryPage() {
             const dateStr = item.date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
             // Loss records have status "completed" in DB — override to show red "loss" badge
             // Partial refund records may have status "win" from old code — always show "partial"
-            // Win stakes and old "Flyova Win" docs (status:"completed") both show "win" badge
+            // Win stakes and old "StraWins Win" docs (status:"completed") both show "win" badge
             const displayStatus = item.type === 'loss' || item.isLossStake ? 'loss'
-              : (item.type === 'refund' && item.isFlyovaOutcome) ? 'partial'
+              : (item.type === 'refund' && item.isStraWinsOutcome) ? 'partial'
               : item.isWinStake || (item.status === 'completed' && item.type === 'win') ? 'win'
               : item.status;
             
             return (
               <div 
                 key={item.id} 
-                className="bg-[#1e293b] border border-white/5 p-5 rounded-[2.5rem] flex items-center justify-between group hover:border-[#613de6]/50 transition-all duration-300 shadow-xl"
+                className="bg-[#142036] border border-white/5 p-5 rounded-[2.5rem] flex items-center justify-between group hover:border-[#2457D6]/50 transition-all duration-300 shadow-xl"
               >
                 <div className="flex items-center space-x-4">
                   <div className={`p-4 rounded-2xl shadow-inner ${iconTone}`}>
@@ -420,8 +425,8 @@ export default function HistoryPage() {
                   <div>
                     {/* GRAY Main Category Label */}
                     <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-0.5">
-                      {item.isFlyovaOutcome && item.mainTitle === 'TRANSACTION'
-                        ? 'FLYOVA TO DOLLARS'
+                      {item.isStraWinsOutcome && item.mainTitle === 'TRANSACTION'
+                        ? 'STRAWINS TO DOLLARS'
                         : item.mainTitle}
                     </p>
 
@@ -445,17 +450,17 @@ export default function HistoryPage() {
                     </div>
                     {/* Account pin / reference details */}
                     {item.type === 'withdrawal' && item.details?.usdtAddress && (
-                      <p className="text-[8px] font-bold text-[#613de6]/80 mt-1 font-mono tracking-wider">
+                      <p className="text-[8px] font-bold text-[#2457D6]/80 mt-1 font-mono tracking-wider">
                         {item.details.usdtAddress.slice(0, 6)}...{item.details.usdtAddress.slice(-4)}
                       </p>
                     )}
                     {(item.mainTitle === 'AGENT WITHDRAWAL' || item.mainTitle === 'AGENT DEPOSIT') && item.agentId && (
-                      <p className="text-[8px] font-bold text-[#613de6]/80 mt-1 font-mono tracking-wider">
+                      <p className="text-[8px] font-bold text-[#2457D6]/80 mt-1 font-mono tracking-wider">
                         Trade #{(item.id || '').slice(-6).toUpperCase()}
                       </p>
                     )}
                     {item.type === 'deposit' && item.addressUsed && (
-                      <p className="text-[8px] font-bold text-[#613de6]/80 mt-1 font-mono tracking-wider">
+                      <p className="text-[8px] font-bold text-[#2457D6]/80 mt-1 font-mono tracking-wider">
                         {item.addressUsed.slice(0, 6)}...{item.addressUsed.slice(-4)}
                       </p>
                     )}
@@ -473,7 +478,7 @@ export default function HistoryPage() {
                       ? 'P2P Transfer'
                       : item.type === 'predict_group'
                         ? 'Prediction Summary'
-                        : item.isFlyovaOutcome
+                        : item.isStraWinsOutcome
                           ? String(displayStatus || 'stake').toUpperCase()
                           : (item.type || 'Transaction')}
                   </span>
@@ -484,7 +489,7 @@ export default function HistoryPage() {
         </div>
 
         {!loading && renderedData.length === 0 && (
-          <div className="text-center py-24 bg-[#1e293b] rounded-[3rem] border border-dashed border-white/5 opacity-50">
+          <div className="text-center py-24 bg-[#142036] rounded-[3rem] border border-dashed border-white/5 opacity-50">
             <Coins size={48} className="mx-auto mb-4 text-gray-700" />
             <p className="font-black uppercase text-[10px] tracking-[0.2em] text-gray-500">No History found in {filter}</p>
           </div>

@@ -84,8 +84,8 @@ export default function AdminJackpot() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Step 1: Find User */}
         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
-          <h3 className="text-sm font-black text-blue-600 uppercase mb-6 flex items-center gap-2">
-            <User size={16} className="text-blue-600" /> 1. Select Recipient
+          <h3 className="text-sm font-black text-[#1D4FC4] uppercase mb-6 flex items-center gap-2">
+            <User size={16} className="text-[#1D4FC4]" /> 1. Select Recipient
           </h3>
           
           <div className="flex gap-2 mb-6">
@@ -95,7 +95,7 @@ export default function AdminJackpot() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search user email..."
-                className="w-full bg-slate-50 border text-black border-slate-100 rounded-2xl py-3 pl-10 pr-4 text-sm outline-none focus:border-blue-500 transition-all"
+                className="w-full bg-slate-50 border text-black border-slate-100 rounded-2xl py-3 pl-10 pr-4 text-sm outline-none focus:border-[#2457D6] transition-all"
               />
             </div>
             <button 
@@ -113,14 +113,14 @@ export default function AdminJackpot() {
                 key={u.id}
                 onClick={() => setSelectedUser(u)}
                 className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
-                  selectedUser?.id === u.id ? 'border-blue-500 bg-blue-50' : 'border-slate-100 hover:bg-slate-50'
+                  selectedUser?.id === u.id ? 'border-[#2457D6] bg-[#D7E2FF]' : 'border-slate-100 hover:bg-slate-50'
                 }`}
               >
                 <div>
                   <p className="text-xs font-black text-slate-700">{u.email}</p>
                   <p className="text-[10px] text-slate-400">UID: {u.id.slice(0,8)}...</p>
                 </div>
-                {selectedUser?.id === u.id && <CheckCircle2 size={18} className="text-blue-600" />}
+                {selectedUser?.id === u.id && <CheckCircle2 size={18} className="text-[#1D4FC4]" />}
               </div>
             ))}
           </div>
@@ -135,7 +135,7 @@ export default function AdminJackpot() {
             </div>
           )}
 
-          <h3 className="text-sm font-black uppercase mb-6 text-blue-600 flex items-center gap-2">
+          <h3 className="text-sm font-black uppercase mb-6 text-[#1D4FC4] flex items-center gap-2">
             <Send size={16} className="text-amber-600" /> 2. Set Amount
           </h3>
 

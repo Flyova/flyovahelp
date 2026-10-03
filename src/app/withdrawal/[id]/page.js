@@ -72,18 +72,18 @@ export default function TradeChatPage() {
     }
   };
 
-  if (!trade) return <div className="h-screen bg-[#0f172a] flex items-center justify-center"><Loader2 className="animate-spin text-[#613de6]" /></div>;
+  if (!trade) return <div className="h-screen bg-[#0B1220] flex items-center justify-center"><Loader2 className="animate-spin text-[#2457D6]" /></div>;
 
   const isAgent = user?.uid === trade.agentId;
 
   return (
-    <div className="flex flex-col h-screen bg-[#0f172a] text-white">
+    <div className="flex flex-col h-screen bg-[#0B1220] text-white">
       {/* Header */}
-      <div className="p-4 bg-[#613de6] flex items-center justify-between shadow-lg">
+      <div className="p-4 bg-[#2457D6] flex items-center justify-between shadow-lg">
         <button onClick={() => router.back()} className="p-2 bg-white/10 rounded-lg"><ChevronLeft size={20}/></button>
         <div className="text-center">
           <p className="text-[10px] font-black uppercase opacity-60">Trading with {isAgent ? trade.userName : trade.agentName}</p>
-          <p className="text-lg font-black italic text-[#fc7952]">${trade.amount.toFixed(2)}</p>
+          <p className="text-lg font-black italic text-[#8B1E3F]">${trade.amount.toFixed(2)}</p>
         </div>
         <div className="w-10" />
       </div>
@@ -92,7 +92,7 @@ export default function TradeChatPage() {
       <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-20">
         {/* Agent Bank Details Card (Visible to User) */}
         {!isAgent && agentData && (
-            <div className="bg-[#fc7952] p-5 rounded-3xl shadow-xl shadow-[#fc7952]/10 mb-6 border border-white/10">
+            <div className="bg-[#8B1E3F] p-5 rounded-3xl shadow-xl shadow-[#8B1E3F]/10 mb-6 border border-white/10">
                 <div className="flex items-center gap-2 mb-3">
                     <Landmark size={18} className="text-white" />
                     <h3 className="text-xs font-black uppercase italic">Agent Bank Details</h3>
@@ -105,8 +105,8 @@ export default function TradeChatPage() {
             </div>
         )}
 
-        <div className="bg-[#1e293b] p-4 rounded-2xl border border-white/5 flex flex-col items-center gap-2">
-           <AlertCircle size={24} className="text-[#613de6]" />
+        <div className="bg-[#142036] p-4 rounded-2xl border border-white/5 flex flex-col items-center gap-2">
+           <AlertCircle size={24} className="text-[#2457D6]" />
            <p className="text-[10px] font-black text-center uppercase text-gray-400 leading-tight">
              {isAgent ? "Confirm your details above and wait for the user to upload payment proof." : "Transfer the money to the agent and upload a screenshot of the receipt here."}
            </p>
@@ -114,7 +114,7 @@ export default function TradeChatPage() {
 
         {messages.map((m) => (
           <div key={m.id} className={`flex ${m.senderId === user?.uid ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[85%] p-3 rounded-2xl ${m.senderId === user?.uid ? "bg-[#613de6] rounded-tr-none" : "bg-[#1e293b] rounded-tl-none border border-white/5"}`}>
+            <div className={`max-w-[85%] p-3 rounded-2xl ${m.senderId === user?.uid ? "bg-[#2457D6] rounded-tr-none" : "bg-[#142036] rounded-tl-none border border-white/5"}`}>
               {m.image && <img src={m.image} className="rounded-xl mb-2 w-full object-cover max-h-64" alt="Proof" />}
               {m.text && <p className="text-sm font-medium">{m.text}</p>}
             </div>
@@ -124,10 +124,10 @@ export default function TradeChatPage() {
       </div>
 
       {/* Footer Chat Input */}
-      <div className="p-4 bg-[#1e293b] border-t border-white/5 pb-8">
+      <div className="p-4 bg-[#142036] border-t border-white/5 pb-8">
           <div className="flex items-center gap-2">
-            <label className="p-4 bg-[#0f172a] rounded-2xl cursor-pointer hover:bg-white/5 transition-all border border-white/5">
-              {uploading ? <Loader2 size={20} className="animate-spin" /> : <Image size={20} className="text-[#613de6]" />}
+            <label className="p-4 bg-[#0B1220] rounded-2xl cursor-pointer hover:bg-white/5 transition-all border border-white/5">
+              {uploading ? <Loader2 size={20} className="animate-spin" /> : <Image size={20} className="text-[#2457D6]" />}
               <input type="file" className="hidden" onChange={handleImage} disabled={uploading} />
             </label>
             <input 
@@ -135,9 +135,9 @@ export default function TradeChatPage() {
               onChange={(e) => setText(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
               placeholder="Send proof or message..."
-              className="flex-1 bg-[#0f172a] border border-white/5 p-4 rounded-2xl text-sm focus:outline-none focus:border-[#613de6]"
+              className="flex-1 bg-[#0B1220] border border-white/5 p-4 rounded-2xl text-sm focus:outline-none focus:border-[#2457D6]"
             />
-            <button onClick={() => sendMessage()} className="p-4 bg-[#fc7952] rounded-2xl active:scale-90 transition-all shadow-lg shadow-[#fc7952]/20"><Send size={20} /></button>
+            <button onClick={() => sendMessage()} className="p-4 bg-[#8B1E3F] rounded-2xl active:scale-90 transition-all shadow-lg shadow-[#8B1E3F]/20"><Send size={20} /></button>
           </div>
       </div>
     </div>

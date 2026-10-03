@@ -159,7 +159,7 @@ export default function AdminDeletions() {
         {/* Footer Info */}
         <div className="mt-12 text-center">
           <p className="text-[10px] font-black uppercase text-slate-300 tracking-[0.3em]">
-            Flyova Global Security Protocol &copy; 2026
+            StraWins Global Security Protocol &copy; 2026
           </p>
         </div>
       </div>

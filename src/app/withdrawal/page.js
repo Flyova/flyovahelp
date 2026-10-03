@@ -256,7 +256,7 @@ const handleWithdraw = async () => {
               subject: "New USDT Withdrawal Request",
               html: `
                 <div style="font-family: sans-serif; padding: 20px; color: #333; border: 1px solid #eee; border-radius: 20px;">
-                  <h2 style="color: #fc7952;">Withdrawal Alert</h2>
+                  <h2 style="color: #8B1E3F;">Withdrawal Alert</h2>
                   <p><strong>User:</strong> ${userData.fullName} (${user.uid})</p>
                   <p><strong>Amount:</strong> $${withdrawAmount}</p>
                   <p><strong>Network Fee:</strong> $${fee}</p>
@@ -282,8 +282,8 @@ const handleWithdraw = async () => {
                 subject: "Withdrawal Request Received",
                 html: `
                   <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 30px 20px; color: #333;">
-                    <div style="background: #0f172a; padding: 30px; border-radius: 20px; text-align: center; margin-bottom: 24px;">
-                      <h1 style="color: #fc7952; font-style: italic; text-transform: uppercase; margin: 0; font-size: 22px; letter-spacing: 1px;">Flyova</h1>
+                    <div style="background: #0B1220; padding: 30px; border-radius: 20px; text-align: center; margin-bottom: 24px;">
+                      <h1 style="color: #8B1E3F; font-style: italic; text-transform: uppercase; margin: 0; font-size: 22px; letter-spacing: 1px;">StraWins</h1>
                     </div>
                     <h2 style="font-size: 20px; margin-bottom: 8px;">Withdrawal Request Received</h2>
                     <p style="color: #555; margin-bottom: 24px;">Hi ${userData.fullName}, your USDT withdrawal request has been submitted and is now being reviewed.</p>
@@ -304,7 +304,7 @@ const handleWithdraw = async () => {
                         </tr>` : ''}
                         <tr style="border-top: 1px solid #e2e8f0;">
                           <td style="padding: 12px 0 8px; font-weight: bold; font-size: 14px;">Total Deducted</td>
-                          <td style="padding: 12px 0 8px; font-weight: bold; text-align: right; font-size: 16px; color: #fc7952;">$${totalDeduct.toFixed(2)}</td>
+                          <td style="padding: 12px 0 8px; font-weight: bold; text-align: right; font-size: 16px; color: #8B1E3F;">$${totalDeduct.toFixed(2)}</td>
                         </tr>
                         <tr>
                           <td style="padding: 8px 0; color: #666; font-size: 13px;">Network</td>
@@ -319,7 +319,7 @@ const handleWithdraw = async () => {
                     <p style="color: #555; font-size: 13px; line-height: 1.6;">Our team typically processes USDT withdrawals within <strong>24 hours</strong>. You will receive another email once your withdrawal has been approved or declined.</p>
                     <p style="color: #999; font-size: 11px; margin-top: 24px; text-transform: uppercase; letter-spacing: 1px;">If you did not request this withdrawal, please contact support immediately.</p>
                     <div style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; font-size: 11px; color: #aaa; text-align: center;">
-                      Flyova Gaming Platform
+                      StraWins Gaming Platform
                     </div>
                   </div>
                 `
@@ -415,7 +415,7 @@ const handleWithdraw = async () => {
                       </div>
                       <p>Please log in to your agent panel to view the user's bank details and complete the transfer.</p>
                       <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
-                        Flyova Agent Network
+                        StraWins Agent Network
                       </div>
                     </div>
                   `
@@ -440,15 +440,15 @@ const handleWithdraw = async () => {
 
   if (systemLoading) {
     return (
-      <div className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center">
-        <Loader2 className="animate-spin text-[#613de6]" size={40} />
+      <div className="min-h-screen bg-[#0B1220] flex flex-col items-center justify-center">
+        <Loader2 className="animate-spin text-[#2457D6]" size={40} />
       </div>
     );
   }
 
   if (systemSettings && systemSettings.withdrawalEnabled === false) {
     return (
-        <div className="min-h-screen bg-[#0f172a] p-6 flex flex-col items-center justify-center text-center">
+        <div className="min-h-screen bg-[#0B1220] p-6 flex flex-col items-center justify-center text-center">
             <div className="bg-rose-500/10 p-8 rounded-full mb-8 border border-rose-500/20">
                 <ShieldAlert size={60} className="text-rose-500" />
             </div>
@@ -458,7 +458,7 @@ const handleWithdraw = async () => {
             </p>
             <button
               onClick={() => router.push('/dashboard')}
-              className="mt-12 bg-[#1e293b] text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/5 active:scale-95 transition-all"
+              className="mt-12 bg-[#142036] text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/5 active:scale-95 transition-all"
             >
                 Back to Dashboard
             </button>
@@ -468,7 +468,7 @@ const handleWithdraw = async () => {
 
   if (userData.restrictWithdrawal) {
     return (
-        <div className="min-h-screen bg-[#0f172a] p-6 flex flex-col items-center justify-center text-center">
+        <div className="min-h-screen bg-[#0B1220] p-6 flex flex-col items-center justify-center text-center">
             <div className="bg-rose-500/10 p-8 rounded-full mb-8 border border-rose-500/20">
                 <ShieldAlert size={60} className="text-rose-500" />
             </div>
@@ -478,7 +478,7 @@ const handleWithdraw = async () => {
             </p>
             <button
               onClick={() => router.push('/dashboard')}
-              className="mt-12 bg-[#1e293b] text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/5 active:scale-95 transition-all"
+              className="mt-12 bg-[#142036] text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/5 active:scale-95 transition-all"
             >
                 Back to Dashboard
             </button>
@@ -487,12 +487,12 @@ const handleWithdraw = async () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white pb-10 relative">
+    <div className="min-h-screen bg-[#0B1220] text-white pb-10 relative">
       
       {/* SUCCESS OVERLAY */}
       {showSuccess && (
-        <div className="fixed inset-0 z-[100] bg-[#0f172a]/95 flex items-center justify-center p-6 animate-in fade-in duration-300">
-          <div className="bg-[#1e293b] border border-white/10 p-10 rounded-[3rem] text-center space-y-6 shadow-2xl scale-up-center">
+        <div className="fixed inset-0 z-[100] bg-[#0B1220]/95 flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="bg-[#142036] border border-white/10 p-10 rounded-[3rem] text-center space-y-6 shadow-2xl scale-up-center">
             <div className="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center mx-auto shadow-[0_0_40px_rgba(16,185,129,0.3)]">
               <CheckCircle2 size={40} className="text-white" />
             </div>
@@ -501,53 +501,53 @@ const handleWithdraw = async () => {
               <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mt-1">Redirecting to Dashboard...</p>
             </div>
             {resultingBalance !== null && (
-              <div className="bg-[#0f172a] border border-white/5 rounded-3xl py-4 px-6">
+              <div className="bg-[#0B1220] border border-white/5 rounded-3xl py-4 px-6">
                 <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest mb-1">Remaining Balance</p>
-                <p className="text-2xl font-black italic text-[#fc7952]">${resultingBalance.toFixed(2)}</p>
+                <p className="text-2xl font-black italic text-[#8B1E3F]">${resultingBalance.toFixed(2)}</p>
               </div>
             )}
           </div>
         </div>
       )}
 
-      <div className="p-6 pt-12 flex items-center justify-between bg-[#613de6] rounded-b-[2.5rem] shadow-xl">
+      <div className="p-6 pt-12 flex items-center justify-between bg-[#2457D6] rounded-b-[2.5rem] shadow-xl">
         <button onClick={() => router.back()} className="p-2 bg-white/10 rounded-xl"><ChevronLeft size={20} /></button>
         <h1 className="font-black italic uppercase tracking-wider text-xs text-white">Withdraw Funds</h1>
         <div className="w-10" />
       </div>
 
       <div className="p-6 max-w-md mx-auto space-y-6">
-        <div className="bg-[#1e293b] p-6 rounded-[2.5rem] border border-white/5 flex justify-between items-center shadow-2xl">
+        <div className="bg-[#142036] p-6 rounded-[2.5rem] border border-white/5 flex justify-between items-center shadow-2xl">
           <div>
             <p className="text-[10px] font-black opacity-40 uppercase mb-1">Available Balance</p>
-            <p className="text-3xl font-black italic text-[#fc7952]">${userData.main.toLocaleString()}</p>
+            <p className="text-3xl font-black italic text-[#8B1E3F]">${userData.main.toLocaleString()}</p>
           </div>
-          <Wallet size={24} className="text-[#613de6]" />
+          <Wallet size={24} className="text-[#2457D6]" />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <button onClick={() => setMethod("bank")} className={`p-5 rounded-3xl border-2 transition-all ${method === "bank" ? "border-[#613de6] bg-[#613de6]/10 shadow-lg" : "border-white/5 bg-[#1e293b] opacity-60"}`}>
+          <button onClick={() => setMethod("bank")} className={`p-5 rounded-3xl border-2 transition-all ${method === "bank" ? "border-[#2457D6] bg-[#2457D6]/10 shadow-lg" : "border-white/5 bg-[#142036] opacity-60"}`}>
             <div className="relative">
-              <Landmark size={24} className="mx-auto mb-2 text-[#613de6]" />
+              <Landmark size={24} className="mx-auto mb-2 text-[#2457D6]" />
             </div>
             <span className="text-[10px] font-black uppercase block text-center">Local Agent</span>
           </button>
-          <button onClick={() => setMethod("usdt")} className={`p-5 rounded-3xl border-2 transition-all ${method === "usdt" ? "border-[#613de6] bg-[#613de6]/10 shadow-lg" : "border-white/5 bg-[#1e293b] opacity-60"}`}>
-            <Coins size={24} className="mx-auto mb-2 text-blue-400" />
+          <button onClick={() => setMethod("usdt")} className={`p-5 rounded-3xl border-2 transition-all ${method === "usdt" ? "border-[#2457D6] bg-[#2457D6]/10 shadow-lg" : "border-white/5 bg-[#142036] opacity-60"}`}>
+            <Coins size={24} className="mx-auto mb-2 text-[#7A9BEE]" />
             <span className="text-[10px] font-black uppercase block text-center">USDT (TRC20)</span>
           </button>
         </div>
 
-        <div className="bg-[#1e293b] p-6 rounded-[2rem] border border-white/5">
+        <div className="bg-[#142036] p-6 rounded-[2rem] border border-white/5">
           <label className="text-[10px] font-black uppercase opacity-40 block mb-2">Withdrawal Amount ($)</label>
           <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00"
             className="w-full bg-transparent font-black text-4xl text-white outline-none" />
         </div>
 
         {parseFloat(amount) >= 10 && (method === "usdt" || isEligibleForBonusDeduction) && (
-          <div className="bg-[#613de6]/5 border border-[#613de6]/20 p-5 rounded-3xl space-y-3 animate-in fade-in slide-in-from-top-2">
+          <div className="bg-[#2457D6]/5 border border-[#2457D6]/20 p-5 rounded-3xl space-y-3 animate-in fade-in slide-in-from-top-2">
             <div className="flex items-center gap-2 mb-1">
-               <Receipt size={14} className="text-[#613de6]" />
+               <Receipt size={14} className="text-[#2457D6]" />
                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Transaction Summary</span>
             </div>
 
@@ -570,7 +570,7 @@ const handleWithdraw = async () => {
             <div className="h-px bg-white/5 w-full" />
             <div className="flex justify-between items-center">
                <span className="text-[11px] font-bold text-white">Total Deductible</span>
-               <span className="text-lg font-black italic text-[#fc7952]">${totalDeductible.toFixed(2)}</span>
+               <span className="text-lg font-black italic text-[#8B1E3F]">${totalDeductible.toFixed(2)}</span>
             </div>
             
             {isEligibleForBonusDeduction && (
@@ -585,31 +585,31 @@ const handleWithdraw = async () => {
           <div className="space-y-4">
             <div className="flex justify-between items-center px-1">
               <h4 className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Qualified Merchants</h4>
-              <p className="text-[10px] font-bold text-[#fc7952] flex items-center gap-1 uppercase"><MapPin size={10} /> {userData.country}</p>
+              <p className="text-[10px] font-bold text-[#8B1E3F] flex items-center gap-1 uppercase"><MapPin size={10} /> {userData.country}</p>
             </div>
 
             {agentsLoading ? (
-              <div className="flex justify-center p-8"><Loader2 className="animate-spin text-[#613de6]" /></div>
+              <div className="flex justify-center p-8"><Loader2 className="animate-spin text-[#2457D6]" /></div>
             ) : agents.length > 0 ? (
               <div className="space-y-3">
                 {agents.map((agent) => (
                   <div key={agent.id} onClick={() => setSelectedAgent(agent)}
-                    className={`p-5 rounded-3xl border-2 transition-all cursor-pointer flex justify-between items-center ${selectedAgent?.id === agent.id ? "border-[#613de6] bg-[#613de6]/10 shadow-lg" : "border-white/5 bg-[#1e293b]"}`}>
+                    className={`p-5 rounded-3xl border-2 transition-all cursor-pointer flex justify-between items-center ${selectedAgent?.id === agent.id ? "border-[#2457D6] bg-[#2457D6]/10 shadow-lg" : "border-white/5 bg-[#142036]"}`}>
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-[#613de6] rounded-2xl flex items-center justify-center font-black italic text-white shadow-lg uppercase">{agent.full_name.charAt(0)}</div>
+                      <div className="w-12 h-12 bg-[#2457D6] rounded-2xl flex items-center justify-center font-black italic text-white shadow-lg uppercase">{agent.full_name.charAt(0)}</div>
                       <div>
                         <p className="font-black uppercase text-sm italic tracking-tight">{agent.full_name}</p>
-                        <p className="text-[9px] font-bold text-blue-400 uppercase tracking-tighter">Sell Rate: {agent.exchange_rate} / $</p>
+                        <p className="text-[9px] font-bold text-[#7A9BEE] uppercase tracking-tighter">Sell Rate: {agent.exchange_rate} / $</p>
                       </div>
                     </div>
-                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selectedAgent?.id === agent.id ? 'border-[#613de6] bg-[#613de6]' : 'border-white/10'}`}>
+                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selectedAgent?.id === agent.id ? 'border-[#2457D6] bg-[#2457D6]' : 'border-white/10'}`}>
                       {selectedAgent?.id === agent.id && <Check size={12} className="text-white" />}
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="bg-[#1e293b] p-10 rounded-3xl border border-dashed border-white/10 text-center">
+              <div className="bg-[#142036] p-10 rounded-3xl border border-dashed border-white/10 text-center">
                 <AlertCircle size={24} className="mx-auto mb-2 text-gray-700" />
                 <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest leading-relaxed">No agents found in {userData.country}</p>
               </div>
@@ -621,13 +621,13 @@ const handleWithdraw = async () => {
             <div className="space-y-3 animate-in fade-in duration-300">
                 <p className="text-[10px] font-black uppercase text-gray-500 ml-1">TRC20 Wallet Address</p>
                 <input type="text" placeholder="Enter TRC20 Address" value={usdtAddress} onChange={(e) => setUsdtAddress(e.target.value)}
-                    className="w-full bg-[#1e293b] border border-white/5 p-5 rounded-2xl text-sm font-bold focus:border-[#613de6] outline-none transition-all placeholder:opacity-20" />
+                    className="w-full bg-[#142036] border border-white/5 p-5 rounded-2xl text-sm font-bold focus:border-[#2457D6] outline-none transition-all placeholder:opacity-20" />
                 <p className="text-[9px] font-bold text-rose-500 uppercase flex items-center gap-1"><AlertCircle size={10} /> Double check your address</p>
             </div>
         )}
 
         <button onClick={handleWithdraw} disabled={loading || !amount || (method === 'bank' && !selectedAgent)}
-          className="w-full bg-[#fc7952] py-6 rounded-[2rem] font-black italic uppercase flex items-center justify-center gap-2 shadow-2xl shadow-[#fc7952]/20 disabled:opacity-30 active:scale-95 transition-all text-white">
+          className="w-full bg-[#8B1E3F] py-6 rounded-[2rem] font-black italic uppercase flex items-center justify-center gap-2 shadow-2xl shadow-[#8B1E3F]/20 disabled:opacity-30 active:scale-95 transition-all text-white">
           {loading ? <Loader2 className="animate-spin" /> : <>PROCEED TO WITHDRAW <ArrowRight size={20} /></>}
         </button>
       </div>

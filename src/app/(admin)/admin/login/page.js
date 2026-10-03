@@ -108,16 +108,16 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#020617] text-white flex flex-col p-6 items-center justify-center">
+    <div className="min-h-screen bg-[#0B1220] text-white flex flex-col p-6 items-center justify-center">
       <div className="w-full max-w-md space-y-8">
         
         {/* Admin Branding */}
         <div className="text-center space-y-2">
-            <div className="w-16 h-16 bg-[#613de6]/10 border border-[#613de6]/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <ShieldCheck className="text-[#613de6]" size={32} />
+            <div className="w-16 h-16 bg-[#2457D6]/10 border border-[#2457D6]/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <ShieldCheck className="text-[#2457D6]" size={32} />
             </div>
             <h1 className="text-3xl font-black italic uppercase tracking-tighter">
-                CONTROL <span className="text-[#613de6]">PANEL</span>
+                CONTROL <span className="text-[#2457D6]">PANEL</span>
             </h1>
             <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em]">
                 Admin · Staff · Support
@@ -140,7 +140,7 @@ export default function AdminLoginPage() {
                 type="email"
                 placeholder="Portal Email"
                 required
-                className="w-full bg-[#1e293b]/50 border border-white/5 focus:border-[#613de6] p-5 pl-12 rounded-2xl outline-none transition-all font-bold text-sm placeholder:text-gray-700"
+                className="w-full bg-[#142036]/50 border border-white/5 focus:border-[#2457D6] p-5 pl-12 rounded-2xl outline-none transition-all font-bold text-sm placeholder:text-gray-700"
                 onChange={(e) => setFormData({...formData, email: e.target.value})}
               />
           </div>
@@ -151,7 +151,7 @@ export default function AdminLoginPage() {
                 type="password"
                 placeholder="Secure Password"
                 required
-                className="w-full bg-[#1e293b]/50 border border-white/5 focus:border-[#613de6] p-5 pl-12 rounded-2xl outline-none transition-all font-bold text-sm placeholder:text-gray-700"
+                className="w-full bg-[#142036]/50 border border-white/5 focus:border-[#2457D6] p-5 pl-12 rounded-2xl outline-none transition-all font-bold text-sm placeholder:text-gray-700"
                 onChange={(e) => setFormData({...formData, password: e.target.value})}
               />
           </div>
@@ -159,7 +159,7 @@ export default function AdminLoginPage() {
           <button 
             type="submit"
             disabled={loading}
-            className="w-full py-5 bg-[#613de6] hover:bg-[#724fff] text-white rounded-2xl font-black uppercase text-xs tracking-widest transition-all active:scale-[0.98] shadow-2xl shadow-[#613de6]/20 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full py-5 bg-[#2457D6] hover:bg-[#2457D6] text-white rounded-2xl font-black uppercase text-xs tracking-widest transition-all active:scale-[0.98] shadow-2xl shadow-[#2457D6]/20 disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {loading ? <Loader2 className="animate-spin" size={18} /> : "Access Admin Panel"}
           </button>
@@ -178,7 +178,7 @@ export default function AdminLoginPage() {
       {/* Footer Decoration */}
       <div className="fixed bottom-8 flex items-center gap-2 opacity-20">
          <div className="h-px w-8 bg-gray-500" />
-         <span className="text-[9px] font-black uppercase tracking-widest">Flyova Secure Terminal</span>
+         <span className="text-[9px] font-black uppercase tracking-widest">StraWins Secure Terminal</span>
          <div className="h-px w-8 bg-gray-500" />
       </div>
     </div>

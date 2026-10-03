@@ -288,17 +288,17 @@ const buySubscription = async () => {
               subject: "Predict & Win Plan Activated",
               html: `
                 <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 12px;">
-                  <h2 style="color: #613de6; border-bottom: 1px solid #eee; padding-bottom: 10px;">Access Granted</h2>
+                  <h2 style="color: #2457D6; border-bottom: 1px solid #eee; padding-bottom: 10px;">Access Granted</h2>
                   <p>Hello ${userData.fullName || 'User'},</p>
                   <p>Your stake for the <strong>${pendingPlan.name}</strong> Predict & Win plan was successful.</p>
                   <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #eee;">
                     <p style="margin: 5px 0;"><strong>Plan Type:</strong> ${pendingPlan.name}</p>
                     <p style="margin: 5px 0;"><strong>Stake Amount:</strong> $${pendingPlan.price.toFixed(2)}</p>
-                    <p style="margin: 5px 0; color: #fc7952;"><strong>Expires:</strong> ${expiryDate.toLocaleString()}</p>
+                    <p style="margin: 5px 0; color: #8B1E3F;"><strong>Expires:</strong> ${expiryDate.toLocaleString()}</p>
                   </div>
                   <p>You can now place predictions and win rewards for every correct outcome during your session.</p>
                   <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
-                    Flyova Gaming & Rewards
+                    StraWins Gaming & Rewards
                   </div>
                 </div>
               `
@@ -381,48 +381,48 @@ const buySubscription = async () => {
     setTimeout(() => { if (user) createNewRound(); }, 10000);
   };
 
-  if (loading) return <div className="min-h-screen bg-[#0f172a] flex items-center justify-center text-white italic font-black uppercase tracking-tighter">Syncing...</div>;
+  if (loading) return <div className="min-h-screen bg-[#0B1220] flex items-center justify-center text-white italic font-black uppercase tracking-tighter">Syncing...</div>;
 
   if (!hasSubscribed) {
     return (
-      <div className="min-h-screen bg-[#0f172a] text-white p-6 relative">
+      <div className="min-h-screen bg-[#0B1220] text-white p-6 relative">
         <ToastNotification notification={notification} onClose={() => setNotification(null)} />
         <div className="text-center mt-10 mb-10">
-            <Lock size={48} className="mx-auto text-[#613de6] mb-4" />
+            <Lock size={48} className="mx-auto text-[#2457D6] mb-4" />
             <h1 className="text-3xl font-black italic uppercase">Predict & Win</h1>
             <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mt-2">Choose a plan to start betting</p>
         </div>
         <div className="grid grid-cols-1 gap-3 max-w-sm mx-auto">
             {PLANS.map(plan => (
                 <button key={plan.id} onClick={() => handlePlanClick(plan)}
-                    className="w-full bg-[#1e293b] border border-white/5 p-5 rounded-2xl flex justify-between items-center active:scale-95 transition-all group hover:border-[#613de6]/50">
+                    className="w-full bg-[#142036] border border-white/5 p-5 rounded-2xl flex justify-between items-center active:scale-95 transition-all group hover:border-[#2457D6]/50">
                     <div className="flex items-center space-x-3">
-                        <Clock size={18} className="text-[#613de6] group-hover:animate-pulse"/>
+                        <Clock size={18} className="text-[#2457D6] group-hover:animate-pulse"/>
                         <p className="font-black italic uppercase text-sm tracking-tight">{plan.name}</p>
                     </div>
-                    <span className="text-lg font-black italic text-[#fc7952]">${plan.price}</span>
+                    <span className="text-lg font-black italic text-[#8B1E3F]">${plan.price}</span>
                 </button>
             ))}
         </div>
 
         {/* Confirmation Modal */}
         {showConfirmModal && (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#0f172a]/90 backdrop-blur-sm animate-in fade-in duration-300">
-                <div className="bg-[#1e293b] w-full max-w-xs rounded-[2.5rem] border border-white/10 p-8 shadow-2xl space-y-6 text-center">
-                    <div className="w-16 h-16 bg-[#613de6]/20 text-[#613de6] rounded-3xl flex items-center justify-center mx-auto">
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#0B1220]/90 backdrop-blur-sm animate-in fade-in duration-300">
+                <div className="bg-[#142036] w-full max-w-xs rounded-[2.5rem] border border-white/10 p-8 shadow-2xl space-y-6 text-center">
+                    <div className="w-16 h-16 bg-[#2457D6]/20 text-[#2457D6] rounded-3xl flex items-center justify-center mx-auto">
                         <AlertCircle size={32} />
                     </div>
                     <div>
                         <h2 className="text-xl font-black uppercase italic tracking-tighter mb-2">Confirm Stake</h2>
                         <p className="text-[11px] text-gray-400 font-bold leading-relaxed uppercase">
-                            You are about to stake <span className="text-[#fc7952]">${pendingPlan?.price}</span> for the <span className="text-white">{pendingPlan?.name}</span> access plan.
+                            You are about to stake <span className="text-[#8B1E3F]">${pendingPlan?.price}</span> for the <span className="text-white">{pendingPlan?.name}</span> access plan.
                         </p>
                     </div>
                     <div className="space-y-3">
                         <button 
                             onClick={buySubscription} 
                             disabled={submitting}
-                            className="w-full bg-[#613de6] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
+                            className="w-full bg-[#2457D6] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
                         >
                             {submitting ? "Processing..." : "CONFIRM & PAY"}
                         </button>
@@ -441,17 +441,17 @@ const buySubscription = async () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white flex flex-col relative overflow-hidden pb-24">
+    <div className="min-h-screen bg-[#0B1220] text-white flex flex-col relative overflow-hidden pb-24">
       <ToastNotification notification={notification} onClose={() => setNotification(null)} />
       {/* Result Alert */}
       {showResultAlert && (
         <div className="absolute inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in zoom-in duration-300">
-          <div className={`w-full max-w-xs p-8 rounded-[2.5rem] border-2 text-center shadow-[0_0_50px_rgba(0,0,0,0.5)] ${resultType === 'win' ? 'bg-[#1e293b] border-green-500' : 'bg-[#1e293b] border-red-500'}`}>
+          <div className={`w-full max-w-xs p-8 rounded-[2.5rem] border-2 text-center shadow-[0_0_50px_rgba(0,0,0,0.5)] ${resultType === 'win' ? 'bg-[#142036] border-green-500' : 'bg-[#142036] border-red-500'}`}>
             {resultType === 'win' ? (
               <>
                 <Trophy size={60} className="mx-auto text-green-500 mb-4 animate-bounce" />
                 <h2 className="text-3xl font-black italic uppercase text-white mb-2">You WON!</h2>
-                <p className="text-[#fc7952] text-2xl font-black italic tracking-tighter">${WIN_REWARD.toFixed(2)}</p>
+                <p className="text-[#8B1E3F] text-2xl font-black italic tracking-tighter">${WIN_REWARD.toFixed(2)}</p>
                 {lastResult && (
                   <p className="text-sm text-gray-400 mt-2">You won winning numbers: {lastResult.n1} & {lastResult.n2}</p>
                 )}
@@ -470,26 +470,26 @@ const buySubscription = async () => {
       )}
 
       {/* Progress Bar & Timer */}
-      <div className="relative p-8 text-center bg-[#1e293b] border-b border-white/5">
+      <div className="relative p-8 text-center bg-[#142036] border-b border-white/5">
         <div className="flex flex-col items-center mb-1">
-            <h1 className="text-xl font-black italic uppercase text-[#fc7952]">Predict and Win</h1>
+            <h1 className="text-xl font-black italic uppercase text-[#8B1E3F]">Predict and Win</h1>
             {/* Added: Specific Expiry Date/Time display */}
             <div className="flex items-center gap-1.5 mt-1 text-white/40">
-                <Calendar size={10} className="text-[#613de6]" />
+                <Calendar size={10} className="text-[#2457D6]" />
                 <p className="text-[12px] font-black uppercase tracking-wider">Subscription Ends: <span className="text-white/70 italic">{expiryFormatted}</span></p>
             </div>
         </div>
         
         <div className="absolute top-0 left-0 w-full h-1 bg-white/5 overflow-hidden">
-            <div className="h-full bg-[#fc7952] transition-all duration-1000 ease-linear" style={{ width: `${(timeLeft / ROUND_DURATION) * 100}%` }} />
+            <div className="h-full bg-[#8B1E3F] transition-all duration-1000 ease-linear" style={{ width: `${(timeLeft / ROUND_DURATION) * 100}%` }} />
         </div>
         <div className="inline-flex items-center space-x-3 bg-black/20 px-8 py-4 rounded-[2rem] border border-white/5 mt-4">
-            <Timer size={24} className="text-[#613de6]" />
+            <Timer size={24} className="text-[#2457D6]" />
             <span className="text-4xl font-black italic font-mono">0:{timeLeft.toString().padStart(2, '0')}</span>
         </div>
 
         <div className="grid grid-cols-2 gap-3 mt-5">
-          <div className="bg-[#0f172a]/50 rounded-[1.8rem] p-4 text-center border border-white/5">
+          <div className="bg-[#0B1220]/50 rounded-[1.8rem] p-4 text-center border border-white/5">
             <p className="text-[10px] text-white/30 uppercase tracking-widest font-black mb-2">Session Earnings</p>
             <div className="flex items-center justify-center gap-1">
               <TrendingUp size={14} className="text-emerald-400" />
@@ -498,7 +498,7 @@ const buySubscription = async () => {
               </span>
             </div>
           </div>
-          <div className="bg-[#0f172a]/50 rounded-[1.8rem] p-4 text-center border border-white/5">
+          <div className="bg-[#0B1220]/50 rounded-[1.8rem] p-4 text-center border border-white/5">
             <p className="text-[10px] text-white/30 uppercase tracking-widest font-black mb-2">Reward/Win</p>
             <span className="text-2xl font-black italic text-yellow-400 tracking-tighter">+${WIN_REWARD.toFixed(2)}</span>
           </div>
@@ -510,19 +510,19 @@ const buySubscription = async () => {
         {gameStatus === "results" ? (
             <div className="text-center animate-in zoom-in">
                 <div className="flex space-x-4 mb-6">
-                    <div className="w-20 h-20 bg-[#613de6] rounded-3xl flex items-center justify-center text-4xl font-black border-4 border-white shadow-xl">{lastResult?.n1}</div>
-                    <div className="w-20 h-20 bg-[#613de6] rounded-3xl flex items-center justify-center text-4xl font-black border-4 border-white shadow-xl">{lastResult?.n2}</div>
+                    <div className="w-20 h-20 bg-[#2457D6] rounded-3xl flex items-center justify-center text-4xl font-black border-4 border-white shadow-xl">{lastResult?.n1}</div>
+                    <div className="w-20 h-20 bg-[#2457D6] rounded-3xl flex items-center justify-center text-4xl font-black border-4 border-white shadow-xl">{lastResult?.n2}</div>
                 </div>
-                <h2 className="text-2xl font-black italic text-[#fc7952] uppercase tracking-tighter">RESULT: {lastResult?.condition}</h2>
+                <h2 className="text-2xl font-black italic text-[#8B1E3F] uppercase tracking-tighter">RESULT: {lastResult?.condition}</h2>
             </div>
         ) : (
             <>
-                <p className="text-[#fc7952] font-black italic uppercase text-m mb-8 tracking-tighter">Choose Next Outcome</p>
+                <p className="text-[#8B1E3F] font-black italic uppercase text-m mb-8 tracking-tighter">Choose Next Outcome</p>
                 <div className="grid grid-cols-3 gap-3 w-full max-w-sm mb-10">
                     {["Odd", "Even", "Both"].map(choice => (
                         <button key={choice} disabled={hasBet} onClick={() => setSelectedChoice(choice)}
                             className={`py-8 rounded-3xl font-black italic uppercase transition-all border-2
-                                ${selectedChoice === choice ? 'bg-[#613de6] border-[#fc7952] scale-105' : 'bg-[#1e293b] border-white/5 opacity-40'}
+                                ${selectedChoice === choice ? 'bg-[#2457D6] border-[#8B1E3F] scale-105' : 'bg-[#142036] border-white/5 opacity-40'}
                                 ${hasBet && selectedChoice !== choice ? 'opacity-10 scale-95' : ''}`}>
                             {choice}
                         </button>
@@ -530,7 +530,7 @@ const buySubscription = async () => {
                 </div>
                 {!hasBet ? (
                     <button onClick={placePrediction} disabled={!selectedChoice || placingPrediction}
-                        className="w-full max-w-xs bg-[#fc7952] py-4 rounded-2xl font-black italic uppercase shadow-xl disabled:opacity-20">
+                        className="w-full max-w-xs bg-[#8B1E3F] py-4 rounded-2xl font-black italic uppercase shadow-xl disabled:opacity-20">
                         {placingPrediction ? "Placing..." : "Place bet"}
                     </button>
                 ) : (
@@ -548,7 +548,7 @@ const buySubscription = async () => {
         <span className="text-[10px] font-black italic text-white/50 uppercase">Session Active</span>
         <div className="text-right">
             <p className="text-[9px] font-black italic text-white/30 uppercase mb-1">Ends In</p>
-            <p className="text-lg font-black italic text-[#fc7952] font-mono tracking-tighter leading-none">{subTimeLeft}</p>
+            <p className="text-lg font-black italic text-[#8B1E3F] font-mono tracking-tighter leading-none">{subTimeLeft}</p>
         </div>
       </div>
     </div>

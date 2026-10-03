@@ -290,19 +290,19 @@ export default function AdminSupport() {
 
   if (loading) return (
     <div className="h-screen bg-gray-50 flex items-center justify-center">
-      <Loader2 className="animate-spin text-blue-600" size={32} />
+      <Loader2 className="animate-spin text-[#1D4FC4]" size={32} />
     </div>
   );
 
   if (loadError) {
     return (
       <div className="h-screen bg-[#0b1220] text-white flex items-center justify-center p-6">
-        <div className="max-w-md w-full rounded-3xl border border-rose-400/20 bg-[#111827] p-8 text-center space-y-4">
+        <div className="max-w-md w-full rounded-3xl border border-rose-400/20 bg-[#0B1220] p-8 text-center space-y-4">
           <h2 className="text-lg font-black uppercase tracking-wide text-rose-300">Support Unavailable</h2>
           <p className="text-sm text-slate-300">{loadError}</p>
           <button
             onClick={() => window.location.reload()}
-            className="px-5 py-3 rounded-2xl bg-[#613de6] hover:bg-[#724fff] text-xs font-black uppercase tracking-widest"
+            className="px-5 py-3 rounded-2xl bg-[#2457D6] hover:bg-[#2457D6] text-xs font-black uppercase tracking-widest"
           >
             Retry
           </button>
@@ -319,11 +319,11 @@ export default function AdminSupport() {
         <div className="p-6 bg-white border-b border-gray-200">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-bold text-slate-800">Messages</h1>
-            <div className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-[10px] font-black uppercase">Admin</div>
+            <div className="bg-[#D7E2FF] text-[#1D4FC4] px-2 py-1 rounded text-[10px] font-black uppercase">Admin</div>
           </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input placeholder="Search users..." className="w-full bg-white border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-sm font-semibold text-slate-900 placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500 outline-none" />
+            <input placeholder="Search users..." className="w-full bg-white border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-sm font-semibold text-slate-900 placeholder:text-slate-500 focus:ring-2 focus:ring-[#2457D6] outline-none" />
           </div>
         </div>
 
@@ -337,7 +337,7 @@ export default function AdminSupport() {
               `}
             >
               <div className="relative shrink-0">
-                <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-white font-bold shadow-blue-200 shadow-lg">
+                <div className="w-12 h-12 rounded-2xl bg-[#1D4FC4] flex items-center justify-center text-white font-bold shadow-[#D7E2FF] shadow-lg">
                   {chat.userEmail?.charAt(0).toUpperCase() || "U"}
                 </div>
                 {chat.unreadByAdmin && (
@@ -351,7 +351,7 @@ export default function AdminSupport() {
                   </p>
                   <span className="text-[10px] text-gray-400 font-medium">Just now</span>
                 </div>
-                <p className={`text-xs truncate ${chat.unreadByAdmin ? 'text-blue-600 font-bold' : 'text-gray-400 font-normal'}`}>
+                <p className={`text-xs truncate ${chat.unreadByAdmin ? 'text-[#1D4FC4] font-bold' : 'text-gray-400 font-normal'}`}>
                   {chat.unreadByAdmin ? "New message received" : chat.lastMessage}
                 </p>
               </div>
@@ -417,11 +417,11 @@ export default function AdminSupport() {
                     )}
                     <div className={`max-w-[75%] p-4 rounded-2xl shadow-sm text-sm ${
                       isAdmin
-                      ? 'bg-blue-600 text-white rounded-br-none'
+                      ? 'bg-[#1D4FC4] text-white rounded-br-none'
                       : 'bg-white text-slate-700 border border-gray-100 rounded-bl-none'
                     }`}>
                       <p className="font-medium leading-relaxed">{msg.text}</p>
-                      <p className={`text-[9px] mt-2 font-bold uppercase tracking-widest ${isAdmin ? 'text-blue-100' : 'text-slate-500'}`}>
+                      <p className={`text-[9px] mt-2 font-bold uppercase tracking-widest ${isAdmin ? 'text-[#D7E2FF]' : 'text-slate-500'}`}>
                         {isAdmin ? 'Admin • 10:25 AM' : 'User • 10:24 AM'}
                       </p>
                     </div>
@@ -443,7 +443,7 @@ export default function AdminSupport() {
             {/* INPUT AREA */}
             <div className="p-6 bg-white border-t border-gray-100">
               <form onSubmit={handleSendReply} className="flex items-center gap-4 max-w-5xl mx-auto">
-                <div className="flex-1 bg-[#020617] rounded-2xl px-4 py-3 flex items-center border border-white/10 focus-within:border-blue-500 transition-all">
+                <div className="flex-1 bg-[#0B1220] rounded-2xl px-4 py-3 flex items-center border border-white/10 focus-within:border-[#2457D6] transition-all">
                   <input 
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
@@ -454,7 +454,7 @@ export default function AdminSupport() {
                 <button 
                   type="submit"
                   disabled={!replyText.trim() || sending}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-bold text-xs uppercase tracking-widest shadow-lg shadow-blue-200 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2"
+                  className="bg-[#1D4FC4] hover:bg-[#1D4FC4] text-white px-6 py-3 rounded-2xl font-bold text-xs uppercase tracking-widest shadow-lg shadow-[#D7E2FF] transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2"
                 >
                   {sending ? <Loader2 size={16} className="animate-spin" /> : <><Send size={16}/> Send</>}
                 </button>

@@ -14,7 +14,7 @@ export default function NewBlogPost() {
   }, [router]);
   return (
     <div className="flex items-center justify-center h-96">
-      <Loader2 size={24} className="animate-spin text-[#613de6]" />
+      <Loader2 size={24} className="animate-spin text-[#2457D6]" />
     </div>
   );
 }

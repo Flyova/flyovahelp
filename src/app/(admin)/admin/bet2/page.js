@@ -106,7 +106,7 @@ export default function PredictAndWinHistory() {
         <input
           type="text"
           placeholder="Search player, email, PIN, country, or plan..."
-          className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:border-[#613de6]"
+          className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:border-[#2457D6]"
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
@@ -126,7 +126,7 @@ export default function PredictAndWinHistory() {
             {loading && rows.length === 0 ? (
               <tr>
                 <td colSpan="5" className="p-12 text-center">
-                  <Loader2 className="animate-spin mx-auto text-[#613de6] mb-2" />
+                  <Loader2 className="animate-spin mx-auto text-[#2457D6] mb-2" />
                   <p className="text-[10px] font-black uppercase text-slate-400">Loading Predict Sessions...</p>
                 </td>
               </tr>
@@ -143,7 +143,7 @@ export default function PredictAndWinHistory() {
                   <tr key={row.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-6">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-indigo-50 text-[#613de6] rounded-lg flex items-center justify-center font-black italic text-xs border border-indigo-100">
+                        <div className="w-8 h-8 bg-[#D7E2FF] text-[#2457D6] rounded-lg flex items-center justify-center font-black italic text-xs border border-[#D7E2FF]">
                           {(profile.name || "U").charAt(0).toUpperCase()}
                         </div>
                         <div>

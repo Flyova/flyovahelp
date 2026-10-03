@@ -53,7 +53,7 @@ export default function ClientLayoutShell({ children }) {
                   router.push("/dashboard");
                 }
               }}
-              className={`h-11 px-4 rounded-2xl bg-[#1e293b]/90 border border-white/10 text-white hover:bg-[#243348] transition-all flex items-center gap-2 shadow-lg ${
+              className={`h-11 px-4 rounded-2xl bg-[#142036]/90 border border-white/10 text-white hover:bg-[#1B2A45] transition-all flex items-center gap-2 shadow-lg ${
                 sidebarCollapsed ? "ml-3" : "ml-4"
               }`}
             >

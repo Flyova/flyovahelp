@@ -1,5 +1,5 @@
 export default function sitemap() {
-  const baseUrl = "https://flyovahelp.com";
+  const baseUrl = "https://strawins.com";
   const now = new Date();
 
   const publicRoutes = ["/", "/about", "/faq", "/blog", "/advertise", "/partner", "/login", "/register", "/forgot-password"];

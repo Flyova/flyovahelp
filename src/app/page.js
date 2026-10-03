@@ -58,14 +58,14 @@ const FAQ_ITEMS = [
   },
   {
     q: "How does deposit work?",
-    a: "Proceed to deposit using your verified crypto wallet or a verified Flyova Agent in your region. Deposits are processed in less than 30 minutes.",
+    a: "Proceed to deposit using your verified crypto wallet or a verified StraWins Agent in your region. Deposits are processed in less than 30 minutes.",
   },
   {
     q: "How does withdrawal work?",
-    a: "Request a withdrawal from your wallet to your verified crypto wallet or a verified Flyova Agent in your region. Agent payouts are completed within minutes.",
+    a: "Request a withdrawal from your wallet to your verified crypto wallet or a verified StraWins Agent in your region. Agent payouts are completed within minutes.",
   },
   {
-    q: "What is a Flyova Agent?",
+    q: "What is a StraWins Agent?",
     a: "Agents are verified community members who process deposits and withdrawals. They earn a commission on every transaction they handle.",
   },
   {
@@ -74,31 +74,31 @@ const FAQ_ITEMS = [
   },
   {
     q: "Can I stake on my own?",
-    a: "Yes. Flyovahelp provides medium for users to stake on their own as many times and anytime as possible.",
+    a: "Yes. StraWins provides medium for users to stake on their own as many times and anytime as possible.",
   },
   {
-    q: "How much do I need to play Flyova games?",
-    a: "Deposit as low as 10.00 USD to start your journey on Flyovahelp. Minimum stake starts from 1.00 USD.",
+    q: "How much do I need to play StraWins games?",
+    a: "Deposit as low as 10.00 USD to start your journey on StraWins. Minimum stake starts from 1.00 USD.",
   },
   {
     q: "Is there free prediction days?",
-    a: "Absolutely. Flyova admins offer daily free predictions on weekdays and weekends.",
+    a: "Absolutely. StraWins admins offer daily free predictions on weekdays and weekends.",
   },
   {
-    q: "Which country is eligible to create Flyova account?",
-    a: "Everyone, regardless of country, can own a verified Flyova account.",
+    q: "Which country is eligible to create StraWins account?",
+    a: "Everyone, regardless of country, can own a verified StraWins account.",
   },
   {
-    q: "What do I need to apply as a Flyova Agent?",
-    a: "Just a verified Flyova account, age qualification and trustworthiness.",
+    q: "What do I need to apply as a StraWins Agent?",
+    a: "Just a verified StraWins account, age qualification and trustworthiness.",
   },
   {
     q: "What are the withdrawal days?",
-    a: "Flyovahelp do not have any specific days or time for withdrawal. Users can withdraw anytime and any-day.",
+    a: "StraWins do not have any specific days or time for withdrawal. Users can withdraw anytime and any-day.",
   },
   {
     q: "How do I earn jackpot?",
-    a: "Participate on Flyova activities including referral programs, advertising, deposits, stakes, etc to earn.",
+    a: "Participate on StraWins activities including referral programs, advertising, deposits, stakes, etc to earn.",
   },
   {
     q: "Is my money safe?",
@@ -106,7 +106,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Can I play on mobile?",
-    a: "Absolutely. Flyovahelp is built mobile-first and works perfectly on any smartphone or tablet browser.",
+    a: "Absolutely. StraWins is built mobile-first and works perfectly on any smartphone or tablet browser.",
   },
 ];
 
@@ -117,7 +117,7 @@ function DemoGamePicker({ onSelect, onClose }) {
     <div className="p-8 space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#fc7952] mb-1">No account needed</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#8B1E3F] mb-1">No account needed</p>
           <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white">Try a Demo</h2>
           <p className="text-xs font-bold text-gray-500 mt-1">Pick a game. No real money, no sign-up.</p>
         </div>
@@ -127,22 +127,22 @@ function DemoGamePicker({ onSelect, onClose }) {
       </div>
 
       <div className="space-y-3">
-        <button onClick={() => onSelect("flyova")}
-          className="w-full bg-[#1e293b] border border-white/5 hover:border-[#fc7952]/40 p-5 rounded-2xl text-left transition-all group">
+        <button onClick={() => onSelect("strawins")}
+          className="w-full bg-[#142036] border border-white/5 hover:border-[#8B1E3F]/40 p-5 rounded-2xl text-left transition-all group">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-[#fc7952]/10 flex items-center justify-center text-[#fc7952] flex-shrink-0">
+            <div className="w-14 h-14 rounded-2xl bg-[#8B1E3F]/10 flex items-center justify-center text-[#8B1E3F] flex-shrink-0">
               <Hash size={22} />
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="font-black italic uppercase tracking-tighter text-white">Flyova to Dollars</h3>
+              <h3 className="font-black italic uppercase tracking-tighter text-white">StraWins to Dollars</h3>
               <p className="text-xs font-bold text-gray-500 mt-0.5">Pick numbers · Countdown · Win 1.3×</p>
             </div>
-            <ArrowRight size={16} className="text-gray-600 group-hover:text-[#fc7952] transition-colors flex-shrink-0" />
+            <ArrowRight size={16} className="text-gray-600 group-hover:text-[#8B1E3F] transition-colors flex-shrink-0" />
           </div>
         </button>
 
         <button onClick={() => onSelect("predict")}
-          className="w-full bg-[#1e293b] border border-white/5 hover:border-emerald-500/40 p-5 rounded-2xl text-left transition-all group">
+          className="w-full bg-[#142036] border border-white/5 hover:border-emerald-500/40 p-5 rounded-2xl text-left transition-all group">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 flex-shrink-0">
               <Target size={22} />
@@ -156,16 +156,16 @@ function DemoGamePicker({ onSelect, onClose }) {
         </button>
 
         <button onClick={() => onSelect("friends")}
-          className="w-full bg-[#1e293b] border border-white/5 hover:border-[#a78bfa]/40 p-5 rounded-2xl text-left transition-all group">
+          className="w-full bg-[#142036] border border-white/5 hover:border-[#7A9BEE]/40 p-5 rounded-2xl text-left transition-all group">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-[#a78bfa]/10 flex items-center justify-center text-[#a78bfa] flex-shrink-0">
+            <div className="w-14 h-14 rounded-2xl bg-[#7A9BEE]/10 flex items-center justify-center text-[#7A9BEE] flex-shrink-0">
               <Users size={22} />
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="font-black italic uppercase tracking-tighter text-white">Play with Friends</h3>
               <p className="text-xs font-bold text-gray-500 mt-0.5">Hide a number · Guess theirs · First to 5 wins</p>
             </div>
-            <ArrowRight size={16} className="text-gray-600 group-hover:text-[#a78bfa] transition-colors flex-shrink-0" />
+            <ArrowRight size={16} className="text-gray-600 group-hover:text-[#7A9BEE] transition-colors flex-shrink-0" />
           </div>
         </button>
       </div>
@@ -173,7 +173,7 @@ function DemoGamePicker({ onSelect, onClose }) {
   );
 }
 
-function TutorialTip({ step, total, accent = "#a78bfa", children }) {
+function TutorialTip({ step, total, accent = "#7A9BEE", children }) {
   return (
     <div className="rounded-2xl p-4 space-y-2" style={{ background: `${accent}18`, border: `1px solid ${accent}35` }}>
       {step && (
@@ -193,7 +193,7 @@ function TutorialTip({ step, total, accent = "#a78bfa", children }) {
   );
 }
 
-function FlyovaDemo({ onBack, onRegister }) {
+function StraWinsDemo({ onBack, onRegister }) {
   const DEMO_NUMBERS = [1, 2, 3, 4];
   const [phase, setPhase] = useState("intro"); // intro | numbers | stake | countdown | result
   const [picks, setPicks] = useState([]);
@@ -234,11 +234,11 @@ function FlyovaDemo({ onBack, onRegister }) {
           <ArrowLeft size={18} />
         </button>
         <div className="flex-1">
-          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#fc7952]">Tutorial</p>
-          <h2 className="text-lg font-black italic uppercase tracking-tighter text-white">Flyova to Dollars</h2>
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#8B1E3F]">Tutorial</p>
+          <h2 className="text-lg font-black italic uppercase tracking-tighter text-white">StraWins to Dollars</h2>
         </div>
         {phase !== "intro" && (
-          <div className="bg-[#1e293b] px-3 py-2 rounded-xl border border-white/5 text-right">
+          <div className="bg-[#142036] px-3 py-2 rounded-xl border border-white/5 text-right">
             <p className="text-[9px] font-black text-gray-500 uppercase">Demo Wallet</p>
             <p className="text-sm font-black text-emerald-400">$50.00</p>
           </div>
@@ -248,7 +248,7 @@ function FlyovaDemo({ onBack, onRegister }) {
       {/* INTRO */}
       {phase === "intro" && (
         <div className="space-y-5">
-          <div className="bg-[#fc7952]/10 border border-[#fc7952]/20 rounded-2xl p-5 space-y-4">
+          <div className="bg-[#8B1E3F]/10 border border-[#8B1E3F]/20 rounded-2xl p-5 space-y-4">
             <p className="text-sm font-black italic uppercase tracking-tighter text-white">How the game works</p>
             <ul className="space-y-3">
               {[
@@ -258,13 +258,13 @@ function FlyovaDemo({ onBack, onRegister }) {
                 { n: "4", text: "If either of your picks matches a winning number, you win 1.3× your stake instantly." },
               ].map(item => (
                 <li key={item.n} className="flex gap-3">
-                  <span className="w-5 h-5 rounded-full bg-[#fc7952]/20 text-[#fc7952] text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">{item.n}</span>
+                  <span className="w-5 h-5 rounded-full bg-[#8B1E3F]/20 text-[#8B1E3F] text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">{item.n}</span>
                   <p className="text-xs font-bold text-white/75 leading-relaxed">{item.text}</p>
                 </li>
               ))}
             </ul>
           </div>
-          <div className="bg-[#1e293b] border border-white/5 rounded-2xl p-4 flex items-center gap-3">
+          <div className="bg-[#142036] border border-white/5 rounded-2xl p-4 flex items-center gap-3">
             <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 flex-shrink-0">
               <Wallet size={16} />
             </div>
@@ -273,7 +273,7 @@ function FlyovaDemo({ onBack, onRegister }) {
             </p>
           </div>
           <button onClick={() => setPhase("numbers")}
-            className="w-full bg-[#fc7952] text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2">
+            className="w-full bg-[#8B1E3F] text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2">
             Start Tutorial <ArrowRight size={14} />
           </button>
         </div>
@@ -282,7 +282,7 @@ function FlyovaDemo({ onBack, onRegister }) {
       {/* STEP 1 — PICK NUMBERS */}
       {phase === "numbers" && (
         <div className="space-y-4">
-          <TutorialTip step={1} total={3} accent="#fc7952">
+          <TutorialTip step={1} total={3} accent="#8B1E3F">
             Pick any 2 numbers from the grid below. The game will draw 2 winning numbers at random — if either of your picks matches, you win. There's no correct answer; it's your lucky guess.
           </TutorialTip>
           <div className="grid grid-cols-4 gap-2">
@@ -290,8 +290,8 @@ function FlyovaDemo({ onBack, onRegister }) {
               <button key={n} onClick={() => togglePick(n)}
                 className={`aspect-square rounded-xl font-black text-sm transition-all active:scale-90 ${
                   picks.includes(n)
-                    ? "bg-[#fc7952] text-white shadow-lg shadow-[#fc7952]/30 scale-105"
-                    : "bg-[#1e293b] border border-white/5 text-gray-400 hover:border-[#fc7952]/40"
+                    ? "bg-[#8B1E3F] text-white shadow-lg shadow-[#8B1E3F]/30 scale-105"
+                    : "bg-[#142036] border border-white/5 text-gray-400 hover:border-[#8B1E3F]/40"
                 }`}>
                 {n}
               </button>
@@ -299,7 +299,7 @@ function FlyovaDemo({ onBack, onRegister }) {
           </div>
           <p className="text-center text-[10px] font-black text-gray-600 uppercase tracking-widest">{picks.length}/2 numbers selected</p>
           <button onClick={() => setPhase("stake")} disabled={picks.length < 2}
-            className="w-full bg-[#613de6] disabled:opacity-30 text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95">
+            className="w-full bg-[#2457D6] disabled:opacity-30 text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95">
             Next: Set Your Stake →
           </button>
         </div>
@@ -308,25 +308,25 @@ function FlyovaDemo({ onBack, onRegister }) {
       {/* STEP 2 — STAKE */}
       {phase === "stake" && (
         <div className="space-y-4">
-          <TutorialTip step={2} total={3} accent="#fc7952">
+          <TutorialTip step={2} total={3} accent="#8B1E3F">
             Choose how much to put on the line. This amount comes out of your wallet when you place the bet. Win = stake × 1.3. So a $10 stake returns $13 if you're right. You can stake any amount within your balance.
           </TutorialTip>
-          <div className="bg-[#1e293b]/60 px-4 py-2 rounded-xl border border-white/5 flex items-center justify-between">
+          <div className="bg-[#142036]/60 px-4 py-2 rounded-xl border border-white/5 flex items-center justify-between">
             <span className="text-[10px] font-black text-gray-500 uppercase">Your picks</span>
-            <span className="text-sm font-black text-[#fc7952]">{picks.join(" & ")}</span>
+            <span className="text-sm font-black text-[#8B1E3F]">{picks.join(" & ")}</span>
           </div>
           <div className="grid grid-cols-3 gap-3">
             {[1, 5, 10].map(s => (
               <button key={s} onClick={() => setStake(s)}
                 className={`py-5 rounded-2xl font-black text-base transition-all active:scale-90 ${
-                  stake === s ? "bg-[#fc7952] text-white shadow-lg shadow-[#fc7952]/30" : "bg-[#1e293b] border border-white/5 text-gray-300 hover:border-[#fc7952]/30"
+                  stake === s ? "bg-[#8B1E3F] text-white shadow-lg shadow-[#8B1E3F]/30" : "bg-[#142036] border border-white/5 text-gray-300 hover:border-[#8B1E3F]/30"
                 }`}>
                 ${s}
               </button>
             ))}
           </div>
           {stake && (
-            <div className="bg-[#1e293b] p-4 rounded-2xl border border-white/5 space-y-2">
+            <div className="bg-[#142036] p-4 rounded-2xl border border-white/5 space-y-2">
               <div className="flex justify-between text-xs font-black">
                 <span className="text-gray-500 uppercase">You stake</span>
                 <span className="text-white">${stake}.00</span>
@@ -338,7 +338,7 @@ function FlyovaDemo({ onBack, onRegister }) {
             </div>
           )}
           <button onClick={() => setPhase("countdown")} disabled={!stake}
-            className="w-full bg-[#fc7952] disabled:opacity-30 text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95">
+            className="w-full bg-[#8B1E3F] disabled:opacity-30 text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95">
             Place Stake & Watch the Draw →
           </button>
         </div>
@@ -347,14 +347,14 @@ function FlyovaDemo({ onBack, onRegister }) {
       {/* STEP 3 — COUNTDOWN */}
       {phase === "countdown" && (
         <div className="space-y-5">
-          <TutorialTip step={3} total={3} accent="#fc7952">
+          <TutorialTip step={3} total={3} accent="#8B1E3F">
             The draw is now running. In the real game this lasts 120 seconds — other players are placing stakes at the same time. When the timer hits zero, 2 winning numbers are revealed and all matching bets are paid out instantly.
           </TutorialTip>
           <div className="flex flex-col items-center py-6 space-y-4">
             <div className="relative w-28 h-28">
               <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="8" />
-                <circle cx="50" cy="50" r="42" fill="none" stroke="#fc7952" strokeWidth="8"
+                <circle cx="50" cy="50" r="42" fill="none" stroke="#8B1E3F" strokeWidth="8"
                   strokeDasharray={`${2 * Math.PI * 42}`}
                   strokeDashoffset={`${2 * Math.PI * 42 * (1 - timeLeft / 10)}`}
                   strokeLinecap="round" className="transition-all duration-1000" />
@@ -365,7 +365,7 @@ function FlyovaDemo({ onBack, onRegister }) {
             </div>
             <div className="text-center space-y-1">
               <p className="text-xs font-black uppercase tracking-widest text-gray-500">Draw in progress — sped up for demo</p>
-              <p className="text-sm font-bold text-white">Your picks: <span className="text-[#fc7952] font-black">{picks.join(" & ")}</span> · Stake: <span className="text-white font-black">${stake}</span></p>
+              <p className="text-sm font-bold text-white">Your picks: <span className="text-[#8B1E3F] font-black">{picks.join(" & ")}</span> · Stake: <span className="text-white font-black">${stake}</span></p>
             </div>
           </div>
         </div>
@@ -384,14 +384,14 @@ function FlyovaDemo({ onBack, onRegister }) {
               {result === "lose" && <span className="block mt-1 text-gray-500">Your picks ({picks.join(" & ")}) didn't match — try different numbers next round.</span>}
             </p>
           </div>
-          <div className="bg-[#613de6]/10 border border-[#613de6]/25 rounded-2xl p-4 space-y-1.5">
-            <p className="text-[10px] font-black uppercase tracking-widest text-[#a78bfa]">How payouts work</p>
+          <div className="bg-[#2457D6]/10 border border-[#2457D6]/25 rounded-2xl p-4 space-y-1.5">
+            <p className="text-[10px] font-black uppercase tracking-widest text-[#7A9BEE]">How payouts work</p>
             <p className="text-xs font-bold text-white/65 leading-relaxed">
-              In the real game, winning amounts land in your wallet instantly after the draw. You can withdraw anytime through a verified Flyova Agent — no waiting, no hidden fees.
+              In the real game, winning amounts land in your wallet instantly after the draw. You can withdraw anytime through a verified StraWins Agent — no waiting, no hidden fees.
             </p>
           </div>
           <button onClick={onRegister}
-            className="w-full bg-[#613de6] text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2">
+            className="w-full bg-[#2457D6] text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2">
             Play for Real — Sign Up Free <ArrowRight size={14} />
           </button>
           <button onClick={reset}
@@ -450,7 +450,7 @@ function PredictDemo({ onBack, onRegister }) {
           <h2 className="text-lg font-black italic uppercase tracking-tighter text-white">Predict and Win</h2>
         </div>
         {phase !== "intro" && phase !== "done" && (
-          <div className="bg-[#1e293b] px-3 py-2 rounded-xl border border-white/5 text-right">
+          <div className="bg-[#142036] px-3 py-2 rounded-xl border border-white/5 text-right">
             <p className="text-[9px] font-black text-gray-500 uppercase">Earned</p>
             <p className="text-sm font-black text-emerald-400">${earnings.toFixed(2)}</p>
           </div>
@@ -462,7 +462,7 @@ function PredictDemo({ onBack, onRegister }) {
         <div className="space-y-1">
           <div className="flex gap-1.5">
             {Array.from({ length: TOTAL_ROUNDS }, (_, i) => (
-              <div key={i} className={`flex-1 h-1.5 rounded-full transition-all ${i < round - 1 ? "bg-emerald-400" : i === round - 1 ? "bg-[#fc7952]" : "bg-white/10"}`} />
+              <div key={i} className={`flex-1 h-1.5 rounded-full transition-all ${i < round - 1 ? "bg-emerald-400" : i === round - 1 ? "bg-[#8B1E3F]" : "bg-white/10"}`} />
             ))}
           </div>
           <p className="text-[9px] font-black uppercase tracking-widest text-gray-600 text-right">Round {round} of {TOTAL_ROUNDS}</p>
@@ -488,7 +488,7 @@ function PredictDemo({ onBack, onRegister }) {
               ))}
             </ul>
           </div>
-          <div className="bg-[#1e293b] border border-white/5 rounded-2xl p-4 space-y-2">
+          <div className="bg-[#142036] border border-white/5 rounded-2xl p-4 space-y-2">
             <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Subscription plans</p>
             <div className="grid grid-cols-2 gap-2">
               {[["3 Hours", "$12"], ["5 Hours", "$20"], ["12 Hours", "$48"], ["1 Day", "$95"], ["1 Week", "$650"]].map(([label, price]) => (
@@ -499,8 +499,8 @@ function PredictDemo({ onBack, onRegister }) {
               ))}
             </div>
           </div>
-          <div className="bg-[#1e293b] border border-white/5 rounded-2xl p-4 flex items-start gap-3">
-            <div className="w-8 h-8 rounded-xl bg-[#fc7952]/10 flex items-center justify-center text-[#fc7952] flex-shrink-0 mt-0.5">
+          <div className="bg-[#142036] border border-white/5 rounded-2xl p-4 flex items-start gap-3">
+            <div className="w-8 h-8 rounded-xl bg-[#8B1E3F]/10 flex items-center justify-center text-[#8B1E3F] flex-shrink-0 mt-0.5">
               <Target size={16} />
             </div>
             <p className="text-xs font-bold text-gray-400 leading-relaxed">
@@ -524,14 +524,14 @@ function PredictDemo({ onBack, onRegister }) {
           </TutorialTip>
           <div className="grid grid-cols-2 gap-4">
             {[
-              { id: "A", emoji: "🔵", label: "Blue", activeClass: "bg-[#613de6] shadow-[#613de6]/30" },
-              { id: "B", emoji: "🟠", label: "Orange", activeClass: "bg-[#fc7952] shadow-[#fc7952]/30" },
+              { id: "A", emoji: "🔵", label: "Blue", activeClass: "bg-[#2457D6] shadow-[#2457D6]/30" },
+              { id: "B", emoji: "🟠", label: "Orange", activeClass: "bg-[#8B1E3F] shadow-[#8B1E3F]/30" },
             ].map(opt => (
               <button key={opt.id} onClick={() => setChoice(opt.id)}
                 className={`py-7 rounded-2xl font-black transition-all active:scale-95 ${
                   choice === opt.id
                     ? `${opt.activeClass} text-white shadow-lg scale-105`
-                    : "bg-[#1e293b] border border-white/5 text-gray-500 hover:border-white/20"
+                    : "bg-[#142036] border border-white/5 text-gray-500 hover:border-white/20"
                 }`}>
                 <div className="text-3xl">{opt.emoji}</div>
                 <div className="text-xs mt-2 uppercase tracking-widest">{opt.label}</div>
@@ -566,7 +566,7 @@ function PredictDemo({ onBack, onRegister }) {
             </div>
             <p className="text-xs font-black uppercase tracking-widest text-gray-500">Round closing — sped up for tutorial</p>
             <p className="text-sm font-bold text-white">
-              Your prediction: <span className={`font-black ${choice === "A" ? "text-[#613de6]" : "text-[#fc7952]"}`}>
+              Your prediction: <span className={`font-black ${choice === "A" ? "text-[#2457D6]" : "text-[#8B1E3F]"}`}>
                 {choice === "A" ? "🔵 Blue" : "🟠 Orange"}
               </span>
             </p>
@@ -591,12 +591,12 @@ function PredictDemo({ onBack, onRegister }) {
               ? "Correct! $0.20 lands in your wallet instantly. In a real session with a 1-day plan, you could play ~1,440 rounds — hundreds of $0.20 wins add up fast."
               : "Not this time — the outcome was random. That's the challenge. Over many rounds, consistent predictions build steady earnings. No round costs you anything extra beyond your subscription."}
           </TutorialTip>
-          <div className="bg-[#1e293b] p-3 rounded-xl flex justify-between items-center">
+          <div className="bg-[#142036] p-3 rounded-xl flex justify-between items-center">
             <span className="text-xs font-black uppercase text-gray-500">Running total</span>
             <span className="text-base font-black text-emerald-400">${earnings.toFixed(2)}</span>
           </div>
           <button onClick={nextRound}
-            className="w-full bg-[#fc7952] text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95">
+            className="w-full bg-[#8B1E3F] text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95">
             {round >= TOTAL_ROUNDS ? "See Summary →" : `Next Round →`}
           </button>
         </div>
@@ -612,7 +612,7 @@ function PredictDemo({ onBack, onRegister }) {
               You earned <span className="text-emerald-400 font-black">${earnings.toFixed(2)}</span> across {TOTAL_ROUNDS} rounds
             </p>
           </div>
-          <div className="bg-[#1e293b] border border-white/5 rounded-2xl p-4 space-y-2">
+          <div className="bg-[#142036] border border-white/5 rounded-2xl p-4 space-y-2">
             <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Real game potential</p>
             <p className="text-xs font-bold text-white/70 leading-relaxed">
               A 1-day plan ($35) gives you ~1,440 rounds. At $0.20 per correct prediction, even a 50% hit rate earns you $144 — over 4× your subscription cost.
@@ -710,18 +710,18 @@ function FriendsDemo({ onBack, onRegister }) {
           <ArrowLeft size={18} />
         </button>
         <div className="flex-1">
-          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#a78bfa]">Tutorial</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#7A9BEE]">Tutorial</p>
           <h2 className="text-lg font-black italic uppercase tracking-tighter text-white">Play with Friends</h2>
         </div>
         {phase !== "intro" && phase !== "done" && (
           <div className="flex gap-2">
-            <div className="bg-[#1e293b] px-3 py-2 rounded-xl border border-white/5 text-center">
+            <div className="bg-[#142036] px-3 py-2 rounded-xl border border-white/5 text-center">
               <p className="text-[9px] font-black text-gray-500 uppercase">You</p>
-              <p className="text-sm font-black text-[#fc7952]">{scores.you}</p>
+              <p className="text-sm font-black text-[#8B1E3F]">{scores.you}</p>
             </div>
-            <div className="bg-[#1e293b] px-3 py-2 rounded-xl border border-white/5 text-center">
+            <div className="bg-[#142036] px-3 py-2 rounded-xl border border-white/5 text-center">
               <p className="text-[9px] font-black text-gray-500 uppercase">Bot</p>
-              <p className="text-sm font-black text-[#a78bfa]">{scores.bot}</p>
+              <p className="text-sm font-black text-[#7A9BEE]">{scores.bot}</p>
             </div>
           </div>
         )}
@@ -730,7 +730,7 @@ function FriendsDemo({ onBack, onRegister }) {
       {/* INTRO */}
       {phase === "intro" && (
         <div className="space-y-5">
-          <div className="bg-[#a78bfa]/10 border border-[#a78bfa]/20 rounded-2xl p-5 space-y-4">
+          <div className="bg-[#7A9BEE]/10 border border-[#7A9BEE]/20 rounded-2xl p-5 space-y-4">
             <p className="text-sm font-black italic uppercase tracking-tighter text-white">How the game works</p>
             <ul className="space-y-3">
               {[
@@ -740,14 +740,14 @@ function FriendsDemo({ onBack, onRegister }) {
                 { n: "4", text: "Correct guess = 1 point. First player to score 15 points wins the match." },
               ].map(item => (
                 <li key={item.n} className="flex gap-3">
-                  <span className="w-5 h-5 rounded-full bg-[#a78bfa]/20 text-[#a78bfa] text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">{item.n}</span>
+                  <span className="w-5 h-5 rounded-full bg-[#7A9BEE]/20 text-[#7A9BEE] text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">{item.n}</span>
                   <p className="text-xs font-bold text-white/75 leading-relaxed">{item.text}</p>
                 </li>
               ))}
             </ul>
           </div>
-          <div className="bg-[#1e293b] border border-white/5 rounded-2xl p-4 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-[#613de6]/10 flex items-center justify-center text-[#613de6] flex-shrink-0">
+          <div className="bg-[#142036] border border-white/5 rounded-2xl p-4 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-[#2457D6]/10 flex items-center justify-center text-[#2457D6] flex-shrink-0">
               <Users size={16} />
             </div>
             <p className="text-xs font-bold text-gray-400 leading-relaxed">
@@ -755,7 +755,7 @@ function FriendsDemo({ onBack, onRegister }) {
             </p>
           </div>
           <button onClick={() => startRound(1)}
-            className="w-full bg-[#613de6] text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2">
+            className="w-full bg-[#2457D6] text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2">
             Start Tutorial <ArrowRight size={14} />
           </button>
         </div>
@@ -775,7 +775,7 @@ function FriendsDemo({ onBack, onRegister }) {
             </div>
           </div>
 
-          <TutorialTip step={phase === "hide" ? 1 : 2} total={2} accent="#a78bfa">
+          <TutorialTip step={phase === "hide" ? 1 : 2} total={2} accent="#7A9BEE">
             {phase === "hide"
               ? "Pick one number to hide. The bot will try to guess which one you chose."
               : `You hid ${myHidden}. Now guess which number the bot is hiding — pick from the same two.`}
@@ -787,8 +787,8 @@ function FriendsDemo({ onBack, onRegister }) {
                 onClick={() => phase === "hide" ? handleHide(num) : handleGuess(num)}
                 className={`py-8 rounded-2xl text-2xl font-black italic transition-all active:scale-95 border-2 ${
                   myHidden === num && phase === "guess"
-                    ? "bg-[#fc7952]/15 border-[#fc7952] text-[#fc7952]"
-                    : "bg-[#1e293b] border-white/5 text-white hover:border-[#a78bfa]/40"
+                    ? "bg-[#8B1E3F]/15 border-[#8B1E3F] text-[#8B1E3F]"
+                    : "bg-[#142036] border-white/5 text-white hover:border-[#7A9BEE]/40"
                 }`}>
                 {num}
               </button>
@@ -810,18 +810,18 @@ function FriendsDemo({ onBack, onRegister }) {
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-[#1e293b] rounded-2xl p-3 text-center border border-white/5">
+            <div className="bg-[#142036] rounded-2xl p-3 text-center border border-white/5">
               <p className="text-[9px] font-black text-gray-500 uppercase">You</p>
-              <p className="text-2xl font-black text-[#fc7952]">{scores.you}</p>
+              <p className="text-2xl font-black text-[#8B1E3F]">{scores.you}</p>
             </div>
-            <div className="bg-[#1e293b] rounded-2xl p-3 text-center border border-white/5">
+            <div className="bg-[#142036] rounded-2xl p-3 text-center border border-white/5">
               <p className="text-[9px] font-black text-gray-500 uppercase">Bot</p>
-              <p className="text-2xl font-black text-[#a78bfa]">{scores.bot}</p>
+              <p className="text-2xl font-black text-[#7A9BEE]">{scores.bot}</p>
             </div>
           </div>
           <button
             onClick={() => round >= TOTAL_ROUNDS ? setPhase("done") : startRound(round + 1)}
-            className="w-full bg-[#613de6] text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95">
+            className="w-full bg-[#2457D6] text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95">
             {round >= TOTAL_ROUNDS ? "See Summary →" : "Next Round →"}
           </button>
         </div>
@@ -834,17 +834,17 @@ function FriendsDemo({ onBack, onRegister }) {
             <p className="text-4xl">{scores.you >= scores.bot ? "🏆" : "🎯"}</p>
             <p className="text-2xl font-black italic uppercase tracking-tighter text-white">Tutorial Complete!</p>
             <p className="text-sm font-bold text-gray-400">
-              Final score: <span className="text-[#fc7952] font-black">{scores.you}</span> – <span className="text-[#a78bfa] font-black">{scores.bot}</span>
+              Final score: <span className="text-[#8B1E3F] font-black">{scores.you}</span> – <span className="text-[#7A9BEE] font-black">{scores.bot}</span>
             </p>
           </div>
-          <div className="bg-[#613de6]/10 border border-[#613de6]/25 rounded-2xl p-4 space-y-1.5">
-            <p className="text-[10px] font-black uppercase tracking-widest text-[#a78bfa]">Real game</p>
+          <div className="bg-[#2457D6]/10 border border-[#2457D6]/25 rounded-2xl p-4 space-y-1.5">
+            <p className="text-[10px] font-black uppercase tracking-widest text-[#7A9BEE]">Real game</p>
             <p className="text-xs font-bold text-white/65 leading-relaxed">
               In the real game you play 30 rounds (15 each) against a live opponent. Stake any amount — correct guesses transfer your stake from their pool to yours. Winner takes the larger share.
             </p>
           </div>
           <button onClick={onRegister}
-            className="w-full bg-[#613de6] text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2">
+            className="w-full bg-[#2457D6] text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2">
             Play for Real — Sign Up Free <ArrowRight size={14} />
           </button>
           <button onClick={() => { setScores({ you: 0, bot: 0 }); setPhase("intro"); }}
@@ -864,9 +864,9 @@ function DemoModal({ onClose, router }) {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-md bg-[#0f172a] rounded-[2.5rem] border border-white/10 shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
+      <div className="relative z-10 w-full max-w-md bg-[#0B1220] rounded-[2.5rem] border border-white/10 shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
         {screen === "pick"    && <DemoGamePicker onSelect={setScreen} onClose={onClose} />}
-        {screen === "flyova"  && <FlyovaDemo  onBack={() => setScreen("pick")} onRegister={handleRegister} />}
+        {screen === "strawins"  && <StraWinsDemo  onBack={() => setScreen("pick")} onRegister={handleRegister} />}
         {screen === "predict" && <PredictDemo onBack={() => setScreen("pick")} onRegister={handleRegister} />}
         {screen === "friends" && <FriendsDemo onBack={() => setScreen("pick")} onRegister={handleRegister} />}
       </div>
@@ -907,7 +907,7 @@ export default function LandingPage() {
         if (liveData.length === 0) {
           setTestimonials([
             { name: "John D.", text: "Turned my lucky $10 into $500 in one afternoon. The withdrawals are instant!", rating: 5 },
-            { name: "Sarah K.", text: "Finally a platform that is transparent and fun. Flyova is the real deal.", rating: 5 },
+            { name: "Sarah K.", text: "Finally a platform that is transparent and fun. StraWins is the real deal.", rating: 5 },
             { name: "Mike A.", text: "The agent system is genius. Got paid within minutes of requesting a withdrawal.", rating: 5 },
             { name: "Tunde B.", text: "Play with Friends is so addictive. Beat my brother 3 times in a row!", rating: 5 },
           ]);
@@ -920,7 +920,7 @@ export default function LandingPage() {
         console.error("Testimonials listener error:", error);
         setTestimonials([
           { name: "John D.", text: "Turned my lucky $10 into $500 in one afternoon. The withdrawals are instant!", rating: 5 },
-          { name: "Sarah K.", text: "Finally a platform that is transparent and fun. Flyova is the real deal.", rating: 5 },
+          { name: "Sarah K.", text: "Finally a platform that is transparent and fun. StraWins is the real deal.", rating: 5 },
         ]);
         setLoading(false);
       }
@@ -945,8 +945,8 @@ export default function LandingPage() {
       icon: <Wallet size={24} />,
       title: "Instant Wallet",
       desc: "Fund your account and manage your balance in real time. Every win lands in your wallet immediately.",
-      color: "text-cyan-400",
-      bg: "bg-cyan-400/10",
+      color: "text-[#7A9BEE]",
+      bg: "bg-[#7A9BEE]/10",
     },
     {
       icon: <DollarSign size={24} />,
@@ -959,15 +959,15 @@ export default function LandingPage() {
       icon: <Users size={24} />,
       title: "Live Multiplayer",
       desc: "Challenge real players online. Find opponents instantly and compete with real money on the line.",
-      color: "text-[#fc7952]",
-      bg: "bg-[#fc7952]/10",
+      color: "text-[#8B1E3F]",
+      bg: "bg-[#8B1E3F]/10",
     },
     {
       icon: <ShieldCheck size={24} />,
       title: "Verified Agents",
       desc: "Every withdrawal is handled by a vetted agent in your region. Safe, accountable, and trackable.",
-      color: "text-[#613de6]",
-      bg: "bg-[#613de6]/20",
+      color: "text-[#2457D6]",
+      bg: "bg-[#2457D6]/20",
     },
     {
       icon: <Zap size={24} />,
@@ -986,7 +986,7 @@ export default function LandingPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#613de6] text-white selection:bg-[#fc7952] overflow-x-hidden">
+    <div className="min-h-screen bg-[#2457D6] text-white selection:bg-[#8B1E3F] overflow-x-hidden">
 
       {/* ── NAVIGATION ───────────────────────────────── */}
       <nav className="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto relative z-50">
@@ -995,11 +995,11 @@ export default function LandingPage() {
         </div>
 
         <div className="hidden md:flex items-center space-x-8 text-sm font-bold uppercase tracking-wider">
-          <a href="#how-it-works" className="hover:text-[#fc7952] transition">How It Works</a>
-          <a href="#features" className="hover:text-[#fc7952] transition">Features</a>
-          <a href="#reviews" className="hover:text-[#fc7952] transition">Reviews</a>
-          <button onClick={() => router.push('/about')} className="hover:text-[#fc7952] transition">About Us</button>
-          <button onClick={() => router.push('/login')} className="hover:text-[#fc7952] transition">Login</button>
+          <a href="#how-it-works" className="hover:text-[#8B1E3F] transition">How It Works</a>
+          <a href="#features" className="hover:text-[#8B1E3F] transition">Features</a>
+          <a href="#reviews" className="hover:text-[#8B1E3F] transition">Reviews</a>
+          <button onClick={() => router.push('/about')} className="hover:text-[#8B1E3F] transition">About Us</button>
+          <button onClick={() => router.push('/login')} className="hover:text-[#8B1E3F] transition">Login</button>
         </div>
 
         <div className="flex items-center gap-3">
@@ -1011,7 +1011,7 @@ export default function LandingPage() {
           </button>
           <button
             onClick={() => router.push('/login')}
-            className="bg-cyan-400 hover:bg-cyan-300 text-black px-6 py-2 rounded-full font-black text-sm transition-all flex items-center shadow-[0_0_20px_rgba(34,211,238,0.4)]"
+            className="bg-[#7A9BEE] hover:bg-[#D7E2FF] text-black px-6 py-2 rounded-full font-black text-sm transition-all flex items-center shadow-[0_0_20px_rgba(34,211,238,0.4)]"
           >
             Play Now <ArrowRight size={16} className="ml-2" />
           </button>
@@ -1026,10 +1026,10 @@ export default function LandingPage() {
 
       {/* Mobile menu */}
       {menuOpen && (
-        <div className="md:hidden bg-[#4d2ec9] border-t border-white/10 px-6 py-6 space-y-4 z-40 relative">
+        <div className="md:hidden bg-[#1D4FC4] border-t border-white/10 px-6 py-6 space-y-4 z-40 relative">
           {["#how-it-works", "#features", "#reviews"].map((href) => (
             <a key={href} href={href} onClick={() => setMenuOpen(false)}
-              className="block text-sm font-black uppercase tracking-wider hover:text-[#fc7952] transition py-1">
+              className="block text-sm font-black uppercase tracking-wider hover:text-[#8B1E3F] transition py-1">
               {href.replace("#", "").replace(/-/g, " ")}
             </a>
           ))}
@@ -1038,7 +1038,7 @@ export default function LandingPage() {
               setMenuOpen(false);
               router.push('/about');
             }}
-            className="block w-full text-left text-sm font-black uppercase tracking-wider hover:text-[#fc7952] transition py-1"
+            className="block w-full text-left text-sm font-black uppercase tracking-wider hover:text-[#8B1E3F] transition py-1"
           >
             About Us
           </button>
@@ -1051,14 +1051,14 @@ export default function LandingPage() {
 
       {/* ── HERO ─────────────────────────────────────── */}
       <main className="relative max-w-7xl mx-auto px-6 pt-12 pb-24 flex flex-col md:flex-row items-center">
-        <div className="absolute top-20 right-1/4 w-32 h-32 bg-cyan-400 rounded-full blur-[80px] opacity-30 animate-pulse" />
-        <div className="absolute bottom-10 left-10 w-48 h-48 bg-[#fc7952] rounded-full blur-[100px] opacity-20" />
+        <div className="absolute top-20 right-1/4 w-32 h-32 bg-[#7A9BEE] rounded-full blur-[80px] opacity-30 animate-pulse" />
+        <div className="absolute bottom-10 left-10 w-48 h-48 bg-[#8B1E3F] rounded-full blur-[100px] opacity-20" />
 
         <div className="flex-1 text-center md:text-left z-10 space-y-8">
           <div className="space-y-4">
             <h1 className="text-4xl md:text-7xl font-black italic leading-[0.9] tracking-tighter">
               Feeling Lucky? <br />
-              <span className="text-white">Play Flyovahelp </span> <br />
+              <span className="text-white">Play StraWins </span> <br />
               <span className="text-white">and Win Big</span>
             </h1>
             <p className="text-md md:text-xl text-white/80 max-w-lg font-medium mx-auto md:mx-0">
@@ -1070,7 +1070,7 @@ export default function LandingPage() {
           <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
             <button
               onClick={() => router.push('/login')}
-              className="group relative inline-flex items-center justify-center px-10 py-5 font-black text-white transition-all duration-200 bg-[#fc7952] rounded-full hover:bg-[#fd8a6a] active:scale-95 shadow-2xl"
+              className="group relative inline-flex items-center justify-center px-10 py-5 font-black text-white transition-all duration-200 bg-[#8B1E3F] rounded-full hover:bg-[#A62A4D] active:scale-95 shadow-2xl"
             >
               Play Now <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
             </button>
@@ -1082,7 +1082,7 @@ export default function LandingPage() {
             </button>
             <button
               onClick={() => router.push('/about')}
-              className="inline-flex items-center justify-center px-10 py-5 font-black text-white border border-cyan-300/50 rounded-full hover:bg-cyan-300/10 transition-all active:scale-95"
+              className="inline-flex items-center justify-center px-10 py-5 font-black text-white border border-[#D7E2FF]/50 rounded-full hover:bg-[#D7E2FF]/10 transition-all active:scale-95"
             >
               About Us
             </button>
@@ -1092,8 +1092,8 @@ export default function LandingPage() {
 
         {/* Phone Mockup */}
         <div className="flex-1 mt-16 md:mt-0 relative flex justify-center z-10">
-          <div className="w-[300px] md:w-[310px] h-[610px] md:h-[630px] bg-[#0f172a] rounded-[3.5rem] p-3 shadow-[0_50px_100px_rgba(0,0,0,0.6)] border-[10px] border-white/10 relative overflow-hidden">
-            <div className="bg-[#0f172a] h-full rounded-[2.8rem] overflow-hidden flex flex-col text-white font-sans">
+          <div className="w-[300px] md:w-[310px] h-[610px] md:h-[630px] bg-[#0B1220] rounded-[3.5rem] p-3 shadow-[0_50px_100px_rgba(0,0,0,0.6)] border-[10px] border-white/10 relative overflow-hidden">
+            <div className="bg-[#0B1220] h-full rounded-[2.8rem] overflow-hidden flex flex-col text-white font-sans">
               <div className="pt-6 px-8 flex justify-between items-center opacity-40">
                 <span className="text-[10px] font-bold">9:41</span>
                 <div className="flex gap-1">
@@ -1102,26 +1102,26 @@ export default function LandingPage() {
                 </div>
               </div>
               <div className="p-5 flex justify-between items-center">
-                <div className="bg-white/5 p-2 rounded-xl"><Menu size={18} className="text-[#613de6]" /></div>
+                <div className="bg-white/5 p-2 rounded-xl"><Menu size={18} className="text-[#2457D6]" /></div>
                 <div className="flex flex-col items-center">
                   <span className="text-[8px] font-black uppercase tracking-[0.2em] text-gray-500 italic">Arena Live</span>
                   <span className="text-xs font-black italic">FLYODOLS</span>
                 </div>
-                <div className="bg-[#613de6]/20 p-2 rounded-xl border border-[#613de6]/30 text-[#613de6]">
+                <div className="bg-[#2457D6]/20 p-2 rounded-xl border border-[#2457D6]/30 text-[#2457D6]">
                   <Wallet size={16} />
                 </div>
               </div>
               <div className="px-5 flex-1 flex flex-col space-y-5">
-                <div className="bg-gradient-to-br from-[#1e293b] to-[#0f172a] p-5 rounded-3xl border border-white/5 shadow-inner">
+                <div className="bg-gradient-to-br from-[#142036] to-[#0B1220] p-5 rounded-3xl border border-white/5 shadow-inner">
                   <div className="flex justify-between items-center mb-4">
-                    <span className="text-[9px] font-black uppercase text-[#fc7952] flex items-center gap-1">
+                    <span className="text-[9px] font-black uppercase text-[#8B1E3F] flex items-center gap-1">
                       <Trophy size={10} /> Winning Numbers
                     </span>
                     <span className="text-[8px] bg-white/5 px-2 py-1 rounded-lg text-gray-400 font-bold uppercase">ID: 88241</span>
                   </div>
                   <div className="flex justify-around gap-2">
-                    <div className="w-14 h-14 rounded-2xl bg-[#613de6] flex items-center justify-center text-2xl font-black italic shadow-lg shadow-[#613de6]/40 border border-white/20 animate-pulse">42</div>
-                    <div className="w-14 h-14 rounded-2xl bg-[#fc7952] flex items-center justify-center text-2xl font-black italic shadow-lg shadow-[#fc7952]/40 border border-white/20 animate-pulse">17</div>
+                    <div className="w-14 h-14 rounded-2xl bg-[#2457D6] flex items-center justify-center text-2xl font-black italic shadow-lg shadow-[#2457D6]/40 border border-white/20 animate-pulse">42</div>
+                    <div className="w-14 h-14 rounded-2xl bg-[#8B1E3F] flex items-center justify-center text-2xl font-black italic shadow-lg shadow-[#8B1E3F]/40 border border-white/20 animate-pulse">17</div>
                   </div>
                 </div>
                 <div className="text-center space-y-1 py-2">
@@ -1142,20 +1142,20 @@ export default function LandingPage() {
                       <p className="font-black text-lg">26</p>
                     </div>
                   </div>
-                  <button className="w-full bg-[#613de6] text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl">
+                  <button className="w-full bg-[#2457D6] text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl">
                     Place Stake Now
                   </button>
                 </div>
               </div>
               <div className="p-6 pb-10 flex justify-around border-t border-white/5 bg-black/20">
-                <div className="w-2 h-2 bg-[#613de6] rounded-full" />
+                <div className="w-2 h-2 bg-[#2457D6] rounded-full" />
                 <div className="w-2 h-2 bg-gray-700 rounded-full" />
                 <div className="w-2 h-2 bg-gray-700 rounded-full" />
               </div>
             </div>
           </div>
-          <div className="absolute -top-10 -right-4 w-16 h-16 bg-cyan-400 rounded-full shadow-inner animate-bounce pointer-events-none" />
-          <div className="absolute bottom-10 -left-10 w-24 h-24 bg-[#fc7952] rounded-full shadow-inner animate-pulse pointer-events-none" />
+          <div className="absolute -top-10 -right-4 w-16 h-16 bg-[#7A9BEE] rounded-full shadow-inner animate-bounce pointer-events-none" />
+          <div className="absolute bottom-10 -left-10 w-24 h-24 bg-[#8B1E3F] rounded-full shadow-inner animate-pulse pointer-events-none" />
         </div>
       </main>
 
@@ -1163,8 +1163,8 @@ export default function LandingPage() {
       <section className="bg-black/20 backdrop-blur-sm border-y border-white/10 py-10">
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <StatCard value={12400} suffix="+" label="Active Players" color="text-cyan-400" />
-            <StatCard value={980000} suffix="+" label="Games Played" color="text-[#fc7952]" />
+            <StatCard value={12400} suffix="+" label="Active Players" color="text-[#7A9BEE]" />
+            <StatCard value={980000} suffix="+" label="Games Played" color="text-[#8B1E3F]" />
             <StatCard value={3} suffix="" label="Live Games" color="text-emerald-400" />
             <StatCard value={50000} suffix="+" label="Payouts Processed" color="text-white" />
           </div>
@@ -1172,18 +1172,18 @@ export default function LandingPage() {
       </section>
 
       {/* ── ABOUT PREVIEW ────────────────────────────── */}
-      <section className="bg-[#0a0f1e] py-16 px-6 border-b border-white/5">
+      <section className="bg-[#0B1220] py-16 px-6 border-b border-white/5">
         <div className="max-w-4xl mx-auto text-center">
-          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-cyan-400 mb-3">About Flyovahelp</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#7A9BEE] mb-3">About StraWins</p>
           <h2 className="text-3xl md:text-5xl font-black italic uppercase tracking-tighter text-white leading-tight">
             Learn Who We Are
           </h2>
           <p className="mt-4 text-sm text-white/65 font-bold max-w-2xl mx-auto leading-relaxed">
-            Flyovahelp is built for fast, transparent gameplay with reliable payouts. Read our full story, mission, and values on the About page.
+            StraWins is built for fast, transparent gameplay with reliable payouts. Read our full story, mission, and values on the About page.
           </p>
           <button
             onClick={() => router.push("/about")}
-            className="mt-8 inline-flex items-center gap-2 bg-[#613de6] hover:bg-[#7251ed] text-white px-8 py-4 rounded-full font-black text-xs uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-[#613de6]/20"
+            className="mt-8 inline-flex items-center gap-2 bg-[#2457D6] hover:bg-[#1D4FC4] text-white px-8 py-4 rounded-full font-black text-xs uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-[#2457D6]/20"
           >
             Visit About Us <ArrowRight size={14} />
           </button>
@@ -1191,13 +1191,13 @@ export default function LandingPage() {
       </section>
 
       {/* ── TRANSITION TO DARK ───────────────────────── */}
-      <div className="h-16 bg-gradient-to-b from-[#613de6] to-[#0f172a]" />
+      <div className="h-16 bg-gradient-to-b from-[#2457D6] to-[#0B1220]" />
 
       {/* ── HOW IT WORKS ─────────────────────────────── */}
-      <section id="how-it-works" className="bg-[#0a0f1e] py-20 px-6">
+      <section id="how-it-works" className="bg-[#0B1220] py-20 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-14">
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-cyan-400 mb-3">Simple Process</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#7A9BEE] mb-3">Simple Process</p>
             <h2 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter text-white leading-tight">
               How It Works
             </h2>
@@ -1213,18 +1213,18 @@ export default function LandingPage() {
                 icon: <Users size={28} />,
                 title: "Create Your Account",
                 desc: "Sign up for free in under 2 minutes. No lengthy verification — just a username, email, and password.",
-                color: "text-cyan-400",
-                bg: "bg-cyan-400/10",
-                border: "border-cyan-400/20",
+                color: "text-[#7A9BEE]",
+                bg: "bg-[#7A9BEE]/10",
+                border: "border-[#7A9BEE]/20",
               },
               {
                 step: "02",
                 icon: <Wallet size={28} />,
                 title: "Fund Your Wallet",
                 desc: "Deposit into your wallet via your preferred payment method. Your balance is live and ready to use instantly.",
-                color: "text-[#fc7952]",
-                bg: "bg-[#fc7952]/10",
-                border: "border-[#fc7952]/20",
+                color: "text-[#8B1E3F]",
+                bg: "bg-[#8B1E3F]/10",
+                border: "border-[#8B1E3F]/20",
               },
               {
                 step: "03",
@@ -1250,7 +1250,7 @@ export default function LandingPage() {
           <div className="mt-16 text-center">
             <button
               onClick={() => router.push('/register')}
-              className="inline-flex items-center gap-3 bg-[#613de6] hover:bg-[#7251ed] text-white px-10 py-5 rounded-full font-black text-sm uppercase tracking-widest transition-all shadow-2xl shadow-[#613de6]/30 active:scale-95"
+              className="inline-flex items-center gap-3 bg-[#2457D6] hover:bg-[#1D4FC4] text-white px-10 py-5 rounded-full font-black text-sm uppercase tracking-widest transition-all shadow-2xl shadow-[#2457D6]/30 active:scale-95"
             >
               Start Playing Now <ArrowRight size={18} />
             </button>
@@ -1259,21 +1259,21 @@ export default function LandingPage() {
       </section>
 
       {/* ── FEATURES GRID ────────────────────────────── */}
-      <section id="features" className="bg-[#0f172a] py-20 px-6">
+      <section id="features" className="bg-[#0B1220] py-20 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-14">
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#613de6] mb-3">Platform</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#2457D6] mb-3">Platform</p>
             <h2 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter text-white leading-tight">
               Everything You Need
             </h2>
             <p className="text-white/50 font-bold mt-4 max-w-xl mx-auto text-sm">
-              Built for speed, security, and simplicity. Everything on Flyovahelp is designed to get you playing and winning faster.
+              Built for speed, security, and simplicity. Everything on StraWins is designed to get you playing and winning faster.
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {features.map((f) => (
-              <div key={f.title} className="bg-[#1e293b] border border-white/5 p-6 rounded-[2rem] hover:border-white/10 transition-all group hover:-translate-y-0.5">
+              <div key={f.title} className="bg-[#142036] border border-white/5 p-6 rounded-[2rem] hover:border-white/10 transition-all group hover:-translate-y-0.5">
                 <div className={`w-14 h-14 rounded-2xl ${f.bg} flex items-center justify-center mb-5 ${f.color} group-hover:scale-110 transition-transform`}>
                   {f.icon}
                 </div>
@@ -1286,20 +1286,20 @@ export default function LandingPage() {
       </section>
 
       {/* ── AGENT SECTION ────────────────────────────── */}
-      <section className="bg-[#0a0f1e] py-20 px-6">
+      <section className="bg-[#0B1220] py-20 px-6">
         <div className="max-w-7xl mx-auto">
-          <div className="relative bg-gradient-to-br from-[#613de6] to-[#3b1f9e] rounded-[2.5rem] overflow-hidden p-10 md:p-16 shadow-2xl">
-            <div className="absolute top-0 right-0 w-80 h-80 bg-[#fc7952] rounded-full blur-[120px] opacity-20 pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-cyan-400 rounded-full blur-[100px] opacity-10 pointer-events-none" />
+          <div className="relative bg-gradient-to-br from-[#2457D6] to-[#1D4FC4] rounded-[2.5rem] overflow-hidden p-10 md:p-16 shadow-2xl">
+            <div className="absolute top-0 right-0 w-80 h-80 bg-[#8B1E3F] rounded-full blur-[120px] opacity-20 pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#7A9BEE] rounded-full blur-[100px] opacity-10 pointer-events-none" />
             <ShieldCheck size={220} className="absolute -right-10 -bottom-10 opacity-[0.06] text-white pointer-events-none" />
 
             <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-10">
               <div className="space-y-5 max-w-lg">
-                <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-widest text-[#fc7952]">
+                <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-widest text-[#8B1E3F]">
                   <TrendingUp size={14} /> Revenue Opportunity
                 </div>
                 <h2 className="text-4xl md:text-5xl font-black italic uppercase tracking-tighter text-white leading-tight">
-                  Become a <br /><span className="text-[#fc7952]">Flyova Agent</span>
+                  Become a <br /><span className="text-[#8B1E3F]">StraWins Agent</span>
                 </h2>
                 <p className="text-white/70 font-bold text-sm leading-relaxed">
                   Join our agent network and earn commissions by processing withdrawal requests in your region. No capital needed — just your time and trustworthiness.
@@ -1312,7 +1312,7 @@ export default function LandingPage() {
                     "Grow your income as you process more trades",
                   ].map((item) => (
                     <li key={item} className="flex items-center gap-3 text-sm font-bold text-white/80">
-                      <CheckCircle2 size={16} className="text-[#fc7952] flex-shrink-0" />
+                      <CheckCircle2 size={16} className="text-[#8B1E3F] flex-shrink-0" />
                       {item}
                     </li>
                   ))}
@@ -1322,7 +1322,7 @@ export default function LandingPage() {
               <div className="flex flex-col gap-4 items-start md:items-center">
                 <button
                   onClick={() => router.push('/register')}
-                  className="bg-[#fc7952] hover:bg-[#fd8a6a] text-white px-10 py-5 rounded-full font-black text-sm uppercase tracking-widest transition-all shadow-2xl shadow-[#fc7952]/30 active:scale-95 flex items-center gap-3"
+                  className="bg-[#8B1E3F] hover:bg-[#A62A4D] text-white px-10 py-5 rounded-full font-black text-sm uppercase tracking-widest transition-all shadow-2xl shadow-[#8B1E3F]/30 active:scale-95 flex items-center gap-3"
                 >
                   Apply to Be an Agent <ArrowRight size={18} />
                 </button>
@@ -1334,7 +1334,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── TESTIMONIALS ─────────────────────────────── */}
-      <section id="reviews" className="bg-[#0f172a] py-20 px-6">
+      <section id="reviews" className="bg-[#0B1220] py-20 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-14">
             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-yellow-400 mb-3">Community Voice</p>
@@ -1351,14 +1351,14 @@ export default function LandingPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
               {testimonials.slice(0, 8).map((t, i) => (
-                <div key={t.id || i} className="bg-[#1e293b] border border-white/5 p-6 rounded-[2rem] flex flex-col gap-4">
+                <div key={t.id || i} className="bg-[#142036] border border-white/5 p-6 rounded-[2rem] flex flex-col gap-4">
                   <div className="flex gap-1">
                     {[...Array(t.rating || 5)].map((_, j) => (
                       <Star key={j} size={13} className="fill-yellow-400 text-yellow-400" />
                     ))}
                   </div>
                   <p className="text-sm font-bold italic text-white/80 leading-relaxed flex-1">"{t.text}"</p>
-                  <p className="text-[10px] font-black uppercase text-[#fc7952] tracking-widest">— {t.name}</p>
+                  <p className="text-[10px] font-black uppercase text-[#8B1E3F] tracking-widest">— {t.name}</p>
                 </div>
               ))}
             </div>
@@ -1367,10 +1367,10 @@ export default function LandingPage() {
       </section>
 
       {/* ── COMMUNITY SECTION ────────────────────────── */}
-      <section className="bg-[#0a0f1e] py-20 px-6">
+      <section className="bg-[#0B1220] py-20 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-14">
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-cyan-400 mb-3">Stay Connected</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#7A9BEE] mb-3">Stay Connected</p>
             <h2 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter text-white leading-tight">
               Join the Community
             </h2>
@@ -1382,16 +1382,16 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 max-w-6xl mx-auto">
             {[
               {
-                href: "http://chat.flyovahelp.com/",
-                bg: "bg-[#613de6]",
-                shadow: "shadow-[#613de6]/20",
+                href: "http://chat.strawins.com/",
+                bg: "bg-[#2457D6]",
+                shadow: "shadow-[#2457D6]/20",
                 icon: <MessageCircle size={24} />,
                 name: "Chatroom",
                 desc: "Hang out in our dedicated player chatroom. Talk strategy and wins.",
               },
               {
                 href: "https://www.instagram.com/flyovahelp1?igsh=MW5ubDB1Z2tueHhuaQ==",
-                bg: "bg-gradient-to-tr from-[#f9ce34] via-[#ee2a7b] to-[#6228d7]",
+                bg: "bg-gradient-to-tr from-[#f9ce34] via-[#ee2a7b] to-[#2457D6]",
                 shadow: "shadow-[#ee2a7b]/20",
                 icon: <Instagram size={24} />,
                 name: "Instagram",
@@ -1415,7 +1415,7 @@ export default function LandingPage() {
                   </svg>
                 ),
                 name: "TikTok",
-                desc: "Watch clips, wins, and quick updates from Flyovahelp.",
+                desc: "Watch clips, wins, and quick updates from StraWins.",
               },
             ].map((channel) => (
               <a
@@ -1438,13 +1438,13 @@ export default function LandingPage() {
 
       {/* ── BLOG ─────────────────────────────────────── */}
       {blogPosts.length > 0 && (
-        <section className="bg-[#1e293b] py-20 px-6 border-y border-white/5">
+        <section className="bg-[#142036] py-20 px-6 border-y border-white/5">
           <div className="max-w-6xl mx-auto">
             {/* Header */}
             <div className="text-center mb-12">
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#a78bfa] mb-3">From the Team</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#7A9BEE] mb-3">From the Team</p>
               <h2 className="text-4xl md:text-5xl font-black italic uppercase tracking-tighter text-white leading-tight">
-                Latest <span className="text-[#613de6]">Posts</span>
+                Latest <span className="text-[#2457D6]">Posts</span>
               </h2>
             </div>
 
@@ -1458,10 +1458,10 @@ export default function LandingPage() {
                   <button
                     key={post.id}
                     onClick={() => router.push(`/blog/${post.slug}`)}
-                    className="group text-left bg-[#0f172a] border border-white/5 hover:border-[#613de6]/40 rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-[#613de6]/10 flex flex-col"
+                    className="group text-left bg-[#0B1220] border border-white/5 hover:border-[#2457D6]/40 rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-[#2457D6]/10 flex flex-col"
                   >
                     {post.coverImage ? (
-                      <div className="h-44 overflow-hidden bg-[#0a0f1e]">
+                      <div className="h-44 overflow-hidden bg-[#0B1220]">
                         <img
                           src={post.coverImage}
                           alt={post.title}
@@ -1469,7 +1469,7 @@ export default function LandingPage() {
                         />
                       </div>
                     ) : (
-                      <div className="h-44 bg-gradient-to-br from-[#613de6]/25 to-[#fc7952]/15 flex items-center justify-center">
+                      <div className="h-44 bg-gradient-to-br from-[#2457D6]/25 to-[#8B1E3F]/15 flex items-center justify-center">
                         <FileText size={28} className="text-white/20" />
                       </div>
                     )}
@@ -1486,7 +1486,7 @@ export default function LandingPage() {
                           </span>
                         )}
                       </div>
-                      <h3 className="font-black text-white text-base leading-snug mb-2 group-hover:text-[#a78bfa] transition-colors line-clamp-2">
+                      <h3 className="font-black text-white text-base leading-snug mb-2 group-hover:text-[#7A9BEE] transition-colors line-clamp-2">
                         {post.title}
                       </h3>
                       {post.excerpt && (
@@ -1494,7 +1494,7 @@ export default function LandingPage() {
                           {post.excerpt}
                         </p>
                       )}
-                      <div className="flex items-center gap-1.5 mt-4 text-xs font-black text-[#fc7952] uppercase tracking-wider">
+                      <div className="flex items-center gap-1.5 mt-4 text-xs font-black text-[#8B1E3F] uppercase tracking-wider">
                         Read More <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform" />
                       </div>
                     </div>
@@ -1507,7 +1507,7 @@ export default function LandingPage() {
             <div className="flex justify-center mt-10">
               <button
                 onClick={() => router.push("/blog")}
-                className="inline-flex items-center gap-3 bg-[#0f172a] border border-white/10 hover:border-[#613de6]/50 text-white px-8 py-4 rounded-full font-black text-xs uppercase tracking-widest transition-all hover:shadow-lg hover:shadow-[#613de6]/10 active:scale-95"
+                className="inline-flex items-center gap-3 bg-[#0B1220] border border-white/10 hover:border-[#2457D6]/50 text-white px-8 py-4 rounded-full font-black text-xs uppercase tracking-widest transition-all hover:shadow-lg hover:shadow-[#2457D6]/10 active:scale-95"
               >
                 See All Posts <ArrowRight size={14} />
               </button>
@@ -1517,10 +1517,10 @@ export default function LandingPage() {
       )}
 
       {/* ── FAQ ──────────────────────────────────────── */}
-      <section className="bg-[#0f172a] py-20 px-6">
+      <section className="bg-[#0B1220] py-20 px-6">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-14">
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#fc7952] mb-3">FAQ</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#8B1E3F] mb-3">FAQ</p>
             <h2 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter text-white leading-tight">
               Got Questions?
             </h2>
@@ -1528,7 +1528,7 @@ export default function LandingPage() {
 
           <div className="space-y-3">
             {FAQ_ITEMS.map((item, i) => (
-              <div key={i} className="bg-[#1e293b] border border-white/5 rounded-[1.5rem] overflow-hidden">
+              <div key={i} className="bg-[#142036] border border-white/5 rounded-[1.5rem] overflow-hidden">
                 <button
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
                   className="w-full flex items-center justify-between p-6 text-left"
@@ -1550,20 +1550,20 @@ export default function LandingPage() {
       </section>
 
       {/* ── FINAL CTA ────────────────────────────────── */}
-      <section className="bg-[#613de6] py-24 px-6 relative overflow-hidden">
-        <div className="absolute top-0 left-1/4 w-64 h-64 bg-cyan-400 rounded-full blur-[120px] opacity-20 pointer-events-none" />
-        <div className="absolute bottom-0 right-1/4 w-64 h-64 bg-[#fc7952] rounded-full blur-[120px] opacity-20 pointer-events-none" />
+      <section className="bg-[#2457D6] py-24 px-6 relative overflow-hidden">
+        <div className="absolute top-0 left-1/4 w-64 h-64 bg-[#7A9BEE] rounded-full blur-[120px] opacity-20 pointer-events-none" />
+        <div className="absolute bottom-0 right-1/4 w-64 h-64 bg-[#8B1E3F] rounded-full blur-[120px] opacity-20 pointer-events-none" />
         <div className="max-w-3xl mx-auto text-center relative z-10 space-y-8">
           <h2 className="animate-flicker text-4xl md:text-7xl font-black italic uppercase tracking-tighter text-white leading-tight">
-            Your Next <br /><span className="text-[#fc7952]">Big Win</span><br /> Starts Here
+            Your Next <br /><span className="text-[#8B1E3F]">Big Win</span><br /> Starts Here
           </h2>
           <p className="text-white/70 font-bold text-sm md:text-lg max-w-xl mx-auto leading-relaxed">
-            Join thousands of players already winning on Flyovahelp. Create your free account now and play your first game today.
+            Join thousands of players already winning on StraWins. Create your free account now and play your first game today.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
               onClick={() => router.push('/register')}
-              className="inline-flex items-center justify-center gap-3 bg-white text-[#613de6] px-10 py-5 rounded-full font-black text-sm uppercase tracking-widest transition-all shadow-2xl hover:bg-white/90 active:scale-95"
+              className="inline-flex items-center justify-center gap-3 bg-white text-[#2457D6] px-10 py-5 rounded-full font-black text-sm uppercase tracking-widest transition-all shadow-2xl hover:bg-white/90 active:scale-95"
             >
               Create Free Account <ArrowRight size={18} />
             </button>
@@ -1578,14 +1578,14 @@ export default function LandingPage() {
       </section>
 
       {/* ── FOOTER ───────────────────────────────────── */}
-      <footer className="relative bg-[#613de6] overflow-hidden">
+      <footer className="relative bg-[#2457D6] overflow-hidden">
         {/* Glowing top border */}
-        <div className="h-px w-full bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-60" />
+        <div className="h-px w-full bg-gradient-to-r from-transparent via-[#7A9BEE] to-transparent opacity-60" />
 
         {/* Giant watermark */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden">
           <span className="text-[18vw] font-black italic uppercase tracking-tighter text-white/[0.04] whitespace-nowrap leading-none">
-            FLYOVAHELP
+            STRAWINS
           </span>
         </div>
 
@@ -1632,7 +1632,7 @@ export default function LandingPage() {
               <Facebook size={17} fill="currentColor" />
             </a>
             <a href="https://www.instagram.com/flyovahelp1?igsh=MW5ubDB1Z2tueHhuaQ=="
-              className="w-11 h-11 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center hover:bg-gradient-to-tr hover:from-[#f9ce34] hover:via-[#ee2a7b] hover:to-[#6228d7] hover:border-transparent transition-all hover:scale-110">
+              className="w-11 h-11 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center hover:bg-gradient-to-tr hover:from-[#f9ce34] hover:via-[#ee2a7b] hover:to-[#2457D6] hover:border-transparent transition-all hover:scale-110">
               <Instagram size={17} />
             </a>
             <a href="https://x.com/flyovahelp"
@@ -1650,14 +1650,14 @@ export default function LandingPage() {
 
           {/* Bottom bar */}
           <div className="flex flex-col sm:flex-row items-center justify-between w-full gap-3">
-            <p className="text-[10px] font-black tracking-widest text-white/30 uppercase">© 2026 Flyovahelp Arena. All rights reserved.</p>
+            <p className="text-[10px] font-black tracking-widest text-white/30 uppercase">© 2026 StraWins Arena. All rights reserved.</p>
             <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Play responsibly · 18+ only</p>
           </div>
           <a
-            href="mailto:support@flyovahelp.com"
+            href="mailto:support@strawins.com"
             className="text-[11px] font-black tracking-widest text-white/70 uppercase hover:text-white transition-colors"
           >
-            support@flyovahelp.com
+            support@strawins.com
           </a>
         </div>
       </footer>

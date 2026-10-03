@@ -6,8 +6,8 @@ export async function GET() {
   
   const result = await sendEmail(
     testEmail, 
-    "Flyova Test Connection ✅", 
-    "<h1>It Works!</h1><p>Resend is officially connected to Flyova via Vercel.</p>"
+    "StraWins Test Connection ✅", 
+    "<h1>It Works!</h1><p>Resend is officially connected to StraWins via Vercel.</p>"
   );
 
   return NextResponse.json(result);

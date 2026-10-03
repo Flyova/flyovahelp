@@ -1,13 +1,13 @@
 export const metadata = {
   title: "Register",
-  description: "Create your Flyovahelp account to play games, make predictions, and withdraw your winnings.",
+  description: "Create your StraWins account to play games, make predictions, and withdraw your winnings.",
   alternates: {
-    canonical: "https://flyovahelp.com/register",
+    canonical: "https://strawins.com/register",
   },
   openGraph: {
-    title: "Create Account | Flyovahelp",
-    description: "Join Flyovahelp and start playing.",
-    url: "https://flyovahelp.com/register",
+    title: "Create Account | StraWins",
+    description: "Join StraWins and start playing.",
+    url: "https://strawins.com/register",
     type: "website",
   },
 };

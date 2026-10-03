@@ -21,7 +21,7 @@ import { ref as rtdbRef, onValue as rtdbOnValue } from "firebase/database";
 import { Timer, CheckCircle2, Trophy, History, XCircle, RefreshCw, Loader2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-export default function FlyovaToDollars() {
+export default function StraWinsToDollars() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [myWallet, setMyWallet] = useState(0);
@@ -95,7 +95,7 @@ export default function FlyovaToDollars() {
       const message = error?.name === "AbortError"
         ? "Game engine request timed out."
         : error?.message || "Game engine is unavailable.";
-      console.warn("Flyova game engine heartbeat failed:", message);
+      console.warn("StraWins game engine heartbeat failed:", message);
       setEngineIssue(message);
     } finally {
       clearTimeout(timeoutId);
@@ -442,7 +442,7 @@ export default function FlyovaToDollars() {
 
       // Record stake with picks and gameId for payout computation
       await addDoc(collection(db, "users", user.uid, "transactions"), {
-        title: "Flyova Stake",
+        title: "StraWins Stake",
         amount: stakeAmount,
         picks: [...selectedNumbers],
         gameId: currentGame.id,
@@ -466,10 +466,10 @@ export default function FlyovaToDollars() {
     }
   };
 
-  if (loading) return <div className="min-h-screen bg-[#0f172a] flex items-center justify-center text-white italic font-black">SYNCING...</div>;
+  if (loading) return <div className="min-h-screen bg-[#0B1220] flex items-center justify-center text-white italic font-black">SYNCING...</div>;
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white flex flex-col pb-24 relative overflow-hidden">
+    <div className="min-h-screen bg-[#0B1220] text-white flex flex-col pb-24 relative overflow-hidden">
 
       {showResultAlert && (
         <div
@@ -477,7 +477,7 @@ export default function FlyovaToDollars() {
           onClick={closeModal}
         >
           <div
-            className="w-full max-w-md bg-[#0f172a] rounded-t-[2.5rem] border border-white/10 shadow-2xl animate-in slide-in-from-bottom-8 duration-300 overflow-hidden"
+            className="w-full max-w-md bg-[#0B1220] rounded-t-[2.5rem] border border-white/10 shadow-2xl animate-in slide-in-from-bottom-8 duration-300 overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
@@ -541,7 +541,7 @@ export default function FlyovaToDollars() {
                         <span key={p} className={`w-8 h-8 rounded-lg flex items-center justify-center font-black italic text-xs border ${
                           modalWinners.includes(p)
                             ? 'bg-green-500 border-green-400 text-white'
-                            : 'bg-[#1e293b] border-white/10 text-slate-400'
+                            : 'bg-[#142036] border-white/10 text-slate-400'
                         }`}>{p}</span>
                       ))}
                     </div>
@@ -584,7 +584,7 @@ export default function FlyovaToDollars() {
               )}
               <button
                 onClick={closeModal}
-                className={`bg-[#613de6] hover:bg-[#7c5ce6] text-white font-black uppercase text-xs px-7 py-3 rounded-2xl transition-all active:scale-95 ${resultType === 'noStake' ? 'ml-auto' : ''}`}
+                className={`bg-[#2457D6] hover:bg-[#2F63E7] text-white font-black uppercase text-xs px-7 py-3 rounded-2xl transition-all active:scale-95 ${resultType === 'noStake' ? 'ml-auto' : ''}`}
               >
                 Close
               </button>
@@ -594,16 +594,16 @@ export default function FlyovaToDollars() {
       )}
 
       {/* Real-time Timer */}
-      <div className="p-8 text-center bg-[#1e293b] border-b border-white/5 relative">
+      <div className="p-8 text-center bg-[#142036] border-b border-white/5 relative">
         <div className="absolute top-0 left-0 h-1 transition-all duration-1000"
           style={{
             width: `${gameStatus === "break"
               ? (timeLeft / (BREAK_DURATION / 1000)) * 100
               : (timeLeft / (ROUND_DURATION / 1000)) * 100}%`,
-            backgroundColor: gameStatus === "break" ? "#64748b" : "#fc7952"
+            backgroundColor: gameStatus === "break" ? "#64748b" : "#8B1E3F"
           }}
         />
-        <h1 className="lg:text-xl text-lg font-black italic uppercase text-[#fc7952] mb-1">Flyova to Dollars</h1>
+        <h1 className="lg:text-xl text-lg font-black italic uppercase text-[#8B1E3F] mb-1">StraWins to Dollars</h1>
         {currentGame?.roundInSession && gameStatus !== "break" && (
           <p className="text-[10px] font-black uppercase tracking-widest text-white/30 mt-1">
             Round {currentGame.roundInSession} / 3
@@ -612,7 +612,7 @@ export default function FlyovaToDollars() {
         <div className={`inline-flex items-center space-x-3 px-8 py-4 rounded-4xl border mt-4 ${
           gameStatus === "break" ? "bg-slate-800/50 border-slate-600/30" : "bg-black/20 border-white/5"
         }`}>
-          <Timer size={24} className={gameStatus === "break" ? "text-slate-400" : "text-[#613de6]"} />
+          <Timer size={24} className={gameStatus === "break" ? "text-slate-400" : "text-[#2457D6]"} />
           <span className="text-4xl font-black italic font-mono">
             {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
           </span>
@@ -640,7 +640,7 @@ export default function FlyovaToDollars() {
           </div>
         )}
 
-        <p className="text-[#fc7952] font-black italic uppercase text-xs mb-4 tracking-tighter">
+        <p className="text-[#8B1E3F] font-black italic uppercase text-xs mb-4 tracking-tighter">
           Pick 2 Numbers and Enter Stake Amount
         </p>
 
@@ -648,7 +648,7 @@ export default function FlyovaToDollars() {
         {(lastGameNumbers.length > 0 ? lastGameNumbers : currentGame?.numbers || []).length === 0 ? (
           <div className="grid grid-cols-4 gap-4 w-full max-w-sm mb-12">
             {[0,1,2,3].map(i => (
-              <div key={i} className="aspect-square rounded-2xl bg-[#1e293b] border-2 border-white/5 flex items-center justify-center">
+              <div key={i} className="aspect-square rounded-2xl bg-[#142036] border-2 border-white/5 flex items-center justify-center">
                 <Loader2 size={20} className="animate-spin text-white/20" />
               </div>
             ))}
@@ -665,7 +665,7 @@ export default function FlyovaToDollars() {
                   onClick={() => toggleNumber(num)}
                   className={`aspect-square rounded-2xl text-xl font-black italic transition-all border-2
                     ${isWinner ? 'bg-green-500 border-white scale-110 shadow-[0_0_25px_rgba(34,197,94,0.6)]' :
-                      isSelected ? 'bg-[#613de6] border-[#fc7952]' : 'bg-[#1e293b] border-white/5'}`}
+                      isSelected ? 'bg-[#2457D6] border-[#8B1E3F]' : 'bg-[#142036] border-white/5'}`}
                 >{num}</button>
               );
             })}
@@ -673,7 +673,7 @@ export default function FlyovaToDollars() {
         )}
 
         {/* Betting Panel */}
-        <div className="w-full max-w-xs bg-[#1e293b] p-6 rounded-[2.5rem] border border-white/5">
+        <div className="w-full max-w-xs bg-[#142036] p-6 rounded-[2.5rem] border border-white/5">
           {gameStatus === "break" ? (
             <div className="text-center py-2">
               <p className="font-black italic uppercase text-sm text-slate-400">Session Break</p>
@@ -691,7 +691,7 @@ export default function FlyovaToDollars() {
           ) : (
             <>
               <div className="flex items-center justify-between mb-6 bg-black/20 p-4 rounded-2xl">
-                <button onClick={() => setStake(Math.max(1, stake - 1))} className="w-10 h-10 bg-[#613de6] rounded-xl font-bold">-</button>
+                <button onClick={() => setStake(Math.max(1, stake - 1))} className="w-10 h-10 bg-[#2457D6] rounded-xl font-bold">-</button>
                 <input
                   type="number"
                   min="1"
@@ -702,14 +702,14 @@ export default function FlyovaToDollars() {
                     else if (e.target.value === "") setStake("");
                   }}
                   onBlur={() => { if (!stake || stake < 1) setStake(1); }}
-                  className="w-20 text-center text-2xl font-black italic text-[#fc7952] bg-transparent outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  className="w-20 text-center text-2xl font-black italic text-[#8B1E3F] bg-transparent outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
-                <button onClick={() => setStake((s) => (parseInt(s) || 0) + 1)} className="w-10 h-10 bg-[#613de6] rounded-xl font-bold">+</button>
+                <button onClick={() => setStake((s) => (parseInt(s) || 0) + 1)} className="w-10 h-10 bg-[#2457D6] rounded-xl font-bold">+</button>
               </div>
               <button
                 onClick={placeBet}
                 disabled={placingBet || selectedNumbers.length !== 2 || timeLeft <= 0 || !parseInt(stake) || parseInt(stake) > myWallet}
-                className="w-full bg-[#fc7952] pt-4 pb-3 rounded-2xl font-black uppercase italic shadow-lg disabled:opacity-20 flex flex-col items-center"
+                className="w-full bg-[#8B1E3F] pt-4 pb-3 rounded-2xl font-black uppercase italic shadow-lg disabled:opacity-20 flex flex-col items-center"
               >
                 {placingBet ? (
                   <Loader2 size={22} className="animate-spin my-0.5" />
@@ -732,9 +732,9 @@ export default function FlyovaToDollars() {
         </div>
         <div className="flex space-x-4 overflow-x-auto pb-2 no-scrollbar">
           {pastGames.map((pg) => (
-            <div key={pg.id} className="bg-[#1e293b] px-4 py-3 rounded-2xl border border-white/5 shrink-0">
+            <div key={pg.id} className="bg-[#142036] px-4 py-3 rounded-2xl border border-white/5 shrink-0">
               <div className="flex space-x-2">
-                {pg.winners?.map(w => <span key={w} className="text-[#fc7952] font-black italic">{w}</span>)}
+                {pg.winners?.map(w => <span key={w} className="text-[#8B1E3F] font-black italic">{w}</span>)}
               </div>
             </div>
           ))}

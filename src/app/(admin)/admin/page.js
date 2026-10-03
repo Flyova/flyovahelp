@@ -30,7 +30,7 @@ export default function AdminDashboard() {
     pendingDeposits: 0,
     activeAgents: 0
   });
-  const [flyovaResult, setFlyovaResult] = useState({ n1: "--", n2: "--", gameId: "NO ACTIVE" });
+  const [strawinsResult, setStraWinsResult] = useState({ n1: "--", n2: "--", gameId: "NO ACTIVE" });
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
@@ -88,7 +88,7 @@ export default function AdminDashboard() {
       unsubFly = onSnapshot(qF, (snap) => {
         if (!snap.empty) {
           const data = snap.docs[0].data();
-          setFlyovaResult({
+          setStraWinsResult({
             n1: data.winners?.[0] ?? "--",
             n2: data.winners?.[1] ?? "--",
             gameId: shortGameId(snap.docs[0].id)
@@ -96,7 +96,7 @@ export default function AdminDashboard() {
         }
       });
     } else {
-      setFlyovaResult({ n1: "--", n2: "--", gameId: "RESTRICTED" });
+      setStraWinsResult({ n1: "--", n2: "--", gameId: "RESTRICTED" });
     }
 
     return () => {
@@ -112,8 +112,8 @@ export default function AdminDashboard() {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center space-y-3">
-          <div className="w-10 h-10 rounded-2xl bg-[#613de6]/20 flex items-center justify-center mx-auto">
-            <Users size={18} className="text-[#a78bfa] animate-pulse" />
+          <div className="w-10 h-10 rounded-2xl bg-[#2457D6]/20 flex items-center justify-center mx-auto">
+            <Users size={18} className="text-[#7A9BEE] animate-pulse" />
           </div>
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Loading dashboard...</p>
         </div>
@@ -129,16 +129,16 @@ export default function AdminDashboard() {
             <h1 className="text-3xl font-black italic uppercase tracking-tighter text-white">Support Dashboard</h1>
             <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Support Operations Console</p>
           </div>
-          <div className="flex items-center gap-2 bg-[#0f172a] px-4 py-2 rounded-2xl border border-white/10">
+          <div className="flex items-center gap-2 bg-[#0B1220] px-4 py-2 rounded-2xl border border-white/10">
             <ShieldAlert size={14} className="text-amber-400" />
-            <span className="text-[10px] font-black uppercase text-slate-300">Flyova Outcomes Restricted</span>
+            <span className="text-[10px] font-black uppercase text-slate-300">StraWins Outcomes Restricted</span>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Link
             href="/admin/agent-tx"
-            className="bg-[#0f172a] p-7 rounded-[2rem] border border-white/10 hover:border-[#613de6]/40 transition-all group"
+            className="bg-[#0B1220] p-7 rounded-[2rem] border border-white/10 hover:border-[#2457D6]/40 transition-all group"
           >
             <div className="flex items-start justify-between">
               <div>
@@ -146,7 +146,7 @@ export default function AdminDashboard() {
                 <h2 className="text-2xl font-black italic uppercase text-white tracking-tight">Agent Transactions</h2>
                 <p className="mt-2 text-xs text-slate-400 font-bold">Track deposits and withdrawals between clients and agents.</p>
               </div>
-              <div className="bg-[#613de6]/15 text-[#a78bfa] p-3 rounded-2xl group-hover:scale-105 transition-transform">
+              <div className="bg-[#2457D6]/15 text-[#7A9BEE] p-3 rounded-2xl group-hover:scale-105 transition-transform">
                 <Wallet size={22} />
               </div>
             </div>
@@ -154,7 +154,7 @@ export default function AdminDashboard() {
 
           <Link
             href="/admin/support"
-            className="bg-[#0f172a] p-7 rounded-[2rem] border border-white/10 hover:border-[#613de6]/40 transition-all group"
+            className="bg-[#0B1220] p-7 rounded-[2rem] border border-white/10 hover:border-[#2457D6]/40 transition-all group"
           >
             <div className="flex items-start justify-between">
               <div>
@@ -162,7 +162,7 @@ export default function AdminDashboard() {
                 <h2 className="text-2xl font-black italic uppercase text-white tracking-tight">Support</h2>
                 <p className="mt-2 text-xs text-slate-400 font-bold">Reply to users and resolve ongoing support tickets.</p>
               </div>
-              <div className="bg-[#613de6]/15 text-[#a78bfa] p-3 rounded-2xl group-hover:scale-105 transition-transform">
+              <div className="bg-[#2457D6]/15 text-[#7A9BEE] p-3 rounded-2xl group-hover:scale-105 transition-transform">
                 <MessageCircle size={22} />
               </div>
             </div>
@@ -185,7 +185,7 @@ export default function AdminDashboard() {
             {isStaff ? "Content, Announcements & Outcome Monitoring" : "System Overview & Live Performance"}
           </p>
         </div>
-        <div className="flex items-center gap-2 bg-[#0f172a] px-4 py-2 rounded-2xl border border-white/10 shadow-sm">
+        <div className="flex items-center gap-2 bg-[#0B1220] px-4 py-2 rounded-2xl border border-white/10 shadow-sm">
           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
           <span className="text-[10px] font-black uppercase text-slate-300">System Live</span>
         </div>
@@ -201,13 +201,13 @@ export default function AdminDashboard() {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Registered Users" value={stats.totalUsers} icon={Users} color="bg-indigo-600" />
+        <StatCard label="Registered Users" value={stats.totalUsers} icon={Users} color="bg-[#2457D6]" />
         <StatCard label="Pending Payouts" value={stats.pendingWithdrawals} icon={ArrowUpCircle} color="bg-rose-500" isCurrency />
         <StatCard label="Deposit Requests" value={stats.pendingDeposits} icon={ArrowDownCircle} color="bg-emerald-500" isCurrency />
         <StatCard label="Approved Agents" value={stats.activeAgents} icon={UserCheck} color="bg-amber-500" />
       </div>
 
-      <div className="bg-[#0f172a] p-10 rounded-[3rem] border border-white/10 shadow-sm relative overflow-hidden">
+      <div className="bg-[#0B1220] p-10 rounded-[3rem] border border-white/10 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 p-12 opacity-[0.03] rotate-12">
           <Trophy size={200} />
         </div>
@@ -218,13 +218,13 @@ export default function AdminDashboard() {
               <Trophy size={24} />
             </div>
             <div>
-              <h3 className="text-xl font-black uppercase italic text-white tracking-tight leading-none mb-1">Flyova to Dollars Results</h3>
+              <h3 className="text-xl font-black uppercase italic text-white tracking-tight leading-none mb-1">StraWins to Dollars Results</h3>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Game Winning Numbers</p>
             </div>
           </div>
           <div className="flex flex-col items-end">
-            <span className="text-[10px] font-black bg-[#1e293b] px-4 py-2 rounded-xl uppercase text-slate-300 mb-1 border border-white/10">
-              Game ID: {flyovaResult.gameId}
+            <span className="text-[10px] font-black bg-[#142036] px-4 py-2 rounded-xl uppercase text-slate-300 mb-1 border border-white/10">
+              Game ID: {strawinsResult.gameId}
             </span>
             <div className="flex items-center gap-1 text-emerald-500 text-[9px] font-bold uppercase">
               <TrendingUp size={12} /> Live Sync
@@ -233,23 +233,23 @@ export default function AdminDashboard() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
-          <div className="bg-[#1e293b] p-12 rounded-[2.5rem] border border-white/10 text-center shadow-inner group transition-all hover:border-[#613de6]/40">
+          <div className="bg-[#142036] p-12 rounded-[2.5rem] border border-white/10 text-center shadow-inner group transition-all hover:border-[#2457D6]/40">
             <p className="text-[11px] font-black uppercase text-slate-400 mb-4 tracking-[0.2em]">Primary Winner</p>
-            <p className="text-8xl font-black text-[#613de6] italic tracking-tighter drop-shadow-sm group-hover:scale-110 transition-transform">
-              {flyovaResult.n1}
+            <p className="text-8xl font-black text-[#2457D6] italic tracking-tighter drop-shadow-sm group-hover:scale-110 transition-transform">
+              {strawinsResult.n1}
             </p>
           </div>
-          <div className="bg-[#1e293b] p-12 rounded-[2.5rem] border border-white/10 text-center shadow-inner group transition-all hover:border-[#fc7952]/40">
+          <div className="bg-[#142036] p-12 rounded-[2.5rem] border border-white/10 text-center shadow-inner group transition-all hover:border-[#8B1E3F]/40">
             <p className="text-[11px] font-black uppercase text-slate-400 mb-4 tracking-[0.2em]">Secondary Winner</p>
-            <p className="text-8xl font-black text-[#fc7952] italic tracking-tighter drop-shadow-sm group-hover:scale-110 transition-transform">
-              {flyovaResult.n2}
+            <p className="text-8xl font-black text-[#8B1E3F] italic tracking-tighter drop-shadow-sm group-hover:scale-110 transition-transform">
+              {strawinsResult.n2}
             </p>
           </div>
         </div>
 
-        <div className="mt-10 p-5 bg-[#1e293b] rounded-2xl flex items-center justify-center gap-3 border border-white/10">
-          <Zap size={18} className="text-indigo-600 animate-pulse" />
-          <p className="text-[11px] font-bold text-indigo-300 uppercase tracking-wide">
+        <div className="mt-10 p-5 bg-[#142036] rounded-2xl flex items-center justify-center gap-3 border border-white/10">
+          <Zap size={18} className="text-[#2457D6] animate-pulse" />
+          <p className="text-[11px] font-bold text-[#7A9BEE] uppercase tracking-wide">
             Results are pulled in real-time from the <span className="font-black italic">timed_games</span> winning sequence.
           </p>
         </div>
@@ -262,9 +262,9 @@ function QuickAction({ href, label, icon: Icon }) {
   return (
     <Link
       href={href}
-      className="bg-[#0f172a] p-5 rounded-3xl border border-white/10 hover:border-[#613de6]/40 transition-all flex items-center gap-3 group"
+      className="bg-[#0B1220] p-5 rounded-3xl border border-white/10 hover:border-[#2457D6]/40 transition-all flex items-center gap-3 group"
     >
-      <div className="p-2.5 rounded-xl bg-[#613de6]/15 text-[#a78bfa] group-hover:scale-105 transition-transform">
+      <div className="p-2.5 rounded-xl bg-[#2457D6]/15 text-[#7A9BEE] group-hover:scale-105 transition-transform">
         <Icon size={18} />
       </div>
       <span className="text-[11px] font-black uppercase tracking-wider text-white">{label}</span>
@@ -274,7 +274,7 @@ function QuickAction({ href, label, icon: Icon }) {
 
 function StatCard({ label, value, icon: Icon, color, isCurrency }) {
   return (
-    <div className="bg-[#0f172a] p-6 rounded-[2.5rem] border border-white/10 shadow-sm flex items-center gap-5 transition-transform hover:scale-[1.02]">
+    <div className="bg-[#0B1220] p-6 rounded-[2.5rem] border border-white/10 shadow-sm flex items-center gap-5 transition-transform hover:scale-[1.02]">
       <div className={`${color} p-4 rounded-2xl text-white shadow-lg shadow-current/20`}>
         <Icon size={24} />
       </div>

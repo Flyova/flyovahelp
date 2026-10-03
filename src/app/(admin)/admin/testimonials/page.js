@@ -160,15 +160,15 @@ export default function AdminTestimonialApprovals() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search username, country, amount..."
-            className="w-full bg-[#0f172a] border border-white/10 rounded-2xl py-3 pl-11 pr-4 text-sm font-bold text-white placeholder:text-slate-500 outline-none focus:border-[#613de6]/50"
+            className="w-full bg-[#0B1220] border border-white/10 rounded-2xl py-3 pl-11 pr-4 text-sm font-bold text-white placeholder:text-slate-500 outline-none focus:border-[#2457D6]/50"
           />
         </div>
       </div>
 
-      <div className="bg-[#0f172a] rounded-[2rem] border border-white/10 overflow-hidden">
+      <div className="bg-[#0B1220] rounded-[2rem] border border-white/10 overflow-hidden">
         {loading ? (
           <div className="h-52 flex items-center justify-center">
-            <Loader2 size={28} className="animate-spin text-[#613de6]" />
+            <Loader2 size={28} className="animate-spin text-[#2457D6]" />
           </div>
         ) : filtered.length === 0 ? (
           <div className="h-52 flex items-center justify-center text-slate-400 text-xs font-black uppercase tracking-widest">

@@ -106,7 +106,7 @@ export default function AdminBlogList() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-black italic uppercase tracking-tighter text-white">
-            Blog <span className="text-[#613de6]">Posts</span>
+            Blog <span className="text-[#2457D6]">Posts</span>
           </h1>
           <p className="text-xs text-slate-400 font-bold mt-0.5 uppercase tracking-wider">
             {posts.length} total · {posts.filter((p) => p.published).length} published
@@ -114,7 +114,7 @@ export default function AdminBlogList() {
         </div>
         <button
           onClick={() => router.push("/admin/blog/new")}
-          className="flex items-center gap-2 bg-[#613de6] hover:brightness-110 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-[#613de6]/20 transition-all active:scale-95"
+          className="flex items-center gap-2 bg-[#2457D6] hover:brightness-110 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-[#2457D6]/20 transition-all active:scale-95"
         >
           <Plus size={16} /> New Post
         </button>
@@ -127,15 +127,15 @@ export default function AdminBlogList() {
         </div>
       ) : loading ? (
         <div className="flex items-center justify-center h-60">
-          <Loader2 size={28} className="animate-spin text-[#613de6]" />
+          <Loader2 size={28} className="animate-spin text-[#2457D6]" />
         </div>
       ) : posts.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-60 bg-[#0f172a] rounded-2xl border border-slate-800 gap-4">
+        <div className="flex flex-col items-center justify-center h-60 bg-[#0B1220] rounded-2xl border border-slate-800 gap-4">
           <FileText size={36} className="text-slate-600" />
           <p className="text-slate-500 font-black text-sm uppercase tracking-widest">No posts yet</p>
           <button
             onClick={() => router.push("/admin/blog/new")}
-            className="flex items-center gap-2 bg-[#613de6] text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest"
+            className="flex items-center gap-2 bg-[#2457D6] text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest"
           >
             <Plus size={14} /> Write First Post
           </button>
@@ -145,7 +145,7 @@ export default function AdminBlogList() {
           {posts.map((post) => (
             <div
               key={post.id}
-              className="bg-[#0f172a] rounded-2xl border border-slate-800 p-5 flex items-start gap-4 hover:border-slate-700 transition-colors"
+              className="bg-[#0B1220] rounded-2xl border border-slate-800 p-5 flex items-start gap-4 hover:border-slate-700 transition-colors"
             >
               {/* Cover thumbnail */}
               {post.coverImage ? (

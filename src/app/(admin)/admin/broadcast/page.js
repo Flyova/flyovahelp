@@ -146,7 +146,7 @@ export default function AdminBroadcast() {
       </div>
 
       {/* Composer */}
-      <div className="bg-[#0f172a] rounded-[2.5rem] border border-white/10 p-8 shadow-sm">
+      <div className="bg-[#0B1220] rounded-[2.5rem] border border-white/10 p-8 shadow-sm">
         <form onSubmit={sendBroadcast} className="space-y-6">
           <div className="space-y-2">
             <label className="text-[10px] font-black uppercase text-slate-300 ml-2 tracking-widest">Message Content</label>
@@ -154,7 +154,7 @@ export default function AdminBroadcast() {
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Enter your announcement here..."
-              className="w-full bg-[#020617] border text-white placeholder:text-slate-500 border-white/10 rounded-[2rem] p-6 text-sm font-bold outline-none focus:border-[#613de6] transition-all min-h-[120px] resize-none"
+              className="w-full bg-[#0B1220] border text-white placeholder:text-slate-500 border-white/10 rounded-[2rem] p-6 text-sm font-bold outline-none focus:border-[#2457D6] transition-all min-h-[120px] resize-none"
               required
             />
           </div>
@@ -163,21 +163,21 @@ export default function AdminBroadcast() {
             <button 
               type="button"
               onClick={() => setType("info")}
-              className={`flex items-center justify-center gap-2 p-4 rounded-2xl border font-black uppercase text-[10px] transition-all ${type === 'info' ? 'bg-blue-500/20 border-blue-400 text-blue-200' : 'bg-[#020617] border-white/10 text-slate-300'}`}
+              className={`flex items-center justify-center gap-2 p-4 rounded-2xl border font-black uppercase text-[10px] transition-all ${type === 'info' ? 'bg-[#2457D6]/20 border-[#7A9BEE] text-[#D7E2FF]' : 'bg-[#0B1220] border-white/10 text-slate-300'}`}
             >
               <Info size={16} /> Info
             </button>
             <button 
               type="button"
               onClick={() => setType("warning")}
-              className={`flex items-center justify-center gap-2 p-4 rounded-2xl border font-black uppercase text-[10px] transition-all ${type === 'warning' ? 'bg-amber-500/20 border-amber-400 text-amber-200' : 'bg-[#020617] border-white/10 text-slate-300'}`}
+              className={`flex items-center justify-center gap-2 p-4 rounded-2xl border font-black uppercase text-[10px] transition-all ${type === 'warning' ? 'bg-amber-500/20 border-amber-400 text-amber-200' : 'bg-[#0B1220] border-white/10 text-slate-300'}`}
             >
               <AlertTriangle size={16} /> Warning
             </button>
             <button 
               type="button"
               onClick={() => setType("success")}
-              className={`flex items-center justify-center gap-2 p-4 rounded-2xl border font-black uppercase text-[10px] transition-all ${type === 'success' ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200' : 'bg-[#020617] border-white/10 text-slate-300'}`}
+              className={`flex items-center justify-center gap-2 p-4 rounded-2xl border font-black uppercase text-[10px] transition-all ${type === 'success' ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200' : 'bg-[#0B1220] border-white/10 text-slate-300'}`}
             >
               <CheckCircle2 size={16} /> Success
             </button>
@@ -185,7 +185,7 @@ export default function AdminBroadcast() {
 
           <button 
             disabled={sending}
-            className="w-full bg-[#613de6] text-white py-5 rounded-2xl font-black uppercase italic tracking-[0.2em] shadow-xl shadow-[#613de6]/20 flex items-center justify-center gap-3 active:scale-[0.98] transition-all disabled:opacity-50"
+            className="w-full bg-[#2457D6] text-white py-5 rounded-2xl font-black uppercase italic tracking-[0.2em] shadow-xl shadow-[#2457D6]/20 flex items-center justify-center gap-3 active:scale-[0.98] transition-all disabled:opacity-50"
           >
             {sending ? "Sending..." : (
               <>
@@ -201,8 +201,8 @@ export default function AdminBroadcast() {
         <h3 className="text-[10px] font-black uppercase text-slate-300 ml-4 tracking-[0.2em]">Recent Broadcasts</h3>
         <div className="space-y-3">
           {loading && (
-            <div className="text-center py-10 bg-[#0f172a] rounded-[2rem] border border-dashed border-white/10">
-              <Loader2 className="mx-auto mb-3 animate-spin text-[#613de6]" size={24} />
+            <div className="text-center py-10 bg-[#0B1220] rounded-[2rem] border border-dashed border-white/10">
+              <Loader2 className="mx-auto mb-3 animate-spin text-[#2457D6]" size={24} />
               <p className="text-[10px] font-black uppercase text-slate-400">Loading announcements</p>
             </div>
           )}
@@ -212,16 +212,16 @@ export default function AdminBroadcast() {
             </div>
           )}
           {!loading && !loadError && history.length === 0 && (
-            <div className="text-center py-10 bg-[#0f172a] rounded-[2rem] border border-dashed border-white/10">
+            <div className="text-center py-10 bg-[#0B1220] rounded-[2rem] border border-dashed border-white/10">
                <p className="text-[10px] font-black uppercase text-slate-400">No active broadcasts</p>
             </div>
           )}
           {!loading && !loadError && history.map((post) => (
-            <div key={post.id} className="bg-[#0f172a] p-6 rounded-[2rem] border border-white/10 flex items-start justify-between gap-4 group hover:border-white/20 transition-all">
+            <div key={post.id} className="bg-[#0B1220] p-6 rounded-[2rem] border border-white/10 flex items-start justify-between gap-4 group hover:border-white/20 transition-all">
               <div className="flex items-start gap-4">
                 <div className={`p-3 rounded-xl shrink-0 mt-1 ${
                   post.type === 'warning' ? 'bg-amber-100 text-amber-600' : 
-                  post.type === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
+                  post.type === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-[#D7E2FF] text-[#1D4FC4]'
                 }`}>
                   <Megaphone size={18} />
                 </div>
@@ -234,7 +234,7 @@ export default function AdminBroadcast() {
                     </span>
                     <span className={`px-2 py-0.5 rounded-md font-bold ${
                       post.type === 'warning' ? 'bg-amber-50 text-amber-500' : 
-                      post.type === 'success' ? 'bg-emerald-50 text-emerald-500' : 'bg-blue-50 text-blue-500'
+                      post.type === 'success' ? 'bg-emerald-50 text-emerald-500' : 'bg-[#D7E2FF] text-[#2457D6]'
                     }`}>{post.type}</span>
                   </div>
                 </div>

@@ -1,4 +1,4 @@
-// "Flyova to Dollars" round docs are stored as `round_<endTimeMs>`. The raw
+// "StraWins to Dollars" round docs are stored as `round_<endTimeMs>`. The raw
 // timestamp is too long for display, and slicing its last few decimal digits
 // tends to repeat (rounds run on a fixed schedule, so timestamps are often
 // multiples of the same interval). Encoding the timestamp in base36 keeps it

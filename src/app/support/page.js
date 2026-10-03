@@ -142,18 +142,18 @@ export default function SupportChat() {
 
   if (loading) {
     return (
-      <div className="h-screen bg-[#0f172a] flex flex-col items-center justify-center text-white">
-        <Loader2 className="animate-spin text-[#613de6] mb-4" size={40} />
+      <div className="h-screen bg-[#0B1220] flex flex-col items-center justify-center text-white">
+        <Loader2 className="animate-spin text-[#2457D6] mb-4" size={40} />
         <p className="text-[10px] font-black uppercase tracking-widest opacity-50">Connecting...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen max-h-screen bg-[#0f172a] text-white overflow-hidden">
+    <div className="flex flex-col h-screen max-h-screen bg-[#0B1220] text-white overflow-hidden">
       
       {/* HEADER */}
-      <div className="shrink-0 p-6 bg-[#1e293b] border-b border-white/5 flex items-center justify-between shadow-xl z-10">
+      <div className="shrink-0 p-6 bg-[#142036] border-b border-white/5 flex items-center justify-between shadow-xl z-10">
         <div className="flex items-center gap-4">
           <button onClick={() => router.back()} className="p-2 bg-white/5 rounded-xl text-gray-400 active:scale-90 transition-all">
             <ChevronLeft size={20} />
@@ -170,7 +170,7 @@ export default function SupportChat() {
         </div>
         <button 
           onClick={requestNotificationPermission}
-          className="p-2.5 bg-[#613de6]/20 text-[#613de6] rounded-xl active:scale-95"
+          className="p-2.5 bg-[#2457D6]/20 text-[#2457D6] rounded-xl active:scale-95"
         >
           <Bell size={18} />
         </button>
@@ -195,7 +195,7 @@ export default function SupportChat() {
         )}
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center opacity-20">
-            <MessageCircle size={80} className="mb-6 text-[#613de6]" />
+            <MessageCircle size={80} className="mb-6 text-[#2457D6]" />
             <p className="text-xs font-black uppercase tracking-[0.3em]">Support is Online</p>
           </div>
         ) : (
@@ -218,8 +218,8 @@ export default function SupportChat() {
                 <div className={`max-w-[85%] flex flex-col ${isMe ? "items-end" : "items-start"}`}>
                   <div className={`p-4 rounded-[1.8rem] text-sm font-bold shadow-2xl ${
                     isMe 
-                    ? "bg-[#613de6] text-white rounded-tr-none border border-white/10" 
-                    : "bg-[#1e293b] text-white border border-white/5 rounded-tl-none"
+                    ? "bg-[#2457D6] text-white rounded-tr-none border border-white/10" 
+                    : "bg-[#142036] text-white border border-white/5 rounded-tl-none"
                   }`}>
                     {msg.text}
                   </div>
@@ -234,20 +234,20 @@ export default function SupportChat() {
       </div>
 
       {/* INPUT AREA - ADJUSTED FOR BOTTOM NAV BAR */}
-      <div className="shrink-0 p-6 bg-[#1e293b] border-t border-white/5 pb-32"> 
+      <div className="shrink-0 p-6 bg-[#142036] border-t border-white/5 pb-32"> 
         <form onSubmit={sendMessage} className="flex items-center gap-3 max-w-4xl mx-auto">
           <div className="flex-1 relative">
             <input 
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               placeholder="Type a message..."
-              className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 px-6 text-sm font-bold text-white placeholder:text-slate-500 outline-none focus:border-[#613de6] transition-all"
+              className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 px-6 text-sm font-bold text-white placeholder:text-slate-500 outline-none focus:border-[#2457D6] transition-all"
             />
           </div>
           <button 
             type="submit"
             disabled={!newMessage.trim() || sending}
-            className="bg-[#613de6] p-4 rounded-2xl text-white shadow-xl active:scale-95 disabled:opacity-30"
+            className="bg-[#2457D6] p-4 rounded-2xl text-white shadow-xl active:scale-95 disabled:opacity-30"
           >
             {sending ? <Loader2 size={22} className="animate-spin" /> : <Send size={22} />}
           </button>

@@ -233,9 +233,9 @@ export default function AdminWithdrawalList() {
                   </div>
                   <p>${newStatus === "approved" 
                     ? "Your payout has been confirmed on the blockchain. Please check your external wallet." 
-                    : `Your withdrawal was declined. A total of $${withdrawal.totalDeducted || (withdrawal.amount + (withdrawal.fee || 0))} has been refunded to your Flyova wallet.`}</p>
+                    : `Your withdrawal was declined. A total of $${withdrawal.totalDeducted || (withdrawal.amount + (withdrawal.fee || 0))} has been refunded to your StraWins wallet.`}</p>
                   <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
-                    Flyova Administration Team
+                    StraWins Administration Team
                   </div>
                 </div>
               `
@@ -282,7 +282,7 @@ export default function AdminWithdrawalList() {
           <h1 className="text-2xl font-black italic uppercase text-slate-800 tracking-tighter">Withdrawal Center</h1>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">USDT TRC20 Queue</p>
         </div>
-        <div className="bg-[#fc7952] text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg shadow-[#fc7952]/20">
+        <div className="bg-[#8B1E3F] text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg shadow-[#8B1E3F]/20">
             <Clock size={16} />
             <span className="text-[10px] font-black uppercase tracking-widest">
               {viewMode === "pending" ? `${pendingCount} Pending` : viewMode === "history" ? `${historyCount} History` : `${withdrawals.length} Total`}
@@ -294,14 +294,14 @@ export default function AdminWithdrawalList() {
         <button
           type="button"
           onClick={() => setViewMode("pending")}
-          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === "pending" ? "bg-[#fc7952] text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === "pending" ? "bg-[#8B1E3F] text-white" : "bg-white text-slate-500 border border-slate-200"}`}
         >
           Pending ({pendingCount})
         </button>
         <button
           type="button"
           onClick={() => setViewMode("history")}
-          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === "history" ? "bg-[#1e293b] text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === "history" ? "bg-[#142036] text-white" : "bg-white text-slate-500 border border-slate-200"}`}
         >
           History ({historyCount})
         </button>
@@ -319,7 +319,7 @@ export default function AdminWithdrawalList() {
         <input 
           type="text" 
           placeholder="Search Player or Wallet Address..." 
-          className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:border-[#fc7952] font-bold"
+          className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:border-[#8B1E3F] font-bold"
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
@@ -337,7 +337,7 @@ export default function AdminWithdrawalList() {
           </thead>
           <tbody className="divide-y divide-slate-100 block md:table-row-group">
             {loading ? (
-                <tr className="block md:table-row"><td colSpan="5" className="p-12 text-center"><Loader2 className="animate-spin mx-auto text-[#613de6]" /></td></tr>
+                <tr className="block md:table-row"><td colSpan="5" className="p-12 text-center"><Loader2 className="animate-spin mx-auto text-[#2457D6]" /></td></tr>
             ) : filtered.length === 0 ? (
                 <tr className="block md:table-row"><td colSpan="5" className="p-12 text-center text-slate-300 font-black italic uppercase text-xs tracking-widest">No Records Found</td></tr>
             ) : filtered.map((item) => (
@@ -346,7 +346,7 @@ export default function AdminWithdrawalList() {
                 {/* USER INFO */}
                 <td className="block md:table-cell p-2 md:p-6">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-[#fc7952]/10 text-[#fc7952] rounded-xl flex items-center justify-center font-black italic text-sm">
+                    <div className="w-10 h-10 bg-[#8B1E3F]/10 text-[#8B1E3F] rounded-xl flex items-center justify-center font-black italic text-sm">
                         {(userCache[item.userId]?.name || "U").charAt(0).toUpperCase()}
                     </div>
                     <div>
@@ -354,7 +354,7 @@ export default function AdminWithdrawalList() {
                             {userCache[item.userId]?.name || "Resolving..."}
                         </p>
                         <p className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-tighter">ID: {item.userId}</p>
-                        <p className="text-[9px] font-mono font-black text-[#613de6] uppercase tracking-widest mt-0.5">
+                        <p className="text-[9px] font-mono font-black text-[#2457D6] uppercase tracking-widest mt-0.5">
                             PIN: {userCache[item.userId]?.pin || "—"}
                         </p>
                     </div>
@@ -384,14 +384,14 @@ export default function AdminWithdrawalList() {
                     <div className="mt-3 md:mt-0">
                         <button 
                           onClick={() => copyToClipboard(item.details?.usdtAddress, item.id)}
-                          className="group flex items-center gap-3 bg-slate-50 p-4 md:p-2 rounded-xl border border-slate-100 w-full md:max-w-[160px] text-left transition-all hover:border-[#613de6]/30 active:scale-[0.98]"
+                          className="group flex items-center gap-3 bg-slate-50 p-4 md:p-2 rounded-xl border border-slate-100 w-full md:max-w-[160px] text-left transition-all hover:border-[#2457D6]/30 active:scale-[0.98]"
                         >
-                            <Coins size={16} className={`${copiedId === item.id ? 'text-emerald-500' : 'text-blue-400'} shrink-0`} />
+                            <Coins size={16} className={`${copiedId === item.id ? 'text-emerald-500' : 'text-[#7A9BEE]'} shrink-0`} />
                             <p className="text-xs md:text-[10px] font-mono font-black text-slate-600 truncate flex-1">
                                 {item.details?.usdtAddress || "MISSING ADDRESS"}
                             </p>
                             <div className="shrink-0 ml-auto bg-white p-1 rounded-md border border-slate-100">
-                               {copiedId === item.id ? <CheckCheck size={14} className="text-emerald-500" /> : <Copy size={14} className="text-slate-300 group-hover:text-[#613de6]" />}
+                               {copiedId === item.id ? <CheckCheck size={14} className="text-emerald-500" /> : <Copy size={14} className="text-slate-300 group-hover:text-[#2457D6]" />}
                             </div>
                         </button>
                         {copiedId === item.id && <p className="text-[8px] font-black text-emerald-500 uppercase mt-2 ml-1 animate-pulse">Address copied to clipboard</p>}

@@ -27,14 +27,14 @@ export default function ChallengeList() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-[#0f172a] p-4 md:p-8">
+    <div className="min-h-[calc(100vh-64px)] bg-[#0B1220] p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
         
         {/* Search & Stats Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-black text-white flex items-center">
-              PLAY WITH FRIENDS <Swords className="ml-3 text-[#fc7952]" />
+              PLAY WITH FRIENDS <Swords className="ml-3 text-[#8B1E3F]" />
             </h1>
             <p className="text-gray-400">Challenge online players and win rewards.</p>
           </div>
@@ -44,7 +44,7 @@ export default function ChallengeList() {
             <input 
               type="text"
               placeholder="Search username..."
-              className="w-full bg-[#1e293b] border-gray-700 border p-3 pl-10 rounded-xl focus:ring-2 focus:ring-[#613de6] outline-none text-white text-sm"
+              className="w-full bg-[#142036] border-gray-700 border p-3 pl-10 rounded-xl focus:ring-2 focus:ring-[#2457D6] outline-none text-white text-sm"
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
@@ -56,21 +56,21 @@ export default function ChallengeList() {
             filteredPlayers.map((player) => (
               <div 
                 key={player.id}
-                className="bg-[#1e293b] border border-gray-800 p-5 rounded-2xl flex items-center justify-between transition-all hover:border-[#613de6]/50 group"
+                className="bg-[#142036] border border-gray-800 p-5 rounded-2xl flex items-center justify-between transition-all hover:border-[#2457D6]/50 group"
               >
                 <div className="flex items-center space-x-4">
                   <div className="relative">
-                    <div className="w-14 h-14 bg-[#0f172a] rounded-full flex items-center justify-center border-2 border-gray-700">
+                    <div className="w-14 h-14 bg-[#0B1220] rounded-full flex items-center justify-center border-2 border-gray-700">
                       <User size={28} className="text-gray-400" />
                     </div>
                     {/* Status Indicator */}
-                    <div className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-[#1e293b] ${
+                    <div className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-[#142036] ${
                       player.status === 'active' ? 'bg-green-500' : 'bg-yellow-500'
                     }`} />
                   </div>
                   
                   <div>
-                    <h3 className="font-bold text-lg text-white group-hover:text-[#fc7952] transition-colors">
+                    <h3 className="font-bold text-lg text-white group-hover:text-[#8B1E3F] transition-colors">
                       {player.username}
                     </h3>
                     <div className="flex items-center space-x-2 text-xs text-gray-500">
@@ -93,7 +93,7 @@ export default function ChallengeList() {
                     onClick={() => handleChallenge(player)}
                     className={`px-6 py-3 rounded-xl font-bold text-sm transition-all flex items-center space-x-2 shadow-lg ${
                       player.status === 'active' 
-                      ? 'bg-[#613de6] text-white active:scale-95' 
+                      ? 'bg-[#2457D6] text-white active:scale-95' 
                       : 'bg-gray-700 text-gray-400 cursor-not-allowed'
                     }`}
                   >
@@ -104,7 +104,7 @@ export default function ChallengeList() {
               </div>
             ))
           ) : (
-            <div className="text-center py-20 bg-[#1e293b] rounded-3xl border border-dashed border-gray-700">
+            <div className="text-center py-20 bg-[#142036] rounded-3xl border border-dashed border-gray-700">
               <p className="text-gray-500">No players found in the arena...</p>
             </div>
           )}

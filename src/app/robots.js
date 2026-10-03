@@ -1,5 +1,5 @@
 export default function robots() {
-  const baseUrl = "https://flyovahelp.com";
+  const baseUrl = "https://strawins.com";
 
   return {
     rules: [

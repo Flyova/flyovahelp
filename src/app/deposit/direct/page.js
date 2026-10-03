@@ -173,7 +173,7 @@ function DirectDepositContent() {
                 </div>
                 
                 <div style="margin-top: 30px; font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
-                  This is a system notification for the Flyova Admin Panel.
+                  This is a system notification for the StraWins Admin Panel.
                 </div>
               </div>
             `
@@ -194,7 +194,7 @@ function DirectDepositContent() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white p-6 flex flex-col items-center">
+    <div className="min-h-screen bg-[#0B1220] text-white p-6 flex flex-col items-center">
       <div className="max-w-md w-full space-y-8 pt-10">
 
         {/* Header & Timer */}
@@ -211,7 +211,7 @@ function DirectDepositContent() {
               : "Complete Deposit"}
           </h1>
           {!proofAlreadySubmitted && !["completed", "rejected", "cancelled"].includes(depositStatus) && (
-            <div className="flex items-center justify-center gap-2 text-[#fc7952] font-bold">
+            <div className="flex items-center justify-center gap-2 text-[#8B1E3F] font-bold">
               <Timer size={20} />
               <span className="text-2xl tabular-nums">{formatTime(timeLeft)}</span>
             </div>
@@ -219,7 +219,7 @@ function DirectDepositContent() {
         </div>
 
         {depositStatus === "cancelled" ? (
-          <div className="bg-[#1e293b] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-[#142036] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="w-16 h-16 mx-auto bg-gray-500/10 text-gray-400 rounded-3xl flex items-center justify-center">
               <XCircle size={32} />
             </div>
@@ -231,13 +231,13 @@ function DirectDepositContent() {
             </div>
             <button
               onClick={() => router.push("/deposit")}
-              className="w-full bg-[#613de6] hover:bg-[#7251ed] py-5 rounded-3xl font-black uppercase text-xs tracking-widest active:scale-95 transition-all"
+              className="w-full bg-[#2457D6] hover:bg-[#1D4FC4] py-5 rounded-3xl font-black uppercase text-xs tracking-widest active:scale-95 transition-all"
             >
               Start New Deposit
             </button>
           </div>
         ) : depositStatus === "completed" ? (
-          <div className="bg-[#1e293b] p-8 rounded-[2.5rem] border border-emerald-500/20 shadow-2xl space-y-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-[#142036] p-8 rounded-[2.5rem] border border-emerald-500/20 shadow-2xl space-y-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="w-16 h-16 mx-auto bg-emerald-500/10 text-emerald-400 rounded-3xl flex items-center justify-center">
               <CheckCircle size={32} />
             </div>
@@ -249,13 +249,13 @@ function DirectDepositContent() {
             </div>
             <button
               onClick={() => router.push("/dashboard")}
-              className="w-full bg-[#613de6] hover:bg-[#7251ed] py-5 rounded-3xl font-black uppercase text-xs tracking-widest active:scale-95 transition-all"
+              className="w-full bg-[#2457D6] hover:bg-[#1D4FC4] py-5 rounded-3xl font-black uppercase text-xs tracking-widest active:scale-95 transition-all"
             >
               Back to Dashboard
             </button>
           </div>
         ) : depositStatus === "rejected" ? (
-          <div className="bg-[#1e293b] p-8 rounded-[2.5rem] border border-rose-500/20 shadow-2xl space-y-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-[#142036] p-8 rounded-[2.5rem] border border-rose-500/20 shadow-2xl space-y-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="w-16 h-16 mx-auto bg-rose-500/10 text-rose-400 rounded-3xl flex items-center justify-center">
               <XCircle size={32} />
             </div>
@@ -267,24 +267,24 @@ function DirectDepositContent() {
             </div>
             <button
               onClick={() => router.push("/support")}
-              className="w-full bg-[#613de6] hover:bg-[#7251ed] py-5 rounded-3xl font-black uppercase text-xs tracking-widest active:scale-95 transition-all"
+              className="w-full bg-[#2457D6] hover:bg-[#1D4FC4] py-5 rounded-3xl font-black uppercase text-xs tracking-widest active:scale-95 transition-all"
             >
               Contact Support
             </button>
           </div>
         ) : proofAlreadySubmitted ? (
-          <div className="bg-[#1e293b] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="w-16 h-16 mx-auto bg-[#fc7952]/10 text-[#fc7952] rounded-3xl flex items-center justify-center">
+          <div className="bg-[#142036] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="w-16 h-16 mx-auto bg-[#8B1E3F]/10 text-[#8B1E3F] rounded-3xl flex items-center justify-center">
               <Clock size={32} />
             </div>
             <div className="space-y-2">
-              <p className="text-sm font-black uppercase text-[#fc7952]">Pending admin confirmation</p>
+              <p className="text-sm font-black uppercase text-[#8B1E3F]">Pending admin confirmation</p>
               <p className="text-[11px] font-bold text-gray-400 leading-relaxed uppercase">
                 We received your payment proof for ${amount} USDT. An admin is reviewing it now — this page will update automatically once it&apos;s confirmed.
               </p>
             </div>
             {depositData?.transactionHash && (
-              <div className="bg-[#0f172a] p-4 rounded-2xl border border-white/5 text-left">
+              <div className="bg-[#0B1220] p-4 rounded-2xl border border-white/5 text-left">
                 <p className="text-[9px] font-black text-gray-500 uppercase mb-1">Transaction Hash</p>
                 <p className="text-[10px] font-bold break-all text-gray-300">{depositData.transactionHash}</p>
               </div>
@@ -297,10 +297,10 @@ function DirectDepositContent() {
             </button>
           </div>
         ) : !showProofForm ? (
-          <div className="bg-[#1e293b] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-[#142036] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="space-y-1 text-center">
               <p className="text-[10px] font-black text-gray-500 uppercase">Amount to Send</p>
-              <p className="text-4xl font-black text-[#613de6] italic">${amount} <span className="text-sm">USDT</span></p>
+              <p className="text-4xl font-black text-[#2457D6] italic">${amount} <span className="text-sm">USDT</span></p>
             </div>
 
             <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl flex gap-3">
@@ -322,9 +322,9 @@ function DirectDepositContent() {
 
             <div className="space-y-3">
               <p className="text-[10px] font-black text-gray-500 uppercase ml-2">USDT TRC20 Address</p>
-              <div className="bg-[#0f172a] p-4 rounded-2xl border border-white/5 flex items-center justify-between group active:scale-[0.98] transition-all">
+              <div className="bg-[#0B1220] p-4 rounded-2xl border border-white/5 flex items-center justify-between group active:scale-[0.98] transition-all">
                 <span className="text-[10px] font-bold break-all mr-4 text-gray-300 group-hover:text-white">{USDT_ADDRESS}</span>
-                <button onClick={copyToClipboard} className="p-3 bg-[#613de6] hover:bg-[#7251ed] rounded-xl shadow-lg transition-colors shrink-0">
+                <button onClick={copyToClipboard} className="p-3 bg-[#2457D6] hover:bg-[#1D4FC4] rounded-xl shadow-lg transition-colors shrink-0">
                   <Copy size={16} />
                 </button>
               </div>
@@ -332,15 +332,15 @@ function DirectDepositContent() {
 
             <button 
               onClick={() => setShowProofForm(true)}
-              className="w-full bg-[#fc7952] hover:bg-[#ff8a6a] py-5 rounded-3xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-3 shadow-xl shadow-[#fc7952]/20 active:scale-95 transition-all"
+              className="w-full bg-[#8B1E3F] hover:bg-[#A62A4D] py-5 rounded-3xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-3 shadow-xl shadow-[#8B1E3F]/20 active:scale-95 transition-all"
             >
               <CheckCircle size={18} /> I HAVE PAID
             </button>
           </div>
         ) : (
-          <div className="bg-[#1e293b] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6 animate-in zoom-in-95 duration-300">
+          <div className="bg-[#142036] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6 animate-in zoom-in-95 duration-300">
             <div className="flex items-center justify-between">
-              <h2 className="font-black uppercase italic text-sm tracking-tight text-[#fc7952]">Upload Payment Proof</h2>
+              <h2 className="font-black uppercase italic text-sm tracking-tight text-[#8B1E3F]">Upload Payment Proof</h2>
               <button onClick={() => setShowProofForm(false)} className="text-gray-500"><X size={20}/></button>
             </div>
 
@@ -348,13 +348,13 @@ function DirectDepositContent() {
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase text-gray-500 ml-2">Transaction Hash (TXID)</label>
                 <div className="relative">
-                  <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-[#613de6]" size={16} />
+                  <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-[#2457D6]" size={16} />
                   <input 
                     required
                     value={hashId}
                     onChange={(e) => setHashId(e.target.value)}
                     placeholder="Enter 64-character hash"
-                    className="w-full bg-[#0f172a] border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-sm font-bold focus:border-[#613de6] outline-none"
+                    className="w-full bg-[#0B1220] border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-sm font-bold focus:border-[#2457D6] outline-none"
                   />
                 </div>
               </div>
@@ -363,7 +363,7 @@ function DirectDepositContent() {
                 <label className="text-[10px] font-black uppercase text-gray-500 ml-2">Payment Screenshot</label>
                 <div 
                   onClick={() => fileInputRef.current.click()}
-                  className="aspect-video bg-[#0f172a] border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center justify-center cursor-pointer hover:border-[#613de6] transition-all overflow-hidden relative"
+                  className="aspect-video bg-[#0B1220] border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center justify-center cursor-pointer hover:border-[#2457D6] transition-all overflow-hidden relative"
                 >
                   {preview ? (
                     <img src={preview} alt="Preview" className="w-full h-full object-cover" />
@@ -380,7 +380,7 @@ function DirectDepositContent() {
               <button 
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full bg-[#613de6] hover:bg-[#7251ed] py-5 rounded-3xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-3 shadow-xl shadow-[#613de6]/20 active:scale-95 transition-all disabled:opacity-50"
+                className="w-full bg-[#2457D6] hover:bg-[#1D4FC4] py-5 rounded-3xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-3 shadow-xl shadow-[#2457D6]/20 active:scale-95 transition-all disabled:opacity-50"
               >
                 {isSubmitting ? <Loader2 className="animate-spin" /> : <CheckCircle size={18} />}
                 SUBMIT
@@ -402,8 +402,8 @@ function DirectDepositContent() {
 export default function DirectDeposit() {
     return (
         <Suspense fallback={
-          <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
-            <Loader2 className="animate-spin text-[#613de6]" size={40} />
+          <div className="min-h-screen bg-[#0B1220] flex items-center justify-center">
+            <Loader2 className="animate-spin text-[#2457D6]" size={40} />
           </div>
         }>
             <DirectDepositContent />

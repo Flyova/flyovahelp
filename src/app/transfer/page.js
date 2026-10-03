@@ -193,17 +193,17 @@ export default function TransferPage() {
               subject: "Funds Received - P2P Transfer",
               html: `
                 <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 12px;">
-                  <h2 style="color: #613de6; border-bottom: 1px solid #eee; padding-bottom: 10px;">Payment Received</h2>
+                  <h2 style="color: #2457D6; border-bottom: 1px solid #eee; padding-bottom: 10px;">Payment Received</h2>
                   <p>Hello ${recipientData.name},</p>
-                  <p>You have received a P2P transfer from another user on the Flyova Network.</p>
+                  <p>You have received a P2P transfer from another user on the StraWins Network.</p>
                   <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #eee;">
                     <p style="margin: 5px 0;"><strong>Sender:</strong> ${userData.fullName}</p>
                     <p style="margin: 5px 0;"><strong>Amount:</strong> $${val.toFixed(2)}</p>
                     <p style="margin: 5px 0; font-size: 11px; color: #666;"><strong>Transaction ID:</strong> ${txId}</p>
                   </div>
-                  <p>The funds are now available in your Flyova wallet for immediate use or withdrawal.</p>
+                  <p>The funds are now available in your StraWins wallet for immediate use or withdrawal.</p>
                   <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
-                    Flyova Global Liquidity Control
+                    StraWins Global Liquidity Control
                   </div>
                 </div>
               `
@@ -223,8 +223,8 @@ export default function TransferPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-6">
-        <div id="receipt" className="bg-[#1e293b] w-full max-w-sm rounded-[3rem] p-8 border border-white/5 text-center shadow-2xl space-y-6">
+      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-6">
+        <div id="receipt" className="bg-[#142036] w-full max-w-sm rounded-[3rem] p-8 border border-white/5 text-center shadow-2xl space-y-6">
           <div className="w-20 h-20 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mx-auto shadow-lg">
             <CheckCircle2 size={40} />
           </div>
@@ -240,7 +240,7 @@ export default function TransferPage() {
              </div>
              <div className="flex justify-between items-center">
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Amount Sent</span>
-                <span className="text-sm font-black text-[#fc7952] italic">${transferRecord?.amount.toFixed(2)}</span>
+                <span className="text-sm font-black text-[#8B1E3F] italic">${transferRecord?.amount.toFixed(2)}</span>
              </div>
              <div className="flex justify-between items-center">
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Service Fee</span>
@@ -248,8 +248,8 @@ export default function TransferPage() {
              </div>
              {transferRecord?.bonusRepaid > 0 && (
                <div className="flex justify-between items-center animate-pulse">
-                  <span className="text-[10px] font-bold text-[#613de6] uppercase tracking-widest">Bonus Repaid</span>
-                  <span className="text-sm font-black text-[#613de6] italic">-$3.00</span>
+                  <span className="text-[10px] font-bold text-[#2457D6] uppercase tracking-widest">Bonus Repaid</span>
+                  <span className="text-sm font-black text-[#2457D6] italic">-$3.00</span>
                </div>
              )}
              <div className="h-px bg-white/5 w-full" />
@@ -257,7 +257,7 @@ export default function TransferPage() {
           </div>
 
           <div className="space-y-3 no-print">
-            <button onClick={() => window.print()} className="w-full bg-[#613de6] py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 shadow-lg">
+            <button onClick={() => window.print()} className="w-full bg-[#2457D6] py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 shadow-lg">
               <Download size={14} /> Download Receipt
             </button>
             <button onClick={() => router.push('/dashboard')} className="w-full py-4 rounded-2xl bg-white/5 text-white/50 font-black uppercase text-[10px]">
@@ -278,7 +278,7 @@ export default function TransferPage() {
 
   if (userData.restrictTransfer) {
     return (
-        <div className="min-h-screen bg-[#0f172a] p-6 flex flex-col items-center justify-center text-center">
+        <div className="min-h-screen bg-[#0B1220] p-6 flex flex-col items-center justify-center text-center">
             <div className="bg-rose-500/10 p-8 rounded-full mb-8 border border-rose-500/20">
                 <ShieldAlert size={60} className="text-rose-500" />
             </div>
@@ -288,7 +288,7 @@ export default function TransferPage() {
             </p>
             <button
               onClick={() => router.push('/dashboard')}
-              className="mt-12 bg-[#1e293b] text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/5 active:scale-95 transition-all"
+              className="mt-12 bg-[#142036] text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/5 active:scale-95 transition-all"
             >
                 Back to Dashboard
             </button>
@@ -302,24 +302,24 @@ export default function TransferPage() {
   const totalWithFee = (parseFloat(amount) || 0) + currentFee + bonusRepaymentAmount;
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white">
-      <div className="p-6 pt-12 flex items-center justify-between bg-[#613de6] rounded-b-[2.5rem] shadow-xl">
+    <div className="min-h-screen bg-[#0B1220] text-white">
+      <div className="p-6 pt-12 flex items-center justify-between bg-[#2457D6] rounded-b-[2.5rem] shadow-xl">
         <button onClick={() => router.back()} className="p-2 bg-white/10 rounded-xl"><ChevronLeft size={20} /></button>
         <h1 className="font-black italic uppercase tracking-wider text-xs">P2P Transfer</h1>
         <div className="w-10" />
       </div>
 
       <div className="p-6 max-w-md mx-auto space-y-6 mt-4">
-        <div className="bg-[#1e293b] p-6 rounded-[2.5rem] border border-white/5 flex justify-between items-center">
+        <div className="bg-[#142036] p-6 rounded-[2.5rem] border border-white/5 flex justify-between items-center">
           <div>
             <p className="text-[10px] font-black opacity-40 uppercase mb-1 tracking-widest">Available to Send</p>
-            <p className="text-3xl font-black italic text-[#613de6]">${userData.wallet.toLocaleString()}</p>
+            <p className="text-3xl font-black italic text-[#2457D6]">${userData.wallet.toLocaleString()}</p>
           </div>
-          <Wallet size={24} className="text-[#fc7952]" />
+          <Wallet size={24} className="text-[#8B1E3F]" />
         </div>
 
         <div className="space-y-4">
-          <div className="bg-[#1e293b] p-6 rounded-[2rem] border border-white/5 relative">
+          <div className="bg-[#142036] p-6 rounded-[2rem] border border-white/5 relative">
             <label className="text-[10px] font-black uppercase opacity-40 block mb-3 tracking-widest">Recipient PIN (8 Digits)</label>
             <div className="flex items-center gap-3">
               <User size={20} className="text-gray-500" />
@@ -331,18 +331,18 @@ export default function TransferPage() {
                 placeholder="00000000"
                 className="bg-transparent font-black text-2xl outline-none w-full tracking-widest placeholder:opacity-10" 
               />
-              {searching && <Loader2 size={16} className="animate-spin text-[#613de6]" />}
+              {searching && <Loader2 size={16} className="animate-spin text-[#2457D6]" />}
             </div>
 
             {recipientData && (
-               <div className="mt-4 flex items-center gap-2 bg-[#613de6]/10 p-3 rounded-2xl border border-[#613de6]/20 animate-in fade-in slide-in-from-top-2">
+               <div className="mt-4 flex items-center gap-2 bg-[#2457D6]/10 p-3 rounded-2xl border border-[#2457D6]/20 animate-in fade-in slide-in-from-top-2">
                  <CheckCircle2 size={14} className="text-green-500" />
                  <p className="text-[10px] font-black uppercase tracking-tight">RECIPIENT: <span className="text-white italic">{recipientData.name}</span></p>
                </div>
             )}
           </div>
 
-          <div className="bg-[#1e293b] p-6 rounded-[2rem] border border-white/5">
+          <div className="bg-[#142036] p-6 rounded-[2rem] border border-white/5">
             <label className="text-[10px] font-black uppercase opacity-40 block mb-2 tracking-widest">Amount to Transfer</label>
             <div className="flex items-baseline gap-1">
                <span className="text-2xl font-black opacity-20">$</span>
@@ -365,15 +365,15 @@ export default function TransferPage() {
                
                {shouldRepayBonus && (
                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-[#613de6] uppercase tracking-widest">Bonus Repayment</span>
-                    <span className="text-[10px] font-black text-[#613de6] tracking-widest">+ $3.00</span>
+                    <span className="text-[10px] font-bold text-[#2457D6] uppercase tracking-widest">Bonus Repayment</span>
+                    <span className="text-[10px] font-black text-[#2457D6] tracking-widest">+ $3.00</span>
                  </div>
                )}
 
                <div className="h-px bg-white/5 w-full" />
                <div className="flex justify-between items-center">
                   <span className="text-[11px] font-black text-white uppercase tracking-widest">Total Deductible</span>
-                  <span className="text-lg font-black italic text-[#fc7952]">${totalWithFee.toFixed(2)}</span>
+                  <span className="text-lg font-black italic text-[#8B1E3F]">${totalWithFee.toFixed(2)}</span>
                </div>
             </div>
           )}
@@ -381,7 +381,7 @@ export default function TransferPage() {
           <button 
             onClick={handleTransfer}
             disabled={loading || !recipientData || !amount}
-            className="w-full bg-[#fc7952] py-6 rounded-[2rem] font-black italic uppercase flex items-center justify-center gap-3 shadow-2xl disabled:opacity-30 active:scale-95 transition-all text-white"
+            className="w-full bg-[#8B1E3F] py-6 rounded-[2rem] font-black italic uppercase flex items-center justify-center gap-3 shadow-2xl disabled:opacity-30 active:scale-95 transition-all text-white"
           >
             {loading ? <Loader2 className="animate-spin" /> : <>SEND NOW <Send size={20} /></>}
           </button>

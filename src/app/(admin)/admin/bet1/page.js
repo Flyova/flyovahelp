@@ -22,17 +22,17 @@ import {
   RefreshCw
 } from "lucide-react";
 
-export default function FlyovaHistory() {
+export default function StraWinsHistory() {
   const [bets, setBets] = useState([]);
   const [userCache, setUserCache] = useState({}); // Stores { userId: { name, pin, email, country } }
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Listen for Flyova specific transactions
+    // 1. Listen for StraWins specific transactions
     const q = query(
       collectionGroup(db, "transactions"),
-      where("title", "in", ["Flyova Stake", "Flyova Win", "Flyova Win Payout", "Flyova Partial Refund", "Flyova Loss"]),
+      where("title", "in", ["StraWins Stake", "StraWins Win", "StraWins Win Payout", "StraWins Partial Refund", "StraWins Loss", "Flyova Stake", "Flyova Win", "Flyova Win Payout", "Flyova Partial Refund", "Flyova Loss"]),
       orderBy("timestamp", "desc")
     );
 
@@ -40,11 +40,18 @@ export default function FlyovaHistory() {
       const betData = snap.docs.map(d => {
         const pathSegments = d.ref.path.split('/');
         const userIdFromPath = pathSegments[1];
+        const raw = d.data();
+
+        // Rebrand compat: pre-rename records carry "Flyova ..." titles.
+        const title = typeof raw.title === "string" && raw.title.startsWith("Flyova ")
+          ? raw.title.replace(/^Flyova /, "StraWins ")
+          : raw.title;
 
         return {
           id: d.id,
           userId: userIdFromPath,
-          ...d.data()
+          ...raw,
+          title,
         };
       });
 
@@ -88,7 +95,7 @@ export default function FlyovaHistory() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-black italic uppercase text-slate-800">Flyova to Dollars Log</h1>
+          <h1 className="text-2xl font-black italic uppercase text-slate-800">StraWins to Dollars Log</h1>
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Tracking number picks and stakes</p>
         </div>
        
@@ -100,7 +107,7 @@ export default function FlyovaHistory() {
         <input 
           type="text" 
           placeholder="Search Player Full Name or Game ID..." 
-          className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:border-[#613de6]"
+          className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:border-[#2457D6]"
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
@@ -121,18 +128,18 @@ export default function FlyovaHistory() {
             {loading && bets.length === 0 ? (
                 <tr>
                     <td colSpan="5" className="p-12 text-center">
-                        <Loader2 className="animate-spin mx-auto text-[#613de6] mb-2" />
-                        <p className="text-[10px] font-black uppercase text-slate-400">Loading Flyova Data...</p>
+                        <Loader2 className="animate-spin mx-auto text-[#2457D6] mb-2" />
+                        <p className="text-[10px] font-black uppercase text-slate-400">Loading StraWins Data...</p>
                     </td>
                 </tr>
             ) : filteredBets.map((bet) => {
-                const isWin     = bet.title === 'Flyova Win' || bet.title === 'Flyova Win Payout' || bet.type === 'win'
-                               || (bet.title === 'Flyova Stake' && bet.status === 'win');
-                const isLoss    = bet.title === 'Flyova Loss' || bet.type === 'loss'
-                               || (bet.title === 'Flyova Stake' && bet.status === 'loss');
-                const isPartial = bet.title === 'Flyova Partial Refund' || bet.type === 'refund'
-                               || (bet.title === 'Flyova Stake' && bet.status === 'partial');
-                const isStake   = bet.title === 'Flyova Stake' && bet.status !== 'partial' && bet.status !== 'loss' && bet.status !== 'win' && bet.status !== 'settled';
+                const isWin     = bet.title === 'StraWins Win' || bet.title === 'StraWins Win Payout' || bet.type === 'win'
+                               || (bet.title === 'StraWins Stake' && bet.status === 'win');
+                const isLoss    = bet.title === 'StraWins Loss' || bet.type === 'loss'
+                               || (bet.title === 'StraWins Stake' && bet.status === 'loss');
+                const isPartial = bet.title === 'StraWins Partial Refund' || bet.type === 'refund'
+                               || (bet.title === 'StraWins Stake' && bet.status === 'partial');
+                const isStake   = bet.title === 'StraWins Stake' && bet.status !== 'partial' && bet.status !== 'loss' && bet.status !== 'win' && bet.status !== 'settled';
                 const raw       = Number(bet.amount || 0);
                 const stakeAmt  = raw;
 
@@ -140,7 +147,7 @@ export default function FlyovaHistory() {
                   <tr key={bet.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-6">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-indigo-50 text-[#613de6] rounded-lg flex items-center justify-center font-black italic text-xs border border-indigo-100">
+                        <div className="w-8 h-8 bg-[#D7E2FF] text-[#2457D6] rounded-lg flex items-center justify-center font-black italic text-xs border border-[#D7E2FF]">
                           {(userCache[bet.userId]?.name || "U").charAt(0).toUpperCase()}
                         </div>
                         <div>

@@ -32,12 +32,12 @@ const THEMES = {
   },
   info: {
     icon: Info,
-    bg: "bg-[#15233e]/95",
-    border: "border-blue-400/40",
-    iconBg: "bg-blue-500/20",
-    iconColor: "text-blue-300",
-    title: "text-blue-200",
-    body: "text-blue-100/90",
+    bg: "bg-[#142036]/95",
+    border: "border-[#7A9BEE]/40",
+    iconBg: "bg-[#2457D6]/20",
+    iconColor: "text-[#7A9BEE]",
+    title: "text-[#D7E2FF]",
+    body: "text-[#D7E2FF]/90",
   },
 };
 

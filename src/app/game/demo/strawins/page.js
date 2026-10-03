@@ -28,9 +28,9 @@ function generatePattern() {
   return slots;
 }
 
-export default function DemoFlyova() {
+export default function DemoStraWins() {
   const router = useRouter();
-  const [nextPath, setNextPath] = useState("/game/flyova-to-dollars");
+  const [nextPath, setNextPath] = useState("/game/strawins-to-dollars");
   const [uid, setUid] = useState(null);
   const [wallet, setWallet] = useState(null);
 
@@ -174,29 +174,29 @@ export default function DemoFlyova() {
 
   if (wallet === null) {
     return (
-      <div className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center text-white italic font-black uppercase">
-        <Loader2 className="animate-spin text-[#fc7952] mb-4" size={32} />
+      <div className="min-h-screen bg-[#0B1220] flex flex-col items-center justify-center text-white italic font-black uppercase">
+        <Loader2 className="animate-spin text-[#8B1E3F] mb-4" size={32} />
         Loading game...
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white flex flex-col pb-24 relative overflow-hidden">
+    <div className="min-h-screen bg-[#0B1220] text-white flex flex-col pb-24 relative overflow-hidden">
 
       {/* RESULT MODAL */}
       {showResult && (
         <div className="absolute inset-0 z-100 flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
           <div className={`w-full max-w-xs p-8 rounded-[2.5rem] border-2 text-center shadow-2xl ${
             resultType === "win"
-              ? "bg-[#1e293b] border-green-500 shadow-green-500/30"
-              : "bg-[#1e293b] border-red-500 shadow-red-500/30"
+              ? "bg-[#142036] border-green-500 shadow-green-500/30"
+              : "bg-[#142036] border-red-500 shadow-red-500/30"
           }`}>
             {resultType === "win" ? (
               <>
                 <Trophy size={60} className="mx-auto text-green-400 mb-4 animate-bounce" />
                 <h2 className="text-3xl font-black italic uppercase mb-2 text-white">You Won!</h2>
-                <p className="text-[#fc7952] text-2xl font-black italic">+${winAmount.toFixed(2)}</p>
+                <p className="text-[#8B1E3F] text-2xl font-black italic">+${winAmount.toFixed(2)}</p>
                 <p className="text-sm text-gray-400 mt-2">You won winning numbers: {winningNumbers.join(" & ")}</p>
               </>
             ) : (
@@ -231,17 +231,17 @@ export default function DemoFlyova() {
       </div>
 
       {/* Header & Progress Bar */}
-      <div className="p-8 text-center bg-[#1e293b] border-b border-white/5 relative">
+      <div className="p-8 text-center bg-[#142036] border-b border-white/5 relative">
         <div
-          className="absolute top-0 left-0 h-1 bg-[#fc7952] transition-all duration-1000"
+          className="absolute top-0 left-0 h-1 bg-[#8B1E3F] transition-all duration-1000"
           style={{ width: `${(timeLeft / GAME_DURATION) * 100}%` }}
         />
-        <h1 className="text-sm font-black italic uppercase text-[#fc7952] mb-1">Flyova to Dollars</h1>
+        <h1 className="text-sm font-black italic uppercase text-[#8B1E3F] mb-1">StraWins to Dollars</h1>
         <p className="text-xs text-gray-500 font-bold mb-4">
           Demo Balance: <span className="text-amber-400">${wallet.toFixed(2)}</span>
         </p>
         <div className="inline-flex items-center space-x-3 bg-black/20 px-8 py-4 rounded-4xl border border-white/5 mt-2">
-          <Timer size={24} className="text-[#613de6]" />
+          <Timer size={24} className="text-[#2457D6]" />
           <span className="text-4xl font-black italic font-mono">
             {phase === "waiting"
               ? "00:00"
@@ -260,7 +260,7 @@ export default function DemoFlyova() {
                   className={`aspect-square rounded-2xl text-xl font-black italic flex items-center justify-center border-2 transition-all duration-500 ${
                     winningNumbers.includes(num)
                       ? "bg-green-500/20 border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.4)] scale-110"
-                      : "bg-[#1e293b] border-white/5 opacity-20"
+                      : "bg-[#142036] border-white/5 opacity-20"
                   }`}
                 >
                   {num}
@@ -268,7 +268,7 @@ export default function DemoFlyova() {
               ))}
             </div>
             <div className="flex flex-col items-center space-y-2 animate-pulse">
-              <Loader2 size={32} className="text-[#fc7952] animate-spin" />
+              <Loader2 size={32} className="text-[#8B1E3F] animate-spin" />
               <h2 className="text-xl font-black italic uppercase">Next Round Starting Soon</h2>
             </div>
           </div>
@@ -295,8 +295,8 @@ export default function DemoFlyova() {
                   disabled={hasBet || phase !== "betting"}
                   className={`aspect-square rounded-2xl text-xl font-black italic transition-all border-2 ${
                     selected.includes(num)
-                      ? "bg-[#613de6] border-[#fc7952] scale-105 shadow-lg"
-                      : "bg-[#1e293b] border-white/5"
+                      ? "bg-[#2457D6] border-[#8B1E3F] scale-105 shadow-lg"
+                      : "bg-[#142036] border-white/5"
                   }`}
                 >
                   {num}
@@ -305,13 +305,13 @@ export default function DemoFlyova() {
             </div>
 
             {/* Stake Panel */}
-            <div className="w-full max-w-xs bg-[#1e293b] p-6 rounded-[2.5rem] border border-white/5">
+            <div className="w-full max-w-xs bg-[#142036] p-6 rounded-[2.5rem] border border-white/5">
               <div className="flex items-center justify-between mb-6 bg-black/20 p-4 rounded-2xl">
                 <button
                   onClick={() => setStake(Math.max(1, stake - 1))}
-                  className="w-10 h-10 bg-[#613de6] rounded-xl font-bold"
+                  className="w-10 h-10 bg-[#2457D6] rounded-xl font-bold"
                 >-</button>
-                <div className="flex items-center text-[#fc7952]">
+                <div className="flex items-center text-[#8B1E3F]">
                   <span className="text-2xl font-black italic mr-1">$</span>
                   <input
                     type="number"
@@ -322,13 +322,13 @@ export default function DemoFlyova() {
                 </div>
                 <button
                   onClick={() => setStake(Math.min(stake + 1, Math.floor(wallet)))}
-                  className="w-10 h-10 bg-[#613de6] rounded-xl font-bold"
+                  className="w-10 h-10 bg-[#2457D6] rounded-xl font-bold"
                 >+</button>
               </div>
               <button
                 onClick={placeBet}
                 disabled={selected.length !== 2 || timeLeft <= 0 || phase !== "betting" || hasBet}
-                className="w-full bg-[#fc7952] py-4 rounded-2xl font-black uppercase italic shadow-lg active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                className="w-full bg-[#8B1E3F] py-4 rounded-2xl font-black uppercase italic shadow-lg active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {hasBet ? "BET PLACED ✓" : timeLeft <= 0 ? "BETTING CLOSED" : "PLACE BET"}
               </button>
@@ -346,10 +346,10 @@ export default function DemoFlyova() {
           </div>
           <div className="flex space-x-4 overflow-x-auto pb-2 no-scrollbar">
             {history.map((h, i) => (
-              <div key={i} className="bg-[#1e293b] px-4 py-3 rounded-2xl border border-white/5 shrink-0">
+              <div key={i} className="bg-[#142036] px-4 py-3 rounded-2xl border border-white/5 shrink-0">
                 <div className="flex space-x-2">
                   {h.drawn?.map((w, wi) => (
-                    <span key={wi} className="text-[#fc7952] font-black italic">{w}</span>
+                    <span key={wi} className="text-[#8B1E3F] font-black italic">{w}</span>
                   ))}
                 </div>
                 {h.type !== "no_bet" && (

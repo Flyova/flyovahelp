@@ -7,8 +7,8 @@ import {
   Users, DollarSign, Layers, Mail, CheckCircle2, Link2, Megaphone
 } from "lucide-react";
 
-const CONTACT_EMAIL = "info@flyovahelp.com";
-const PAGE_URL = "https://flyovahelp.com/partner";
+const CONTACT_EMAIL = "info@strawins.com";
+const PAGE_URL = "https://strawins.com/partner";
 const breadcrumbJsonLd = {
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
@@ -17,7 +17,7 @@ const breadcrumbJsonLd = {
       "@type": "ListItem",
       position: 1,
       name: "Home",
-      item: "https://flyovahelp.com/",
+      item: "https://strawins.com/",
     },
     {
       "@type": "ListItem",
@@ -32,28 +32,28 @@ const MODELS = [
   {
     icon: <DollarSign size={22} className="text-[#34d399]" />,
     title: "Affiliate Program",
-    desc: "Refer players to Flyovahelp and earn a percentage of every transaction they make. No cap on earnings.",
+    desc: "Refer players to StraWins and earn a percentage of every transaction they make. No cap on earnings.",
     tag: "Revenue Share",
     tagColor: "#34d399",
   },
   {
-    icon: <Layers size={22} className="text-[#a78bfa]" />,
+    icon: <Layers size={22} className="text-[#7A9BEE]" />,
     title: "White-Label",
     desc: "Launch your own branded gaming platform powered by our infrastructure. Your brand, our engine.",
     tag: "Enterprise",
-    tagColor: "#a78bfa",
+    tagColor: "#7A9BEE",
   },
   {
-    icon: <Megaphone size={22} className="text-[#fc7952]" />,
+    icon: <Megaphone size={22} className="text-[#8B1E3F]" />,
     title: "Co-Marketing",
     desc: "Joint campaigns, giveaways, or sponsored events that expose both brands to new audiences.",
     tag: "Brand Growth",
-    tagColor: "#fc7952",
+    tagColor: "#8B1E3F",
   },
   {
     icon: <Link2 size={22} className="text-[#fbbf24]" />,
     title: "Integration Partner",
-    desc: "Build on top of Flyovahelp via API access. Add wallet features, game embeds, or data pipelines to your product.",
+    desc: "Build on top of StraWins via API access. Add wallet features, game embeds, or data pipelines to your product.",
     tag: "Tech",
     tagColor: "#fbbf24",
   },
@@ -82,7 +82,7 @@ export default function PartnerPage() {
   const handleSend = () => {
     const subject = encodeURIComponent(`Partnership Inquiry — ${form.company || form.name}`);
     const body = encodeURIComponent(
-      `Hi Flyovahelp Partnerships Team,\n\nName: ${form.name}\nCompany: ${form.company}\nPartnership Type: ${form.type}\n\n${form.message}\n\nLooking forward to connecting.`
+      `Hi StraWins Partnerships Team,\n\nName: ${form.name}\nCompany: ${form.company}\nPartnership Type: ${form.type}\n\n${form.message}\n\nLooking forward to connecting.`
     );
     window.location.href = `mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`;
   };
@@ -90,23 +90,23 @@ export default function PartnerPage() {
   const canSend = form.name.trim() && form.message.trim();
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white">
+    <div className="min-h-screen bg-[#0B1220] text-white">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
       {/* NAV */}
-      <div className="sticky top-0 z-50 bg-[#0f172a]/90 backdrop-blur-md border-b border-white/5 px-6 py-4 flex items-center justify-between">
+      <div className="sticky top-0 z-50 bg-[#0B1220]/90 backdrop-blur-md border-b border-white/5 px-6 py-4 flex items-center justify-between">
         <button
           onClick={() => router.back()}
           className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 hover:text-white transition-colors"
         >
           <ArrowLeft size={16} /> Back
         </button>
-        <Image src="/logo.svg" alt="Flyovahelp" width={110} height={28} />
+        <Image src="/logo.svg" alt="StraWins" width={110} height={28} />
         <a
           href={`mailto:${CONTACT_EMAIL}`}
-          className="hidden sm:flex items-center gap-2 bg-[#613de6] text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider hover:brightness-110 transition-all"
+          className="hidden sm:flex items-center gap-2 bg-[#2457D6] text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider hover:brightness-110 transition-all"
         >
           <Mail size={14} /> Email Us
         </a>
@@ -120,19 +120,19 @@ export default function PartnerPage() {
           </span>
         </div>
         <div className="relative z-10 max-w-2xl mx-auto">
-          <div className="inline-flex items-center gap-2 bg-[#613de6]/15 border border-[#613de6]/30 text-[#a78bfa] text-[10px] font-black uppercase tracking-[0.25em] px-4 py-2 rounded-full mb-6">
+          <div className="inline-flex items-center gap-2 bg-[#2457D6]/15 border border-[#2457D6]/30 text-[#7A9BEE] text-[10px] font-black uppercase tracking-[0.25em] px-4 py-2 rounded-full mb-6">
             <Handshake size={12} /> Partner with Us
           </div>
           <h1 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter leading-none mb-4">
             Grow Together<br />
-            <span className="text-[#a78bfa]">Build Together</span>
+            <span className="text-[#7A9BEE]">Build Together</span>
           </h1>
           <p className="text-gray-400 text-sm md:text-base font-bold max-w-lg mx-auto leading-relaxed">
             Whether you're building a product, running a brand, or growing a community — there's a partnership model designed for you.
           </p>
           <button
             onClick={() => document.getElementById("contact-form")?.scrollIntoView({ behavior: "smooth" })}
-            className="mt-8 inline-flex items-center gap-2 bg-[#613de6] text-white px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-wider hover:brightness-110 transition-all shadow-xl shadow-[#613de6]/30"
+            className="mt-8 inline-flex items-center gap-2 bg-[#2457D6] text-white px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-wider hover:brightness-110 transition-all shadow-xl shadow-[#2457D6]/30"
           >
             Explore Partnership <ArrowRight size={16} />
           </button>
@@ -140,7 +140,7 @@ export default function PartnerPage() {
       </section>
 
       {/* PARTNERSHIP MODELS */}
-      <section className="bg-[#1e293b] border-y border-white/5 px-6 py-16">
+      <section className="bg-[#142036] border-y border-white/5 px-6 py-16">
         <div className="max-w-4xl mx-auto">
           <p className="text-[10px] font-black uppercase tracking-[0.25em] text-gray-500 mb-2">Models</p>
           <h2 className="text-3xl font-black italic uppercase tracking-tighter mb-10">
@@ -150,7 +150,7 @@ export default function PartnerPage() {
             {MODELS.map((m) => (
               <div
                 key={m.title}
-                className="bg-[#0f172a] border border-white/5 rounded-2xl p-6 hover:border-white/15 transition-all group"
+                className="bg-[#0B1220] border border-white/5 rounded-2xl p-6 hover:border-white/15 transition-all group"
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="bg-white/5 w-11 h-11 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -179,8 +179,8 @@ export default function PartnerPage() {
         </h2>
         <div className="grid sm:grid-cols-2 gap-3">
           {BENEFITS.map((b) => (
-            <div key={b} className="flex items-start gap-3 bg-[#1e293b] border border-white/5 rounded-xl p-4">
-              <CheckCircle2 size={16} className="text-[#613de6] shrink-0 mt-0.5" />
+            <div key={b} className="flex items-start gap-3 bg-[#142036] border border-white/5 rounded-xl p-4">
+              <CheckCircle2 size={16} className="text-[#2457D6] shrink-0 mt-0.5" />
               <p className="text-xs font-bold text-gray-300">{b}</p>
             </div>
           ))}
@@ -188,7 +188,7 @@ export default function PartnerPage() {
       </section>
 
       {/* PROCESS */}
-      <section className="bg-[#1e293b] border-y border-white/5 px-6 py-16">
+      <section className="bg-[#142036] border-y border-white/5 px-6 py-16">
         <div className="max-w-3xl mx-auto">
           <p className="text-[10px] font-black uppercase tracking-[0.25em] text-gray-500 mb-2">The Process</p>
           <h2 className="text-3xl font-black italic uppercase tracking-tighter mb-10">
@@ -199,10 +199,10 @@ export default function PartnerPage() {
               <div key={p.step} className="flex gap-6 relative">
                 {/* Connector line */}
                 {i < PROCESS.length - 1 && (
-                  <div className="absolute left-[22px] top-12 w-px h-full bg-[#613de6]/30" />
+                  <div className="absolute left-[22px] top-12 w-px h-full bg-[#2457D6]/30" />
                 )}
-                <div className="shrink-0 w-11 h-11 rounded-2xl bg-[#613de6]/20 border border-[#613de6]/40 flex items-center justify-center">
-                  <span className="text-[10px] font-black text-[#a78bfa]">{p.step}</span>
+                <div className="shrink-0 w-11 h-11 rounded-2xl bg-[#2457D6]/20 border border-[#2457D6]/40 flex items-center justify-center">
+                  <span className="text-[10px] font-black text-[#7A9BEE]">{p.step}</span>
                 </div>
                 <div className="pb-10">
                   <h3 className="font-black text-white text-base mb-1">{p.title}</h3>
@@ -233,7 +233,7 @@ export default function PartnerPage() {
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder="Jane Smith"
-                className="w-full bg-[#1e293b] border border-white/5 focus:border-[#613de6]/50 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none transition-colors placeholder:text-gray-600"
+                className="w-full bg-[#142036] border border-white/5 focus:border-[#2457D6]/50 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none transition-colors placeholder:text-gray-600"
               />
             </div>
             <div>
@@ -243,7 +243,7 @@ export default function PartnerPage() {
                 value={form.company}
                 onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))}
                 placeholder="Your Company"
-                className="w-full bg-[#1e293b] border border-white/5 focus:border-[#613de6]/50 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none transition-colors placeholder:text-gray-600"
+                className="w-full bg-[#142036] border border-white/5 focus:border-[#2457D6]/50 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none transition-colors placeholder:text-gray-600"
               />
             </div>
           </div>
@@ -253,14 +253,14 @@ export default function PartnerPage() {
             <select
               value={form.type}
               onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
-              className="w-full bg-[#1e293b] border border-white/5 focus:border-[#613de6]/50 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none transition-colors"
+              className="w-full bg-[#142036] border border-white/5 focus:border-[#2457D6]/50 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none transition-colors"
             >
-              <option value="" className="bg-[#1e293b]">Select a model…</option>
-              <option value="Affiliate Program" className="bg-[#1e293b]">Affiliate Program</option>
-              <option value="White-Label" className="bg-[#1e293b]">White-Label</option>
-              <option value="Co-Marketing" className="bg-[#1e293b]">Co-Marketing</option>
-              <option value="Integration / API" className="bg-[#1e293b]">Integration / API</option>
-              <option value="Other" className="bg-[#1e293b]">Other</option>
+              <option value="" className="bg-[#142036]">Select a model…</option>
+              <option value="Affiliate Program" className="bg-[#142036]">Affiliate Program</option>
+              <option value="White-Label" className="bg-[#142036]">White-Label</option>
+              <option value="Co-Marketing" className="bg-[#142036]">Co-Marketing</option>
+              <option value="Integration / API" className="bg-[#142036]">Integration / API</option>
+              <option value="Other" className="bg-[#142036]">Other</option>
             </select>
           </div>
 
@@ -271,21 +271,21 @@ export default function PartnerPage() {
               onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
               placeholder="Briefly describe your company, your goal, and how you see a partnership working..."
               rows={5}
-              className="w-full bg-[#1e293b] border border-white/5 focus:border-[#613de6]/50 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none transition-colors placeholder:text-gray-600 resize-none"
+              className="w-full bg-[#142036] border border-white/5 focus:border-[#2457D6]/50 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none transition-colors placeholder:text-gray-600 resize-none"
             />
           </div>
 
           <button
             onClick={handleSend}
             disabled={!canSend}
-            className="w-full flex items-center justify-center gap-2 bg-[#613de6] hover:brightness-110 disabled:opacity-40 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-wider transition-all shadow-xl shadow-[#613de6]/30 active:scale-95"
+            className="w-full flex items-center justify-center gap-2 bg-[#2457D6] hover:brightness-110 disabled:opacity-40 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-wider transition-all shadow-xl shadow-[#2457D6]/30 active:scale-95"
           >
             <Mail size={16} /> Send Application
           </button>
 
           <p className="text-center text-[11px] text-gray-500 font-bold">
             Or email us directly at{" "}
-            <a href={`mailto:${CONTACT_EMAIL}`} className="text-[#a78bfa] hover:underline">
+            <a href={`mailto:${CONTACT_EMAIL}`} className="text-[#7A9BEE] hover:underline">
               {CONTACT_EMAIL}
             </a>
           </p>
@@ -295,7 +295,7 @@ export default function PartnerPage() {
       {/* FOOTER STRIP */}
       <div className="border-t border-white/5 px-6 py-6 text-center">
         <p className="text-[10px] font-black uppercase tracking-widest text-gray-600">
-          © 2026 Flyovahelp Arena · All rights reserved
+          © 2026 StraWins Arena · All rights reserved
         </p>
       </div>
     </div>

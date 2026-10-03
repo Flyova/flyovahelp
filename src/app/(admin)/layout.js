@@ -109,8 +109,8 @@ export default function AdminLayout({ children }) {
   };
 
   if (loading) return (
-    <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center text-white text-center">
-      <Loader2 className="animate-spin text-[#613de6] mb-4" size={40} />
+    <div className="min-h-screen bg-[#0B1220] flex flex-col items-center justify-center text-white text-center">
+      <Loader2 className="animate-spin text-[#2457D6] mb-4" size={40} />
       <p className="text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">
         Verifying Credentials...
       </p>
@@ -161,7 +161,7 @@ export default function AdminLayout({ children }) {
   const panelLabel = accessRole === "support" ? "Support Console" : accessRole === "staff" ? "Staff Console" : "Admin Engine";
 
   return (
-    <div className="flex min-h-screen bg-[#020617]">
+    <div className="flex min-h-screen bg-[#0B1220]">
       {/* Mobile Overlay */}
       {isSidebarOpen && (
         <div 
@@ -171,11 +171,11 @@ export default function AdminLayout({ children }) {
       )}
 
       {/* Admin Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-[#0f172a] text-white flex flex-col transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-[#0B1220] text-white flex flex-col transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         {/* Sidebar Header */}
         <div className="p-8 flex justify-between items-center shrink-0">
           <div>
-            <h2 className="text-2xl font-black italic tracking-tighter text-[#613de6]">FLY OVA</h2>
+            <h2 className="text-2xl font-black italic tracking-tighter text-[#2457D6]">FLY OVA</h2>
             <p className="text-[10px] font-black uppercase opacity-40 tracking-widest text-white">{panelLabel}</p>
           </div>
           <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-slate-400">
@@ -193,7 +193,7 @@ export default function AdminLayout({ children }) {
                 key={item.name} 
                 href={item.path} 
                 onClick={() => setIsSidebarOpen(false)}
-                className={`w-full flex items-center gap-3 px-5 py-3.5 text-[11px] font-black uppercase tracking-wider rounded-2xl transition-all mb-1 ${isActive ? "bg-[#613de6] text-white shadow-xl shadow-[#613de6]/30" : "text-slate-400 hover:bg-white/5 hover:text-white"}`}
+                className={`w-full flex items-center gap-3 px-5 py-3.5 text-[11px] font-black uppercase tracking-wider rounded-2xl transition-all mb-1 ${isActive ? "bg-[#2457D6] text-white shadow-xl shadow-[#2457D6]/30" : "text-slate-400 hover:bg-white/5 hover:text-white"}`}
               >
                 <item.icon size={18} /> {item.name}
               </Link>
@@ -217,8 +217,8 @@ export default function AdminLayout({ children }) {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Mobile Header Bar */}
-        <header className="lg:hidden bg-[#0f172a] border-b border-white/5 p-4 flex justify-between items-center shrink-0">
-          <h1 className="font-black italic text-[#613de6]">FLY OVA</h1>
+        <header className="lg:hidden bg-[#0B1220] border-b border-white/5 p-4 flex justify-between items-center shrink-0">
+          <h1 className="font-black italic text-[#2457D6]">FLY OVA</h1>
           <button 
             onClick={() => setIsSidebarOpen(true)} 
             className="p-2 bg-white/5 rounded-xl text-slate-300"
@@ -227,7 +227,7 @@ export default function AdminLayout({ children }) {
           </button>
         </header>
 
-        <main className="admin-theme flex-1 overflow-y-auto p-4 md:p-10 bg-[#020617]">
+        <main className="admin-theme flex-1 overflow-y-auto p-4 md:p-10 bg-[#0B1220]">
           {children}
         </main>
       </div>

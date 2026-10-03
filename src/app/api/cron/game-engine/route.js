@@ -267,7 +267,7 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
     lockOwnerId = `engine_${now}_${Math.random().toString(36).slice(2, 10)}`;
 
     const lockState = await withEngineTimeout(
-      "Flyova game engine lock",
+      "StraWins game engine lock",
       () => acquireEngineLock(adminDb, lockOwnerId)
     );
     if (!lockState.acquired) {
@@ -283,7 +283,7 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
 
     // 1. SETTLE EXPIRED GAMES
     const activeSnap = await withEngineTimeout(
-      "Expired Flyova round lookup",
+      "Expired StraWins round lookup",
       () => adminDb.collection("timed_games")
         .where("status", "==", "active")
         .where("endTime", "<=", now)
@@ -331,7 +331,7 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
 
     // 2. START NEW GAME
     const runningSnap = await withEngineTimeout(
-      "Active Flyova round lookup",
+      "Active StraWins round lookup",
       () => adminDb.collection("timed_games")
         .where("status", "==", "active")
         .limit(1)
@@ -466,7 +466,7 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
     });
   } catch (err) {
     engineFailed = true;
-    console.error("Flyova game engine failed:", err);
+    console.error("StraWins game engine failed:", err);
     return NextResponse.json({
       error: err.message,
       code: err.code || null,

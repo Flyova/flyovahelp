@@ -117,11 +117,11 @@ export default function AdminAgentManagement() {
                 <h2 style="color: #000; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">Application Status Update</h2>
                 <p>Hello ${selectedAgent.full_name},</p>
                 <p>${newStatus === "approved" 
-                  ? "Your application to join the Flyova Agent Network has been approved. You may now log in to access your agent dashboard." 
-                  : "We regret to inform you that your application to join the Flyova Agent Network has been declined at this time."
+                  ? "Your application to join the StraWins Agent Network has been approved. You may now log in to access your agent dashboard." 
+                  : "We regret to inform you that your application to join the StraWins Agent Network has been declined at this time."
                 }</p>
                 <div style="margin-top: 30px; font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
-                  Flyova Global Liquidity Control
+                  StraWins Global Liquidity Control
                 </div>
               </div>
             `
@@ -174,14 +174,14 @@ export default function AdminAgentManagement() {
         <div className="lg:col-span-4 space-y-4">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input type="text" placeholder="Search..." className="w-full bg-white border border-slate-200 p-4 pl-12 rounded-2xl text-[11px] font-bold uppercase outline-none focus:border-[#613de6] shadow-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            <input type="text" placeholder="Search..." className="w-full bg-white border border-slate-200 p-4 pl-12 rounded-2xl text-[11px] font-bold uppercase outline-none focus:border-[#2457D6] shadow-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
 
           <div className="space-y-2 overflow-y-auto max-h-[600px] pr-2 custom-scrollbar">
             {loading ? [1,2,3].map(i => <div key={i} className="h-24 bg-white rounded-[2rem] border border-slate-100 animate-pulse" />) : filteredAgents.map((agent) => (
-                <div key={agent.id} onClick={() => setSelectedAgent(agent)} className={`p-5 rounded-[2rem] border-2 cursor-pointer transition-all flex items-center justify-between group ${selectedAgent?.id === agent.id ? "border-[#613de6] bg-[#613de6]/5 shadow-lg" : "border-slate-100 bg-white hover:border-slate-200"}`}>
+                <div key={agent.id} onClick={() => setSelectedAgent(agent)} className={`p-5 rounded-[2rem] border-2 cursor-pointer transition-all flex items-center justify-between group ${selectedAgent?.id === agent.id ? "border-[#2457D6] bg-[#2457D6]/5 shadow-lg" : "border-slate-100 bg-white hover:border-slate-200"}`}>
                     <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black italic text-sm ${agent.banned ? 'bg-rose-100 text-rose-500' : 'bg-slate-100 text-[#613de6]'}`}>
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black italic text-sm ${agent.banned ? 'bg-rose-100 text-rose-500' : 'bg-slate-100 text-[#2457D6]'}`}>
                             {agent.full_name?.charAt(0).toUpperCase()}
                         </div>
                         <div>
@@ -192,7 +192,7 @@ export default function AdminAgentManagement() {
                             </p>
                         </div>
                     </div>
-                    <ChevronRight size={16} className={selectedAgent?.id === agent.id ? "text-[#613de6]" : "text-slate-300"} />
+                    <ChevronRight size={16} className={selectedAgent?.id === agent.id ? "text-[#2457D6]" : "text-slate-300"} />
                 </div>
             ))}
           </div>
@@ -216,7 +216,7 @@ export default function AdminAgentManagement() {
                             {activeTab === "pending" ? (
                                 <>
                                     <button onClick={() => updateStatus(selectedAgent.id, "rejected")} className="flex-1 bg-slate-100 px-6 py-4 rounded-2xl font-black uppercase text-[11px]">Reject</button>
-                                    <button onClick={() => updateStatus(selectedAgent.id, "approved")} className="flex-1 bg-[#613de6] text-white px-8 py-4 rounded-2xl font-black uppercase text-[11px] shadow-lg">Approve Agent</button>
+                                    <button onClick={() => updateStatus(selectedAgent.id, "approved")} className="flex-1 bg-[#2457D6] text-white px-8 py-4 rounded-2xl font-black uppercase text-[11px] shadow-lg">Approve Agent</button>
                                 </>
                             ) : (
                                 <button onClick={() => toggleBan(selectedAgent.id, selectedAgent.banned)} className={`flex-1 px-8 py-4 rounded-2xl font-black uppercase text-[11px] flex items-center justify-center gap-2 transition-all shadow-lg ${selectedAgent.banned ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
@@ -229,13 +229,13 @@ export default function AdminAgentManagement() {
 
                   <div className="p-10 space-y-10">
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                          <StatBox label="Business Balance" value={`$${selectedAgent.agent_balance || 0}`} color="text-[#613de6]" />
+                          <StatBox label="Business Balance" value={`$${selectedAgent.agent_balance || 0}`} color="text-[#2457D6]" />
                           <StatBox label="Deposit Rate" value={`${selectedAgent.deposit_rate || 0}`} sub="per 1 USD" />
                           <StatBox label="Withdraw Rate" value={`${selectedAgent.withdrawal_rate || 0}`} sub="per 1 USD" />
                           <StatBox label="Status" value={selectedAgent.banned ? 'Banned' : 'Active'} color={selectedAgent.banned ? 'text-rose-500' : 'text-emerald-500'} />
                       </div>
                       <div className="space-y-4">
-                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Landmark size={14} className="text-[#613de6]" /> Bank Details</p>
+                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Landmark size={14} className="text-[#2457D6]" /> Bank Details</p>
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                               <StatBox label="Bank Name" value={selectedAgent.bankName || "Not Provided"} />
                               <StatBox label="Account Name" value={selectedAgent.accountName || "Not Provided"} />
@@ -262,7 +262,7 @@ export default function AdminAgentManagement() {
 
 function TabButton({ active, onClick, icon: Icon, label, count }) {
     return (
-        <button onClick={onClick} className={`px-6 py-3.5 rounded-xl text-[10px] font-black uppercase transition-all flex items-center gap-2 ${active ? "bg-[#613de6] text-white" : "text-slate-400"}`}>
+        <button onClick={onClick} className={`px-6 py-3.5 rounded-xl text-[10px] font-black uppercase transition-all flex items-center gap-2 ${active ? "bg-[#2457D6] text-white" : "text-slate-400"}`}>
             <Icon size={14} /> {label} {count !== null && <span className="ml-1 opacity-60">({count})</span>}
         </button>
     );
@@ -271,7 +271,7 @@ function TabButton({ active, onClick, icon: Icon, label, count }) {
 function InfoBadge({ icon: Icon, label }) {
     return (
         <div className="flex items-center gap-2 bg-white border border-slate-100 px-3 py-1.5 rounded-full shadow-sm">
-            <Icon size={12} className="text-[#613de6]" />
+            <Icon size={12} className="text-[#2457D6]" />
             <span className="text-[10px] font-black uppercase text-slate-600">{label}</span>
         </div>
     );

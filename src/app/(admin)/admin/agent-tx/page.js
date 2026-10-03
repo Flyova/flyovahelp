@@ -340,7 +340,7 @@ export default function AgentTransactions() {
           <input 
             type="text"
             placeholder="Search by Trade ID, PIN, email, agent or user..."
-            className="w-full bg-white border border-slate-200 pl-12 pr-6 py-3 rounded-2xl text-xs font-bold outline-none focus:ring-2 ring-indigo-500/10 transition-all shadow-sm"
+            className="w-full bg-white border border-slate-200 pl-12 pr-6 py-3 rounded-2xl text-xs font-bold outline-none focus:ring-2 ring-[#2457D6]/10 transition-all shadow-sm"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -364,7 +364,7 @@ export default function AgentTransactions() {
               {loading ? (
                 <tr>
                   <td colSpan="6" className="p-20 text-center">
-                    <Loader2 className="animate-spin text-indigo-600 mx-auto" size={32} />
+                    <Loader2 className="animate-spin text-[#2457D6] mx-auto" size={32} />
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
@@ -383,7 +383,7 @@ export default function AgentTransactions() {
                           : status === "pending"
                             ? "bg-orange-100 text-orange-600"
                             : status === "acknowledged"
-                              ? "bg-indigo-100 text-indigo-600"
+                              ? "bg-[#D7E2FF] text-[#2457D6]"
                               : status === "refunded"
                                 ? "bg-amber-100 text-amber-700"
                                 : "bg-slate-100 text-slate-400";
@@ -401,7 +401,7 @@ export default function AgentTransactions() {
                     </td>
                     <td className="p-6">
                       <div className="flex items-center gap-2">
-                        <ShieldCheck size={14} className="text-indigo-600" />
+                        <ShieldCheck size={14} className="text-[#2457D6]" />
                         <div>
                           <p className="text-sm font-black text-slate-800 italic">
                             {agentNames[trade.agentId] || trade.agentName || "Unknown Agent"}
@@ -446,7 +446,7 @@ export default function AgentTransactions() {
                                   setChatLoading(true);
                                   setChatTrade(trade);
                                 }}
-                                className="flex items-center gap-1 px-3 py-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-500 hover:text-white transition-all border border-indigo-100"
+                                className="flex items-center gap-1 px-3 py-2 bg-[#D7E2FF] text-[#2457D6] rounded-xl hover:bg-[#2457D6] hover:text-white transition-all border border-[#D7E2FF]"
                             >
                                 <MessageSquare size={12} />
                                 <span className="text-[8px] font-black uppercase tracking-tighter">View Chat</span>
@@ -485,7 +485,7 @@ export default function AgentTransactions() {
             <button 
               onClick={loadMore}
               disabled={loadingMore}
-              className="flex items-center gap-2 px-8 py-3 bg-white border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-indigo-600 transition-all shadow-sm"
+              className="flex items-center gap-2 px-8 py-3 bg-white border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#2457D6] transition-all shadow-sm"
             >
               {loadingMore ? <Loader2 size={14} className="animate-spin" /> : <>Fetch Older Trades <ChevronDown size={14} /></>}
             </button>
@@ -496,8 +496,8 @@ export default function AgentTransactions() {
       {chatTrade && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 md:p-8">
           <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => setChatTrade(null)} />
-          <div className="relative z-10 w-full max-w-4xl bg-[#0f172a] rounded-[2rem] border border-white/10 shadow-2xl overflow-hidden text-white">
-            <div className="p-5 md:p-6 border-b border-white/10 flex items-center justify-between bg-[#111827]">
+          <div className="relative z-10 w-full max-w-4xl bg-[#0B1220] rounded-[2rem] border border-white/10 shadow-2xl overflow-hidden text-white">
+            <div className="p-5 md:p-6 border-b border-white/10 flex items-center justify-between bg-[#0B1220]">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Trade Chat Monitor</p>
                 <h3 className="text-lg font-black italic uppercase tracking-tight text-white">
@@ -515,10 +515,10 @@ export default function AgentTransactions() {
               </button>
             </div>
 
-            <div className="max-h-[70vh] overflow-y-auto p-5 md:p-6 bg-[#020617] space-y-3">
+            <div className="max-h-[70vh] overflow-y-auto p-5 md:p-6 bg-[#0B1220] space-y-3">
               {chatLoading ? (
                 <div className="h-40 flex items-center justify-center">
-                  <Loader2 size={28} className="animate-spin text-indigo-600" />
+                  <Loader2 size={28} className="animate-spin text-[#2457D6]" />
                 </div>
               ) : tradeMessages.length === 0 ? (
                 <div className="h-40 flex items-center justify-center text-[11px] font-black uppercase tracking-widest text-slate-300">
@@ -534,14 +534,14 @@ export default function AgentTransactions() {
                     <div
                       key={msg.id}
                       className={`rounded-2xl p-4 border ${
-                        sender.isAgent ? "bg-[#111827] border-indigo-500/30" : "bg-[#1e293b] border-white/10"
+                        sender.isAgent ? "bg-[#0B1220] border-[#2457D6]/30" : "bg-[#142036] border-white/10"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2">
                           <span
                             className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
-                              sender.isAgent ? "bg-indigo-600 text-white" : "bg-slate-700 text-white"
+                              sender.isAgent ? "bg-[#2457D6] text-white" : "bg-slate-700 text-white"
                             }`}
                           >
                             {sender.role}
@@ -553,7 +553,7 @@ export default function AgentTransactions() {
 
                       {msg.image ? (
                         <a href={msg.image} target="_blank" rel="noreferrer" className="block group">
-                          <div className="inline-flex items-center gap-2 text-[11px] font-black text-indigo-600 mb-2">
+                          <div className="inline-flex items-center gap-2 text-[11px] font-black text-[#2457D6] mb-2">
                             <ImageIcon size={13} /> Image Attachment
                           </div>
                           <img

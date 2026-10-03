@@ -196,7 +196,7 @@ export default function AdminDepositList() {
                     ? "The funds have been added to your wallet and are ready for use." 
                     : "Unfortunately, your deposit could not be verified. Please contact support if you believe this is an error."}</p>
                   <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
-                    Flyova Administration Team
+                    StraWins Administration Team
                   </div>
                 </div>
               `
@@ -253,7 +253,7 @@ export default function AdminDepositList() {
           <h1 className="text-2xl font-black italic uppercase text-slate-800 tracking-tighter">Deposit Center</h1>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Verify Screenshot & TXID</p>
         </div>
-        <div className="bg-[#613de6] text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg shadow-[#613de6]/20">
+        <div className="bg-[#2457D6] text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg shadow-[#2457D6]/20">
             <Clock size={16} />
             <span className="text-[10px] font-black uppercase tracking-widest">
               {viewMode === "pending" ? `${pendingCount} Pending` : viewMode === "history" ? `${historyCount} History` : `${deposits.length} Total`}
@@ -265,14 +265,14 @@ export default function AdminDepositList() {
         <button
           type="button"
           onClick={() => setViewMode("pending")}
-          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === "pending" ? "bg-[#613de6] text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === "pending" ? "bg-[#2457D6] text-white" : "bg-white text-slate-500 border border-slate-200"}`}
         >
           Pending ({pendingCount})
         </button>
         <button
           type="button"
           onClick={() => setViewMode("history")}
-          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === "history" ? "bg-[#1e293b] text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === "history" ? "bg-[#142036] text-white" : "bg-white text-slate-500 border border-slate-200"}`}
         >
           History ({historyCount})
         </button>
@@ -291,7 +291,7 @@ export default function AdminDepositList() {
         <input 
           type="text" 
           placeholder="Search User or TXID..." 
-          className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:border-[#613de6] font-bold"
+          className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:border-[#2457D6] font-bold"
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
@@ -310,7 +310,7 @@ export default function AdminDepositList() {
           </thead>
           <tbody className="divide-y divide-slate-100 block md:table-row-group">
             {loading ? (
-                <tr className="block md:table-row"><td colSpan="5" className="p-12 text-center"><Loader2 className="animate-spin mx-auto text-[#fc7952]" /></td></tr>
+                <tr className="block md:table-row"><td colSpan="5" className="p-12 text-center"><Loader2 className="animate-spin mx-auto text-[#8B1E3F]" /></td></tr>
             ) : filtered.length === 0 ? (
                 <tr className="block md:table-row"><td colSpan="5" className="p-12 text-center text-slate-300 font-black italic uppercase text-xs tracking-widest">No Records Found</td></tr>
             ) : filtered.map((item) => (
@@ -319,7 +319,7 @@ export default function AdminDepositList() {
                 {/* PLAYER INFO */}
                 <td className="block md:table-cell p-2 md:p-6">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-[#613de6]/10 text-[#613de6] rounded-xl flex items-center justify-center font-black italic text-sm">
+                    <div className="w-10 h-10 bg-[#2457D6]/10 text-[#2457D6] rounded-xl flex items-center justify-center font-black italic text-sm">
                         {(userCache[item.userId]?.name || "U").charAt(0).toUpperCase()}
                     </div>
                     <div>
@@ -327,7 +327,7 @@ export default function AdminDepositList() {
                             {userCache[item.userId]?.name || "Resolving Name..."}
                         </p>
                         <p className="text-[9px] font-mono font-bold text-slate-400 uppercase">ID: {item.userId}</p>
-                        <p className="text-[9px] font-mono font-black text-[#613de6] uppercase tracking-widest mt-0.5">
+                        <p className="text-[9px] font-mono font-black text-[#2457D6] uppercase tracking-widest mt-0.5">
                             PIN: {userCache[item.userId]?.pin || "—"}
                         </p>
                     </div>
@@ -368,11 +368,11 @@ export default function AdminDepositList() {
                                     <a 
                                         href={`https://tronscan.org/#/transaction/${item.transactionHash}`} 
                                         target="_blank" 
-                                        className="bg-slate-100 p-1.5 rounded-lg text-slate-400 hover:text-[#613de6] transition-colors"
+                                        className="bg-slate-100 p-1.5 rounded-lg text-slate-400 hover:text-[#2457D6] transition-colors"
                                     >
                                         <Link2 size={12} />
                                     </a>
-                                    <button onClick={() => copyToClipboard(item.transactionHash)} className="bg-slate-100 p-1.5 rounded-lg text-slate-400 hover:text-[#613de6]">
+                                    <button onClick={() => copyToClipboard(item.transactionHash)} className="bg-slate-100 p-1.5 rounded-lg text-slate-400 hover:text-[#2457D6]">
                                         <Copy size={12} />
                                     </button>
                                 </div>

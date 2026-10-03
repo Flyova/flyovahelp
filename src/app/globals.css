@@ -1,28 +1,63 @@
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,700;1,800;1,900&display=swap");
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* ── StraWins brand system ─────────────────────────── */
+  --color-ink: #0b1220;
+  --color-ink-elevated: #142036;
+  --color-paper: #f5f3ee;
+  --color-brand: #2457d6;
+  --color-brand-hover: #1d4fc4;
+  --color-brand-soft: #d7e2ff;
+  --color-brand-muted: #7a9bee;
+  --color-maroon: #8b1e3f;
+  --color-maroon-hover: #a62a4d;
+
+  --background: var(--color-ink);
+  --foreground: var(--color-paper);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-ink: var(--color-ink);
+  --color-paper: var(--color-paper);
+  --color-brand: var(--color-brand);
+  --color-maroon: var(--color-maroon);
+  --font-sans: "Montserrat", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --font-mono: "Montserrat", ui-monospace, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0b1220;
+    --foreground: #f5f3ee;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Montserrat", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, Helvetica, sans-serif;
+}
+
+/* Force Montserrat across the whole app (mobile + desktop) */
+button,
+input,
+select,
+textarea,
+a,
+p,
+span,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+li,
+div {
+  font-family: inherit;
 }
 
 @keyframes flicker {
@@ -37,27 +72,27 @@ body {
 }
 
 /* ── TIPTAP / BLOG PROSE ─────────────────────────────────────────────── */
-.tiptap-prose { color: #e2e8f0; }
-.tiptap-prose h1 { font-size: 1.9rem; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: -0.03em; margin: 1.5rem 0 0.6rem; line-height: 1.15; color: #fff; }
-.tiptap-prose h2 { font-size: 1.45rem; font-weight: 800; letter-spacing: -0.02em; margin: 1.4rem 0 0.5rem; line-height: 1.25; color: #fff; }
-.tiptap-prose h3 { font-size: 1.15rem; font-weight: 800; margin: 1.2rem 0 0.4rem; color: #fff; }
+.tiptap-prose { color: #f5f3ee; }
+.tiptap-prose h1 { font-size: 1.9rem; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: -0.03em; margin: 1.5rem 0 0.6rem; line-height: 1.15; color: #f5f3ee; font-family: "Montserrat", sans-serif; }
+.tiptap-prose h2 { font-size: 1.45rem; font-weight: 800; letter-spacing: -0.02em; margin: 1.4rem 0 0.5rem; line-height: 1.25; color: #f5f3ee; font-family: "Montserrat", sans-serif; }
+.tiptap-prose h3 { font-size: 1.15rem; font-weight: 800; margin: 1.2rem 0 0.4rem; color: #f5f3ee; font-family: "Montserrat", sans-serif; }
 .tiptap-prose p { margin: 0.85rem 0; line-height: 1.8; font-size: 0.95rem; }
 .tiptap-prose p:first-child { margin-top: 0; }
 .tiptap-prose ul { list-style: disc; padding-left: 1.5rem; margin: 0.75rem 0; }
 .tiptap-prose ol { list-style: decimal; padding-left: 1.5rem; margin: 0.75rem 0; }
 .tiptap-prose li { margin: 0.3rem 0; line-height: 1.75; }
-.tiptap-prose blockquote { border-left: 3px solid #613de6; padding-left: 1.1rem; margin: 1.25rem 0; color: #94a3b8; font-style: italic; }
-.tiptap-prose a { color: #fc7952; text-decoration: underline; }
-.tiptap-prose a:hover { color: #ff9a7a; }
+.tiptap-prose blockquote { border-left: 3px solid #2457d6; padding-left: 1.1rem; margin: 1.25rem 0; color: rgba(245, 243, 238, 0.65); font-style: italic; }
+.tiptap-prose a { color: #7a9bee; text-decoration: underline; }
+.tiptap-prose a:hover { color: #d7e2ff; }
 .tiptap-prose img { max-width: 100%; border-radius: 12px; margin: 1.25rem 0; display: block; }
-.tiptap-prose strong { font-weight: 800; color: #fff; }
+.tiptap-prose strong { font-weight: 800; color: #f5f3ee; }
 .tiptap-prose em { font-style: italic; }
 .tiptap-prose u { text-decoration: underline; }
 .tiptap-prose s { text-decoration: line-through; }
-.tiptap-prose code { background: rgba(255,255,255,0.08); padding: 0.1em 0.45em; border-radius: 5px; font-family: monospace; font-size: 0.85em; color: #a78bfa; }
-.tiptap-prose pre { background: #020617; padding: 1rem 1.25rem; border-radius: 12px; overflow-x: auto; margin: 1.25rem 0; border: 1px solid rgba(255,255,255,0.06); }
-.tiptap-prose pre code { background: none; padding: 0; color: #e2e8f0; }
-.tiptap-prose hr { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 2rem 0; }
+.tiptap-prose code { background: rgba(245,243,238,0.08); padding: 0.1em 0.45em; border-radius: 5px; font-family: monospace; font-size: 0.85em; color: #7a9bee; }
+.tiptap-prose pre { background: #0b1220; padding: 1rem 1.25rem; border-radius: 12px; overflow-x: auto; margin: 1.25rem 0; border: 1px solid rgba(245,243,238,0.08); }
+.tiptap-prose pre code { background: none; padding: 0; color: #f5f3ee; }
+.tiptap-prose hr { border: none; border-top: 1px solid rgba(245,243,238,0.1); margin: 2rem 0; }
 .tiptap-prose .text-left { text-align: left; }
 .tiptap-prose .text-center { text-align: center; }
 .tiptap-prose .text-right { text-align: right; }
@@ -65,7 +100,7 @@ body {
 /* Editor placeholder */
 .tiptap-prose p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
-  color: rgba(255,255,255,0.18);
+  color: rgba(245,243,238,0.25);
   pointer-events: none;
   float: left;
   height: 0;
@@ -73,56 +108,56 @@ body {
 
 /* ── ADMIN DARK THEME NORMALIZATION ───────────────────────────────────── */
 .admin-theme {
-  color: #e2e8f0;
+  color: #f5f3ee;
 }
 
 .admin-theme .bg-white {
-  background-color: #0f172a !important;
+  background-color: #0b1220 !important;
 }
 
 .admin-theme .bg-slate-50 {
-  background-color: #111827 !important;
+  background-color: #0b1220 !important;
 }
 
 .admin-theme .bg-slate-50\/50 {
-  background-color: rgba(17, 24, 39, 0.7) !important;
+  background-color: rgba(11, 18, 32, 0.7) !important;
 }
 
 .admin-theme .bg-slate-100 {
-  background-color: #1f2937 !important;
+  background-color: #142036 !important;
 }
 
 .admin-theme .bg-slate-100\/30 {
-  background-color: rgba(31, 41, 55, 0.3) !important;
+  background-color: rgba(20, 32, 54, 0.3) !important;
 }
 
 .admin-theme .border-slate-50,
 .admin-theme .border-slate-100,
 .admin-theme .border-slate-200 {
-  border-color: rgba(148, 163, 184, 0.16) !important;
+  border-color: rgba(245, 243, 238, 0.14) !important;
 }
 
 .admin-theme .text-slate-900 {
-  color: #f8fafc !important;
+  color: #f5f3ee !important;
 }
 
 .admin-theme .text-slate-800 {
-  color: #f1f5f9 !important;
+  color: #f5f3ee !important;
 }
 
 .admin-theme .text-slate-700 {
-  color: #e2e8f0 !important;
+  color: rgba(245, 243, 238, 0.85) !important;
 }
 
 .admin-theme .text-slate-600 {
-  color: #cbd5e1 !important;
+  color: rgba(245, 243, 238, 0.65) !important;
 }
 
 .admin-theme .text-slate-500,
 .admin-theme .text-slate-400 {
-  color: #94a3b8 !important;
+  color: rgba(245, 243, 238, 0.5) !important;
 }
 
 .admin-theme .text-slate-300 {
-  color: #64748b !important;
+  color: rgba(245, 243, 238, 0.35) !important;
 }

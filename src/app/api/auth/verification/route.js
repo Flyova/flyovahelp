@@ -72,7 +72,7 @@ async function resendVerificationCode(emailInput) {
   const fullName = profile.userData?.fullName || profile.userData?.username || "Player";
   const emailResult = await sendEmail(
     profile.email,
-    "Flyovahelp Verification Code",
+    "StraWins Verification Code",
     `<p>Hello ${fullName}, your verification code is <strong>${otpCode}</strong>.</p>`
   );
 

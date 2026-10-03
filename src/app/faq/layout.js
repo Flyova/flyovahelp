@@ -1,23 +1,23 @@
-const PAGE_URL = "https://flyovahelp.com/faq";
+const PAGE_URL = "https://strawins.com/faq";
 
 export const metadata = {
   title: "FAQ",
   description:
-    "Get answers to common Flyovahelp questions about deposits, withdrawals, agents, staking, referrals, and account access.",
+    "Get answers to common StraWins questions about deposits, withdrawals, agents, staking, referrals, and account access.",
   keywords: [
-    "Flyovahelp FAQ",
-    "Flyovahelp deposit",
-    "Flyovahelp withdrawal",
-    "Flyovahelp agent",
-    "Flyovahelp support",
+    "StraWins FAQ",
+    "StraWins deposit",
+    "StraWins withdrawal",
+    "StraWins agent",
+    "StraWins support",
   ],
   alternates: {
     canonical: PAGE_URL,
   },
   openGraph: {
-    title: "Flyovahelp FAQ",
+    title: "StraWins FAQ",
     description:
-      "Everything you need to know about how Flyovahelp works.",
+      "Everything you need to know about how StraWins works.",
     url: PAGE_URL,
     type: "website",
   },

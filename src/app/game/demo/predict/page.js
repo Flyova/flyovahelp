@@ -137,7 +137,7 @@ export default function DemoPredict() {
 
   if (wallet === null) {
     return (
-      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -147,7 +147,7 @@ export default function DemoPredict() {
   const timerColor = timeLeft > 12 ? "#22c55e" : timeLeft > 6 ? "#f59e0b" : "#ef4444";
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white pb-24">
+    <div className="min-h-screen bg-[#0B1220] text-white pb-24">
       {/* DEMO BANNER */}
       <div className="w-full bg-amber-500/20 border-b border-amber-500/40 px-4 py-2 flex items-center justify-between">
         <span className="text-amber-400 text-xs font-black uppercase tracking-widest">
@@ -184,21 +184,21 @@ export default function DemoPredict() {
 
         {/* Stats row */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-[#1e293b] rounded-2xl p-3 text-center">
+          <div className="bg-[#142036] rounded-2xl p-3 text-center">
             <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Session Earnings</p>
             <div className="flex items-center justify-center gap-1">
               <TrendingUp size={14} className="text-emerald-400" />
               <span className="text-base font-black text-emerald-400">+${totalEarnings.toFixed(2)}</span>
             </div>
           </div>
-          <div className="bg-[#1e293b] rounded-2xl p-3 text-center">
+          <div className="bg-[#142036] rounded-2xl p-3 text-center">
             <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Reward/Win</p>
             <span className="text-base font-black text-yellow-400">+${WIN_REWARD.toFixed(2)}</span>
           </div>
         </div>
 
         {/* Timer */}
-        <div className="bg-[#1e293b] rounded-2xl p-4">
+        <div className="bg-[#142036] rounded-2xl p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Timer size={14} style={{ color: timerColor }} />
@@ -217,12 +217,12 @@ export default function DemoPredict() {
         </div>
 
         {/* Choice Buttons */}
-        <div className="bg-[#1e293b] rounded-2xl p-4">
+        <div className="bg-[#142036] rounded-2xl p-4">
           <p className="text-xs text-gray-400 uppercase tracking-wider mb-3">Make Your Prediction</p>
           <div className="grid grid-cols-3 gap-3">
             {CONDITIONS.map((c) => {
               const isSelected = selectedChoice === c;
-              const colors = { Odd: "#a78bfa", Even: "#34d399", Both: "#f59e0b" };
+              const colors = { Odd: "#7A9BEE", Even: "#34d399", Both: "#f59e0b" };
               const color = colors[c];
               return (
                 <button
@@ -231,7 +231,7 @@ export default function DemoPredict() {
                   disabled={hasBet || phase !== "betting"}
                   className="py-4 rounded-2xl font-black text-sm transition-all active:scale-95 disabled:opacity-60"
                   style={{
-                    background: isSelected ? `${color}22` : "#0f172a",
+                    background: isSelected ? `${color}22` : "#0B1220",
                     border: `2px solid ${isSelected ? color : "#334155"}`,
                     color: isSelected ? color : "#64748b",
                   }}
@@ -264,7 +264,7 @@ export default function DemoPredict() {
         )}
 
         {phase === "resolving" && (
-          <div className="bg-[#1e293b] rounded-2xl p-4 text-center">
+          <div className="bg-[#142036] rounded-2xl p-4 text-center">
             <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
             <p className="text-sm text-gray-400">Resolving round…</p>
           </div>
@@ -299,7 +299,7 @@ export default function DemoPredict() {
 
         {/* History */}
         {history.length > 0 && (
-          <div className="bg-[#1e293b] rounded-2xl p-4">
+          <div className="bg-[#142036] rounded-2xl p-4">
             <p className="text-xs text-gray-400 uppercase tracking-wider mb-3">Round History</p>
             <div className="space-y-2">
               {history.map((h, i) => (

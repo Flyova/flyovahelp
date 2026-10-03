@@ -63,47 +63,47 @@ export default function AgentWithdraw() {
     }
   };
 
-  if (loading) return <div className="min-h-screen bg-[#0f172a] flex items-center justify-center"><Loader2 className="animate-spin text-[#613de6]" /></div>;
+  if (loading) return <div className="min-h-screen bg-[#0B1220] flex items-center justify-center"><Loader2 className="animate-spin text-[#2457D6]" /></div>;
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white pb-20">
+    <div className="min-h-screen bg-[#0B1220] text-white pb-20">
       <Header />
       <main className="pt-28 px-6 max-w-2xl mx-auto">
         <header className="mb-10 flex justify-between items-end">
           <div>
             <h1 className="text-3xl font-black italic uppercase tracking-tighter">Withdraw via Agent</h1>
-            <p className="text-[10px] font-black text-[#613de6] uppercase tracking-widest flex items-center gap-1">
+            <p className="text-[10px] font-black text-[#2457D6] uppercase tracking-widest flex items-center gap-1">
               <Globe size={12}/> Trusted Agents in {userCountry}
             </p>
           </div>
-          <div className="bg-[#1e293b] p-3 rounded-2xl border border-white/5">
+          <div className="bg-[#142036] p-3 rounded-2xl border border-white/5">
             <ShieldCheck className="text-green-500" />
           </div>
         </header>
 
         <div className="grid gap-4">
           {agents.length === 0 ? (
-            <div className="bg-[#1e293b] p-10 rounded-[2.5rem] border border-dashed border-white/10 text-center">
+            <div className="bg-[#142036] p-10 rounded-[2.5rem] border border-dashed border-white/10 text-center">
               <p className="text-gray-500 font-bold uppercase text-xs">No agents available in your country yet.</p>
             </div>
           ) : (
             agents.map((agent) => (
-              <div key={agent.id} className="bg-[#1e293b] p-6 rounded-[2rem] border border-white/5 flex items-center justify-between group hover:border-[#613de6]/50 transition-all">
+              <div key={agent.id} className="bg-[#142036] p-6 rounded-[2rem] border border-white/5 flex items-center justify-between group hover:border-[#2457D6]/50 transition-all">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-[#0f172a] rounded-2xl flex items-center justify-center font-black italic text-[#613de6] border border-white/5">
+                  <div className="w-12 h-12 bg-[#0B1220] rounded-2xl flex items-center justify-center font-black italic text-[#2457D6] border border-white/5">
                     {agent.full_name.charAt(0)}
                   </div>
                   <div>
                     <h3 className="font-black uppercase italic text-sm">{agent.full_name}</h3>
                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-tighter">
-                      Rate: <span className="text-[#fc7952]">{agent.withdrawal_rate || 0} / USD</span>
+                      Rate: <span className="text-[#8B1E3F]">{agent.withdrawal_rate || 0} / USD</span>
                     </p>
                   </div>
                 </div>
                 
                 <button 
                   onClick={() => initiateWithdrawal(agent)}
-                  className="bg-[#613de6] p-4 rounded-2xl shadow-lg shadow-[#613de6]/20 group-hover:scale-110 transition-transform"
+                  className="bg-[#2457D6] p-4 rounded-2xl shadow-lg shadow-[#2457D6]/20 group-hover:scale-110 transition-transform"
                 >
                   <ArrowRight size={20} />
                 </button>

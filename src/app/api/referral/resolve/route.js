@@ -20,7 +20,7 @@ export async function GET(request) {
       return NextResponse.json({
         valid: true,
         uid: uidSnap.id,
-        name: d.fullName || d.username || "Flyova Member",
+        name: d.fullName || d.username || "StraWins Member",
       });
     }
 
@@ -36,7 +36,7 @@ export async function GET(request) {
       return NextResponse.json({
         valid: true,
         uid: refDoc.id,
-        name: d.fullName || d.username || "Flyova Member",
+        name: d.fullName || d.username || "StraWins Member",
       });
     }
 

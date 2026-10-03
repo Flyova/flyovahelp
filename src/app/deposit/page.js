@@ -264,7 +264,7 @@ export default function DepositPage() {
                     </div>
                     <p>Please log in to your agent panel to confirm the transaction once funds are received.</p>
                     <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
-                      Flyova Agent Network
+                      StraWins Agent Network
                     </div>
                   </div>
                 `
@@ -288,8 +288,8 @@ export default function DepositPage() {
   // INITIAL LOAD
   if (systemLoading) {
     return (
-      <div className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center">
-        <Loader2 className="animate-spin text-[#613de6]" size={40} />
+      <div className="min-h-screen bg-[#0B1220] flex flex-col items-center justify-center">
+        <Loader2 className="animate-spin text-[#2457D6]" size={40} />
       </div>
     );
   }
@@ -297,7 +297,7 @@ export default function DepositPage() {
   // DISABLED STATE VIEW
   if (systemSettings && systemSettings.depositEnabled === false) {
     return (
-        <div className="min-h-screen bg-[#0f172a] p-6 flex flex-col items-center justify-center text-center">
+        <div className="min-h-screen bg-[#0B1220] p-6 flex flex-col items-center justify-center text-center">
             <div className="bg-rose-500/10 p-8 rounded-full mb-8 border border-rose-500/20">
                 <ShieldAlert size={60} className="text-rose-500" />
             </div>
@@ -307,7 +307,7 @@ export default function DepositPage() {
             </p>
             <button
               onClick={() => router.push('/dashboard')}
-              className="mt-12 bg-[#1e293b] text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/5 active:scale-95 transition-all"
+              className="mt-12 bg-[#142036] text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/5 active:scale-95 transition-all"
             >
                 Back to Dashboard
             </button>
@@ -318,7 +318,7 @@ export default function DepositPage() {
   // ACCOUNT-LEVEL RESTRICTION VIEW
   if (userData.restrictDeposit) {
     return (
-        <div className="min-h-screen bg-[#0f172a] p-6 flex flex-col items-center justify-center text-center">
+        <div className="min-h-screen bg-[#0B1220] p-6 flex flex-col items-center justify-center text-center">
             <div className="bg-rose-500/10 p-8 rounded-full mb-8 border border-rose-500/20">
                 <ShieldAlert size={60} className="text-rose-500" />
             </div>
@@ -328,7 +328,7 @@ export default function DepositPage() {
             </p>
             <button
               onClick={() => router.push('/dashboard')}
-              className="mt-12 bg-[#1e293b] text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/5 active:scale-95 transition-all"
+              className="mt-12 bg-[#142036] text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/5 active:scale-95 transition-all"
             >
                 Back to Dashboard
             </button>
@@ -339,13 +339,13 @@ export default function DepositPage() {
   const quickAmounts = [10, 20, 50, 100, 500];
 
   return (
-    <div className="min-h-screen bg-[#0f172a] pb-24 text-white">
+    <div className="min-h-screen bg-[#0B1220] pb-24 text-white">
       {/* Header */}
-      <div className="bg-[#613de6] p-10 pt-16 rounded-b-[3.5rem] shadow-2xl relative overflow-hidden text-center">
+      <div className="bg-[#2457D6] p-10 pt-16 rounded-b-[3.5rem] shadow-2xl relative overflow-hidden text-center">
         <div className="absolute top-0 right-0 p-10 opacity-10 rotate-12"><Wallet size={120} /></div>
         <p className="relative z-10 text-white/60 text-[10px] font-black uppercase tracking-[0.3em] mb-2">My Balance</p>
         <h1 className="relative z-10 text-5xl font-black italic tracking-tighter">
-          <span className="text-[#fc7952] mr-1">$</span>{userData.main.toLocaleString()}
+          <span className="text-[#8B1E3F] mr-1">$</span>{userData.main.toLocaleString()}
         </h1>
       </div>
 
@@ -377,12 +377,12 @@ export default function DepositPage() {
           <p className="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest">Deposit Method</p>
           <div className="grid grid-cols-2 gap-3">
             <button onClick={() => setMethod("usdt")} 
-              className={`p-5 rounded-3xl border flex flex-col items-center gap-2 transition-all ${method === 'usdt' ? 'bg-[#613de6] border-[#613de6]' : 'bg-[#1e293b] border-white/5 opacity-60'}`}>
+              className={`p-5 rounded-3xl border flex flex-col items-center gap-2 transition-all ${method === 'usdt' ? 'bg-[#2457D6] border-[#2457D6]' : 'bg-[#142036] border-white/5 opacity-60'}`}>
               <Coins size={22} />
               <span className="text-[10px] font-black uppercase">Direct USDT</span>
             </button>
             <button onClick={() => setMethod("agent")} 
-              className={`p-5 rounded-3xl border flex flex-col items-center gap-2 transition-all ${method === 'agent' ? 'bg-[#613de6] border-[#613de6]' : 'bg-[#1e293b] border-white/5 opacity-60'}`}>
+              className={`p-5 rounded-3xl border flex flex-col items-center gap-2 transition-all ${method === 'agent' ? 'bg-[#2457D6] border-[#2457D6]' : 'bg-[#142036] border-white/5 opacity-60'}`}>
               <UserCheck size={22} />
               <span className="text-[10px] font-black uppercase">Local Agent</span>
             </button>
@@ -394,15 +394,15 @@ export default function DepositPage() {
           <div className="grid grid-cols-3 gap-2">
             {quickAmounts.map((amt) => (
               <button key={amt} onClick={() => setDepositAmount(amt.toString())}
-                className="bg-[#1e293b] py-3 rounded-xl font-black text-xs border border-white/5 active:scale-95 transition-all hover:border-[#613de6]">
+                className="bg-[#142036] py-3 rounded-xl font-black text-xs border border-white/5 active:scale-95 transition-all hover:border-[#2457D6]">
                 ${amt}
               </button>
             ))}
           </div>
           <div className="relative">
-            <span className="absolute left-5 top-1/2 -translate-y-1/2 font-black text-[#613de6] text-xl">$</span>
+            <span className="absolute left-5 top-1/2 -translate-y-1/2 font-black text-[#2457D6] text-xl">$</span>
             <input type="number" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)}
-              placeholder="0.00" className="w-full bg-[#1e293b] border border-white/5 p-6 pl-12 rounded-4xl font-black text-2xl outline-none focus:border-[#613de6]/50 transition-all" />
+              placeholder="0.00" className="w-full bg-[#142036] border border-white/5 p-6 pl-12 rounded-4xl font-black text-2xl outline-none focus:border-[#2457D6]/50 transition-all" />
           </div>
         </div>
 
@@ -411,7 +411,7 @@ export default function DepositPage() {
              <div className="flex justify-between items-end px-1">
                 <div>
                     <h4 className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Available Merchants</h4>
-                    <p className="text-[11px] font-bold text-[#fc7952] flex items-center gap-1 uppercase">
+                    <p className="text-[11px] font-bold text-[#8B1E3F] flex items-center gap-1 uppercase">
                         <MapPin size={10} /> {userData.country || "Global"}
                     </p>
                 </div>
@@ -420,16 +420,16 @@ export default function DepositPage() {
              {agentsLoading ? (
                 <div className="space-y-3">
                     {[1,2,3].map(i => (
-                        <div key={i} className="h-20 bg-[#1e293b] rounded-3xl animate-pulse" />
+                        <div key={i} className="h-20 bg-[#142036] rounded-3xl animate-pulse" />
                     ))}
                 </div>
              ) : agents.length > 0 ? (
                 <div className="space-y-3">
                     {agents.map((agent) => (
                     <div key={agent.id} onClick={() => setSelectedAgent(agent)}
-                        className={`p-5 rounded-3xl border transition-all cursor-pointer flex justify-between items-center group ${selectedAgent?.id === agent.id ? 'bg-[#613de6]/10 border-[#613de6]' : 'bg-[#1e293b] border-white/5 hover:border-white/10'}`}>
+                        className={`p-5 rounded-3xl border transition-all cursor-pointer flex justify-between items-center group ${selectedAgent?.id === agent.id ? 'bg-[#2457D6]/10 border-[#2457D6]' : 'bg-[#142036] border-white/5 hover:border-white/10'}`}>
                         <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-[#613de6] rounded-2xl flex items-center justify-center font-black italic text-white shadow-lg uppercase">
+                            <div className="w-12 h-12 bg-[#2457D6] rounded-2xl flex items-center justify-center font-black italic text-white shadow-lg uppercase">
                                 {agent.full_name?.charAt(0)}
                             </div>
                             <div>
@@ -437,14 +437,14 @@ export default function DepositPage() {
                                 <p className="text-[9px] font-bold text-green-500 uppercase tracking-tighter">Buy Rate: {agent.exchange_rate} / $</p>
                             </div>
                         </div>
-                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selectedAgent?.id === agent.id ? 'border-[#613de6] bg-[#613de6]' : 'border-white/10'}`}>
+                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selectedAgent?.id === agent.id ? 'border-[#2457D6] bg-[#2457D6]' : 'border-white/10'}`}>
                             {selectedAgent?.id === agent.id && <Check size={12} className="text-white" />}
                         </div>
                     </div>
                     ))}
                 </div>
              ) : (
-                <div className="bg-[#1e293b] p-8 rounded-3xl border border-dashed border-white/10 text-center">
+                <div className="bg-[#142036] p-8 rounded-3xl border border-dashed border-white/10 text-center">
                     <Users size={30} className="mx-auto mb-2 text-gray-700" />
                     <p className="text-[10px] font-black uppercase text-gray-500">No agent with enough balance in {userData.country}</p>
                 </div>
@@ -455,7 +455,7 @@ export default function DepositPage() {
         <button
           onClick={() => setShowConfirmModal(true)}
           disabled={loading || !depositAmount || (method === 'agent' && !selectedAgent) || (activeUsdtSession && method === "usdt")}
-          className="w-full bg-[#613de6] py-5 rounded-4xl font-black uppercase italic text-sm shadow-2xl flex items-center justify-center gap-3 disabled:opacity-30 active:scale-95 transition-all"
+          className="w-full bg-[#2457D6] py-5 rounded-4xl font-black uppercase italic text-sm shadow-2xl flex items-center justify-center gap-3 disabled:opacity-30 active:scale-95 transition-all"
         >
           {loading ? <Loader2 className="animate-spin" /> : <>PROCEED TO TRADE <ArrowRight size={20}/></>}
         </button>
@@ -463,15 +463,15 @@ export default function DepositPage() {
 
       {/* Confirmation Modal */}
       {showConfirmModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#0f172a]/90 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-[#1e293b] w-full max-w-xs rounded-[2.5rem] border border-white/10 p-8 shadow-2xl space-y-6 text-center">
-            <div className="w-16 h-16 bg-[#613de6]/20 text-[#613de6] rounded-3xl flex items-center justify-center mx-auto">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#0B1220]/90 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-[#142036] w-full max-w-xs rounded-[2.5rem] border border-white/10 p-8 shadow-2xl space-y-6 text-center">
+            <div className="w-16 h-16 bg-[#2457D6]/20 text-[#2457D6] rounded-3xl flex items-center justify-center mx-auto">
               <AlertCircle size={32} />
             </div>
             <div>
               <h2 className="text-xl font-black uppercase italic tracking-tighter mb-2">Confirm Deposit</h2>
               <p className="text-[11px] text-gray-400 font-bold leading-relaxed uppercase">
-                You are about to deposit <span className="text-[#fc7952]">${depositAmount}</span>. Do not proceed if you&apos;re not ready to deposit.
+                You are about to deposit <span className="text-[#8B1E3F]">${depositAmount}</span>. Do not proceed if you&apos;re not ready to deposit.
               </p>
             </div>
             <div className="space-y-3">
@@ -481,7 +481,7 @@ export default function DepositPage() {
                   handleDeposit();
                 }}
                 disabled={loading}
-                className="w-full bg-[#613de6] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
+                className="w-full bg-[#2457D6] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
               >
                 {loading ? "Processing..." : "CONFIRM & PAY"}
               </button>

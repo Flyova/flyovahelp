@@ -149,11 +149,11 @@ export default function Header() {
           type="button"
           aria-label="Close wallet dropdown"
           onClick={() => setShowBalances(false)}
-          className="fixed inset-0 z-[90] bg-[#020617]/35 backdrop-blur-sm"
+          className="fixed inset-0 z-[90] bg-[#0B1220]/35 backdrop-blur-sm"
         />
       )}
 
-      <header className="sticky top-0 z-[100] w-full bg-[#613de6] text-white shadow-lg">
+      <header className="sticky top-0 z-[100] w-full bg-[#2457D6] text-[#F5F3EE] shadow-lg" style={{ fontFamily: "Montserrat, sans-serif" }}>
         <div className="container mx-auto px-4 h-14 flex items-center justify-between">
         <div 
           className="flex items-center space-x-2 cursor-pointer"
@@ -169,19 +169,19 @@ export default function Header() {
               onClick={() => setShowBalances(!showBalances)}
               className="bg-black/20 hover:bg-black/30 transition px-3 py-1.5 rounded-full flex items-center space-x-2 border border-white/10 active:scale-95"
             >
-              <Wallet size={14} className="text-[#fc7952]" />
-              <span className="font-mono font-black text-sm tracking-tight">${userData.wallet}</span>
+              <Wallet size={14} className="text-[#F5F3EE]" />
+              <span className="font-black text-sm tracking-tight">${userData.wallet}</span>
               <ChevronDown size={14} className={`transition-transform duration-300 ${showBalances ? 'rotate-180' : ''}`} />
             </button>
 
             {showBalances && (
-              <div className="absolute right-0 mt-3 w-64 bg-[#1e293b] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/5 overflow-hidden animate-in fade-in zoom-in-95">
+              <div className="absolute right-0 mt-3 w-64 bg-[#142036] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/5 overflow-hidden animate-in fade-in zoom-in-95">
                 <div className="p-4 space-y-4">
                   
-                  <div className="bg-[#0f172a] p-3 rounded-xl border border-white/5 flex justify-between items-center">
+                  <div className="bg-[#0B1220] p-3 rounded-xl border border-white/5 flex justify-between items-center">
                       <div>
                           <p className="text-[8px] font-black uppercase text-gray-500 tracking-widest leading-none mb-1">Identity PIN</p>
-                          <p className="text-sm font-mono font-black text-[#fc7952] tracking-wider">{userData.pin}</p>
+                          <p className="text-sm font-black text-[#F5F3EE] tracking-wider">{userData.pin}</p>
                       </div>
                       <button 
                           onClick={handleCopyPin}
@@ -199,10 +199,10 @@ export default function Header() {
                       <BalanceItem label="Referral Bonus" amount={userData.referralBonus} color="text-green-400" />
                       
                       {userData.isAgent ? (
-                        <BalanceItem label="Agent Balance" amount={userData.agentBalance} color="text-[#fc7952]" />
+                        <BalanceItem label="Agent Balance" amount={userData.agentBalance} color="text-[#F5F3EE]" />
                       ) : (
                         Number(userData.gameCredits) > 0 && (
-                          <BalanceItem label="Active Stakes" amount={userData.gameCredits} color="text-[#fc7952]" />
+                          <BalanceItem label="Active Stakes" amount={userData.gameCredits} color="text-[#F5F3EE]" />
                         )
                       )}
                   </div>
@@ -211,7 +211,7 @@ export default function Header() {
                     {userData.isAgent && (
                       <button 
                         onClick={handleAgentDashboardClick}
-                        className="w-full bg-[#613de6] hover:bg-[#7251ed] py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-[#613de6]/20 active:scale-95 flex items-center justify-center space-x-2 border border-white/10"
+                        className="w-full bg-[#2457D6] hover:bg-[#1D4FC4] py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-[#2457D6]/20 active:scale-95 flex items-center justify-center space-x-2 border border-white/10"
                       >
                         <LayoutDashboard size={14} />
                         <span>Agent Dashboard</span>
@@ -220,7 +220,7 @@ export default function Header() {
 
                     <button 
                       onClick={handleTransferClick}
-                      className="w-full bg-blue-500 hover:bg-blue-600 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-500/20 active:scale-95 flex items-center justify-center space-x-2"
+                      className="w-full bg-[#2457D6] hover:bg-[#1D4FC4] py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-[#2457D6]/20 active:scale-95 flex items-center justify-center space-x-2"
                     >
                       <Send size={14} />
                       <span>Transfer Funds</span>
@@ -236,7 +236,7 @@ export default function Header() {
 
                     <button 
                       onClick={handleDepositClick}
-                      className="w-full bg-[#fc7952] hover:bg-[#ff8a6a] py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-[#fc7952]/20 active:scale-95"
+                      className="w-full bg-[#8B1E3F] hover:bg-[#A62A4D] py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-[#8B1E3F]/20 active:scale-95"
                     >
                       DEPOSIT FUNDS
                     </button>
@@ -271,8 +271,8 @@ export default function Header() {
 function BalanceItem({ label, amount, color }) {
   return (
     <div className="flex justify-between items-center last:border-0">
-      <span className="text-[9px] uppercase font-black text-gray-500 tracking-wider">{label}</span>
-      <span className={`font-mono font-bold ${color}`}>${amount}</span>
+      <span className="text-[9px] uppercase font-black text-[#F5F3EE]/50 tracking-wider">{label}</span>
+      <span className={`font-bold ${color}`}>${amount}</span>
     </div>
   );
 }

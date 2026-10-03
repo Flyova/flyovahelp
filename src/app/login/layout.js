@@ -1,13 +1,13 @@
 export const metadata = {
   title: "Login",
-  description: "Sign in to your Flyovahelp account to access your wallet, games, and transaction history.",
+  description: "Sign in to your StraWins account to access your wallet, games, and transaction history.",
   alternates: {
-    canonical: "https://flyovahelp.com/login",
+    canonical: "https://strawins.com/login",
   },
   openGraph: {
-    title: "Login | Flyovahelp",
-    description: "Sign in to your Flyovahelp account.",
-    url: "https://flyovahelp.com/login",
+    title: "Login | StraWins",
+    description: "Sign in to your StraWins account.",
+    url: "https://strawins.com/login",
     type: "website",
   },
 };

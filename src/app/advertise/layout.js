@@ -1,22 +1,22 @@
 export const metadata = {
   title: "Advertise",
   description:
-    "Advertise your brand on Flyovahelp and reach active mobile gaming audiences with in-app campaigns and sponsorships.",
+    "Advertise your brand on StraWins and reach active mobile gaming audiences with in-app campaigns and sponsorships.",
   keywords: [
     "advertise on gaming app",
     "in-app advertising Nigeria",
     "mobile gaming audience",
     "game sponsorship",
-    "Flyovahelp advertising",
+    "StraWins advertising",
   ],
   alternates: {
-    canonical: "https://flyovahelp.com/advertise",
+    canonical: "https://strawins.com/advertise",
   },
   openGraph: {
-    title: "Advertise on Flyovahelp",
+    title: "Advertise on StraWins",
     description:
       "Reach high-intent players with in-app banners, sponsorships, and community promotions.",
-    url: "https://flyovahelp.com/advertise",
+    url: "https://strawins.com/advertise",
     type: "website",
   },
 };

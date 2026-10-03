@@ -8,8 +8,8 @@ import {
 } from "lucide-react";
 
 const RichTextEditor = dynamic(() => import("@/components/RichTextEditor"), { ssr: false, loading: () => (
-  <div className="h-96 bg-[#0f172a] rounded-2xl border border-white/8 flex items-center justify-center">
-    <Loader2 size={24} className="animate-spin text-[#613de6]" />
+  <div className="h-96 bg-[#0B1220] rounded-2xl border border-white/8 flex items-center justify-center">
+    <Loader2 size={24} className="animate-spin text-[#2457D6]" />
   </div>
 )});
 
@@ -66,7 +66,7 @@ function BlogEditorContent() {
   const [excerpt, setExcerpt] = useState("");
   const [content, setContent] = useState("");
   const [published, setPublished] = useState(false);
-  const [author, setAuthor] = useState("Flyovahelp Team");
+  const [author, setAuthor] = useState("StraWins Team");
   const [coverImage, setCoverImage] = useState("");
   const [coverImagePath, setCoverImagePath] = useState("");
   const [coverUploading, setCoverUploading] = useState(false);
@@ -98,7 +98,7 @@ function BlogEditorContent() {
         setExcerpt(d.excerpt ?? "");
         setContent(d.content ?? "");
         setPublished(d.published ?? false);
-        setAuthor(d.author ?? "Flyovahelp Team");
+        setAuthor(d.author ?? "StraWins Team");
         setCoverImage(d.coverImage ?? "");
         setCoverImagePath(d.coverImagePath ?? "");
         setKeywords(normalizeHashtagList(d.keywords ?? []));
@@ -175,7 +175,7 @@ function BlogEditorContent() {
       slug: displaySlug || slugify(title),
       excerpt: excerpt.trim(),
       content,
-      author: author.trim() || "Flyovahelp Team",
+      author: author.trim() || "StraWins Team",
       coverImage,
       coverImagePath,
       keywords: normalizedKeywords,
@@ -251,7 +251,7 @@ function BlogEditorContent() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <Loader2 size={28} className="animate-spin text-[#613de6]" />
+        <Loader2 size={28} className="animate-spin text-[#2457D6]" />
       </div>
     );
   }
@@ -287,7 +287,7 @@ function BlogEditorContent() {
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all text-white shadow-lg ${
               published
                 ? "bg-amber-500 hover:bg-amber-400 shadow-amber-500/20"
-                : "bg-[#613de6] hover:brightness-110 shadow-[#613de6]/25"
+                : "bg-[#2457D6] hover:brightness-110 shadow-[#2457D6]/25"
             }`}
           >
             {published ? <><EyeOff size={14} /> Unpublish</> : <><Globe size={14} /> Publish</>}
@@ -310,11 +310,11 @@ function BlogEditorContent() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Post Title"
-            className="w-full bg-[#0f172a] border border-slate-800 rounded-2xl px-5 py-4 text-2xl font-black text-white placeholder:text-slate-500 outline-none focus:border-[#613de6]/40 transition-colors"
+            className="w-full bg-[#0B1220] border border-slate-800 rounded-2xl px-5 py-4 text-2xl font-black text-white placeholder:text-slate-500 outline-none focus:border-[#2457D6]/40 transition-colors"
           />
 
           {/* Slug */}
-          <div className="flex items-center gap-2 bg-[#0f172a] border border-slate-800 rounded-xl px-4 py-2">
+          <div className="flex items-center gap-2 bg-[#0B1220] border border-slate-800 rounded-xl px-4 py-2">
             <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider shrink-0">
               /blog/
             </span>
@@ -339,7 +339,7 @@ function BlogEditorContent() {
         {/* Settings panel */}
         <div className="space-y-4">
           {/* Cover image */}
-          <div className="bg-[#0f172a] border border-slate-800 rounded-2xl p-4 space-y-3">
+          <div className="bg-[#0B1220] border border-slate-800 rounded-2xl p-4 space-y-3">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cover Image</p>
             {coverImage ? (
               <div className="relative">
@@ -352,18 +352,18 @@ function BlogEditorContent() {
                 </button>
               </div>
             ) : (
-              <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-slate-700 hover:border-[#613de6]/40 rounded-xl cursor-pointer transition-colors group">
+              <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-slate-700 hover:border-[#2457D6]/40 rounded-xl cursor-pointer transition-colors group">
                 {coverUploading ? (
                   <div className="flex flex-col items-center gap-2">
                     <div className="w-24 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-[#613de6] rounded-full transition-all" style={{ width: `${coverProgress}%` }} />
+                      <div className="h-full bg-[#2457D6] rounded-full transition-all" style={{ width: `${coverProgress}%` }} />
                     </div>
                     <span className="text-[10px] font-bold text-slate-400">{coverProgress}%</span>
                   </div>
                 ) : (
                   <>
-                    <ImageIcon size={22} className="text-slate-500 group-hover:text-[#613de6] transition-colors mb-2" />
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 group-hover:text-[#613de6] transition-colors">
+                    <ImageIcon size={22} className="text-slate-500 group-hover:text-[#2457D6] transition-colors mb-2" />
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 group-hover:text-[#2457D6] transition-colors">
                       Upload Cover
                     </span>
                   </>
@@ -379,7 +379,7 @@ function BlogEditorContent() {
           </div>
 
           {/* Excerpt */}
-          <div className="bg-[#0f172a] border border-slate-800 rounded-2xl p-4 space-y-2">
+          <div className="bg-[#0B1220] border border-slate-800 rounded-2xl p-4 space-y-2">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Excerpt</p>
             <textarea
               value={excerpt}
@@ -387,31 +387,31 @@ function BlogEditorContent() {
               placeholder="Brief description shown in post listings…"
               rows={3}
               maxLength={200}
-              className="w-full bg-slate-900 border border-slate-800 focus:border-[#613de6]/40 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-200 placeholder:text-slate-500 outline-none transition-colors resize-none"
+              className="w-full bg-slate-900 border border-slate-800 focus:border-[#2457D6]/40 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-200 placeholder:text-slate-500 outline-none transition-colors resize-none"
             />
             <p className="text-right text-[10px] text-slate-500 font-bold">{excerpt.length}/200</p>
           </div>
 
           {/* Author */}
-          <div className="bg-[#0f172a] border border-slate-800 rounded-2xl p-4 space-y-2">
+          <div className="bg-[#0B1220] border border-slate-800 rounded-2xl p-4 space-y-2">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Author</p>
             <input
               type="text"
               value={author}
               onChange={(e) => setAuthor(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 focus:border-[#613de6]/40 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-200 outline-none transition-colors"
+              className="w-full bg-slate-900 border border-slate-800 focus:border-[#2457D6]/40 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-200 outline-none transition-colors"
             />
           </div>
 
           {/* Hashtags */}
-          <div className="bg-[#0f172a] border border-slate-800 rounded-2xl p-4 space-y-3">
+          <div className="bg-[#0B1220] border border-slate-800 rounded-2xl p-4 space-y-3">
             <div className="flex items-center gap-2">
               <Hash size={13} className="text-slate-400" />
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Hashtags</p>
             </div>
             <div className="flex flex-wrap gap-1.5 min-h-7">
               {keywords.map((kw) => (
-                <span key={kw} className="flex items-center gap-1 bg-[#613de6]/20 border border-[#613de6]/30 text-[#a78bfa] text-[10px] font-black uppercase tracking-wide px-2.5 py-1 rounded-full">
+                <span key={kw} className="flex items-center gap-1 bg-[#2457D6]/20 border border-[#2457D6]/30 text-[#7A9BEE] text-[10px] font-black uppercase tracking-wide px-2.5 py-1 rounded-full">
                   {kw}
                   <button
                     type="button"
@@ -441,13 +441,13 @@ function BlogEditorContent() {
                 }
               }}
               placeholder="Type hashtag, press Enter…"
-              className="w-full bg-slate-900 border border-slate-800 focus:border-[#613de6]/40 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-200 placeholder:text-slate-500 outline-none transition-colors"
+              className="w-full bg-slate-900 border border-slate-800 focus:border-[#2457D6]/40 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-200 placeholder:text-slate-500 outline-none transition-colors"
             />
             <p className="text-[10px] text-slate-500 font-bold">Auto-formats to #hashtag · Enter/comma/Tab adds · Esc clears input</p>
           </div>
 
           {/* SEO / Meta Tags */}
-          <div className="bg-[#0f172a] border border-slate-800 rounded-2xl p-4 space-y-3">
+          <div className="bg-[#0B1220] border border-slate-800 rounded-2xl p-4 space-y-3">
             <div className="flex items-center gap-2">
               <Search size={13} className="text-slate-400" />
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">SEO / Meta Tags</p>
@@ -460,7 +460,7 @@ function BlogEditorContent() {
                 onChange={(e) => setMetaTitle(e.target.value)}
                 placeholder={title || "Defaults to post title"}
                 maxLength={70}
-                className="w-full bg-slate-900 border border-slate-800 focus:border-[#613de6]/40 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-200 placeholder:text-slate-500 outline-none transition-colors"
+                className="w-full bg-slate-900 border border-slate-800 focus:border-[#2457D6]/40 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-200 placeholder:text-slate-500 outline-none transition-colors"
               />
               <p className={`text-right text-[10px] font-bold ${metaTitle.length > 60 ? "text-amber-400" : "text-slate-500"}`}>
                 {metaTitle.length}/70 {metaTitle.length > 60 ? "· trim for best SEO" : ""}
@@ -474,7 +474,7 @@ function BlogEditorContent() {
                 placeholder={excerpt || "Defaults to excerpt"}
                 rows={3}
                 maxLength={160}
-                className="w-full bg-slate-900 border border-slate-800 focus:border-[#613de6]/40 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-200 placeholder:text-slate-500 outline-none transition-colors resize-none"
+                className="w-full bg-slate-900 border border-slate-800 focus:border-[#2457D6]/40 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-200 placeholder:text-slate-500 outline-none transition-colors resize-none"
               />
               <p className={`text-right text-[10px] font-bold ${metaDescription.length > 155 ? "text-amber-400" : "text-slate-500"}`}>
                 {metaDescription.length}/160 {metaDescription.length > 155 ? "· trim for best SEO" : ""}
@@ -483,7 +483,7 @@ function BlogEditorContent() {
           </div>
 
           {/* Status */}
-          <div className="bg-[#0f172a] border border-slate-800 rounded-2xl p-4">
+          <div className="bg-[#0B1220] border border-slate-800 rounded-2xl p-4">
             <div className="flex items-center justify-between">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Status</p>
               <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${published ? "bg-emerald-500/15 text-emerald-400" : "bg-slate-700/40 text-slate-300"}`}>
@@ -499,7 +499,7 @@ function BlogEditorContent() {
 
 export default function BlogEditorPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center h-96"><Loader2 size={24} className="animate-spin text-[#613de6]" /></div>}>
+    <Suspense fallback={<div className="flex items-center justify-center h-96"><Loader2 size={24} className="animate-spin text-[#2457D6]" /></div>}>
       <BlogEditorContent />
     </Suspense>
   );

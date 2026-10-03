@@ -81,7 +81,7 @@ export default function AdminContacts() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-40">
-        <Loader2 className="animate-spin text-[#613de6]" size={32} />
+        <Loader2 className="animate-spin text-[#2457D6]" size={32} />
       </div>
     );
   }
@@ -102,12 +102,12 @@ export default function AdminContacts() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search name, email, phone..."
-              className="bg-[#0f172a] border border-white/5 rounded-2xl pl-11 pr-4 py-3 text-xs font-bold text-white outline-none focus:border-[#613de6]/50 w-64"
+              className="bg-[#0B1220] border border-white/5 rounded-2xl pl-11 pr-4 py-3 text-xs font-bold text-white outline-none focus:border-[#2457D6]/50 w-64"
             />
           </div>
           <button
             onClick={handleCopy}
-            className="flex items-center gap-2 bg-[#613de6] px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white active:scale-95 transition-all"
+            className="flex items-center gap-2 bg-[#2457D6] px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white active:scale-95 transition-all"
           >
             {copied ? <CheckCircle size={14} /> : <Copy size={14} />}
             {copied ? "Copied" : "Copy List"}
@@ -115,7 +115,7 @@ export default function AdminContacts() {
         </div>
       </div>
 
-      <div className="bg-[#0f172a] border border-white/5 rounded-[2rem] overflow-x-auto">
+      <div className="bg-[#0B1220] border border-white/5 rounded-[2rem] overflow-x-auto">
         <table className="w-full text-left text-xs">
           <thead>
             <tr className="border-b border-white/5">

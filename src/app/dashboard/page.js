@@ -303,12 +303,12 @@ export default function Dashboard() {
     },
     {
       id: 2,
-      name: "Flyova To Dollars",
+      name: "StraWins To Dollars",
       img: "/flytodols.svg",
       tag: "Cash",
       tutorialKey: "flyova_to_dollars",
-      path: "/game/flyova-to-dollars",
-      tutorialPath: "/game/demo/flyova",
+      path: "/game/strawins-to-dollars",
+      tutorialPath: "/game/demo/strawins",
       tutorialPoints: ["Pick 2 numbers", "Set stake", "See result flow"]
     },
     {
@@ -325,21 +325,21 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center text-white">
-        <Loader2 className="animate-spin text-[#613de6] mb-4" size={40} />
+      <div className="min-h-screen bg-[#0B1220] flex flex-col items-center justify-center text-white">
+        <Loader2 className="animate-spin text-[#2457D6] mb-4" size={40} />
         <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-50">Loading Dashboard...</p>
       </div>
     );
   }
 
   return (
-    <main className="bg-[#0f172a] min-h-screen animate-in fade-in duration-500 pb-24 md:pb-10">
+    <main className="bg-[#0B1220] min-h-screen animate-in fade-in duration-500 pb-24 md:pb-10">
       
       {/* TESTIMONIAL MODAL */}
       {showModal && (
         <div className="fixed inset-0 z-100 flex items-center justify-center px-6">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowModal(false)} />
-          <div className="bg-[#1e293b] w-full max-w-sm rounded-[2.5rem] border border-white/10 p-8 relative z-10 animate-in zoom-in-95 duration-300">
+          <div className="bg-[#142036] w-full max-w-sm rounded-[2.5rem] border border-white/10 p-8 relative z-10 animate-in zoom-in-95 duration-300">
             <button onClick={() => setShowModal(false)} className="absolute top-6 right-6 text-gray-500 hover:text-white">
               <X size={20} />
             </button>
@@ -376,11 +376,11 @@ export default function Dashboard() {
             onClick={closeTutorialPrompt}
             className="absolute inset-0 bg-black/75 backdrop-blur-sm"
           />
-          <div className="relative z-10 w-full max-w-md rounded-[2.2rem] border border-[#613de6]/35 bg-[#111a35] p-7 shadow-[0_20px_80px_rgba(0,0,0,0.65)] animate-in zoom-in-95 duration-200">
+          <div className="relative z-10 w-full max-w-md rounded-[2.2rem] border border-[#2457D6]/35 bg-[#142036] p-7 shadow-[0_20px_80px_rgba(0,0,0,0.65)] animate-in zoom-in-95 duration-200">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-[#613de6]/25 border border-[#613de6]/35 flex items-center justify-center">
-                  <GraduationCap size={22} className="text-[#c8b9ff]" />
+                <div className="w-12 h-12 rounded-2xl bg-[#2457D6]/25 border border-[#2457D6]/35 flex items-center justify-center">
+                  <GraduationCap size={22} className="text-[#D7E2FF]" />
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/50">Before You Play</p>
@@ -395,8 +395,8 @@ export default function Dashboard() {
               </button>
             </div>
 
-            <div className="mt-5 rounded-2xl border border-white/10 bg-[#0b1228] p-4">
-              <p className="text-sm font-black text-[#fc7952] uppercase tracking-tight">{tutorialPromptGame.name}</p>
+            <div className="mt-5 rounded-2xl border border-white/10 bg-[#0B1220] p-4">
+              <p className="text-sm font-black text-[#8B1E3F] uppercase tracking-tight">{tutorialPromptGame.name}</p>
               <p className="text-xs font-bold text-white/65 mt-1">Try a short simulator tutorial before staking real funds.</p>
               <div className="mt-3 space-y-2">
                 {(tutorialPromptGame.tutorialPoints || []).map((point) => (
@@ -408,7 +408,7 @@ export default function Dashboard() {
             </div>
 
             <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-white/80 transition-colors hover:bg-white/[0.07]">
-              <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${dontShowTutorialAgain ? "border-[#fc7952] bg-[#fc7952]" : "border-white/25 bg-black/20"}`}>
+              <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${dontShowTutorialAgain ? "border-[#8B1E3F] bg-[#8B1E3F]" : "border-white/25 bg-black/20"}`}>
                 {dontShowTutorialAgain && <Check size={14} className="text-white" />}
               </span>
               <input
@@ -425,7 +425,7 @@ export default function Dashboard() {
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
                 onClick={startTutorial}
-                className="bg-[#613de6] hover:bg-[#7251ed] text-white px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-[#613de6]/30"
+                className="bg-[#2457D6] hover:bg-[#1D4FC4] text-white px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-[#2457D6]/30"
               >
                 <PlayCircle size={15} /> Start Tutorial
               </button>
@@ -446,12 +446,12 @@ export default function Dashboard() {
           {announcements
             .filter(msg => !readMessages.includes(msg.id))
             .map((msg) => (
-              <div key={msg.id} className={`p-5 rounded-4xl border flex items-start justify-between gap-4 shadow-2xl ${msg.type === 'warning' ? 'bg-amber-500 border-amber-400' : msg.type === 'success' ? 'bg-emerald-600 border-emerald-500' : 'bg-[#1e293b] border-white/10'}`}>
+              <div key={msg.id} className={`p-5 rounded-4xl border flex items-start justify-between gap-4 shadow-2xl ${msg.type === 'warning' ? 'bg-amber-500 border-amber-400' : msg.type === 'success' ? 'bg-emerald-600 border-emerald-500' : 'bg-[#142036] border-white/10'}`}>
                 <div className="flex items-start gap-3">
                   <div className="bg-white/10 p-2.5 rounded-xl mt-1">
                     {msg.type === 'warning' ? <AlertTriangle size={18} className="text-white" /> :
                      msg.type === 'success' ? <CheckCircle2 size={18} className="text-white" /> :
-                     <Megaphone size={18} className="text-[#613de6]" />}
+                     <Megaphone size={18} className="text-[#2457D6]" />}
                   </div>
                   <div>
                     <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-1">Announcement</p>
@@ -497,7 +497,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-1">Payout Success</p>
-                  <p className="text-sm font-bold text-white leading-tight">Tell us about your recent withdrawal, game experience or flyovahelp activities you like or dislike. Share the love!</p>
+                  <p className="text-sm font-bold text-white leading-tight">Tell us about your recent withdrawal, game experience or strawins activities you like or dislike. Share the love!</p>
                 </div>
               </div>
               <button
@@ -517,7 +517,7 @@ export default function Dashboard() {
               <div
                 key={trade.id}
                 onClick={() => router.push(`/trade/${trade.id}`)}
-                className="bg-[#613de6] p-4 rounded-2xl flex items-center justify-between border border-white/20 shadow-2xl cursor-pointer hover:brightness-110 transition-all"
+                className="bg-[#2457D6] p-4 rounded-2xl flex items-center justify-between border border-white/20 shadow-2xl cursor-pointer hover:brightness-110 transition-all"
               >
                 <div className="flex items-center gap-3">
                   <div className="bg-white/20 p-2 rounded-lg animate-pulse">
@@ -547,42 +547,42 @@ export default function Dashboard() {
             <div>
               <div
                 onClick={() =>
-                  handleGameClick(topGames.find((g) => g.path === "/game/flyova-to-dollars") || topGames[1])
+                  handleGameClick(topGames.find((g) => g.path === "/game/strawins-to-dollars") || topGames[1])
                 }
-                className="relative w-full h-52 md:h-64 rounded-3xl overflow-hidden bg-[#613de6] group cursor-pointer shadow-2xl border border-white/5"
+                className="relative w-full h-52 md:h-64 rounded-3xl overflow-hidden bg-[#2457D6] group cursor-pointer shadow-2xl border border-white/5"
               >
           <div className="absolute inset-0 opacity-40 group-hover:opacity-60 transition-opacity"><img src="/flytodols.svg" alt="Background" className="w-full h-full object-cover" /></div>
           <div className="absolute inset-0 bg-gradient-to-r from-black/60 to-transparent" />
           <div className="absolute bottom-6 left-6 z-10">
-            <h2 className="text-2xl font-black text-white italic leading-tight tracking-tighter">FLYOVA TO<br/><span className="text-[#fc7952]">DOLLARS</span></h2>
-            <button className="mt-3 bg-[#fc7952] text-white px-6 py-2 rounded-full text-xs font-black uppercase shadow-lg group-hover:scale-105 transition-all">Play Now</button>
+            <h2 className="text-2xl font-black text-white italic leading-tight tracking-tighter">STRAWINS TO<br/><span className="text-[#8B1E3F]">DOLLARS</span></h2>
+            <button className="mt-3 bg-[#8B1E3F] text-white px-6 py-2 rounded-full text-xs font-black uppercase shadow-lg group-hover:scale-105 transition-all">Play Now</button>
           </div>
               </div>
             </div>
 
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-              <input className="w-full bg-[#1e293b] border border-gray-800 p-4 pl-12 rounded-2xl text-sm focus:border-[#613de6] outline-none text-white font-bold" placeholder="Search for games..." />
+              <input className="w-full bg-[#142036] border border-gray-800 p-4 pl-12 rounded-2xl text-sm focus:border-[#2457D6] outline-none text-white font-bold" placeholder="Search for games..." />
             </div>
 
             <div>
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-black text-white text-lg uppercase tracking-tighter italic">Featured Games</h3>
-                <button className="text-[#fc7952] text-xs font-black uppercase tracking-widest hover:underline">View All</button>
+                <button className="text-[#8B1E3F] text-xs font-black uppercase tracking-widest hover:underline">View All</button>
               </div>
               <div className="grid grid-cols-3 gap-3 md:gap-4">
                 {topGames.map((game, index) => (
                   <div
                     key={game.id}
                     onClick={() => handleGameClick(game)}
-                    className="relative aspect-4/5 rounded-2xl overflow-hidden bg-[#1e293b] border border-gray-800 group cursor-pointer shadow-lg"
+                    className="relative aspect-4/5 rounded-2xl overflow-hidden bg-[#142036] border border-gray-800 group cursor-pointer shadow-lg"
                   >
                     <div className="absolute top-0 left-0 bg-red-600 text-white font-black px-2.5 py-1 text-[10px] rounded-br-xl z-30 shadow-md italic">{index + 1}</div>
                     <div className="absolute inset-0 z-10 overflow-hidden"><img src={game.img} alt={game.name} className="w-full h-full object-cover opacity-50 group-hover:opacity-100 transition-all duration-500 group-hover:scale-110" /></div>
                     <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent z-20" />
                     <div className="absolute bottom-3 left-0 right-0 px-2 text-center z-30">
                       <p className="text-[9px] font-black text-white uppercase truncate tracking-tighter mb-1">{game.name}</p>
-                      <div className="text-[7px] inline-block px-2 py-0.5 rounded-full font-black uppercase shadow-sm bg-[#fc7952] text-white">{game.tag}</div>
+                      <div className="text-[7px] inline-block px-2 py-0.5 rounded-full font-black uppercase shadow-sm bg-[#8B1E3F] text-white">{game.tag}</div>
                     </div>
                   </div>
                 ))}
@@ -602,7 +602,7 @@ export default function Dashboard() {
                 </a>
 
                 {/* Custom Chatroom */}
-                <a href="http://chat.flyovahelp.com/" className="flex items-center gap-3 bg-[#613de6] p-4 rounded-2xl hover:opacity-100 active:scale-95 transition-all shadow-xl shadow-[#613de6]/20 col-span-1">
+                <a href="http://chat.strawins.com/" className="flex items-center gap-3 bg-[#2457D6] p-4 rounded-2xl hover:opacity-100 active:scale-95 transition-all shadow-xl shadow-[#2457D6]/20 col-span-1">
                   <div className="bg-white/20 p-2 rounded-xl">
                     <MessageCircle size={20} className="text-white" />
                   </div>
@@ -615,12 +615,12 @@ export default function Dashboard() {
           <aside className="xl:col-span-4 space-y-4 xl:sticky xl:top-24 h-fit">
             {userData && userData.isAgent !== true && (
               <div className="mt-2">
-                <div className="relative bg-gradient-to-br from-[#1e293b] to-[#0f172a] p-6 rounded-[2rem] border border-[#613de6]/30 overflow-hidden group shadow-2xl">
+                <div className="relative bg-gradient-to-br from-[#142036] to-[#0B1220] p-6 rounded-[2rem] border border-[#2457D6]/30 overflow-hidden group shadow-2xl">
                   <div className="relative z-10 space-y-4">
-                    <div className="flex items-center gap-2 text-[#fc7952]"><ShieldCheck size={20} /><span className="text-[10px] font-black uppercase tracking-widest">Revenue Opportunity</span></div>
-                    <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white">Become a <br/><span className="text-[#613de6]">Flyova Agent</span></h2>
+                    <div className="flex items-center gap-2 text-[#8B1E3F]"><ShieldCheck size={20} /><span className="text-[10px] font-black uppercase tracking-widest">Revenue Opportunity</span></div>
+                    <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white">Become a <br/><span className="text-[#2457D6]">StraWins Agent</span></h2>
                     <p className="text-[11px] text-gray-400 font-bold leading-relaxed max-w-[240px]">Process user withdrawals in your region and earn commissions.</p>
-                    <button onClick={() => router.push('/agent/apply')} className="bg-[#613de6] hover:bg-[#7251ed] text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase transition-all flex items-center shadow-lg">Apply Now <ArrowRight size={14} /></button>
+                    <button onClick={() => router.push('/agent/apply')} className="bg-[#2457D6] hover:bg-[#1D4FC4] text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase transition-all flex items-center shadow-lg">Apply Now <ArrowRight size={14} /></button>
                   </div>
                   <ShieldCheck size={180} className="absolute -right-12 -bottom-12 opacity-[0.05] text-white" />
                 </div>

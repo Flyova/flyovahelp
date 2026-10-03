@@ -271,7 +271,7 @@ export default function AgentDashboard() {
                   <p>${trade.type === "withdrawal"
                     ? "The original trade amount has been refunded to your wallet balance."
                     : "This transaction has been cancelled. No funds were charged."}</p>
-                  <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">Flyovahelp</div>
+                  <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">StraWins</div>
                 </div>
               `,
             }),
@@ -289,8 +289,8 @@ export default function AgentDashboard() {
 
   if (agent?.banned) {
     return (
-      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-6 text-center">
-        <div className="max-w-md w-full bg-[#1e293b] p-10 rounded-[3rem] border border-white/10 shadow-2xl space-y-8 animate-in zoom-in duration-300">
+      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-6 text-center">
+        <div className="max-w-md w-full bg-[#142036] p-10 rounded-[3rem] border border-white/10 shadow-2xl space-y-8 animate-in zoom-in duration-300">
           <div className="w-24 h-24 bg-rose-500/20 rounded-[2rem] flex items-center justify-center mx-auto border border-rose-500/20">
             <ShieldAlert size={48} className="text-rose-500 animate-pulse" />
           </div>
@@ -304,7 +304,7 @@ export default function AgentDashboard() {
           <div className="pt-4">
             <button 
               onClick={() => router.push('/support')}
-              className="w-full bg-[#613de6] py-6 rounded-2xl font-black uppercase italic text-xs tracking-widest shadow-xl shadow-[#613de6]/30 active:scale-95 transition-all flex items-center justify-center gap-2"
+              className="w-full bg-[#2457D6] py-6 rounded-2xl font-black uppercase italic text-xs tracking-widest shadow-xl shadow-[#2457D6]/30 active:scale-95 transition-all flex items-center justify-center gap-2"
             >
               <MessageCircle size={18} />
               Contact Support
@@ -322,8 +322,8 @@ export default function AgentDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white pb-20">
-      <div className="bg-[#613de6] p-8 pt-14 rounded-b-[3.5rem] shadow-2xl relative overflow-hidden">
+    <div className="min-h-screen bg-[#0B1220] text-white pb-20">
+      <div className="bg-[#2457D6] p-8 pt-14 rounded-b-[3.5rem] shadow-2xl relative overflow-hidden">
         <div className="relative z-10 space-y-6">
             <div className="flex justify-between items-center">
                 <div>
@@ -345,8 +345,8 @@ export default function AgentDashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-black/20 p-6 rounded-[2.5rem] border border-white/5 flex flex-col gap-5">
                     <div className="flex items-center gap-5">
-                      <div className="bg-[#fc7952]/20 p-3 rounded-2xl">
-                        <Wallet className="text-[#fc7952]" size={24} />
+                      <div className="bg-[#8B1E3F]/20 p-3 rounded-2xl">
+                        <Wallet className="text-[#8B1E3F]" size={24} />
                       </div>
                       <div>
                         <p className="text-[9px] font-black uppercase opacity-60 mb-1">Agent Liquidity Balance</p>
@@ -401,23 +401,23 @@ export default function AgentDashboard() {
         <section className="space-y-6">
             <div className="flex justify-between items-center px-2">
             <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-500">Active Market Orders</h2>
-            <div className="px-3 py-1 bg-[#613de6]/10 rounded-full border border-[#613de6]/20">
-                <span className="text-[9px] font-black text-[#613de6] uppercase">{trades.length} Trade{trades.length !== 1 ? 's' : ''}</span>
+            <div className="px-3 py-1 bg-[#2457D6]/10 rounded-full border border-[#2457D6]/20">
+                <span className="text-[9px] font-black text-[#2457D6] uppercase">{trades.length} Trade{trades.length !== 1 ? 's' : ''}</span>
             </div>
             </div>
 
             {trades.length === 0 ? (
-                <div className="bg-[#1e293b] p-12 rounded-[2.5rem] border border-dashed border-white/5 text-center shadow-inner">
+                <div className="bg-[#142036] p-12 rounded-[2.5rem] border border-dashed border-white/5 text-center shadow-inner">
                     <Loader2 className="text-gray-700 animate-spin-slow mx-auto mb-4" size={24} />
                     <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest leading-relaxed opacity-60">No pending orders in your region</p>
                 </div>
             ) : (
             <div className="space-y-4">
                 {trades.map((trade) => (
-                <div key={trade.id} className="bg-[#1e293b] p-6 rounded-[2.5rem] border border-white/5 shadow-xl hover:border-white/10 transition-all">
+                <div key={trade.id} className="bg-[#142036] p-6 rounded-[2.5rem] border border-white/5 shadow-xl hover:border-white/10 transition-all">
                     <div className="flex justify-between items-center mb-5">
                     <div className="flex items-center gap-3">
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black italic border ${trade.type === 'deposit' ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-blue-500/10 text-blue-500 border-blue-500/20'}`}>
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black italic border ${trade.type === 'deposit' ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-[#2457D6]/10 text-[#2457D6] border-[#2457D6]/20'}`}>
                             {trade.type === 'deposit' ? 'D' : 'W'}
                         </div>
                         <div>
@@ -426,7 +426,7 @@ export default function AgentDashboard() {
                         </div>
                     </div>
                     <div className="text-right">
-                        <p className="text-xl font-black text-[#fc7952]">${trade.amount}</p>
+                        <p className="text-xl font-black text-[#8B1E3F]">${trade.amount}</p>
                         <p className="text-[8px] font-black uppercase opacity-40">Amount</p>
                     </div>
                     </div>
@@ -443,7 +443,7 @@ export default function AgentDashboard() {
                         <button 
                         onClick={() => handleAcceptTrade(trade)} 
                         disabled={actionLoading === trade.id} 
-                        className="flex-[2] bg-[#613de6] py-4 rounded-2xl text-[10px] font-black uppercase italic tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-[#613de6]/20 active:scale-95 transition-all"
+                        className="flex-[2] bg-[#2457D6] py-4 rounded-2xl text-[10px] font-black uppercase italic tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-[#2457D6]/20 active:scale-95 transition-all"
                         >
                         {actionLoading === trade.id ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />} 
                         Accept Trade
@@ -470,7 +470,7 @@ export default function AgentDashboard() {
                 </h2>
             </div>
 
-            <div className="bg-[#1e293b] rounded-[2.5rem] border border-white/5 overflow-hidden shadow-2xl">
+            <div className="bg-[#142036] rounded-[2.5rem] border border-white/5 overflow-hidden shadow-2xl">
                 {tradeHistory.length === 0 ? (
                     <div className="p-10 text-center opacity-40">
                         <Clock className="mx-auto mb-2" size={20} />
@@ -481,7 +481,7 @@ export default function AgentDashboard() {
                         {tradeHistory.map((h) => (
                             <div key={h.id} className="p-5 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
                                 <div className="flex items-center gap-4">
-                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black italic ${h.type === 'deposit' ? 'bg-green-500/20 text-green-500' : 'bg-blue-500/20 text-blue-500'}`}>
+                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black italic ${h.type === 'deposit' ? 'bg-green-500/20 text-green-500' : 'bg-[#2457D6]/20 text-[#2457D6]'}`}>
                                         {h.type === 'deposit' ? 'D' : 'W'}
                                     </div>
                                     <div>
@@ -507,20 +507,20 @@ export default function AgentDashboard() {
 
       {/* TOPUP MODAL */}
       {isTopupModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#0f172a]/95 backdrop-blur-md">
-            <div className="bg-[#1e293b] w-full max-w-sm rounded-[3rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#0B1220]/95 backdrop-blur-md">
+            <div className="bg-[#142036] w-full max-w-sm rounded-[3rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in duration-200">
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="font-black uppercase italic text-sm tracking-wider">Topup Agent Wallet</h3>
                     <button onClick={() => setIsTopupModalOpen(false)} className="p-2 bg-white/5 rounded-xl hover:bg-white/10 transition-colors"><X size={18} /></button>
                 </div>
                 
-                <div className="bg-[#613de6]/10 p-4 rounded-2xl border border-[#613de6]/20 mb-6 flex justify-between items-center">
+                <div className="bg-[#2457D6]/10 p-4 rounded-2xl border border-[#2457D6]/20 mb-6 flex justify-between items-center">
                     <span className="text-[9px] font-black uppercase text-white/40">Main Wallet Balance</span>
-                    <span className="text-sm font-black text-[#fc7952]">${userProfile?.wallet?.toLocaleString() || "0.00"}</span>
+                    <span className="text-sm font-black text-[#8B1E3F]">${userProfile?.wallet?.toLocaleString() || "0.00"}</span>
                 </div>
 
-                <div className="bg-[#0f172a] p-5 rounded-3xl border border-white/5 mb-8">
-                    <label className="text-[9px] font-black uppercase text-[#613de6] block mb-2">Amount to Transfer</label>
+                <div className="bg-[#0B1220] p-5 rounded-3xl border border-white/5 mb-8">
+                    <label className="text-[9px] font-black uppercase text-[#2457D6] block mb-2">Amount to Transfer</label>
                     <div className="relative">
                       <span className="absolute left-0 top-1/2 -translate-y-1/2 text-3xl font-black text-white/20">$</span>
                       <input 
@@ -536,7 +536,7 @@ export default function AgentDashboard() {
                 <button 
                   onClick={handleTopup} 
                   disabled={topupLoading} 
-                  className="w-full bg-[#613de6] py-6 rounded-2xl font-black uppercase italic text-xs tracking-widest shadow-xl shadow-[#613de6]/30 active:scale-95 transition-all flex items-center justify-center gap-2"
+                  className="w-full bg-[#2457D6] py-6 rounded-2xl font-black uppercase italic text-xs tracking-widest shadow-xl shadow-[#2457D6]/30 active:scale-95 transition-all flex items-center justify-center gap-2"
                 >
                     {topupLoading ? <Loader2 className="animate-spin" /> : <>Transfer Funds <ArrowRightLeft size={16} /></>}
                 </button>
@@ -546,8 +546,8 @@ export default function AgentDashboard() {
 
       {/* WITHDRAW TO MAIN MODAL */}
       {isWithdrawModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#0f172a]/95 backdrop-blur-md">
-            <div className="bg-[#1e293b] w-full max-w-sm rounded-[3rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#0B1220]/95 backdrop-blur-md">
+            <div className="bg-[#142036] w-full max-w-sm rounded-[3rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in duration-200">
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="font-black uppercase italic text-sm tracking-wider">Transfer to Main Wallet</h3>
                     <button onClick={() => setIsWithdrawModalOpen(false)} className="p-2 bg-white/5 rounded-xl hover:bg-white/10 transition-colors"><X size={18} /></button>
@@ -558,7 +558,7 @@ export default function AgentDashboard() {
                     <span className="text-sm font-black text-emerald-400">${agent?.agent_balance?.toLocaleString() || "0.00"}</span>
                 </div>
 
-                <div className="bg-[#0f172a] p-5 rounded-3xl border border-white/5 mb-8">
+                <div className="bg-[#0B1220] p-5 rounded-3xl border border-white/5 mb-8">
                     <label className="text-[9px] font-black uppercase text-emerald-500 block mb-2">Amount to Withdraw</label>
                     <div className="relative">
                       <span className="absolute left-0 top-1/2 -translate-y-1/2 text-3xl font-black text-white/20">$</span>
@@ -585,15 +585,15 @@ export default function AgentDashboard() {
 
       {/* RATE MODAL */}
       {isRateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#0f172a]/95 backdrop-blur-md">
-            <div className="bg-[#1e293b] w-full max-w-sm rounded-[3rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#0B1220]/95 backdrop-blur-md">
+            <div className="bg-[#142036] w-full max-w-sm rounded-[3rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in duration-200">
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="font-black uppercase italic text-sm tracking-wider">Set Market Pricing</h3>
                     <button onClick={() => setIsRateModalOpen(false)} className="p-2 bg-white/5 rounded-xl hover:bg-white/10 transition-colors"><X size={18} /></button>
                 </div>
                 
                 <div className="space-y-4 mb-8">
-                    <div className="bg-[#0f172a] p-5 rounded-3xl border border-white/5">
+                    <div className="bg-[#0B1220] p-5 rounded-3xl border border-white/5">
                         <label className="text-[9px] font-black uppercase text-green-500 block mb-2">Deposit Rate (Buying)</label>
                         <input 
                             type="number" 
@@ -603,8 +603,8 @@ export default function AgentDashboard() {
                             placeholder="0.00" 
                         />
                     </div>
-                    <div className="bg-[#0f172a] p-5 rounded-3xl border border-white/5">
-                        <label className="text-[9px] font-black uppercase text-blue-500 block mb-2">Withdrawal Rate (Selling)</label>
+                    <div className="bg-[#0B1220] p-5 rounded-3xl border border-white/5">
+                        <label className="text-[9px] font-black uppercase text-[#2457D6] block mb-2">Withdrawal Rate (Selling)</label>
                         <input 
                             type="number" 
                             value={rates.withdrawal} 
@@ -618,7 +618,7 @@ export default function AgentDashboard() {
                 <button 
                   onClick={updateRates} 
                   disabled={updating} 
-                  className="w-full bg-[#fc7952] py-6 rounded-2xl font-black uppercase italic text-xs tracking-widest shadow-xl shadow-[#fc7952]/30 active:scale-95 transition-all flex items-center justify-center gap-2"
+                  className="w-full bg-[#8B1E3F] py-6 rounded-2xl font-black uppercase italic text-xs tracking-widest shadow-xl shadow-[#8B1E3F]/30 active:scale-95 transition-all flex items-center justify-center gap-2"
                 >
                     {updating ? <Loader2 className="animate-spin" /> : "Confirm Market Rates"}
                 </button>

@@ -160,7 +160,7 @@ export default function Settings() {
 
   const copyReferral = () => {
     if (!user?.uid) return;
-    const link = `https://flyovahelp.com/register?ref=${user.uid}`;
+    const link = `https://strawins.com/register?ref=${user.uid}`;
     navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -168,7 +168,7 @@ export default function Settings() {
 
   if (loading || !user) {
     return (
-      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center text-white italic font-black uppercase tracking-widest">
+      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center text-white italic font-black uppercase tracking-widest">
         Loading Profile...
       </div>
     );
@@ -177,10 +177,10 @@ export default function Settings() {
   const hasChanges = newUsername !== userData?.username || (!userData?.phone && newPhone) || (!userData?.dob && newDob);
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white flex flex-col pb-10">
+    <div className="min-h-screen bg-[#0B1220] text-white flex flex-col pb-10">
       
       <div className="p-6 pt-12 flex items-center gap-4 max-w-md mx-auto w-full">
-        <button onClick={() => router.back()} className="p-3 bg-[#1e293b] rounded-2xl border border-white/5 active:scale-90 transition-all">
+        <button onClick={() => router.back()} className="p-3 bg-[#142036] rounded-2xl border border-white/5 active:scale-90 transition-all">
           <ChevronLeft size={20} />
         </button>
         <h1 className="text-xl font-black italic uppercase tracking-tighter">Account Settings</h1>
@@ -202,17 +202,17 @@ export default function Settings() {
         )}
         
         {/* Profile Card */}
-        <div className="bg-[#1e293b] rounded-[2.5rem] p-6 border border-white/5 relative overflow-hidden shadow-2xl">
+        <div className="bg-[#142036] rounded-[2.5rem] p-6 border border-white/5 relative overflow-hidden shadow-2xl">
           <div className="absolute top-0 right-0 p-4 opacity-5">
             <User size={100} />
           </div>
           
           <div className="flex items-center space-x-4 mb-6 relative z-10">
-            <div className="w-16 h-16 bg-[#613de6] rounded-2xl flex items-center justify-center text-2xl font-black italic shadow-lg border-2 border-white/10">
+            <div className="w-16 h-16 bg-[#2457D6] rounded-2xl flex items-center justify-center text-2xl font-black italic shadow-lg border-2 border-white/10">
               {userData?.username ? userData.username.charAt(0).toUpperCase() : "?"}
             </div>
             <div>
-              <h2 className="text-2xl font-black italic uppercase text-[#fc7952] leading-none">
+              <h2 className="text-2xl font-black italic uppercase text-[#8B1E3F] leading-none">
                 {userData?.fullName || userData?.username || "Merchant"}
               </h2>
               <div className="flex items-center text-green-500 mt-1 gap-3">
@@ -235,7 +235,7 @@ export default function Settings() {
               <div>
                 <p className="text-[9px] font-black uppercase text-white/40 mb-1">Account PIN</p>
                 <div className="flex items-center gap-2">
-                  <Fingerprint size={14} className="text-[#613de6]" />
+                  <Fingerprint size={14} className="text-[#2457D6]" />
                   <p className="font-mono text-sm font-black tracking-[0.4em] text-white">
                     {userData?.pin || "XXXXX"}
                   </p>
@@ -244,7 +244,7 @@ export default function Settings() {
               <button 
                 type="button" 
                 onClick={copyPin}
-                className={`p-3 rounded-xl transition-all active:scale-90 ${pinCopied ? 'bg-green-500' : 'bg-[#613de6]'}`}
+                className={`p-3 rounded-xl transition-all active:scale-90 ${pinCopied ? 'bg-green-500' : 'bg-[#2457D6]'}`}
               >
                 {pinCopied ? <CheckCircle size={14} /> : <Copy size={14} />}
               </button>
@@ -253,7 +253,7 @@ export default function Settings() {
             <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
               <p className="text-[9px] font-black uppercase text-white/40 mb-2">Unique Username</p>
               <div className="flex items-center gap-2">
-                <UserPen size={16} className="text-[#613de6]" />
+                <UserPen size={16} className="text-[#2457D6]" />
                 <input 
                   value={newUsername}
                   onChange={(e) => setNewUsername(e.target.value)}
@@ -289,7 +289,7 @@ export default function Settings() {
             <div className={`bg-black/20 p-4 rounded-2xl border border-white/5 ${userData?.phone ? 'opacity-60' : ''}`}>
               <p className="text-[9px] font-black uppercase text-white/40 mb-2">Phone Number</p>
               <div className="flex items-center gap-2">
-                <Phone size={16} className={userData?.phone ? "text-gray-500" : "text-[#613de6]"} />
+                <Phone size={16} className={userData?.phone ? "text-gray-500" : "text-[#2457D6]"} />
                 <input 
                   value={newPhone}
                   placeholder="e.g. +44 7700 900000"
@@ -303,7 +303,7 @@ export default function Settings() {
             <div className={`bg-black/20 p-4 rounded-2xl border border-white/5 ${userData?.dob ? 'opacity-60' : ''}`}>
               <p className="text-[9px] font-black uppercase text-white/40 mb-2">Date of Birth</p>
               <div className="flex items-center gap-2">
-                <Calendar size={16} className={userData?.dob ? "text-gray-500" : "text-[#613de6]"} />
+                <Calendar size={16} className={userData?.dob ? "text-gray-500" : "text-[#2457D6]"} />
                 <input 
                   type={userData?.dob ? "text" : "date"}
                   value={newDob}
@@ -315,7 +315,7 @@ export default function Settings() {
             </div>
 
             {hasChanges && (
-               <button type="submit" disabled={updateLoading} className="w-full bg-[#613de6] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-[#613de6]/20 transition-all active:scale-95">
+               <button type="submit" disabled={updateLoading} className="w-full bg-[#2457D6] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-[#2457D6]/20 transition-all active:scale-95">
                 {updateLoading ? "Saving Changes..." : "Confirm Profile Updates"}
                </button>
             )}
@@ -331,34 +331,34 @@ export default function Settings() {
           </div>
         )}
 
-        <div className="bg-[#1e293b] rounded-[2rem] p-6 border border-white/5 shadow-xl">
+        <div className="bg-[#142036] rounded-[2rem] p-6 border border-white/5 shadow-xl">
           <div className="flex items-center space-x-2 mb-4">
-            <Share2 size={18} className="text-[#fc7952]" />
+            <Share2 size={18} className="text-[#8B1E3F]" />
             <h3 className="font-black italic uppercase text-sm">Referral CODE</h3>
           </div>
           <p className="text-[10px] text-white/50 mb-4 font-bold">Share your unique link and build your network.</p>
           <div className="flex items-center bg-black/40 p-3 rounded-2xl border border-white/10 gap-2">
-            <div className="bg-[#0f172a] px-3 py-2 rounded-xl flex-1 border border-white/5 overflow-hidden">
-                <p className="text-[10px] font-mono text-white/40 truncate">flyovahelp.com/register?ref={user?.uid}</p>
+            <div className="bg-[#0B1220] px-3 py-2 rounded-xl flex-1 border border-white/5 overflow-hidden">
+                <p className="text-[10px] font-mono text-white/40 truncate">strawins.com/register?ref={user?.uid}</p>
             </div>
-            <button onClick={copyReferral} className={`px-4 py-3 rounded-xl font-black text-[10px] transition-all shrink-0 ${copied ? 'bg-green-500' : 'bg-[#613de6]'} text-white`}>
+            <button onClick={copyReferral} className={`px-4 py-3 rounded-xl font-black text-[10px] transition-all shrink-0 ${copied ? 'bg-green-500' : 'bg-[#2457D6]'} text-white`}>
               {copied ? <CheckCircle size={14} /> : <Copy size={14} />}
             </button>
           </div>
         </div>
 
-        <div className="bg-[#1e293b] rounded-[2rem] p-6 border border-white/5 shadow-xl">
+        <div className="bg-[#142036] rounded-[2rem] p-6 border border-white/5 shadow-xl">
           <div className="flex items-center space-x-2 mb-4">
-            <Lock size={18} className="text-[#fc7952]" />
+            <Lock size={18} className="text-[#8B1E3F]" />
             <h3 className="font-black italic uppercase text-sm">Security</h3>
           </div>
           <form onSubmit={handlePasswordUpdate} className="space-y-4">
             <input 
               type="password" placeholder="New Password" value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold focus:border-[#613de6] outline-none text-white"
+              className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold focus:border-[#2457D6] outline-none text-white"
             />
-            <button type="submit" disabled={passLoading || !newPassword} className="w-full bg-[#613de6] py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest text-white disabled:opacity-20">
+            <button type="submit" disabled={passLoading || !newPassword} className="w-full bg-[#2457D6] py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest text-white disabled:opacity-20">
               {passLoading ? "Processing..." : "Save New Password"}
             </button>
           </form>
@@ -379,8 +379,8 @@ export default function Settings() {
       </div>
 
       {showDeleteModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#0f172a]/90 backdrop-blur-sm animate-in fade-in duration-300">
-           <div className="bg-[#1e293b] w-full max-w-sm rounded-[2.5rem] border border-white/10 p-8 shadow-2xl space-y-6">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#0B1220]/90 backdrop-blur-sm animate-in fade-in duration-300">
+           <div className="bg-[#142036] w-full max-w-sm rounded-[2.5rem] border border-white/10 p-8 shadow-2xl space-y-6">
               <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-3xl flex items-center justify-center mx-auto">
                 <AlertCircle size={32} />
               </div>

@@ -1,22 +1,22 @@
 export const metadata = {
   title: "Blog",
   description:
-    "Read Flyovahelp blog posts on gaming tips, prediction strategies, platform updates, and player guides.",
+    "Read StraWins blog posts on gaming tips, prediction strategies, platform updates, and player guides.",
   keywords: [
-    "Flyovahelp blog",
+    "StraWins blog",
     "gaming tips",
     "prediction game strategy",
     "online gaming news",
     "play and earn guide",
   ],
   alternates: {
-    canonical: "https://flyovahelp.com/blog",
+    canonical: "https://strawins.com/blog",
   },
   openGraph: {
-    title: "Flyovahelp Blog | Tips, Strategies, and Updates",
+    title: "StraWins Blog | Tips, Strategies, and Updates",
     description:
-      "Latest tips, game guides, and platform updates from Flyovahelp.",
-    url: "https://flyovahelp.com/blog",
+      "Latest tips, game guides, and platform updates from StraWins.",
+    url: "https://strawins.com/blog",
     type: "website",
   },
 };

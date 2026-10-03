@@ -157,7 +157,7 @@ export default function AdminTransfers() {
               {loading ? (
                 <tr>
                   <td colSpan="5" className="p-20 text-center">
-                    <Loader2 className="animate-spin text-[#613de6] mx-auto mb-2" size={32} />
+                    <Loader2 className="animate-spin text-[#2457D6] mx-auto mb-2" size={32} />
                     <p className="text-[10px] font-black text-slate-300 uppercase">Scanning User Nodes...</p>
                   </td>
                 </tr>
@@ -177,7 +177,7 @@ export default function AdminTransfers() {
                         </div>
                         <div>
                           <p className="text-sm font-black text-slate-800">{tx.senderName}</p>
-                          <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-tighter">PIN: {tx.senderPin || userProfiles[tx.senderId]?.pin || '---'}</p>
+                          <p className="text-[9px] font-bold text-[#2457D6] uppercase tracking-tighter">PIN: {tx.senderPin || userProfiles[tx.senderId]?.pin || '---'}</p>
                         </div>
                       </div>
                     </td>
@@ -201,7 +201,7 @@ export default function AdminTransfers() {
                         </div>
                         <div>
                           <p className="text-sm font-black text-slate-800">{tx.receiverName}</p>
-                          <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-tighter">PIN: {tx.receiverPin || userProfiles[tx.receiverId]?.pin || '---'}</p>
+                          <p className="text-[9px] font-bold text-[#2457D6] uppercase tracking-tighter">PIN: {tx.receiverPin || userProfiles[tx.receiverId]?.pin || '---'}</p>
                         </div>
                       </div>
                     </td>
@@ -231,7 +231,7 @@ export default function AdminTransfers() {
             <button 
               onClick={loadMore}
               disabled={loadingMore}
-              className="flex items-center gap-2 px-8 py-3 bg-white border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#613de6] transition-all shadow-sm"
+              className="flex items-center gap-2 px-8 py-3 bg-white border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#2457D6] transition-all shadow-sm"
             >
               {loadingMore ? <Loader2 size={14} className="animate-spin" /> : <>Fetch Older Records <ChevronDown size={14} /></>}
             </button>

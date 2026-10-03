@@ -55,7 +55,7 @@ export default function UserActivityPage() {
     return () => unsubTx();
   }, [id]);
 
-  const referralLink = useMemo(() => (id ? `https://flyovahelp.com/register?ref=${id}` : ""), [id]);
+  const referralLink = useMemo(() => (id ? `https://strawins.com/register?ref=${id}` : ""), [id]);
   const referrerUid = user?.referrerUid;
   const referrerPin = !referrerUid
     ? "N/A"
@@ -77,11 +77,11 @@ export default function UserActivityPage() {
         <h1 className="text-2xl font-black italic uppercase text-slate-800">User Activity</h1>
         <p className="text-xs font-bold text-slate-500 mt-2">{user?.fullName || user?.username || "Unknown"} · {user?.email || "No email"}</p>
         <div className="grid md:grid-cols-3 gap-3 mt-4 text-xs font-bold text-slate-600">
-          <div>PIN: <span className="font-mono text-indigo-600">{user?.pin || "--------"}</span></div>
+          <div>PIN: <span className="font-mono text-[#2457D6]">{user?.pin || "--------"}</span></div>
           <div>Referred By: {user?.referredBy || "N/A"}</div>
           <div className="space-y-1">
             <div>Referrer UID: <span className="font-mono">{user?.referrerUid || "N/A"}</span></div>
-            <div>Referrer PIN: <span className="font-mono text-indigo-600">{referrerPin}</span></div>
+            <div>Referrer PIN: <span className="font-mono text-[#2457D6]">{referrerPin}</span></div>
           </div>
           <div>Total Referrals: {downline.length}</div>
           <div className="md:col-span-3">Referral Link: <span className="font-mono break-all">{referralLink}</span></div>
@@ -118,19 +118,23 @@ export default function UserActivityPage() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {txs.map((tx) => {
-              const isFlyovaWin     = tx.title === "Flyova Win"            || (tx.type === "win"    && tx.gameId);
-              const isFlyovaLoss    = tx.title === "Flyova Loss"           || (tx.type === "loss"   && tx.gameId);
-              const isFlyovaPartial = tx.title === "Flyova Partial Refund" || (tx.type === "refund" && tx.gameId);
-              const isFlyovaStake   = tx.title === "Flyova Stake";
-              const isFlyovaOutcome = isFlyovaWin || isFlyovaLoss || isFlyovaPartial;
+              // Rebrand compat: pre-rename records carry "Flyova ..." titles.
+              const txTitle = typeof tx.title === "string" && tx.title.startsWith("Flyova ")
+                ? tx.title.replace(/^Flyova /, "StraWins ")
+                : tx.title;
+              const isStraWinsWin     = txTitle === "StraWins Win"            || (tx.type === "win"    && tx.gameId);
+              const isStraWinsLoss    = txTitle === "StraWins Loss"           || (tx.type === "loss"   && tx.gameId);
+              const isStraWinsPartial = txTitle === "StraWins Partial Refund" || (tx.type === "refund" && tx.gameId);
+              const isStraWinsStake   = txTitle === "StraWins Stake";
+              const isStraWinsOutcome = isStraWinsWin || isStraWinsLoss || isStraWinsPartial;
 
               // Show the original stake amount for outcome records
               const amt = Number(tx.amount || 0);
-              const stakeAmt = isFlyovaWin ? amt / 1.3 : amt;
+              const stakeAmt = isStraWinsWin ? amt / 1.3 : amt;
 
-              const isDebit  = isFlyovaStake || tx.title === "Match Stake" || tx.type === "stake";
-              const isCredit = !isFlyovaOutcome && !isFlyovaStake &&
-                               (tx.type === "deposit" || tx.title === "Flyova Win Payout" || tx.direction === "in");
+              const isDebit  = isStraWinsStake || txTitle === "Match Stake" || tx.type === "stake";
+              const isCredit = !isStraWinsOutcome && !isStraWinsStake &&
+                               (tx.type === "deposit" || txTitle === "StraWins Win Payout" || tx.direction === "in");
 
               return (
                 <tr key={tx.id}>
@@ -139,21 +143,21 @@ export default function UserActivityPage() {
                     {tx.picks && <div className="text-[10px] font-mono text-slate-400 mt-0.5">Picks: {tx.picks.join(", ")}</div>}
                   </td>
                   <td className="p-4">
-                    {isFlyovaWin ? (
+                    {isStraWinsWin ? (
                       <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase bg-emerald-100 text-emerald-700">WIN</span>
-                    ) : isFlyovaLoss ? (
+                    ) : isStraWinsLoss ? (
                       <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase bg-rose-100 text-rose-700">LOSS</span>
-                    ) : isFlyovaPartial ? (
+                    ) : isStraWinsPartial ? (
                       <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase bg-amber-100 text-amber-700">PARTIAL</span>
-                    ) : isFlyovaStake ? (
+                    ) : isStraWinsStake ? (
                       <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase bg-slate-100 text-slate-600">STAKE</span>
                     ) : (
                       <span className="text-xs font-bold text-slate-500 uppercase">{tx.type || "-"}</span>
                     )}
                   </td>
                   <td className="p-4 text-xs font-black">
-                    <span className={isFlyovaOutcome ? "text-slate-800" : isDebit ? "text-rose-600" : isCredit ? "text-emerald-600" : "text-slate-900"}>
-                      {isDebit ? "-" : isCredit ? "+" : ""}${Math.abs(isFlyovaOutcome ? stakeAmt : amt).toFixed(2)}
+                    <span className={isStraWinsOutcome ? "text-slate-800" : isDebit ? "text-rose-600" : isCredit ? "text-emerald-600" : "text-slate-900"}>
+                      {isDebit ? "-" : isCredit ? "+" : ""}${Math.abs(isStraWinsOutcome ? stakeAmt : amt).toFixed(2)}
                     </span>
                   </td>
                   <td className="p-4 text-xs font-black uppercase text-slate-500">{tx.status || "-"}</td>

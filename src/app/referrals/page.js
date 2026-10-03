@@ -122,7 +122,7 @@ export default function ReferralsPage() {
   }, [router]);
 
   const handleCopyLink = () => {
-    const link = `https://flyovahelp.com/register?ref=${user.uid}`;
+    const link = `https://strawins.com/register?ref=${user.uid}`;
     navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -174,19 +174,19 @@ export default function ReferralsPage() {
   };
 
   if (loading) return (
-    <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
+    <div className="min-h-screen bg-[#0B1220] flex items-center justify-center">
       <div className="font-black italic text-white animate-pulse uppercase tracking-widest">Loading Network...</div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white flex flex-col pb-12">
+    <div className="min-h-screen bg-[#0B1220] text-white flex flex-col pb-12">
       
       {/* HEADER */}
       <div className="p-6 pt-12 flex items-center gap-4 max-w-md mx-auto w-full">
         <button 
           onClick={() => router.back()} 
-          className="p-3 bg-[#1e293b] rounded-2xl border border-white/5 active:scale-90 transition-all"
+          className="p-3 bg-[#142036] rounded-2xl border border-white/5 active:scale-90 transition-all"
         >
           <ChevronLeft size={20} />
         </button>
@@ -196,7 +196,7 @@ export default function ReferralsPage() {
       <div className="p-6 space-y-6 max-w-md mx-auto w-full">
         
         {/* EARNINGS CARD */}
-        <div className="bg-gradient-to-br from-[#613de6] to-[#4c2bb3] p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden">
+        <div className="bg-gradient-to-br from-[#2457D6] to-[#1D4FC4] p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden">
             <TrendingUp className="absolute -right-4 -bottom-4 w-32 h-32 opacity-10 rotate-12" />
             <div className="flex justify-between items-start relative z-10">
                 <div>
@@ -230,20 +230,20 @@ export default function ReferralsPage() {
         </div>
 
         {/* REFERRAL CODE SECTION */}
-        <div className="bg-[#1e293b] rounded-[2rem] p-6 border border-white/5 shadow-xl">
+        <div className="bg-[#142036] rounded-[2rem] p-6 border border-white/5 shadow-xl">
           <div className="flex items-center space-x-2 mb-4">
-            <Hash size={18} className="text-[#fc7952]" />
+            <Hash size={18} className="text-[#8B1E3F]" />
             <h3 className="font-black italic uppercase text-sm">Your Referral Link</h3>
           </div>
           <div className="flex items-center bg-black/40 p-3 rounded-2xl border border-white/10 gap-2">
-            <div className="bg-[#0f172a] px-3 py-2 rounded-xl flex-1 border border-white/5 overflow-hidden">
+            <div className="bg-[#0B1220] px-3 py-2 rounded-xl flex-1 border border-white/5 overflow-hidden">
                 <p className="text-[10px] font-mono text-white/40 truncate">
-                    flyovahelp.com/register?ref={user?.uid}
+                    strawins.com/register?ref={user?.uid}
                 </p>
             </div>
             <button 
                 onClick={handleCopyLink} 
-                className={`px-4 py-3 rounded-xl transition-all shrink-0 ${copied ? 'bg-green-500' : 'bg-[#613de6]'} text-white shadow-lg`}
+                className={`px-4 py-3 rounded-xl transition-all shrink-0 ${copied ? 'bg-green-500' : 'bg-[#2457D6]'} text-white shadow-lg`}
             >
               {copied ? <Check size={16} /> : <Copy size={16} />}
             </button>
@@ -257,20 +257,20 @@ export default function ReferralsPage() {
             </div>
 
             {referrals.length === 0 ? (
-                <div className="bg-[#1e293b] rounded-[2rem] p-12 border border-dashed border-white/10 text-center">
+                <div className="bg-[#142036] rounded-[2rem] p-12 border border-dashed border-white/10 text-center">
                     <UserCircle size={48} className="mx-auto mb-4 text-white/5" />
                     <p className="text-[10px] font-black uppercase text-white/20 tracking-widest">No referrals yet</p>
                 </div>
             ) : (
                 <div className="space-y-3">
                     {referrals.map((ref) => (
-                        <div key={ref.id} className="bg-[#1e293b] rounded-3xl p-5 border border-white/5 flex items-center justify-between group hover:border-[#613de6]/30 transition-all">
+                        <div key={ref.id} className="bg-[#142036] rounded-3xl p-5 border border-white/5 flex items-center justify-between group hover:border-[#2457D6]/30 transition-all">
                             <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 bg-black/40 rounded-2xl flex items-center justify-center text-xl font-black italic text-[#613de6] border border-white/5">
+                                <div className="w-12 h-12 bg-black/40 rounded-2xl flex items-center justify-center text-xl font-black italic text-[#2457D6] border border-white/5">
                                     {ref.username?.charAt(0).toUpperCase()}
                                 </div>
                                 <div>
-                                    <h4 className="font-black italic uppercase text-[#fc7952] leading-none">
+                                    <h4 className="font-black italic uppercase text-[#8B1E3F] leading-none">
                                         @{ref.username}
                                     </h4>
                                     <p className="text-[10px] font-bold text-white/40 uppercase tracking-tighter mb-1">
@@ -308,8 +308,8 @@ export default function ReferralsPage() {
 
       {/* WITHDRAW MODAL */}
       {showWithdrawModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-[#0f172a]/90 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-[#1e293b] w-full max-w-sm rounded-[2.5rem] border border-white/10 p-8 shadow-2xl space-y-6">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-[#0B1220]/90 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-[#142036] w-full max-w-sm rounded-[2.5rem] border border-white/10 p-8 shadow-2xl space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-black italic uppercase tracking-tighter">Withdraw Bonus</h2>
               <button onClick={() => setShowWithdrawModal(false)} className="p-2 bg-white/5 rounded-xl"><X size={20} /></button>
@@ -338,7 +338,7 @@ export default function ReferralsPage() {
                 <div className="space-y-2">
                   <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.1em]">Transfer Amount</p>
                   <div className="bg-black/20 p-6 rounded-3xl border border-white/5 relative">
-                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-black italic text-[#613de6]">$</span>
+                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-black italic text-[#2457D6]">$</span>
                     <input
                       type="number"
                       value={withdrawAmount}
@@ -347,12 +347,12 @@ export default function ReferralsPage() {
                       className="w-full bg-transparent pl-6 text-3xl font-black italic text-white outline-none"
                     />
                   </div>
-                  <p className="text-[9px] font-bold text-[#fc7952] uppercase px-2">
+                  <p className="text-[9px] font-bold text-[#8B1E3F] uppercase px-2">
                     Available: ${userData?.referralBonus?.toFixed(2) || "0.00"}
                   </p>
                 </div>
 
-                <div className="bg-[#613de6]/5 border border-[#613de6]/20 p-5 rounded-3xl space-y-1">
+                <div className="bg-[#2457D6]/5 border border-[#2457D6]/20 p-5 rounded-3xl space-y-1">
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] font-bold text-gray-400 uppercase">Destination</span>
                     <span className="text-[10px] font-black uppercase italic text-green-500">Main Wallet</span>
@@ -362,7 +362,7 @@ export default function ReferralsPage() {
                 <button
                   onClick={handleWithdrawBonus}
                   disabled={withdrawLoading || !withdrawAmount}
-                  className="w-full bg-[#613de6] py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all disabled:opacity-40"
+                  className="w-full bg-[#2457D6] py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all disabled:opacity-40"
                 >
                   {withdrawLoading ? (
                     <Loader2 className="animate-spin" size={16} />
