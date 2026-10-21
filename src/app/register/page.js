@@ -461,7 +461,7 @@ export default function RegisterPage() {
 
       <div className="relative z-10 flex-1 flex flex-col items-center px-5 py-12">
         <Link href="/" className="mb-8">
-          <Image src="/logo.svg" alt="StraWins" width={130} height={34} />
+          <Image src="/logo.png" alt="StraWins" width={130} height={22} />
         </Link>
 
         <Suspense

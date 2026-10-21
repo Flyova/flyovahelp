@@ -53,7 +53,12 @@ export default function StraWinsToDollars() {
   const ROUND_DURATION = 120000;
   const BREAK_DURATION = 120000;
   const CLIENT_ENGINE_KICK_ENABLED = process.env.NEXT_PUBLIC_FLYOVA_CLIENT_ENGINE_KICK === "1";
-  const ENGINE_KICK_COOLDOWN_MS = 60000;
+  // Cooldown for background kicks.
+  const ENGINE_KICK_COOLDOWN_MS = 5000;
+  // Rollover kicks (a round just ended / there is no live round) bypass the cooldown so the
+  // next round starts immediately — the engine has its own lock, so they are only throttled
+  // to one per second to stop a client hammering it.
+  const ENGINE_URGENT_KICK_MS = 1000;
 
   const revealedGameRef = useRef(null);
   const resultTimeoutRef = useRef(null);
@@ -69,12 +74,13 @@ export default function StraWinsToDollars() {
   const serverTimeOffsetRef = useRef(0);
   const serverNow = () => Date.now() + serverTimeOffsetRef.current;
 
-  async function maybeKickGameEngine(reason = "heartbeat") {
+  async function maybeKickGameEngine(reason = "heartbeat", { urgent = false } = {}) {
     if (!CLIENT_ENGINE_KICK_ENABLED) return;
 
     const now = Date.now();
     if (engineKickRef.current.inFlight) return;
-    if (now - engineKickRef.current.lastRunAt < ENGINE_KICK_COOLDOWN_MS) return;
+    const minGap = urgent ? ENGINE_URGENT_KICK_MS : ENGINE_KICK_COOLDOWN_MS;
+    if (now - engineKickRef.current.lastRunAt < minGap) return;
 
     engineKickRef.current.inFlight = true;
     engineKickRef.current.lastRunAt = now;
@@ -143,7 +149,7 @@ export default function StraWinsToDollars() {
     // from firing for a fresh game that still has ~120s remaining
     if (currentGame.endTime - serverNow() > 5000) return;
     revealedGameRef.current = currentGame.id;
-    maybeKickGameEngine("reveal-results");
+    maybeKickGameEngine("reveal-results", { urgent: true });
 
     setGameStatus("results");
     const gameWinners = [...(currentGame.winners || [])]; // capture before any awaits
@@ -306,7 +312,7 @@ export default function StraWinsToDollars() {
         if (typeof gameData.endTime === "number" && gameData.endTime - serverNow() > 135000) {
           // Lifecycle is server-owned (cron). Client should never mark rounds completed.
           setCurrentGame(null);
-          maybeKickGameEngine("orphan-active");
+          maybeKickGameEngine("orphan-active", { urgent: true });
           return;
         }
 
@@ -325,8 +331,9 @@ export default function StraWinsToDollars() {
         checkIfUserBet(gameData.id);
 
         if (gameStatusRef.current === "results" && gameData.id !== revealedGameRef.current) {
-          // Clear pending winner display immediately — new game is confirmed
-          if (resultTimeoutRef.current) { clearTimeout(resultTimeoutRef.current); resultTimeoutRef.current = null; }
+          // The next round can now arrive within a second of the reveal. Clear the winner
+          // glow (round-specific) but let the result popup keep its own auto-dismiss timer,
+          // otherwise the new round would cancel it and leave the popup stuck on screen.
           if (winnersTimeoutRef.current) { clearTimeout(winnersTimeoutRef.current); winnersTimeoutRef.current = null; }
           setLastWinners([]);
           setLastGameNumbers([]);
@@ -339,7 +346,7 @@ export default function StraWinsToDollars() {
         activeBetsReqIdRef.current += 1;
         setActiveBets([]);
         setCurrentGame(null);
-        maybeKickGameEngine("no-active-game");
+        maybeKickGameEngine("no-active-game", { urgent: true });
       }
     });
 
@@ -366,18 +373,20 @@ export default function StraWinsToDollars() {
       }
 
       if (!currentGame) {
-        maybeKickGameEngine("missing-current-game");
+        maybeKickGameEngine("missing-current-game", { urgent: true });
         return;
       }
 
       const msLeft = Number(currentGame.endTime || 0) - now;
-      if (msLeft <= 2000) {
-        maybeKickGameEngine("round-ending");
+      // Kick only once the round has genuinely ended. Kicking at -2s used to trip the
+      // cooldown before the engine could settle, freezing the page at 0:00.
+      if (msLeft <= 0) {
+        maybeKickGameEngine("round-ending", { urgent: true });
       }
     };
 
     tick();
-    const id = setInterval(tick, 5000);
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, currentGame?.id, currentGame?.endTime, breakEndsAt]);

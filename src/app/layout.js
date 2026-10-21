@@ -16,7 +16,7 @@ const organizationJsonLd = {
   "@type": "Organization",
   name: "StraWins",
   url: SITE_URL,
-  logo: `${SITE_URL}/logo.svg`,
+  logo: `${SITE_URL}/logo.png`,
   sameAs: [
     "https://www.facebook.com/share/18nRMrs7P5/",
     "https://www.instagram.com/flyovahelp1?igsh=MW5ubDB1Z2tueHhuaQ==",

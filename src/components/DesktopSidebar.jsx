@@ -20,6 +20,7 @@ export default function DesktopSidebar({ collapsed, onToggle }) {
 
   const navs = [
     { name: "Home", icon: Home, path: "/dashboard" },
+    { name: "Chats", icon: MessageCircle, path: "/chat" },
     { name: "History", icon: History, path: "/history" },
     { name: "Deposit", icon: Wallet, path: "/deposit" },
     { name: "Blog Post", icon: BookOpen, path: "/blog" },

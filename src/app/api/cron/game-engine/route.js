@@ -26,13 +26,14 @@ const emptyPendingSweep = (skipped = false) => ({
   skipped,
 });
 
-const getGlobalRoundWindow = (now) => {
-  const startTime = Math.floor(now / ROUND_DURATION_MS) * ROUND_DURATION_MS;
-  return {
-    startTime,
-    endTime: startTime + ROUND_DURATION_MS,
-  };
-};
+// A round is always a full ROUND_DURATION_MS measured from the moment it is created.
+// Snapping to the wall-clock grid used to hand players a round that was already
+// partway through (e.g. 30s left after the engine caught up), short-changing anyone
+// who joined right after. Anchoring to `now` keeps rounds full-length and contiguous.
+const getRoundWindow = (now) => ({
+  startTime: now,
+  endTime: now + ROUND_DURATION_MS,
+});
 
 const withEngineTimeout = (label, operation, timeoutMs = ENGINE_STEP_TIMEOUT_MS) => {
   let timer;
@@ -339,7 +340,7 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
     );
 
     if (runningSnap.empty) {
-      const { startTime, endTime } = getGlobalRoundWindow(now);
+      const { startTime, endTime } = getRoundWindow(now);
 
       const pool = [];
       while (pool.length < 4) {

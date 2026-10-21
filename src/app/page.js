@@ -991,7 +991,7 @@ export default function LandingPage() {
       {/* ── NAVIGATION ───────────────────────────────── */}
       <nav className="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto relative z-50">
         <div className="flex items-center space-x-2">
-          <Image src="/logo.svg" alt="Logo" width={120} height={40} className="rounded-full bg-white/10 p-1" />
+          <Image src="/logo.png" alt="Logo" width={120} height={20} className="rounded-full bg-white/10 p-1" />
         </div>
 
         <div className="hidden md:flex items-center space-x-8 text-sm font-bold uppercase tracking-wider">
@@ -1591,7 +1591,7 @@ export default function LandingPage() {
 
         <div className="relative z-10 max-w-4xl mx-auto px-6 py-16 flex flex-col items-center gap-10 text-center">
           {/* Logo */}
-          <Image src="/logo.svg" alt="Logo" width={140} height={46} className="rounded-full bg-white/10 p-1.5" />
+          <Image src="/logo.png" alt="Logo" width={140} height={24} className="rounded-full bg-white/10 p-1.5" />
 
           {/* Nav links */}
           <nav className="flex flex-wrap justify-center gap-x-8 gap-y-3">

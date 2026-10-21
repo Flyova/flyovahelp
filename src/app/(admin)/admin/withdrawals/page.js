@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
+import { notifyPush } from "@/lib/pushClient";
 import { 
   collection, 
   query, 
@@ -207,6 +208,7 @@ export default function AdminWithdrawalList() {
       }
 
       await batch.commit();
+      notifyPush({ event: "withdrawal_status", withdrawalId: withdrawal.id });
 
       // --- TRIGGER: NOTIFY USER OF WITHDRAWAL STATUS ---
       try {

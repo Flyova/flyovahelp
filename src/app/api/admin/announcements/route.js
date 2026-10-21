@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
+import { sendPushToAll } from "@/lib/push";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -112,6 +113,15 @@ export async function POST(request) {
       createdBy: requester.uid,
       createdByEmail: requester.email,
     });
+
+    // Push to every registered device after the response is sent.
+    after(() =>
+      sendPushToAll({
+        title: type === "warning" ? "Important notice" : "StraWins",
+        body: message,
+        data: { kind: "announcement", id: announcementRef.id, url: "/dashboard" },
+      }).catch((e) => console.error("Announcement push failed:", e))
+    );
 
     const savedSnap = await announcementRef.get();
     return NextResponse.json({ announcement: serializeAnnouncement(savedSnap) });

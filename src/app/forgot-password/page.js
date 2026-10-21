@@ -44,7 +44,7 @@ export default function ForgotPassword() {
 
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-5 py-12">
         <Link href="/" className="mb-10">
-          <Image src="/logo.svg" alt="StraWins" width={120} height={30} />
+          <Image src="/logo.png" alt="StraWins" width={120} height={20} />
         </Link>
 
         <div className="w-full max-w-105">

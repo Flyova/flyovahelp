@@ -94,7 +94,7 @@ export default function AdvertisePage() {
         >
           <ArrowLeft size={16} /> Back
         </button>
-        <Image src="/logo.svg" alt="StraWins" width={110} height={28} />
+        <Image src="/logo.png" alt="StraWins" width={110} height={19} />
         <a
           href={`mailto:${CONTACT_EMAIL}`}
           className="hidden sm:flex items-center gap-2 bg-[#8B1E3F] text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider hover:brightness-110 transition-all"

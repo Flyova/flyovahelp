@@ -95,7 +95,7 @@ export default function BlogPostPage() {
       name: "StraWins",
       logo: {
         "@type": "ImageObject",
-        url: `${SITE_URL}/logo.svg`,
+        url: `${SITE_URL}/logo.png`,
       },
     },
     mainEntityOfPage: pageUrl,
@@ -122,7 +122,7 @@ export default function BlogPostPage() {
       {/* Nav */}
       <div className="relative z-10 sticky top-0 bg-[#0B1220]/90 backdrop-blur-md border-b border-white/5 px-6 py-4 flex items-center justify-between">
         <Link href="/">
-          <Image src="/logo.svg" alt="StraWins" width={110} height={28} />
+          <Image src="/logo.png" alt="StraWins" width={110} height={19} />
         </Link>
         <Link href="/blog" className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 hover:text-white transition-colors">
           <ArrowLeft size={14} /> All Posts

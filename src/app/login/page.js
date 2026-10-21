@@ -79,7 +79,7 @@ export default function LoginPage() {
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-5 py-12">
         {/* Logo */}
         <Link href="/">
-          <Image src="/logo.svg" alt="StraWins" width={130} height={34} className="mb-10 cursor-pointer" />
+          <Image src="/logo.png" alt="StraWins" width={130} height={22} className="mb-10 cursor-pointer" />
         </Link>
 
         {/* Card */}

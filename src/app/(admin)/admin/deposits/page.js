@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
+import { notifyPush } from "@/lib/pushClient";
 import {
   collection,
   query,
@@ -168,6 +169,7 @@ export default function AdminDepositList() {
       }
 
       await batch.commit();
+      notifyPush({ event: "deposit_status", depositId: deposit.id });
 
       // --- TRIGGER: NOTIFY USER OF ADMIN DECISION ---
       try {
