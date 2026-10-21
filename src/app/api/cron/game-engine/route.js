@@ -10,7 +10,10 @@ const shuffleArray = (array) => {
   return array;
 };
 
-const ENGINE_LOCK_TTL_MS = 180000; // 3 minutes
+// Short TTL: a crashed run must not freeze the game for long. Settlement and round
+// creation are idempotent, so an overlapping run after expiry is harmless.
+const ENGINE_LOCK_TTL_MS = 45000;
+const SETTLE_CHUNK_SIZE = 100; // bets per settlement transaction (<= 500 writes)
 const ENGINE_LOCK_GRACE_MS = 5000;
 const ENGINE_LOCK_COLLECTION = "system_locks";
 const ENGINE_LOCK_DOC_ID = "flyova_game_engine_lock";
@@ -97,9 +100,16 @@ const releaseEngineLock = async (adminDb, ownerId) => {
 
 const toMoney = (value) => parseFloat(Number(value || 0).toFixed(2));
 
-const settleBetDoc = async ({
+/**
+ * Settles a chunk of bets in ONE transaction: one read for the bets, one for their
+ * users, one for referrers, one commit. Each Firestore call is a network round trip
+ * on Workers, so settling bet-by-bet made rounds slow to roll over and could exceed
+ * the per-request subrequest limit mid-settlement. Wallet/referral credits are summed
+ * per user so each user document is written once.
+ */
+const settleBetChunk = async ({
   adminDb,
-  betDoc,
+  betDocs,
   winningNums,
   now,
   WIN_MULTIPLIER,
@@ -107,60 +117,71 @@ const settleBetDoc = async ({
   REFERRAL_COMMISSION_RATE,
 }) => {
   return adminDb.runTransaction(async (tx) => {
-    const freshBetSnap = await tx.get(betDoc.ref);
-    if (!freshBetSnap.exists) return { settled: false, reason: "bet-missing" };
+    const betSnaps = await tx.getAll(...betDocs.map((d) => d.ref));
+    const pending = betSnaps.filter(
+      (snap) => snap.exists && snap.data()?.status === "pending" && snap.ref.parent.parent
+    );
+    if (!pending.length) return 0;
 
-    const freshBet = freshBetSnap.data() || {};
-    if (freshBet.status !== "pending") {
-      return { settled: false, reason: "already-settled" };
-    }
+    const userRefs = [...new Map(pending.map((snap) => {
+      const ref = snap.ref.parent.parent;
+      return [ref.path, ref];
+    })).values()];
+    const userSnaps = await tx.getAll(...userRefs);
+    const users = new Map(userSnaps.map((snap) => [snap.ref.path, snap]));
 
-    const userRef = betDoc.ref.parent.parent;
-    if (!userRef) return { settled: false, reason: "missing-user-ref" };
+    const referrerIds = [...new Set(userSnaps
+      .map((snap) => (snap.exists && typeof snap.data()?.referrerUid === "string" ? snap.data().referrerUid.trim() : ""))
+      .filter(Boolean))];
+    const referrerSnaps = referrerIds.length
+      ? await tx.getAll(...referrerIds.map((id) => adminDb.collection("users").doc(id)))
+      : [];
+    const existingReferrers = new Set(referrerSnaps.filter((snap) => snap.exists).map((snap) => snap.id));
 
-    const userSnap = await tx.get(userRef);
-    const userData = userSnap.exists ? userSnap.data() : {};
+    // path -> { ref, wallet, referralBonus }
+    const credits = new Map();
+    const credit = (ref, field, amount) => {
+      if (!(amount > 0)) return;
+      const entry = credits.get(ref.path) || { ref, wallet: 0, referralBonus: 0 };
+      entry[field] += amount;
+      credits.set(ref.path, entry);
+    };
 
-    const referrerUid = typeof userData?.referrerUid === "string" ? userData.referrerUid.trim() : "";
-    const referrerRef = referrerUid ? adminDb.collection("users").doc(referrerUid) : null;
-    const referrerSnap = referrerRef ? await tx.get(referrerRef) : null;
+    for (const betSnap of pending) {
+      const bet = betSnap.data() || {};
+      const userRef = betSnap.ref.parent.parent;
+      const userSnap = users.get(userRef.path);
+      const betAmount = Math.abs(Number(bet.amount || 0));
+      const stakeAmount = Math.abs(Number(bet.stakeAmount || betAmount || 0));
+      const picks = Array.isArray(bet.picks) ? bet.picks : [];
+      const matches = picks.filter((num) => winningNums.includes(num)).length;
 
-    const betAmount = Math.abs(Number(freshBet.amount || 0));
-    const stakeAmount = Math.abs(Number(freshBet.stakeAmount || betAmount || 0));
-    const picks = Array.isArray(freshBet.picks) ? freshBet.picks : [];
-    const matches = picks.filter((num) => winningNums.includes(num)).length;
-
-    if (matches === 2) {
-      const payout = toMoney(betAmount * WIN_MULTIPLIER);
-      tx.update(betDoc.ref, { status: "win", matches: 2, stakeAmount, settledAt: now });
-      if (userSnap.exists) {
-        tx.update(userRef, { wallet: admin.firestore.FieldValue.increment(payout) });
+      if (matches === 2) {
+        tx.update(betSnap.ref, { status: "win", matches: 2, stakeAmount, settledAt: now });
+        if (userSnap?.exists) credit(userRef, "wallet", toMoney(betAmount * WIN_MULTIPLIER));
+      } else if (matches === 1) {
+        tx.update(betSnap.ref, { status: "partial", matches: 1, stakeAmount, settledAt: now });
+        if (userSnap?.exists) credit(userRef, "wallet", toMoney(betAmount * REFUND_PERCENTAGE));
+      } else {
+        tx.update(betSnap.ref, { status: "loss", matches: 0, stakeAmount, settledAt: now });
+        // Referral credit must never block loss settlement.
+        const referrerUid = userSnap?.exists && typeof userSnap.data()?.referrerUid === "string"
+          ? userSnap.data().referrerUid.trim()
+          : "";
+        if (referrerUid && existingReferrers.has(referrerUid)) {
+          credit(adminDb.collection("users").doc(referrerUid), "referralBonus", toMoney(betAmount * REFERRAL_COMMISSION_RATE));
+        }
       }
-      return { settled: true, result: "win", amount: payout };
     }
 
-    if (matches === 1) {
-      const refundAmount = toMoney(betAmount * REFUND_PERCENTAGE);
-      tx.update(betDoc.ref, { status: "partial", matches: 1, stakeAmount, settledAt: now });
-      if (userSnap.exists) {
-        tx.update(userRef, { wallet: admin.firestore.FieldValue.increment(refundAmount) });
-      }
-      return { settled: true, result: "partial", amount: refundAmount };
+    for (const { ref, wallet, referralBonus } of credits.values()) {
+      const update = {};
+      if (wallet > 0) update.wallet = admin.firestore.FieldValue.increment(toMoney(wallet));
+      if (referralBonus > 0) update.referralBonus = admin.firestore.FieldValue.increment(toMoney(referralBonus));
+      if (Object.keys(update).length) tx.update(ref, update);
     }
 
-    tx.update(betDoc.ref, { status: "loss", matches: 0, stakeAmount, settledAt: now });
-
-    // Referral credit must never block loss settlement.
-    if (referrerRef && referrerSnap?.exists) {
-      const commission = toMoney(betAmount * REFERRAL_COMMISSION_RATE);
-      if (commission > 0) {
-        tx.update(referrerRef, {
-          referralBonus: admin.firestore.FieldValue.increment(commission),
-        });
-      }
-    }
-
-    return { settled: true, result: "loss", amount: 0 };
+    return pending.length;
   });
 };
 
@@ -178,24 +199,25 @@ const settlePendingForGame = async ({
     .where("status", "==", "pending")
     .get();
 
-  let settledCount = 0;
-  for (const betDoc of pendingSnap.docs) {
-    const betData = betDoc.data() || {};
-    if (betData.type !== "stake") continue;
+  const stakes = pendingSnap.docs.filter((d) => d.data()?.type === "stake");
 
+  let settledCount = 0;
+  for (let i = 0; i < stakes.length; i += SETTLE_CHUNK_SIZE) {
+    const betDocs = stakes.slice(i, i + SETTLE_CHUNK_SIZE);
+    const args = { adminDb, betDocs, winningNums, now, WIN_MULTIPLIER, REFUND_PERCENTAGE, REFERRAL_COMMISSION_RATE };
     try {
-      const outcome = await settleBetDoc({
-        adminDb,
-        betDoc,
-        winningNums,
-        now,
-        WIN_MULTIPLIER,
-        REFUND_PERCENTAGE,
-        REFERRAL_COMMISSION_RATE,
-      });
-      if (outcome?.settled) settledCount += 1;
+      settledCount += await settleBetChunk(args);
     } catch (error) {
-      console.error("Failed to settle pending bet", { gameId, betId: betDoc.id, error: error?.message || error });
+      // One retry: transient contention (e.g. a player staking mid-settlement) usually clears.
+      try {
+        settledCount += await settleBetChunk(args);
+      } catch (retryError) {
+        console.error("Failed to settle bet chunk", {
+          gameId,
+          bets: betDocs.map((d) => d.id),
+          error: retryError?.message || error?.message || retryError,
+        });
+      }
     }
   }
 
@@ -253,7 +275,6 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
   let adminDb;
   let lockOwnerId = "";
   let lockAcquired = false;
-  let engineFailed = false;
 
   try {
     adminDb = getAdminDb();
@@ -266,6 +287,26 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
     const gameRef = rtdb.ref("active_game_flyova");
     const roundGuardRef = adminDb.collection(ROUND_GUARD_COLLECTION).doc(ROUND_GUARD_DOC_ID);
     lockOwnerId = `engine_${now}_${Math.random().toString(36).slice(2, 10)}`;
+
+    // Fast path: while the live round is still running there is nothing to do, so
+    // answer from one read without taking the lock. Clients poll this every few seconds.
+    if (!includePendingSweep) {
+      const liveSnap = await withEngineTimeout(
+        "Live StraWins round lookup",
+        () => adminDb.collection("timed_games").where("status", "==", "active").limit(1).get()
+      );
+      const liveEnd = Number(liveSnap.docs[0]?.data()?.endTime || 0);
+      if (!liveSnap.empty && liveEnd > now) {
+        return NextResponse.json({
+          message: "Running",
+          settledNow: 0,
+          stalePendingScanned: 0,
+          stalePendingSettled: 0,
+          pendingStakeEligible: 0,
+          pendingSweepSkipped: true,
+        });
+      }
+    }
 
     const lockState = await withEngineTimeout(
       "StraWins game engine lock",
@@ -308,14 +349,16 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
       });
       settledNowCount += settled.settledCount;
 
-      await gameDoc.ref.update({ status: "completed", completedAt: now });
-      await gameRef.update({ status: "settled", winners: winningNums });
-      await roundGuardRef.set({
-        status: "settled",
-        gameId,
-        endTime: gameDoc.data().endTime,
-        updatedAt: now,
-      }, { merge: true });
+      await Promise.all([
+        gameDoc.ref.update({ status: "completed", completedAt: now }),
+        gameRef.update({ status: "settled", winners: winningNums }),
+        roundGuardRef.set({
+          status: "settled",
+          gameId,
+          endTime: gameDoc.data().endTime,
+          updatedAt: now,
+        }, { merge: true }),
+      ]);
     }
 
     // Historical sweep is intentionally opt-in. Running it on every player heartbeat
@@ -466,14 +509,15 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
       pendingSweepSkipped: pendingSweep.skipped,
     });
   } catch (err) {
-    engineFailed = true;
     console.error("StraWins game engine failed:", err);
     return NextResponse.json({
       error: err.message,
       code: err.code || null,
     }, { status: 500 });
   } finally {
-    if (adminDb && lockOwnerId && lockAcquired && !engineFailed) {
+    // Release even after a failure: holding the lock after a crash froze the game
+    // for the whole TTL, since every later run was told "already running".
+    if (adminDb && lockOwnerId && lockAcquired) {
       await releaseEngineLock(adminDb, lockOwnerId).catch(() => {});
     }
   }

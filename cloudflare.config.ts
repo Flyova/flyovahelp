@@ -7,6 +7,9 @@ export default defineConfig({
     entrypoint: "./worker/index.js",
     compatibilityDate: "2026-10-21",
     compatibilityFlags: ["nodejs_compat"],
+    // Run next to Firestore/RTDB: the engine makes many sequential Google API calls,
+    // and from the nearest edge (e.g. Johannesburg) each one is a long round trip.
+    placement: { mode: "smart" },
     assets: {
       htmlHandling: "none",
       notFoundHandling: "none",
