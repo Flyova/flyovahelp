@@ -13,6 +13,10 @@ export default defineConfig({
       runWorkerFirst: ["/*", "!/_next/static/*", "!/*/_next/static/*"],
     },
     triggers: [
+      // Apex + www only. A "*.strawins.com/*" route misses the bare domain and
+      // would also capture other subdomains (e.g. chat.strawins.com).
+      triggers.fetch({ pattern: "strawins.com/*", zone: "strawins.com" }),
+      triggers.fetch({ pattern: "www.strawins.com/*", zone: "strawins.com" }),
       triggers.scheduled({ schedule: "* * * * *" }),
       triggers.scheduled({ schedule: "0 3 * * *" }),
     ],
