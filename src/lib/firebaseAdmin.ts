@@ -1,44 +1,28 @@
-import admin from "firebase-admin";
-import { getDatabase } from "firebase-admin/database";
+import { auth } from "./firebase-rest/auth";
+import { Database } from "./firebase-rest/database";
+import { FieldValue, Firestore, Timestamp } from "./firebase-rest/firestore";
 
-const firebaseAdminConfig = {
-  projectId: process.env.FIREBASE_PROJECT_ID,
-  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-  // Ensure the private key handles line breaks correctly
-  privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-};
+// Server-side Firebase for Cloudflare Workers. firebase-admin cannot run on
+// Workers (its Firestore client needs gRPC and runtime code generation), so this
+// is a REST-backed replacement with the same surface the API routes use:
+//   admin.auth().verifyIdToken / getUserByEmail / createUser / updateUser / deleteUser
+//   admin.firestore.FieldValue / admin.firestore.Timestamp
+//   getAdminDb() -> Firestore, getRtdb() -> Realtime Database
+// Credentials come from FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY.
 
-function hasRequiredAdminEnv() {
-  return Boolean(
-    firebaseAdminConfig.projectId &&
-    firebaseAdminConfig.clientEmail &&
-    firebaseAdminConfig.privateKey
-  );
-}
+const DATABASE_URL = "https://flyovahelp-f9331-default-rtdb.firebaseio.com";
 
-function ensureAdminApp() {
-  if (admin.apps.length) return admin.app();
+let firestore: Firestore | null = null;
+let rtdb: Database | null = null;
 
-  if (!hasRequiredAdminEnv()) {
-    throw new Error(
-      "Firebase Admin environment variables are missing. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY."
-    );
-  }
+const getAdminDb = () => (firestore ??= new Firestore());
 
-  return admin.initializeApp({
-    credential: admin.credential.cert(firebaseAdminConfig),
-    databaseURL: "https://flyovahelp-f9331-default-rtdb.firebaseio.com",
-  });
-}
+const getRtdb = () => (rtdb ??= new Database(DATABASE_URL));
 
-const getAdminDb = () => {
-  ensureAdminApp();
-  return admin.firestore();
-};
-
-const getRtdb = () => {
-  ensureAdminApp();
-  return getDatabase();
+const admin = {
+  firestore: Object.assign(() => getAdminDb(), { FieldValue, Timestamp }),
+  auth: () => auth,
+  database: () => getRtdb(),
 };
 
 export { admin, getAdminDb, getRtdb };

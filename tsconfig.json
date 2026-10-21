@@ -3,7 +3,9 @@
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     },
     "target": "ES2017",
     "lib": [
@@ -35,10 +37,14 @@
     "**/*.mts",
     "**/*.ts",
     "**/*.tsx",
-    "src/**/*.js", 
+    "src/**/*.js",
     "src/**/*.jsx"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "cloudflare.config.ts",
+    "vite.config.ts",
+    "worker",
+    ".cloudflare"
   ]
 }

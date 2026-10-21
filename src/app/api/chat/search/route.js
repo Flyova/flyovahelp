@@ -9,8 +9,20 @@ export async function GET(req) {
     if (!q || q.length < 2) return NextResponse.json({ items: [] });
     const db = getAdminDb();
     const out = new Map();
+    // Public profile fields only — this endpoint is unauthenticated, so never
+    // return email, phone, dob, PIN, OTP or balances from the user document.
     const push = (d, kind) => {
-      if (!out.has(d.id) && !d.data()?.deleted) out.set(d.id, { kind, id: d.id, ...d.data() });
+      const data = d.data() || {};
+      if (out.has(d.id) || data.deleted) return;
+      out.set(d.id, {
+        kind,
+        id: d.id,
+        uid: data.uid || d.id,
+        username: data.username || "",
+        usernameLower: data.usernameLower || "",
+        fullName: data.fullName || "",
+        country: data.country || "",
+      });
     };
     // username identities
     const un = await db.collection("usernames").where("usernameLower", ">=", q)

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/navigation";
+import { NextResponse } from "next/server";
 import { db } from "@/lib/firebase";
 import { 
   collection, 
