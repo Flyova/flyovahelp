@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebaseAdmin";
 import { norm } from "@/lib/chat";
+import { getCaller } from "@/lib/apiAuth";
 
 // GET /api/chat/search?q=... — username, name, phone, country, referrer code
 export async function GET(req) {
   try {
+    if (!(await getCaller(req))) return NextResponse.json({ error: "Sign in again to continue." }, { status: 401 });
     const q = norm(new URL(req.url).searchParams.get("q"));
     if (!q || q.length < 2) return NextResponse.json({ items: [] });
     const db = getAdminDb();
     const out = new Map();
-    // Public profile fields only — this endpoint is unauthenticated, so never
+    // Public profile fields only — any signed-in player can search, so never
     // return email, phone, dob, PIN, OTP or balances from the user document.
     const push = (d, kind) => {
       const data = d.data() || {};

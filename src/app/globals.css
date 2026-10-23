@@ -71,6 +71,99 @@ div {
   animation: flicker 4s infinite;
 }
 
+/* ── GAMING LOOP ANIMATIONS ──────────────────────────────────────────────
+   Transform/opacity only (GPU-friendly). All of them stop for visitors who
+   ask their OS for reduced motion — see the media query at the end. */
+
+@keyframes sw-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}
+.sw-float { animation: sw-float 6s ease-in-out infinite; }
+
+/* Number balls rising through a section. Each ball sets --sw-d (duration),
+   --sw-delay, --sw-x (sideways drift) and --sw-o (peak opacity). */
+@keyframes sw-rise {
+  0% { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 0; }
+  12% { opacity: var(--sw-o, 0.6); }
+  85% { opacity: var(--sw-o, 0.6); }
+  100% { transform: translate3d(var(--sw-x, 0px), -115vh, 0) rotate(200deg); opacity: 0; }
+}
+.sw-rise {
+  animation: sw-rise var(--sw-d, 16s) linear infinite;
+  animation-delay: var(--sw-delay, 0s);
+  will-change: transform, opacity;
+}
+
+/* Endless ticker: content is rendered twice and slides by half its width. */
+@keyframes sw-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.sw-marquee { width: max-content; animation: sw-marquee 45s linear infinite; }
+.sw-marquee:hover { animation-play-state: paused; }
+
+/* Light sweep across buttons/cards. --sw-shine-delay staggers several. */
+@keyframes sw-shine {
+  0% { transform: translateX(-160%) skewX(-20deg); }
+  55%, 100% { transform: translateX(320%) skewX(-20deg); }
+}
+.sw-shine { position: relative; overflow: hidden; isolation: isolate; }
+.sw-shine::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 35%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+  animation: sw-shine 3.6s ease-in-out infinite;
+  animation-delay: var(--sw-shine-delay, 0s);
+  pointer-events: none;
+  z-index: 40;
+}
+
+/* Expanding glow ring for the main call-to-action. */
+@keyframes sw-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(139, 30, 63, 0.6); }
+  70%, 100% { box-shadow: 0 0 0 18px rgba(139, 30, 63, 0); }
+}
+.sw-pulse { animation: sw-pulse 2.2s ease-out infinite; }
+@keyframes sw-pulse-light {
+  0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.45); }
+  70%, 100% { box-shadow: 0 0 0 18px rgba(255, 255, 255, 0); }
+}
+.sw-pulse-light { animation: sw-pulse-light 2.2s ease-out infinite; }
+
+/* Blinking LIVE dot. */
+@keyframes sw-live {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.8); }
+}
+.sw-live { animation: sw-live 1.4s ease-in-out infinite; }
+
+/* A drawn number dropping into place (slot-reel feel). Re-key the element to replay. */
+@keyframes sw-roll {
+  0% { transform: translateY(-70%) scale(0.7); opacity: 0; }
+  60% { transform: translateY(8%) scale(1.08); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+.sw-roll { display: inline-block; animation: sw-roll 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sw-float,
+  .sw-marquee,
+  .sw-pulse,
+  .sw-pulse-light,
+  .sw-live,
+  .sw-roll,
+  .sw-shine::after {
+    animation: none !important;
+  }
+  .sw-shine::after,
+  .sw-rise {
+    display: none;
+  }
+}
+
 /* ── TIPTAP / BLOG PROSE ─────────────────────────────────────────────── */
 .tiptap-prose { color: #f5f3ee; }
 .tiptap-prose h1 { font-size: 1.9rem; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: -0.03em; margin: 1.5rem 0 0.6rem; line-height: 1.15; color: #f5f3ee; font-family: "Montserrat", sans-serif; }

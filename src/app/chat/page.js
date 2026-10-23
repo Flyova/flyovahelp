@@ -5,11 +5,12 @@ import { db, auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   collection, doc, query, where, orderBy, limit, onSnapshot,
-  addDoc, setDoc, getDoc, getDocs, updateDoc, deleteDoc,
+  addDoc, setDoc, getDoc, updateDoc, arrayUnion,
   serverTimestamp,
 } from "firebase/firestore";
 import { norm, isValidText, containsMediaMarker, dmIdFor } from "@/lib/chat";
 import { notifyPush } from "@/lib/pushClient";
+import { authFetch } from "@/lib/authFetch";
 
 export default function ChatPage() {
   const router = useRouter();
@@ -24,6 +25,7 @@ export default function ChatPage() {
   const [results, setResults] = useState([]);
   const [newUsername, setNewUsername] = useState("");
   const [groupName, setGroupName] = useState("");
+  const [memberName, setMemberName] = useState("");
   const [profile, setProfile] = useState({ bio: "", status: "", avatarUrl: "", coverUrl: "" });
   const [sessions, setSessions] = useState([]);
   const [err, setErr] = useState("");
@@ -36,26 +38,25 @@ export default function ChatPage() {
   // my identities
   useEffect(() => {
     if (!uid) return;
-    fetch(`/api/chat/usernames?uid=${uid}`).then((r) => r.json()).then((d) => {
+    authFetch("/api/chat/usernames").then((d) => {
       setIdentities(d.items || []);
       if (!active && d.items?.length) setActive(d.items.find((x) => x.isDefault)?.usernameLower || d.items[0].usernameLower);
     }).catch(() => {});
   }, [uid]); // eslint-disable-line
 
-  // my conversations (where I participate under any identity)
+  // my conversations — one listener by account; Firestore rules only return
+  // conversations whose participantUids include me.
   useEffect(() => {
-    if (!identities.length) return;
+    if (!uid || !identities.length) return;
     const lowers = identities.map((i) => i.usernameLower);
-    const unsubs = lowers.slice(0, 10).map((l) =>
-      onSnapshot(query(collection(db, "conversations"), where("participants", "array-contains", l), orderBy("lastMessageAt", "desc"), limit(30)),
-        (s) => setConvos((prev) => {
-          const m = new Map(prev.map((c) => [c.id, c]));
-          s.docs.forEach((d) => m.set(d.id, { id: d.id, ...d.data() }));
-          return [...m.values()].filter((c) => c.participants.some((p) => lowers.includes(p)));
-        }))
+    return onSnapshot(
+      query(collection(db, "conversations"), where("participantUids", "array-contains", uid), orderBy("lastMessageAt", "desc"), limit(50)),
+      (s) => setConvos(
+        s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((c) => (c.participants || []).some((p) => lowers.includes(p)))
+      ),
+      (e) => setErr(`Could not load conversations: ${e.message}`)
     );
-    return () => unsubs.forEach((u) => u());
-  }, [identities]);
+  }, [uid, identities]);
 
   // messages
   useEffect(() => {
@@ -70,9 +71,10 @@ export default function ChatPage() {
     getDoc(doc(db, "chat_profiles", active)).then((s) => {
       if (s.exists()) setProfile({ bio: "", status: "", avatarUrl: "", coverUrl: "", ...s.data() });
     }).catch(() => {});
-    onSnapshot(query(collection(db, "chat_sessions"), where("usernameLower", "==", active), limit(10)),
-      (s) => setSessions(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
-  }, [active]);
+    if (!uid) return;
+    return onSnapshot(query(collection(db, "chat_sessions"), where("uid", "==", uid), where("usernameLower", "==", active), limit(10)),
+      (s) => setSessions(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => {});
+  }, [active, uid]);
 
   // register this device session
   useEffect(() => {
@@ -84,57 +86,54 @@ export default function ChatPage() {
   }, [uid, active]);
 
   const doSearch = async () => {
-    const r = await fetch(`/api/chat/search?q=${encodeURIComponent(q)}`).then((x) => x.json());
+    const r = await authFetch(`/api/chat/search?q=${encodeURIComponent(q)}`);
+    if (r.error) return setErr(r.error);
     setResults(r.items || []);
   };
 
   const createUsername = async () => {
     setErr("");
-    const r = await fetch("/api/chat/usernames", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ uid, username: newUsername }),
-    }).then((x) => x.json());
+    const r = await authFetch("/api/chat/usernames", { method: "POST", body: { username: newUsername } });
     if (r.error) return setErr(r.error);
     setNewUsername("");
-    const d = await fetch(`/api/chat/usernames?uid=${uid}`).then((x) => x.json());
+    const d = await authFetch("/api/chat/usernames");
     setIdentities(d.items || []);
   };
 
   const deleteUsername = async (usernameLower) => {
     if (!confirm(`Permanently delete @${usernameLower}?`)) return;
-    const r = await fetch("/api/chat/usernames", {
-      method: "DELETE", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ uid, username: usernameLower }),
-    }).then((x) => x.json());
+    const r = await authFetch("/api/chat/usernames", { method: "DELETE", body: { username: usernameLower } });
     if (r.error) return setErr(r.error);
     setIdentities((p) => p.filter((i) => i.usernameLower !== usernameLower));
   };
 
+  // Conversations are created server-side (it checks blocks and records participantUids).
   const startDM = async (targetLower) => {
+    setErr("");
     if (!active || norm(targetLower) === active) return;
-    // block check
-    const b = await getDoc(doc(db, "chat_blocks", `${norm(targetLower)}_${active}`));
-    if (b.exists()) return setErr("You are blocked by this user.");
-    const id = dmIdFor(active, targetLower);
-    const ref = doc(db, "conversations", id);
-    if (!(await getDoc(ref)).exists()) {
-      await setDoc(ref, {
-        type: "dm", participants: [active, norm(targetLower)],
-        createdBy: active, createdAt: serverTimestamp(), lastMessage: "", lastMessageAt: serverTimestamp(),
-      });
-    }
-    setOpenId(id);
+    const r = await authFetch("/api/chat/conversations", { method: "POST", body: { action: "dm", as: active, target: targetLower } });
+    if (r.error) return setErr(r.error);
+    setOpenId(r.id);
   };
 
   const createGroup = async () => {
+    setErr("");
     if (!groupName.trim() || !active) return;
-    const r = await addDoc(collection(db, "conversations"), {
-      type: "group", groupName: groupName.trim(), participants: [active],
-      admins: [active], createdBy: active, createdAt: serverTimestamp(),
-      lastMessage: "", lastMessageAt: serverTimestamp(),
-    });
+    const r = await authFetch("/api/chat/conversations", { method: "POST", body: { action: "group", as: active, name: groupName } });
+    if (r.error) return setErr(r.error);
     setGroupName("");
     setOpenId(r.id);
+  };
+
+  const addMember = async () => {
+    setErr("");
+    if (!openId || !memberName.trim()) return;
+    const r = await authFetch("/api/chat/conversations", {
+      method: "POST",
+      body: { action: "addMember", convoId: openId, as: active, username: memberName.replace(/^@/, "") },
+    });
+    if (r.error) return setErr(r.error);
+    setMemberName("");
   };
 
   const send = async () => {
@@ -171,7 +170,8 @@ export default function ChatPage() {
       blocker: active, blocked: norm(targetLower), createdAt: serverTimestamp(),
     });
     const c = convos.find((x) => x.id === openId);
-    if (c) await updateDoc(doc(db, "conversations", openId), { blocked: [...(c.blocked || []), norm(targetLower)] });
+    // Recorded on the conversation too: the rules refuse new messages from anyone listed in `blocked`.
+    if (c) await updateDoc(doc(db, "conversations", openId), { blocked: arrayUnion(norm(targetLower)) });
   };
   const reportUser = async (targetLower) => {
     const reason = prompt("Reason for report?");
@@ -268,6 +268,16 @@ export default function ChatPage() {
           <p className="text-[10px] font-black uppercase text-white/40 mb-2">
             {open ? (open.type === "group" ? open.groupName : `Private · ${open.participants.filter((p) => p !== active).join(", ")}`) : "Thread"}
           </p>
+          {open && open.type === "group" && (open.admins || []).includes(active) && (
+            <div className="flex gap-2 mb-2">
+              <input value={memberName} onChange={(e) => setMemberName(e.target.value)} placeholder="Add member by @username"
+                className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs outline-none" />
+              <button onClick={addMember} className="bg-[#8B1E3F] px-3 rounded-xl text-[11px] font-black uppercase">Add</button>
+            </div>
+          )}
+          {open && open.type === "group" && (
+            <p className="text-[10px] text-white/40 mb-2 truncate">Members: {(open.participants || []).map((p) => `@${p}`).join(", ")}</p>
+          )}
           {open && open.type === "dm" && (
             <div className="flex gap-2 mb-2">
               {open.participants.filter((p) => p !== active).map((p) => (

@@ -1,0 +1,111 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// StraWins chat — Firestore security rules (snippet)
+//
+// Paste everything between the START and END markers INSIDE your existing
+//   match /databases/{database}/documents { ... }
+// block in Firebase console → Firestore Database → Rules. Keep your other rules.
+//
+// Rules are OR'ed: if your rules contain a broad catch-all such as
+//   match /{document=**} { allow read, write: if request.auth != null; }
+// these chat rules cannot restrict anything. Remove/narrow that catch-all.
+//
+// Who can do what (matches the web + mobile code):
+//   - Conversations are created and joined ONLY by the server
+//     (/api/chat/conversations), which records `participantUids`.
+//   - Members read a conversation and its messages; they may only touch
+//     lastMessage / lastMessageAt / blocked (blocks can be added, not removed).
+//   - A message must be sent as a username you own, by a member, who is not
+//     blocked in that conversation.
+//   - usernames are server-only; clients never read or write them directly.
+// ─────────────────────────────────────────────────────────────────────────────
+
+    // ── START: chat rules ──────────────────────────────────────────────────
+
+    function chatSignedIn() {
+      return request.auth != null;
+    }
+
+    // True when the signed-in account owns chat username `name`.
+    function ownsUsername(name) {
+      return chatSignedIn()
+        && name is string
+        && exists(/databases/$(database)/documents/usernames/$(name))
+        && get(/databases/$(database)/documents/usernames/$(name)).data.uid == request.auth.uid
+        && get(/databases/$(database)/documents/usernames/$(name)).data.get('deleted', false) == false;
+    }
+
+    function chatConvo(convoId) {
+      return get(/databases/$(database)/documents/conversations/$(convoId)).data;
+    }
+
+    function isChatMember(convoId) {
+      return chatSignedIn() && request.auth.uid in chatConvo(convoId).participantUids;
+    }
+
+    match /usernames/{name} {
+      allow read, write: if false; // server only (API routes)
+    }
+
+    match /chat_profiles/{name} {
+      allow read: if chatSignedIn();
+      allow create, update: if ownsUsername(name)
+        && (!('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid);
+      allow delete: if false;
+    }
+
+    match /conversations/{convoId} {
+      allow read: if chatSignedIn() && request.auth.uid in resource.data.participantUids;
+      allow create, delete: if false; // server only
+      allow update: if chatSignedIn()
+        && request.auth.uid in resource.data.participantUids
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageAt', 'blocked'])
+        && request.resource.data.get('blocked', []).hasAll(resource.data.get('blocked', []));
+
+      match /messages/{messageId} {
+        allow read: if isChatMember(convoId);
+        allow create: if isChatMember(convoId)
+          && ownsUsername(request.resource.data.sender)
+          && !(request.resource.data.sender in chatConvo(convoId).get('blocked', []))
+          && request.resource.data.keys().hasOnly(['sender', 'text', 'createdAt', 'deletedForEveryone'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000
+          && request.resource.data.deletedForEveryone == false
+          && request.resource.data.createdAt == request.time;
+        // "Delete for everyone": only the sender, only to the placeholder text.
+        allow update: if ownsUsername(resource.data.sender)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'deletedForEveryone'])
+          && request.resource.data.deletedForEveryone == true
+          && request.resource.data.text == '— message deleted —';
+        allow delete: if false;
+      }
+    }
+
+    // Document id is "<blocker>_<blocked>" so the server can check blocks by id.
+    match /chat_blocks/{blockId} {
+      allow read: if ownsUsername(resource.data.blocker);
+      allow create, update: if ownsUsername(request.resource.data.blocker)
+        && blockId == request.resource.data.blocker + '_' + request.resource.data.blocked;
+      allow delete: if ownsUsername(resource.data.blocker);
+    }
+
+    match /chat_reports/{reportId} {
+      allow create: if ownsUsername(request.resource.data.reporter);
+      allow read, update, delete: if false; // review in the console / admin tools
+    }
+
+    match /chat_sessions/{sessionId} {
+      allow read: if chatSignedIn() && resource.data.uid == request.auth.uid;
+      allow create: if chatSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && ownsUsername(request.resource.data.usernameLower);
+      allow update, delete: if false;
+    }
+
+    match /notifications/{notificationId} {
+      allow create: if ownsUsername(request.resource.data.fromUsername);
+      allow read, update: if ownsUsername(resource.data.toUsername);
+      allow delete: if false;
+    }
+
+    // ── END: chat rules ────────────────────────────────────────────────────

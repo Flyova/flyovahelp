@@ -549,13 +549,16 @@ export default function Dashboard() {
                 onClick={() =>
                   handleGameClick(topGames.find((g) => g.path === "/game/strawins-to-dollars") || topGames[1])
                 }
-                className="relative w-full h-52 md:h-64 rounded-3xl overflow-hidden bg-[#2457D6] group cursor-pointer shadow-2xl border border-white/5"
+                className="sw-shine relative w-full h-52 md:h-64 rounded-3xl overflow-hidden bg-[#2457D6] group cursor-pointer shadow-2xl border border-white/5"
               >
+          <div className="absolute top-4 left-4 z-20 flex items-center gap-1.5 bg-black/40 backdrop-blur px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-white">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-500 sw-live" /> Live
+          </div>
           <div className="absolute inset-0 opacity-40 group-hover:opacity-60 transition-opacity"><img src="/flytodols.svg" alt="Background" className="w-full h-full object-cover" /></div>
           <div className="absolute inset-0 bg-gradient-to-r from-black/60 to-transparent" />
           <div className="absolute bottom-6 left-6 z-10">
             <h2 className="text-2xl font-black text-white italic leading-tight tracking-tighter">STRAWINS TO<br/><span className="text-[#8B1E3F]">DOLLARS</span></h2>
-            <button className="mt-3 bg-[#8B1E3F] text-white px-6 py-2 rounded-full text-xs font-black uppercase shadow-lg group-hover:scale-105 transition-all">Play Now</button>
+            <button className="sw-pulse mt-3 bg-[#8B1E3F] text-white px-6 py-2 rounded-full text-xs font-black uppercase shadow-lg group-hover:scale-105 transition-all">Play Now</button>
           </div>
               </div>
             </div>
@@ -575,14 +578,15 @@ export default function Dashboard() {
                   <div
                     key={game.id}
                     onClick={() => handleGameClick(game)}
-                    className="relative aspect-4/5 rounded-2xl overflow-hidden bg-[#142036] border border-gray-800 group cursor-pointer shadow-lg"
+                    className="sw-shine relative aspect-4/5 rounded-2xl overflow-hidden bg-[#142036] border border-gray-800 group cursor-pointer shadow-lg"
+                    style={{ "--sw-shine-delay": `${index * 1.2}s` }}
                   >
                     <div className="absolute top-0 left-0 bg-red-600 text-white font-black px-2.5 py-1 text-[10px] rounded-br-xl z-30 shadow-md italic">{index + 1}</div>
                     <div className="absolute inset-0 z-10 overflow-hidden"><img src={game.img} alt={game.name} className="w-full h-full object-cover opacity-50 group-hover:opacity-100 transition-all duration-500 group-hover:scale-110" /></div>
                     <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent z-20" />
                     <div className="absolute bottom-3 left-0 right-0 px-2 text-center z-30">
                       <p className="text-[9px] font-black text-white uppercase truncate tracking-tighter mb-1">{game.name}</p>
-                      <div className="text-[7px] inline-block px-2 py-0.5 rounded-full font-black uppercase shadow-sm bg-[#8B1E3F] text-white">{game.tag}</div>
+                      <div className="text-[7px] inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-black uppercase shadow-sm bg-[#8B1E3F] text-white"><span className="w-1 h-1 rounded-full bg-white sw-live" />{game.tag}</div>
                     </div>
                   </div>
                 ))}
@@ -602,7 +606,7 @@ export default function Dashboard() {
                 </a>
 
                 {/* Custom Chatroom */}
-                <a href="http://chat.strawins.com/" className="flex items-center gap-3 bg-[#2457D6] p-4 rounded-2xl hover:opacity-100 active:scale-95 transition-all shadow-xl shadow-[#2457D6]/20 col-span-1">
+                <a href="/chat" className="flex items-center gap-3 bg-[#2457D6] p-4 rounded-2xl hover:opacity-100 active:scale-95 transition-all shadow-xl shadow-[#2457D6]/20 col-span-1">
                   <div className="bg-white/20 p-2 rounded-xl">
                     <MessageCircle size={20} className="text-white" />
                   </div>

@@ -22,3 +22,13 @@ export function monthsSince(ts) {
   const d = ts?.toDate ? ts.toDate() : new Date(ts);
   return (Date.now() - d.getTime()) / (30 * 24 * 3600 * 1000);
 }
+
+// Server helper: the usernames/{lower} doc if `uid` owns it (and it is not deleted), else null.
+export async function ownedUsername(db, uid, username) {
+  const lower = norm(username);
+  if (!uid || !isValidUsername(lower)) return null;
+  const snap = await db.collection("usernames").doc(lower).get();
+  if (!snap.exists) return null;
+  const data = snap.data();
+  return data.uid === uid && !data.deleted ? { lower, ...data } : null;
+}

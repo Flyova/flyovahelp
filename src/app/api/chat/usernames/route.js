@@ -1,12 +1,20 @@
 import { NextResponse } from "next/server";
 import { getAdminDb, admin } from "@/lib/firebaseAdmin";
 import { norm, isValidUsername, monthsSince } from "@/lib/chat";
+import { getCaller } from "@/lib/apiAuth";
 
-// GET /api/chat/usernames?uid=... -> identities owned by account
+const unauthorized = () => NextResponse.json({ error: "Sign in again to continue." }, { status: 401 });
+
+// All three methods act on the signed-in account only. The uid comes from the
+// verified ID token; any uid in the query/body is ignored (it used to be trusted,
+// which let anyone create usernames on — and charge — someone else's wallet).
+
+// GET /api/chat/usernames -> identities owned by the signed-in account
 export async function GET(req) {
   try {
-    const uid = new URL(req.url).searchParams.get("uid");
-    if (!uid) return NextResponse.json({ error: "uid required" }, { status: 400 });
+    const caller = await getCaller(req);
+    if (!caller) return unauthorized();
+    const uid = caller.uid;
     const db = getAdminDb();
     const snap = await db.collection("usernames").where("uid", "==", uid).get();
     const items = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => !x.deleted);
@@ -16,12 +24,15 @@ export async function GET(req) {
   }
 }
 
-// POST /api/chat/usernames { uid, username } — first extra free, then $1 wallet.
+// POST /api/chat/usernames { username } — first extra free, then $1 wallet.
 // Accounts >8mo: 100 free. Agents: 5 free.
 export async function POST(req) {
   try {
-    const { uid, username } = await req.json();
-    if (!uid || !isValidUsername(username))
+    const caller = await getCaller(req);
+    if (!caller) return unauthorized();
+    const uid = caller.uid;
+    const { username } = await req.json();
+    if (!isValidUsername(username))
       return NextResponse.json({ error: "Valid username (3-30 chars, letters/numbers/._) required" }, { status: 400 });
     const lower = norm(username);
     const db = getAdminDb();
@@ -40,43 +51,54 @@ export async function POST(req) {
     // Rule: one free create/change, everything after costs $1 (unless quota covers it)
     let charge = 0;
     if (freeQuota > 0 ? owned >= 1 + freeQuota : freeUsed) charge = 1;
-    if (charge > 0 && (u.wallet || 0) < charge)
-      return NextResponse.json({ error: "Insufficient wallet balance ($1 required)" }, { status: 402 });
+    // One transaction: the name check, a fresh balance check, the charge and the
+    // records commit together, so two buyers can't both get a name and a
+    // concurrent stake can't be overwritten by a stale wallet value.
+    const nameRef = db.collection("usernames").doc(lower);
+    const result = await db.runTransaction(async (tx) => {
+      const [nameSnap, freshUser] = await Promise.all([tx.get(nameRef), tx.get(userRef)]);
+      if (nameSnap.exists) return { status: 409, error: "Username taken" };
+      if (charge > 0 && Number(freshUser.data()?.wallet || 0) < charge) {
+        return { status: 402, error: "Insufficient wallet balance ($1 required)" };
+      }
 
-    const batch = db.batch();
-    batch.set(db.collection("usernames").doc(lower), {
-      username: String(username).trim(), usernameLower: lower, uid,
-      isDefault: owned === 0, createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      pricePaid: charge, deleted: false,
+      tx.create(nameRef, {
+        username: String(username).trim(), usernameLower: lower, uid,
+        isDefault: owned === 0, createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        pricePaid: charge, deleted: false,
+      });
+      tx.set(db.collection("chat_profiles").doc(lower), {
+        username: String(username).trim(), uid, bio: "", status: "",
+        avatarUrl: "", coverUrl: "", updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      if (charge > 0) {
+        tx.update(userRef, {
+          wallet: admin.firestore.FieldValue.increment(-charge),
+          freeUsernameUsed: true,
+        });
+        tx.set(db.collection("users").doc(uid).collection("transactions").doc(), {
+          type: "username_purchase", amount: -charge, username: lower,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(), note: `Username @${username}`,
+        });
+      } else {
+        tx.update(userRef, { freeUsernameUsed: true });
+      }
+      return null;
     });
-    batch.set(db.collection("chat_profiles").doc(lower), {
-      username: String(username).trim(), uid, bio: "", status: "",
-      avatarUrl: "", coverUrl: "", updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
-    if (charge > 0) {
-      batch.update(userRef, {
-        wallet: (u.wallet || 0) - charge,
-        freeUsernameUsed: true,
-      });
-      const tx = db.collection("users").doc(uid).collection("transactions").doc();
-      batch.set(tx, {
-        type: "username_purchase", amount: -charge, username: lower,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(), note: `Username @${username}`,
-      });
-    } else {
-      batch.update(userRef, { freeUsernameUsed: true });
-    }
-    await batch.commit();
+    if (result) return NextResponse.json({ error: result.error }, { status: result.status });
     return NextResponse.json({ ok: true, charged: charge });
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
 
-// DELETE /api/chat/usernames { uid, username } — permanently delete identity
+// DELETE /api/chat/usernames { username } — permanently delete identity
 export async function DELETE(req) {
   try {
-    const { uid, username } = await req.json();
+    const caller = await getCaller(req);
+    if (!caller) return unauthorized();
+    const uid = caller.uid;
+    const { username } = await req.json();
     const lower = norm(username);
     const db = getAdminDb();
     const ref = db.collection("usernames").doc(lower);

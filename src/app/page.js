@@ -51,6 +51,137 @@ function StatCard({ value, suffix, label, color }) {
   );
 }
 
+/* ── LOOP ANIMATION PIECES ─────────────────────────────────────────────
+   Decorative only (aria-hidden). Positions are fixed so server and client
+   render the same markup; randomness only happens after mount. */
+
+const RISING_BALLS = [
+  { n: 7, left: "5%", size: 46, d: 19, delay: -2, x: 30, o: 0.55, tone: "burgundy" },
+  { n: 42, left: "16%", size: 30, d: 14, delay: -9, x: -22, o: 0.45, tone: "glass" },
+  { n: 17, left: "29%", size: 54, d: 23, delay: -5, x: 40, o: 0.35, tone: "paper" },
+  { n: 88, left: "44%", size: 34, d: 16, delay: -12, x: -35, o: 0.5, tone: "burgundy" },
+  { n: 3, left: "57%", size: 26, d: 13, delay: -3, x: 24, o: 0.45, tone: "glass" },
+  { n: 64, left: "69%", size: 48, d: 21, delay: -15, x: -26, o: 0.5, tone: "navy" },
+  { n: 26, left: "81%", size: 36, d: 17, delay: -7, x: 30, o: 0.5, tone: "burgundy" },
+  { n: 51, left: "93%", size: 28, d: 15, delay: -11, x: -30, o: 0.4, tone: "paper" },
+];
+
+const BALL_TONES = {
+  burgundy: "bg-[#8B1E3F] text-white border-white/25",
+  navy: "bg-[#0B1220] text-white border-white/20",
+  glass: "bg-white/15 text-white border-white/30",
+  paper: "bg-[#F5F3EE] text-[#8B1E3F] border-white/40",
+};
+
+function RisingBalls({ only }) {
+  const balls = only ? RISING_BALLS.filter((_, i) => only.includes(i)) : RISING_BALLS;
+  return (
+    <div aria-hidden="true" className="absolute inset-0 overflow-hidden pointer-events-none">
+      {balls.map((b) => (
+        <span
+          key={b.n}
+          className={`sw-rise absolute rounded-full border flex items-center justify-center font-black italic shadow-lg ${BALL_TONES[b.tone]}`}
+          style={{
+            left: b.left,
+            bottom: -b.size - 20,
+            width: b.size,
+            height: b.size,
+            fontSize: Math.round(b.size * 0.38),
+            "--sw-d": `${b.d}s`,
+            "--sw-delay": `${b.delay}s`,
+            "--sw-x": `${b.x}px`,
+            "--sw-o": b.o,
+          }}
+        >
+          {String(b.n).padStart(2, "0")}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+const pad2 = (n) => String(n).padStart(2, "0");
+const randomPair = () => {
+  const a = 1 + Math.floor(Math.random() * 90);
+  let b = a;
+  while (b === a) b = 1 + Math.floor(Math.random() * 90);
+  return { a, b };
+};
+
+/** Phone-mockup draw: counts down, then rolls a fresh pair of numbers. Illustration only. */
+function LiveDrawPreview() {
+  const [draw, setDraw] = useState({ seconds: 27, a: 42, b: 17, id: 0 });
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setDraw((prev) =>
+        prev.seconds > 1
+          ? { ...prev, seconds: prev.seconds - 1 }
+          : { seconds: 30, ...randomPair(), id: prev.id + 1 }
+      );
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <>
+      <div className="bg-gradient-to-br from-[#142036] to-[#0B1220] p-5 rounded-3xl border border-white/5 shadow-inner">
+        <div className="flex justify-between items-center mb-4">
+          <span className="text-[9px] font-black uppercase text-[#8B1E3F] flex items-center gap-1">
+            <Trophy size={10} /> Winning Numbers
+          </span>
+          <span className="text-[8px] bg-white/5 px-2 py-1 rounded-lg text-gray-400 font-bold uppercase tabular-nums">ID: {88241 + draw.id}</span>
+        </div>
+        <div className="flex justify-around gap-2">
+          <div className="w-14 h-14 rounded-2xl bg-[#2457D6] flex items-center justify-center text-2xl font-black italic shadow-lg shadow-[#2457D6]/40 border border-white/20 overflow-hidden">
+            <span key={`a${draw.id}`} className="sw-roll">{pad2(draw.a)}</span>
+          </div>
+          <div className="w-14 h-14 rounded-2xl bg-[#8B1E3F] flex items-center justify-center text-2xl font-black italic shadow-lg shadow-[#8B1E3F]/40 border border-white/20 overflow-hidden">
+            <span key={`b${draw.id}`} className="sw-roll" style={{ animationDelay: "0.15s" }}>{pad2(draw.b)}</span>
+          </div>
+        </div>
+      </div>
+      <div className="text-center space-y-1 py-2">
+        <div className={`flex items-center justify-center gap-2 ${draw.seconds <= 5 ? "text-rose-500" : "text-[#F5F3EE]"}`}>
+          <Timer size={14} />
+          <p className="font-black text-xl italic tracking-tighter tabular-nums">00:{pad2(draw.seconds)}</p>
+        </div>
+        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Next Draw Closing</p>
+      </div>
+    </>
+  );
+}
+
+// Facts taken from the game rules (engine payouts, round length) — no invented numbers.
+const TICKER_ITEMS = [
+  "StraWins to Dollars · new round every 2 minutes",
+  "Match both numbers · 1.3x your stake",
+  "Match one number · 80% back",
+  "Predict & Win",
+  "Play with Friends · head-to-head",
+  "Winnings credited the moment a round ends",
+  "Withdraw with USDT or a local agent",
+  "Free demo · no account needed",
+];
+
+function FeatureTicker() {
+  return (
+    <div className="relative overflow-hidden bg-[#0B1220] border-y border-white/10 py-3.5">
+      <p className="sr-only">{TICKER_ITEMS.join(". ")}</p>
+      <div aria-hidden="true" className="sw-marquee flex items-center whitespace-nowrap">
+        {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, i) => (
+          <span key={i} className="flex items-center gap-3 pr-10 text-xs md:text-sm font-black uppercase italic tracking-widest text-white/80">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#8B1E3F] shrink-0" />
+            {item}
+          </span>
+        ))}
+      </div>
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-[#0B1220] to-transparent" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-[#0B1220] to-transparent" />
+    </div>
+  );
+}
+
 const FAQ_ITEMS = [
   {
     q: "How do I get started?",
@@ -1011,7 +1142,7 @@ export default function LandingPage() {
           </button>
           <button
             onClick={() => router.push('/login')}
-            className="bg-[#7A9BEE] hover:bg-[#D7E2FF] text-black px-6 py-2 rounded-full font-black text-sm transition-all flex items-center shadow-[0_0_20px_rgba(34,211,238,0.4)]"
+            className="sw-shine bg-[#7A9BEE] hover:bg-[#D7E2FF] text-black px-6 py-2 rounded-full font-black text-sm transition-all flex items-center shadow-[0_0_20px_rgba(34,211,238,0.4)]"
           >
             Play Now <ArrowRight size={16} className="ml-2" />
           </button>
@@ -1051,6 +1182,7 @@ export default function LandingPage() {
 
       {/* ── HERO ─────────────────────────────────────── */}
       <main className="relative max-w-7xl mx-auto px-6 pt-12 pb-24 flex flex-col md:flex-row items-center">
+        <RisingBalls />
         <div className="absolute top-20 right-1/4 w-32 h-32 bg-[#7A9BEE] rounded-full blur-[80px] opacity-30 animate-pulse" />
         <div className="absolute bottom-10 left-10 w-48 h-48 bg-[#8B1E3F] rounded-full blur-[100px] opacity-20" />
 
@@ -1070,7 +1202,7 @@ export default function LandingPage() {
           <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
             <button
               onClick={() => router.push('/login')}
-              className="group relative inline-flex items-center justify-center px-10 py-5 font-black text-white transition-all duration-200 bg-[#8B1E3F] rounded-full hover:bg-[#A62A4D] active:scale-95 shadow-2xl"
+              className="group sw-shine sw-pulse inline-flex items-center justify-center px-10 py-5 font-black text-white transition-all duration-200 bg-[#8B1E3F] rounded-full hover:bg-[#A62A4D] active:scale-95 shadow-2xl"
             >
               Play Now <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
             </button>
@@ -1092,7 +1224,7 @@ export default function LandingPage() {
 
         {/* Phone Mockup */}
         <div className="flex-1 mt-16 md:mt-0 relative flex justify-center z-10">
-          <div className="w-[300px] md:w-[310px] h-[610px] md:h-[630px] bg-[#0B1220] rounded-[3.5rem] p-3 shadow-[0_50px_100px_rgba(0,0,0,0.6)] border-[10px] border-white/10 relative overflow-hidden">
+          <div className="sw-float w-[300px] md:w-[310px] h-[610px] md:h-[630px] bg-[#0B1220] rounded-[3.5rem] p-3 shadow-[0_50px_100px_rgba(0,0,0,0.6)] border-[10px] border-white/10 relative overflow-hidden">
             <div className="bg-[#0B1220] h-full rounded-[2.8rem] overflow-hidden flex flex-col text-white font-sans">
               <div className="pt-6 px-8 flex justify-between items-center opacity-40">
                 <span className="text-[10px] font-bold">9:41</span>
@@ -1104,7 +1236,9 @@ export default function LandingPage() {
               <div className="p-5 flex justify-between items-center">
                 <div className="bg-white/5 p-2 rounded-xl"><Menu size={18} className="text-[#2457D6]" /></div>
                 <div className="flex flex-col items-center">
-                  <span className="text-[8px] font-black uppercase tracking-[0.2em] text-gray-500 italic">Arena Live</span>
+                  <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-[0.2em] text-gray-500 italic">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 sw-live" /> Arena Live
+                  </span>
                   <span className="text-xs font-black italic">FLYODOLS</span>
                 </div>
                 <div className="bg-[#2457D6]/20 p-2 rounded-xl border border-[#2457D6]/30 text-[#2457D6]">
@@ -1112,25 +1246,7 @@ export default function LandingPage() {
                 </div>
               </div>
               <div className="px-5 flex-1 flex flex-col space-y-5">
-                <div className="bg-gradient-to-br from-[#142036] to-[#0B1220] p-5 rounded-3xl border border-white/5 shadow-inner">
-                  <div className="flex justify-between items-center mb-4">
-                    <span className="text-[9px] font-black uppercase text-[#8B1E3F] flex items-center gap-1">
-                      <Trophy size={10} /> Winning Numbers
-                    </span>
-                    <span className="text-[8px] bg-white/5 px-2 py-1 rounded-lg text-gray-400 font-bold uppercase">ID: 88241</span>
-                  </div>
-                  <div className="flex justify-around gap-2">
-                    <div className="w-14 h-14 rounded-2xl bg-[#2457D6] flex items-center justify-center text-2xl font-black italic shadow-lg shadow-[#2457D6]/40 border border-white/20 animate-pulse">42</div>
-                    <div className="w-14 h-14 rounded-2xl bg-[#8B1E3F] flex items-center justify-center text-2xl font-black italic shadow-lg shadow-[#8B1E3F]/40 border border-white/20 animate-pulse">17</div>
-                  </div>
-                </div>
-                <div className="text-center space-y-1 py-2">
-                  <div className="flex items-center justify-center gap-2 text-rose-500">
-                    <Timer size={14} />
-                    <p className="font-black text-xl italic tracking-tighter">00:27</p>
-                  </div>
-                  <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Next Draw Closing</p>
-                </div>
+                <LiveDrawPreview />
                 <div className="space-y-3 pt-2">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-black/40 border border-white/5 p-3 rounded-2xl text-center">
@@ -1158,6 +1274,8 @@ export default function LandingPage() {
           <div className="absolute bottom-10 -left-10 w-24 h-24 bg-[#8B1E3F] rounded-full shadow-inner animate-pulse pointer-events-none" />
         </div>
       </main>
+
+      <FeatureTicker />
 
       {/* ── STATS BAR ────────────────────────────────── */}
       <section className="bg-black/20 backdrop-blur-sm border-y border-white/10 py-10">
@@ -1382,12 +1500,12 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 max-w-6xl mx-auto">
             {[
               {
-                href: "http://chat.strawins.com/",
+                href: "/chat",
                 bg: "bg-[#2457D6]",
                 shadow: "shadow-[#2457D6]/20",
                 icon: <MessageCircle size={24} />,
                 name: "Chatroom",
-                desc: "Hang out in our dedicated player chatroom. Talk strategy and wins.",
+                desc: "Chat with other players in StraWins: private messages and groups. Talk strategy and wins.",
               },
               {
                 href: "https://www.instagram.com/flyovahelp1?igsh=MW5ubDB1Z2tueHhuaQ==",
@@ -1551,6 +1669,7 @@ export default function LandingPage() {
 
       {/* ── FINAL CTA ────────────────────────────────── */}
       <section className="bg-[#2457D6] py-24 px-6 relative overflow-hidden">
+        <RisingBalls only={[0, 2, 3, 5, 6]} />
         <div className="absolute top-0 left-1/4 w-64 h-64 bg-[#7A9BEE] rounded-full blur-[120px] opacity-20 pointer-events-none" />
         <div className="absolute bottom-0 right-1/4 w-64 h-64 bg-[#8B1E3F] rounded-full blur-[120px] opacity-20 pointer-events-none" />
         <div className="max-w-3xl mx-auto text-center relative z-10 space-y-8">
@@ -1563,7 +1682,7 @@ export default function LandingPage() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
               onClick={() => router.push('/register')}
-              className="inline-flex items-center justify-center gap-3 bg-white text-[#2457D6] px-10 py-5 rounded-full font-black text-sm uppercase tracking-widest transition-all shadow-2xl hover:bg-white/90 active:scale-95"
+              className="sw-shine sw-pulse-light inline-flex items-center justify-center gap-3 bg-white text-[#2457D6] px-10 py-5 rounded-full font-black text-sm uppercase tracking-widest transition-all shadow-2xl hover:bg-white/90 active:scale-95"
             >
               Create Free Account <ArrowRight size={18} />
             </button>

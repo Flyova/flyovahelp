@@ -10,7 +10,8 @@
     "dev:next": "next dev",
     "build:next": "next build",
     "lint": "eslint",
-    "users:verify-all": "node scripts/verify-all-users.mjs"
+    "users:verify-all": "node scripts/verify-all-users.mjs",
+    "chat:backfill": "node scripts/backfill-chat.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.97.0",
