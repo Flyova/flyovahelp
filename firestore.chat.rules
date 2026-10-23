@@ -108,4 +108,15 @@
       allow delete: if false;
     }
 
+    // Public chatroom: every signed-in player reads it; posts and deletes go through
+    // /api/chat/room so the server can rate-limit and refuse banned/muted players.
+    match /chatroom_messages/{messageId} {
+      allow read: if chatSignedIn();
+      allow write: if false;
+    }
+
+    match /chatroom_rate/{uid} {
+      allow read, write: if false; // server only (rate limiting)
+    }
+
     // ── END: chat rules ────────────────────────────────────────────────────

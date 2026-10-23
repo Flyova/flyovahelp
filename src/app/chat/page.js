@@ -11,6 +11,7 @@ import {
 import { norm, isValidText, containsMediaMarker, dmIdFor } from "@/lib/chat";
 import { notifyPush } from "@/lib/pushClient";
 import { authFetch } from "@/lib/authFetch";
+import ChatRoom from "@/components/chat/ChatRoom";
 
 export default function ChatPage() {
   const router = useRouter();
@@ -29,6 +30,26 @@ export default function ChatPage() {
   const [profile, setProfile] = useState({ bio: "", status: "", avatarUrl: "", coverUrl: "" });
   const [sessions, setSessions] = useState([]);
   const [err, setErr] = useState("");
+  const [tab, setTab] = useState("room"); // "room" = public chatroom, "private" = 1-to-1 chats & groups
+  const [blockedNames, setBlockedNames] = useState([]);
+
+  // /chat?tab=private opens straight on private chats (e.g. from a push notification).
+  // Read after mount (the server render has no URL); deferred so it isn't a synchronous effect update.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tab") !== "private") return;
+    const t = setTimeout(() => setTab("private"), 0);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Usernames the active identity has blocked: hidden in the public chatroom.
+  useEffect(() => {
+    if (!active) return;
+    return onSnapshot(
+      query(collection(db, "chat_blocks"), where("blocker", "==", active)),
+      (s) => setBlockedNames(s.docs.map((d) => d.data().blocked)),
+      () => setBlockedNames([])
+    );
+  }, [active]);
 
   useEffect(() => onAuthStateChanged(auth, (u) => {
     if (!u) return router.push("/login");
@@ -181,6 +202,20 @@ export default function ChatPage() {
     });
     alert("Report submitted.");
   };
+  const reportRoomMessage = async (m) => {
+    const reason = prompt(`Report @${m.sender}'s message? Tell us why:`);
+    if (!reason) return;
+    await addDoc(collection(db, "chat_reports"), {
+      reporter: active, reported: m.sender, reason, room: "public", messageId: m.id,
+      messageText: String(m.text || "").slice(0, 500), createdAt: serverTimestamp(), status: "open",
+    }).catch((e) => setErr(`Could not send the report: ${e.message}`));
+    alert("Report submitted.");
+  };
+  const messagePrivately = async (targetLower) => {
+    await startDM(targetLower);
+    setTab("private");
+  };
+
   const saveProfile = async () => {
     await setDoc(doc(db, "chat_profiles", active), {
       ...profile, username: active, updatedAt: serverTimestamp(),
@@ -190,32 +225,66 @@ export default function ChatPage() {
 
   const open = convos.find((c) => c.id === openId);
 
+  // "Chat as" identity picker — shown on both tabs.
+  const identityCard = (
+    <div className="bg-[#142036] rounded-2xl p-4 border border-white/5">
+        <p className="text-[10px] font-black uppercase text-white/40 mb-2">Chat as</p>
+        <div className="flex flex-wrap gap-2">
+          {identities.map((i) => (
+            <div key={i.usernameLower} className={`flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold border ${active === i.usernameLower ? "bg-[#8B1E3F] border-[#8B1E3F]" : "bg-black/30 border-white/10"}`}>
+              <button onClick={() => setActive(i.usernameLower)}>@{i.username}</button>
+              {!i.isDefault && <button onClick={() => deleteUsername(i.usernameLower)} className="text-red-400 ml-1" title="Delete permanently">×</button>}
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2 mt-3">
+          <input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} placeholder="new username ($1 after first)"
+            className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none" />
+          <button onClick={createUsername} className="bg-[#8B1E3F] px-4 rounded-xl text-xs font-black uppercase">Buy</button>
+        </div>
+        <p className="text-[10px] text-white/40 mt-2">First extra username free · then $1 from wallet · 8mo+ accounts get 100 free · agents get 5 free. To use another account&apos;s username, log in with that account&apos;s email + password + OTP on the login page first.</p>
+    </div>
+  );
+
+
   return (
     <div className="min-h-screen w-full bg-[#0B1220] text-white px-4 py-6 sm:px-6 md:px-8 md:py-8">
-      <h1 className="text-2xl font-black italic uppercase mb-1">Chats <span className="text-[#8B1E3F]">· usernames</span></h1>
+      <h1 className="text-2xl font-black italic uppercase mb-1">Chats</h1>
       <p className="text-[11px] text-white/50 font-bold mb-4 uppercase">Text only — no images, voice or video calls.</p>
+
+      <div className="inline-flex bg-[#142036] border border-white/5 rounded-2xl p-1 mb-4" role="tablist">
+        {[["room", "Chatroom"], ["private", "Private"]].map(([key, label]) => (
+          <button
+            key={key}
+            role="tab"
+            aria-selected={tab === key}
+            onClick={() => setTab(key)}
+            className={`px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition ${tab === key ? "bg-[#8B1E3F] text-white" : "text-white/50 hover:text-white"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {err && <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-bold p-3 rounded-xl mb-3">{err}</div>}
 
+      {tab === "room" ? (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          <div className="lg:col-span-3">{identityCard}</div>
+          <div className="lg:col-span-9">
+            <ChatRoom
+              uid={uid}
+              active={active}
+              blocked={blockedNames}
+              onMessagePrivately={messagePrivately}
+              onReport={reportRoomMessage}
+            />
+          </div>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <div className="space-y-4 lg:col-span-3">
-          {/* identities */}
-          <div className="bg-[#142036] rounded-2xl p-4 border border-white/5">
-            <p className="text-[10px] font-black uppercase text-white/40 mb-2">Chat as</p>
-            <div className="flex flex-wrap gap-2">
-              {identities.map((i) => (
-                <div key={i.usernameLower} className={`flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold border ${active === i.usernameLower ? "bg-[#2457D6] border-[#2457D6]" : "bg-black/30 border-white/10"}`}>
-                  <button onClick={() => setActive(i.usernameLower)}>@{i.username}</button>
-                  {!i.isDefault && <button onClick={() => deleteUsername(i.usernameLower)} className="text-red-400 ml-1" title="Delete permanently">×</button>}
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2 mt-3">
-              <input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} placeholder="new username ($1 after first)"
-                className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none" />
-              <button onClick={createUsername} className="bg-[#2457D6] px-4 rounded-xl text-xs font-black uppercase">Buy</button>
-            </div>
-            <p className="text-[10px] text-white/40 mt-2">First extra username free · then $1 from wallet · 8mo+ accounts get 100 free · agents get 5 free. To use another account&apos;s username, log in with that account&apos;s email + password + OTP on the login page first.</p>
-          </div>
+          {identityCard}
           {/* search */}
           <div className="bg-[#142036] rounded-2xl p-4 border border-white/5">
             <p className="text-[10px] font-black uppercase text-white/40 mb-2">Search · phone / username / name / country / referrer</p>
@@ -308,6 +377,7 @@ export default function ChatPage() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }
