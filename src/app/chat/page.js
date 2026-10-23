@@ -172,11 +172,13 @@ export default function ChatPage() {
     });
     // fan-out minimal notification docs
     const others = (convo?.participants || []).filter((p) => p !== active);
+    // .catch belongs on each write (it used to sit on the array, which threw and
+    // skipped the push + input reset below).
     await Promise.all(others.map((p) => addDoc(collection(db, "notifications"), {
       toUsername: p, fromUsername: active, kind: convo?.type === "group" ? "group" : "dm",
       title: convo?.type === "group" ? `New group message` : `New message from @${active}`,
       body: text.trim().slice(0, 120), convoId: openId, read: false, createdAt: serverTimestamp(),
-    })).catch(() => {}));
+    }).catch(() => null)));
     notifyPush({ event: "chat_message", convoId: openId, messageId: msgRef.id });
     setText("");
   };
@@ -239,8 +241,8 @@ export default function ChatPage() {
         </div>
         <div className="flex gap-2 mt-3">
           <input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} placeholder="new username ($1 after first)"
-            className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none" />
-          <button onClick={createUsername} className="bg-[#8B1E3F] px-4 rounded-xl text-xs font-black uppercase">Buy</button>
+            className="flex-1 min-w-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none" />
+          <button onClick={createUsername} className="shrink-0 bg-[#8B1E3F] px-4 rounded-xl text-xs font-black uppercase">Buy</button>
         </div>
         <p className="text-[10px] text-white/40 mt-2">First extra username free · then $1 from wallet · 8mo+ accounts get 100 free · agents get 5 free. To use another account&apos;s username, log in with that account&apos;s email + password + OTP on the login page first.</p>
     </div>
@@ -289,8 +291,8 @@ export default function ChatPage() {
           <div className="bg-[#142036] rounded-2xl p-4 border border-white/5">
             <p className="text-[10px] font-black uppercase text-white/40 mb-2">Search · phone / username / name / country / referrer</p>
             <div className="flex gap-2">
-              <input value={q} onChange={(e) => setQ(e.target.value)} className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none" placeholder="e.g. john, +44..., NG" />
-              <button onClick={doSearch} className="bg-white/10 px-4 rounded-xl text-xs font-black uppercase">Go</button>
+              <input value={q} onChange={(e) => setQ(e.target.value)} className="flex-1 min-w-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none" placeholder="e.g. john, +44..., NG" />
+              <button onClick={doSearch} className="shrink-0 bg-white/10 px-4 rounded-xl text-xs font-black uppercase">Go</button>
             </div>
             {results.map((r) => {
               const uname = (r.usernameLower || r.username || "").toLowerCase();
@@ -298,7 +300,7 @@ export default function ChatPage() {
                 <div key={r.id} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
                   <div className="text-xs"><b>@{r.username || r.usernameLower || r.id.slice(0, 8)}</b>
                     <span className="text-white/40"> · {r.fullName || r.country || r.phone || r.kind}</span></div>
-                  {uname && <button onClick={() => startDM(uname)} className="text-[11px] bg-[#2457D6] px-3 py-1.5 rounded-lg font-black uppercase">Chat</button>}
+                  {uname && <button onClick={() => startDM(uname)} className="shrink-0 text-[11px] bg-[#8B1E3F] px-3 py-1.5 rounded-lg font-black uppercase">Chat</button>}
                 </div>
               );
             })}
@@ -320,11 +322,11 @@ export default function ChatPage() {
         <div className="bg-[#142036] rounded-2xl p-4 border border-white/5 lg:col-span-3">
           <p className="text-[10px] font-black uppercase text-white/40 mb-2">Conversations</p>
           <div className="flex gap-2 mb-3">
-            <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="New group name" className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs outline-none" />
-            <button onClick={createGroup} className="bg-[#8B1E3F] px-3 rounded-xl text-[11px] font-black uppercase">+ Group</button>
+            <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="New group name" className="flex-1 min-w-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs outline-none" />
+            <button onClick={createGroup} className="shrink-0 whitespace-nowrap bg-[#8B1E3F] px-3 rounded-xl text-[11px] font-black uppercase">+ Group</button>
           </div>
           {convos.map((c) => (
-            <button key={c.id} onClick={() => setOpenId(c.id)} className={`w-full text-left p-3 rounded-xl mb-1 ${openId === c.id ? "bg-[#2457D6]/20 border border-[#2457D6]/40" : "bg-black/20 border border-white/5"}`}>
+            <button key={c.id} onClick={() => setOpenId(c.id)} className={`w-full text-left p-3 rounded-xl mb-1 ${openId === c.id ? "bg-[#8B1E3F]/20 border border-[#8B1E3F]/50" : "bg-black/20 border border-white/5"}`}>
               <p className="text-xs font-black">{c.type === "group" ? c.groupName : c.participants.filter((p) => p !== active).map((p) => `@${p}`).join(", ")}</p>
               <p className="text-[11px] text-white/40 truncate">{c.lastMessage || "—"}</p>
             </button>
@@ -340,8 +342,8 @@ export default function ChatPage() {
           {open && open.type === "group" && (open.admins || []).includes(active) && (
             <div className="flex gap-2 mb-2">
               <input value={memberName} onChange={(e) => setMemberName(e.target.value)} placeholder="Add member by @username"
-                className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs outline-none" />
-              <button onClick={addMember} className="bg-[#8B1E3F] px-3 rounded-xl text-[11px] font-black uppercase">Add</button>
+                className="flex-1 min-w-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs outline-none" />
+              <button onClick={addMember} className="shrink-0 bg-[#8B1E3F] px-3 rounded-xl text-[11px] font-black uppercase">Add</button>
             </div>
           )}
           {open && open.type === "group" && (
@@ -359,7 +361,7 @@ export default function ChatPage() {
           )}
           <div className="flex-1 space-y-2 overflow-y-auto max-h-[50vh] lg:max-h-[calc(100vh-16rem)] mb-3">
             {msgs.map((m) => (
-              <div key={m.id} className={`p-2.5 rounded-xl text-xs max-w-[90%] ${m.sender === active ? "bg-[#2457D6] ml-auto" : "bg-black/40"}`}>
+              <div key={m.id} className={`p-2.5 rounded-xl text-xs max-w-[90%] ${m.sender === active ? "bg-[#8B1E3F] ml-auto" : "bg-black/40"}`}>
                 <p className="text-[9px] opacity-60 font-black">@{m.sender}</p>
                 <p>{m.text}</p>
                 {m.sender === active && !m.deletedForEveryone && (
@@ -371,8 +373,8 @@ export default function ChatPage() {
           {open && (
             <div className="flex gap-2">
               <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}
-                placeholder="Type a text message…" className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none" />
-              <button onClick={send} className="bg-[#2457D6] px-5 rounded-xl text-xs font-black uppercase">Send</button>
+                placeholder="Type a text message…" className="flex-1 min-w-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none" />
+              <button onClick={send} className="shrink-0 bg-[#8B1E3F] px-5 rounded-xl text-xs font-black uppercase">Send</button>
             </div>
           )}
         </div>
