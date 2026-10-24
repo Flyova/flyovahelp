@@ -89,7 +89,7 @@ export default function ChatPage() {
   useEffect(() => {
     if (!openId) return;
     return onSnapshot(query(collection(db, "conversations", openId, "messages"), orderBy("createdAt", "asc"), limit(200)),
-      (s) => setMsgs(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
+      (s) => setMsgs(s.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) }))));
   }, [openId]);
 
   // register this device session (listed under Settings → Chat profile)
