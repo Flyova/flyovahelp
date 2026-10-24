@@ -25,6 +25,8 @@ import {
   Clock
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Avatar from "@/components/Avatar";
+import ChatProfileCard from "@/components/settings/ChatProfileCard";
 
 export default function Settings() {
   const router = useRouter();
@@ -208,9 +210,7 @@ export default function Settings() {
           </div>
           
           <div className="flex items-center space-x-4 mb-6 relative z-10">
-            <div className="w-16 h-16 bg-[#2457D6] rounded-2xl flex items-center justify-center text-2xl font-black italic shadow-lg border-2 border-white/10">
-              {userData?.username ? userData.username.charAt(0).toUpperCase() : "?"}
-            </div>
+            <Avatar username={userData?.username} size={64} rounded="rounded-2xl" className="shadow-lg border-2 border-white/10" />
             <div>
               <h2 className="text-2xl font-black italic uppercase text-[#8B1E3F] leading-none">
                 {userData?.fullName || userData?.username || "Merchant"}
@@ -321,6 +321,8 @@ export default function Settings() {
             )}
           </form>
         </div>
+
+        <ChatProfileCard uid={user?.uid} />
 
         {passMessage.msg && (
           <div className={`flex items-center p-4 rounded-2xl text-[10px] font-black uppercase tracking-tight ${

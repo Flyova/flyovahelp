@@ -1,17 +1,21 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { db, auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   collection, doc, query, where, orderBy, limit, onSnapshot,
-  addDoc, setDoc, getDoc, updateDoc, arrayUnion,
+  addDoc, setDoc, updateDoc, arrayUnion,
   serverTimestamp,
 } from "firebase/firestore";
 import { norm, isValidText, containsMediaMarker, dmIdFor } from "@/lib/chat";
 import { notifyPush } from "@/lib/pushClient";
 import { authFetch } from "@/lib/authFetch";
 import ChatRoom from "@/components/chat/ChatRoom";
+import Avatar from "@/components/Avatar";
+import MessageBubble, { ComposerBanner, startsRun } from "@/components/chat/MessageBubble";
+import { Ban, Flag, MoreHorizontal } from "lucide-react";
 
 export default function ChatPage() {
   const router = useRouter();
@@ -27,9 +31,11 @@ export default function ChatPage() {
   const [newUsername, setNewUsername] = useState("");
   const [groupName, setGroupName] = useState("");
   const [memberName, setMemberName] = useState("");
-  const [profile, setProfile] = useState({ bio: "", status: "", avatarUrl: "", coverUrl: "" });
-  const [sessions, setSessions] = useState([]);
   const [err, setErr] = useState("");
+  const [replyTo, setReplyTo] = useState(null); // private thread: message being replied to
+  const [editing, setEditing] = useState(null); // private thread: own message being edited
+  const [chatMenuOpen, setChatMenuOpen] = useState(false);
+  const threadInputRef = useRef(null);
   const [tab, setTab] = useState("room"); // "room" = public chatroom, "private" = 1-to-1 chats & groups
   const [blockedNames, setBlockedNames] = useState([]);
 
@@ -86,18 +92,7 @@ export default function ChatPage() {
       (s) => setMsgs(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
   }, [openId]);
 
-  // profile + sessions for active identity
-  useEffect(() => {
-    if (!active) return;
-    getDoc(doc(db, "chat_profiles", active)).then((s) => {
-      if (s.exists()) setProfile({ bio: "", status: "", avatarUrl: "", coverUrl: "", ...s.data() });
-    }).catch(() => {});
-    if (!uid) return;
-    return onSnapshot(query(collection(db, "chat_sessions"), where("uid", "==", uid), where("usernameLower", "==", active), limit(10)),
-      (s) => setSessions(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => {});
-  }, [active, uid]);
-
-  // register this device session
+  // register this device session (listed under Settings → Chat profile)
   useEffect(() => {
     if (!uid || !active) return;
     const info = `${navigator.platform} · ${navigator.userAgent.slice(0, 60)}`;
@@ -164,12 +159,37 @@ export default function ChatPage() {
     if (containsMediaMarker(text)) return setErr("Text only — no images, voice or video.");
     const convo = convos.find((c) => c.id === openId);
     if (convo?.blocked?.includes(active)) return setErr("You are blocked in this chat.");
-    const msgRef = await addDoc(collection(db, "conversations", openId, "messages"), {
-      sender: active, text: text.trim(), createdAt: serverTimestamp(), deletedForEveryone: false,
-    });
+    const body = text.trim();
+    // Clear the composer right away; put things back if the write fails.
+    setText("");
+    if (editing) {
+      const target = editing;
+      setEditing(null);
+      await updateDoc(doc(db, "conversations", openId, "messages", target.id), {
+        text: body, editedAt: serverTimestamp(),
+      }).catch((e) => {
+        setEditing(target);
+        setText(body);
+        setErr(`Could not save the edit: ${e.message}`);
+      });
+      return;
+    }
+    const quoted = replyTo;
+    const quote = quoted ? { replyTo: { id: quoted.id, sender: quoted.sender, text: String(quoted.text || "").slice(0, 140) } } : {};
+    setReplyTo(null);
+    let msgRef;
+    try {
+      msgRef = await addDoc(collection(db, "conversations", openId, "messages"), {
+        sender: active, text: body, createdAt: serverTimestamp(), deletedForEveryone: false, ...quote,
+      });
+    } catch (e) {
+      setReplyTo(quoted);
+      setText(body);
+      return setErr(`Could not send: ${e.message}`);
+    }
     await updateDoc(doc(db, "conversations", openId), {
-      lastMessage: text.trim().slice(0, 120), lastMessageAt: serverTimestamp(),
-    });
+      lastMessage: body.slice(0, 120), lastMessageAt: serverTimestamp(),
+    }).catch(() => null);
     // fan-out minimal notification docs
     const others = (convo?.participants || []).filter((p) => p !== active);
     // .catch belongs on each write (it used to sit on the array, which threw and
@@ -177,10 +197,32 @@ export default function ChatPage() {
     await Promise.all(others.map((p) => addDoc(collection(db, "notifications"), {
       toUsername: p, fromUsername: active, kind: convo?.type === "group" ? "group" : "dm",
       title: convo?.type === "group" ? `New group message` : `New message from @${active}`,
-      body: text.trim().slice(0, 120), convoId: openId, read: false, createdAt: serverTimestamp(),
+      body: body.slice(0, 120), convoId: openId, read: false, createdAt: serverTimestamp(),
     }).catch(() => null)));
     notifyPush({ event: "chat_message", convoId: openId, messageId: msgRef.id });
-    setText("");
+  };
+
+  const openConversation = (id) => {
+    setOpenId(id);
+    setReplyTo(null);
+    setEditing(null);
+    setChatMenuOpen(false);
+  };
+  const startReply = (m) => {
+    setEditing(null);
+    setReplyTo(m);
+    threadInputRef.current?.focus();
+  };
+  const startEdit = (m) => {
+    setReplyTo(null);
+    setEditing(m);
+    setText(m.text);
+    threadInputRef.current?.focus();
+  };
+  const cancelThreadMode = () => {
+    if (editing) setText("");
+    setReplyTo(null);
+    setEditing(null);
   };
 
   const deleteForEveryone = async (m) => {
@@ -218,13 +260,6 @@ export default function ChatPage() {
     setTab("private");
   };
 
-  const saveProfile = async () => {
-    await setDoc(doc(db, "chat_profiles", active), {
-      ...profile, username: active, updatedAt: serverTimestamp(),
-    }, { merge: true });
-    alert("Profile saved.");
-  };
-
   const open = convos.find((c) => c.id === openId);
 
   // "Chat as" identity picker — shown on both tabs.
@@ -233,8 +268,10 @@ export default function ChatPage() {
         <p className="text-[10px] font-black uppercase text-white/40 mb-2">Chat as</p>
         <div className="flex flex-wrap gap-2">
           {identities.map((i) => (
-            <div key={i.usernameLower} className={`flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold border ${active === i.usernameLower ? "bg-[#8B1E3F] border-[#8B1E3F]" : "bg-black/30 border-white/10"}`}>
-              <button onClick={() => setActive(i.usernameLower)}>@{i.username}</button>
+            <div key={i.usernameLower} className={`flex items-center gap-1 pl-1.5 pr-3 py-1.5 rounded-xl text-xs font-bold border ${active === i.usernameLower ? "bg-[#8B1E3F] border-[#8B1E3F]" : "bg-black/30 border-white/10"}`}>
+              <button onClick={() => setActive(i.usernameLower)} className="flex items-center gap-1.5">
+                <Avatar username={i.usernameLower} size={22} rounded="rounded-lg" />@{i.username}
+              </button>
               {!i.isDefault && <button onClick={() => deleteUsername(i.usernameLower)} className="text-red-400 ml-1" title="Delete permanently">×</button>}
             </div>
           ))}
@@ -245,6 +282,9 @@ export default function ChatPage() {
           <button onClick={createUsername} className="shrink-0 bg-[#8B1E3F] px-4 rounded-xl text-xs font-black uppercase">Buy</button>
         </div>
         <p className="text-[10px] text-white/40 mt-2">First extra username free · then $1 from wallet · 8mo+ accounts get 100 free · agents get 5 free. To use another account&apos;s username, log in with that account&apos;s email + password + OTP on the login page first.</p>
+        <Link href="/settings#chat-profile" className="inline-block mt-2 text-[10px] font-black uppercase text-[#E0708C] hover:underline">
+          Bio, status &amp; devices → Settings
+        </Link>
     </div>
   );
 
@@ -297,24 +337,16 @@ export default function ChatPage() {
             {results.map((r) => {
               const uname = (r.usernameLower || r.username || "").toLowerCase();
               return (
-                <div key={r.id} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
-                  <div className="text-xs"><b>@{r.username || r.usernameLower || r.id.slice(0, 8)}</b>
-                    <span className="text-white/40"> · {r.fullName || r.country || r.phone || r.kind}</span></div>
+                <div key={r.id} className="flex items-center justify-between gap-2 py-2 border-b border-white/5 last:border-0">
+                  <div className="flex items-center gap-2 min-w-0 text-xs">
+                    <Avatar username={uname || r.id} size={28} rounded="rounded-lg" />
+                    <span className="truncate"><b>@{r.username || r.usernameLower || r.id.slice(0, 8)}</b>
+                      <span className="text-white/40"> · {r.fullName || r.country || r.phone || r.kind}</span></span>
+                  </div>
                   {uname && <button onClick={() => startDM(uname)} className="shrink-0 text-[11px] bg-[#8B1E3F] px-3 py-1.5 rounded-lg font-black uppercase">Chat</button>}
                 </div>
               );
             })}
-          </div>
-          {/* profile */}
-          <div className="bg-[#142036] rounded-2xl p-4 border border-white/5">
-            <p className="text-[10px] font-black uppercase text-white/40 mb-2">Profile · @{active || "…"}</p>
-            <input value={profile.avatarUrl} onChange={(e) => setProfile({ ...profile, avatarUrl: e.target.value })} placeholder="Profile picture URL" className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs mb-2 outline-none" />
-            <input value={profile.coverUrl} onChange={(e) => setProfile({ ...profile, coverUrl: e.target.value })} placeholder="Cover photo URL" className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs mb-2 outline-none" />
-            <input value={profile.bio} onChange={(e) => setProfile({ ...profile, bio: e.target.value })} placeholder="Bio" className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs mb-2 outline-none" />
-            <input value={profile.status} onChange={(e) => setProfile({ ...profile, status: e.target.value })} placeholder="Status update" className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs mb-2 outline-none" />
-            <button onClick={saveProfile} className="w-full bg-white/10 py-2 rounded-xl text-[11px] font-black uppercase">Save profile</button>
-            <p className="text-[10px] text-white/40 mt-2 font-bold uppercase">Devices logged in as @{active}</p>
-            {sessions.map((s) => <p key={s.id} className="text-[11px] text-white/60 truncate">{s.device}</p>)}
           </div>
         </div>
 
@@ -325,56 +357,96 @@ export default function ChatPage() {
             <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="New group name" className="flex-1 min-w-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs outline-none" />
             <button onClick={createGroup} className="shrink-0 whitespace-nowrap bg-[#8B1E3F] px-3 rounded-xl text-[11px] font-black uppercase">+ Group</button>
           </div>
-          {convos.map((c) => (
-            <button key={c.id} onClick={() => setOpenId(c.id)} className={`w-full text-left p-3 rounded-xl mb-1 ${openId === c.id ? "bg-[#8B1E3F]/20 border border-[#8B1E3F]/50" : "bg-black/20 border border-white/5"}`}>
-              <p className="text-xs font-black">{c.type === "group" ? c.groupName : c.participants.filter((p) => p !== active).map((p) => `@${p}`).join(", ")}</p>
-              <p className="text-[11px] text-white/40 truncate">{c.lastMessage || "—"}</p>
-            </button>
-          ))}
+          {convos.map((c) => {
+            const others = (c.participants || []).filter((p) => p !== active);
+            return (
+              <button key={c.id} onClick={() => openConversation(c.id)} className={`w-full flex items-center gap-2.5 text-left p-3 rounded-xl mb-1 ${openId === c.id ? "bg-[#8B1E3F]/20 border border-[#8B1E3F]/50" : "bg-black/20 border border-white/5"}`}>
+                {c.type === "group" ? (
+                  <span className="w-9 h-9 shrink-0 rounded-xl bg-[#2457D6]/30 flex items-center justify-center text-xs font-black">#</span>
+                ) : (
+                  <Avatar username={others[0]} size={36} />
+                )}
+                <span className="min-w-0">
+                  <p className="text-xs font-black truncate">{c.type === "group" ? c.groupName : others.map((p) => `@${p}`).join(", ")}</p>
+                  <p className="text-[11px] text-white/40 truncate">{c.lastMessage || "—"}</p>
+                </span>
+              </button>
+            );
+          })}
           {!convos.length && <p className="text-xs text-white/30">No chats yet — search someone above.</p>}
         </div>
 
         {/* thread */}
         <div className="bg-[#142036] rounded-2xl p-4 border border-white/5 flex flex-col min-h-[60vh] lg:col-span-6 lg:min-h-[calc(100vh-9rem)]">
-          <p className="text-[10px] font-black uppercase text-white/40 mb-2">
-            {open ? (open.type === "group" ? open.groupName : `Private · ${open.participants.filter((p) => p !== active).join(", ")}`) : "Thread"}
-          </p>
-          {open && open.type === "group" && (open.admins || []).includes(active) && (
-            <div className="flex gap-2 mb-2">
-              <input value={memberName} onChange={(e) => setMemberName(e.target.value)} placeholder="Add member by @username"
-                className="flex-1 min-w-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs outline-none" />
-              <button onClick={addMember} className="shrink-0 bg-[#8B1E3F] px-3 rounded-xl text-[11px] font-black uppercase">Add</button>
-            </div>
-          )}
-          {open && open.type === "group" && (
-            <p className="text-[10px] text-white/40 mb-2 truncate">Members: {(open.participants || []).map((p) => `@${p}`).join(", ")}</p>
-          )}
-          {open && open.type === "dm" && (
-            <div className="flex gap-2 mb-2">
-              {open.participants.filter((p) => p !== active).map((p) => (
-                <div key={p} className="flex gap-1">
-                  <button onClick={() => blockUser(p)} className="text-[10px] bg-red-500/20 text-red-400 px-2 py-1 rounded-lg font-black uppercase">Block</button>
-                  <button onClick={() => reportUser(p)} className="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-1 rounded-lg font-black uppercase">Report</button>
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="flex-1 space-y-2 overflow-y-auto max-h-[50vh] lg:max-h-[calc(100vh-16rem)] mb-3">
-            {msgs.map((m) => (
-              <div key={m.id} className={`p-2.5 rounded-xl text-xs max-w-[90%] ${m.sender === active ? "bg-[#8B1E3F] ml-auto" : "bg-black/40"}`}>
-                <p className="text-[9px] opacity-60 font-black">@{m.sender}</p>
-                <p>{m.text}</p>
-                {m.sender === active && !m.deletedForEveryone && (
-                  <button onClick={() => deleteForEveryone(m)} className="text-[9px] opacity-60 underline mt-1">Delete for everyone</button>
+          <div className="relative flex items-center justify-between gap-2 mb-2">
+            <p className="text-[10px] font-black uppercase text-white/40 truncate">
+              {open ? (open.type === "group" ? `${open.groupName} · ${(open.participants || []).length} members` : `Private · ${open.participants.filter((p) => p !== active).join(", ")}`) : "Thread"}
+            </p>
+            {open && (
+              <button
+                type="button"
+                aria-label="Chat options"
+                aria-expanded={chatMenuOpen}
+                onClick={() => setChatMenuOpen((v) => !v)}
+                className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-white/70 hover:text-white bg-white/5 hover:bg-white/10"
+              >
+                <MoreHorizontal size={16} />
+              </button>
+            )}
+            {open && chatMenuOpen && (
+              <div className="absolute right-0 top-10 z-30 w-72 p-2 rounded-xl bg-[#0F1A2E] border border-white/10 shadow-2xl">
+                {open.type === "group" ? (
+                  <div className="p-1.5 space-y-2">
+                    <p className="text-[10px] font-black uppercase text-white/40">Members</p>
+                    <p className="text-xs text-white/70 break-words">{(open.participants || []).map((p) => `@${p}`).join(", ")}</p>
+                    {(open.admins || []).includes(active) && (
+                      <div className="flex gap-2">
+                        <input value={memberName} onChange={(e) => setMemberName(e.target.value)} placeholder="Add member by @username"
+                          className="flex-1 min-w-0 bg-black/40 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs outline-none" />
+                        <button onClick={addMember} className="shrink-0 bg-[#8B1E3F] px-3 rounded-lg text-[11px] font-black uppercase">Add</button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  open.participants.filter((p) => p !== active).map((p) => (
+                    <div key={p}>
+                      <button onClick={() => { setChatMenuOpen(false); blockUser(p); }} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-[13px] font-semibold text-red-300 hover:bg-white/5">
+                        <Ban size={15} /> Block @{p}
+                      </button>
+                      <button onClick={() => { setChatMenuOpen(false); reportUser(p); }} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-[13px] font-semibold text-red-300 hover:bg-white/5">
+                        <Flag size={15} /> Report @{p}
+                      </button>
+                    </div>
+                  ))
                 )}
               </div>
-            ))}
+            )}
           </div>
+          <div className="flex-1 overflow-y-auto max-h-[50vh] lg:max-h-[calc(100vh-16rem)] px-1 md:px-10 pb-2 mb-2">
+            {msgs.map((m, i) => {
+              const mine = m.sender === active;
+              return (
+                <MessageBubble
+                  key={m.id}
+                  message={m}
+                  mine={mine}
+                  first={startsRun(msgs[i - 1], m)}
+                  onReply={open?.blocked?.includes(active) ? undefined : startReply}
+                  onEdit={startEdit}
+                  onDelete={mine ? deleteForEveryone : undefined}
+                  onMessagePrivately={open?.type === "group" ? startDM : undefined}
+                  onReport={(msg) => reportUser(msg.sender)}
+                />
+              );
+            })}
+          </div>
+          {open && <ComposerBanner mode={editing ? "edit" : replyTo ? "reply" : null} message={editing ?? replyTo} onCancel={cancelThreadMode} />}
           {open && (
             <div className="flex gap-2">
-              <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}
+              <input ref={threadInputRef} value={text} onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") send(); else if (e.key === "Escape") cancelThreadMode(); }}
                 placeholder="Type a text message…" className="flex-1 min-w-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none" />
-              <button onClick={send} className="shrink-0 bg-[#8B1E3F] px-5 rounded-xl text-xs font-black uppercase">Send</button>
+              <button onClick={send} className="shrink-0 bg-[#8B1E3F] px-5 rounded-xl text-xs font-black uppercase">{editing ? "Save" : "Send"}</button>
             </div>
           )}
         </div>

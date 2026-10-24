@@ -69,7 +69,7 @@ export async function POST(req) {
       });
       tx.set(db.collection("chat_profiles").doc(lower), {
         username: String(username).trim(), uid, bio: "", status: "",
-        avatarUrl: "", coverUrl: "", updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
       if (charge > 0) {
         tx.update(userRef, {

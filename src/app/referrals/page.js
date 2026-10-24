@@ -5,6 +5,7 @@ import {
   doc, onSnapshot, collection, query, where, getDocs, updateDoc, increment, addDoc, serverTimestamp 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import Avatar from "@/components/Avatar";
 import {
   ChevronLeft,
   Copy,
@@ -266,9 +267,7 @@ export default function ReferralsPage() {
                     {referrals.map((ref) => (
                         <div key={ref.id} className="bg-[#142036] rounded-3xl p-5 border border-white/5 flex items-center justify-between group hover:border-[#2457D6]/30 transition-all">
                             <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 bg-black/40 rounded-2xl flex items-center justify-center text-xl font-black italic text-[#2457D6] border border-white/5">
-                                    {ref.username?.charAt(0).toUpperCase()}
-                                </div>
+                                <Avatar username={ref.username} size={48} rounded="rounded-2xl" className="border border-white/5" />
                                 <div>
                                     <h4 className="font-black italic uppercase text-[#8B1E3F] leading-none">
                                         @{ref.username}

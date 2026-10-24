@@ -42,6 +42,18 @@
       return chatSignedIn() && request.auth.uid in chatConvo(convoId).participantUids;
     }
 
+    // Optional reply quote on a message: { id, sender, text } with a short text.
+    function validReplyQuote(data) {
+      return !('replyTo' in data) || (
+        data.replyTo is map
+        && data.replyTo.keys().hasOnly(['id', 'sender', 'text'])
+        && data.replyTo.id is string
+        && data.replyTo.sender is string
+        && data.replyTo.text is string
+        && data.replyTo.text.size() <= 200
+      );
+    }
+
     match /usernames/{name} {
       allow read, write: if false; // server only (API routes)
     }
@@ -66,17 +78,29 @@
         allow create: if isChatMember(convoId)
           && ownsUsername(request.resource.data.sender)
           && !(request.resource.data.sender in chatConvo(convoId).get('blocked', []))
-          && request.resource.data.keys().hasOnly(['sender', 'text', 'createdAt', 'deletedForEveryone'])
+          && request.resource.data.keys().hasOnly(['sender', 'text', 'createdAt', 'deletedForEveryone', 'replyTo'])
+          && validReplyQuote(request.resource.data)
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 2000
           && request.resource.data.deletedForEveryone == false
           && request.resource.data.createdAt == request.time;
-        // "Delete for everyone": only the sender, only to the placeholder text.
-        allow update: if ownsUsername(resource.data.sender)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'deletedForEveryone'])
-          && request.resource.data.deletedForEveryone == true
-          && request.resource.data.text == '— message deleted —';
+        // Only the sender may change a message: either "delete for everyone" (placeholder
+        // text) or an edit of a live message (new text + editedAt stamp).
+        allow update: if ownsUsername(resource.data.sender) && (
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'deletedForEveryone'])
+            && request.resource.data.deletedForEveryone == true
+            && request.resource.data.text == '— message deleted —'
+          ) || (
+            resource.data.deletedForEveryone == false
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt'])
+            && request.resource.data.text is string
+            && request.resource.data.text.size() > 0
+            && request.resource.data.text.size() <= 2000
+            && request.resource.data.editedAt == request.time
+          )
+        );
         allow delete: if false;
       }
     }

@@ -8,25 +8,43 @@ import { containsMediaMarker, ownedUsername } from "@/lib/chat";
 // for signed-in players). Posting goes through here so the server can rate-limit and
 // refuse banned/muted players; clients cannot write chatroom messages directly.
 //
-//   { action: "send", as, text }  -> { id }
-//   { action: "delete", id }      -> { ok }   own message, or any message for admin/staff/support
+//   { action: "send", as, text, replyTo? } -> { id }   replyTo = id of a chatroom message
+//   { action: "edit", id, text }           -> { ok }   own message only
+//   { action: "delete", id }               -> { ok }   own message, or any message for admin/staff/support
 
 const ROOM_COLLECTION = "chatroom_messages";
 const RATE_COLLECTION = "chatroom_rate"; // per-account { lastPostAt, lastText } — server only
 const MAX_LENGTH = 500;
 const MIN_INTERVAL_MS = 3000;
 const DELETED_TEXT = "— message deleted —";
+const QUOTE_LENGTH = 140;
+
+/** Validates chatroom text; returns { body } or { error }. */
+function cleanText(text) {
+  const body = String(text || "").trim();
+  if (!body) return { error: "Write a message first." };
+  if (body.length > MAX_LENGTH) return { error: `Chatroom messages are limited to ${MAX_LENGTH} characters.` };
+  if (containsMediaMarker(body)) return { error: "Text only — no images, voice or video." };
+  return { body };
+}
 
 const fail = (error, status = 400) => NextResponse.json({ error }, { status });
 
-async function send(db, caller, { as, text }) {
+async function send(db, caller, { as, text, replyTo }) {
   const me = await ownedUsername(db, caller.uid, as);
   if (!me) return fail("You can only post as one of your own usernames.", 403);
 
-  const body = String(text || "").trim();
-  if (!body) return fail("Write a message first.");
-  if (body.length > MAX_LENGTH) return fail(`Chatroom messages are limited to ${MAX_LENGTH} characters.`);
-  if (containsMediaMarker(body)) return fail("Text only — no images, voice or video.");
+  const { body, error } = cleanText(text);
+  if (error) return fail(error);
+
+  // A reply carries a short quote of the original so it renders without a second read.
+  let quote = null;
+  if (replyTo) {
+    const original = await db.collection(ROOM_COLLECTION).doc(String(replyTo)).get();
+    if (!original.exists || original.data().deletedForEveryone) return fail("That message is no longer available to reply to.", 404);
+    const o = original.data();
+    quote = { id: original.id, sender: o.sender, text: String(o.text || "").slice(0, QUOTE_LENGTH) };
+  }
 
   const userSnap = await db.collection("users").doc(caller.uid).get();
   const user = userSnap.exists ? userSnap.data() : {};
@@ -53,11 +71,24 @@ async function send(db, caller, { as, text }) {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       createdAtMs: now,
       deletedForEveryone: false,
+      ...(quote ? { replyTo: quote } : {}),
     });
     return null;
   });
   if (refused) return fail(refused.error, refused.status);
   return NextResponse.json({ id: msgRef.id });
+}
+
+async function edit(db, caller, { id, text }) {
+  const { body, error } = cleanText(text);
+  if (error) return fail(error);
+  const ref = db.collection(ROOM_COLLECTION).doc(String(id || ""));
+  const snap = await ref.get();
+  if (!snap.exists) return fail("Message not found.", 404);
+  if (snap.data().senderUid !== caller.uid) return fail("You can only edit your own messages.", 403);
+  if (snap.data().deletedForEveryone) return fail("Deleted messages can't be edited.", 400);
+  await ref.update({ text: body, editedAt: admin.firestore.FieldValue.serverTimestamp() });
+  return NextResponse.json({ ok: true });
 }
 
 async function remove(db, caller, { id }) {
@@ -82,6 +113,7 @@ export async function POST(req) {
     const body = await req.json().catch(() => ({}));
     const db = getAdminDb();
     if (body.action === "send") return await send(db, caller, body);
+    if (body.action === "edit") return await edit(db, caller, body);
     if (body.action === "delete") return await remove(db, caller, body);
     return fail("Unknown action.");
   } catch (e) {
