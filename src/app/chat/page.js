@@ -13,6 +13,7 @@ import { norm, isValidText, containsMediaMarker, dmIdFor } from "@/lib/chat";
 import { notifyPush } from "@/lib/pushClient";
 import { authFetch } from "@/lib/authFetch";
 import ChatRoom from "@/components/chat/ChatRoom";
+import PlayerSearch from "@/components/chat/PlayerSearch";
 import Avatar from "@/components/Avatar";
 import MessageBubble, { ComposerBanner, startsRun } from "@/components/chat/MessageBubble";
 import { Ban, Flag, MoreHorizontal } from "lucide-react";
@@ -26,8 +27,6 @@ export default function ChatPage() {
   const [openId, setOpenId] = useState(null);
   const [msgs, setMsgs] = useState([]);
   const [text, setText] = useState("");
-  const [q, setQ] = useState("");
-  const [results, setResults] = useState([]);
   const [newUsername, setNewUsername] = useState("");
   const [groupName, setGroupName] = useState("");
   const [memberName, setMemberName] = useState("");
@@ -100,12 +99,6 @@ export default function ChatPage() {
       uid, usernameLower: active, device: info, lastActive: serverTimestamp(),
     }).catch(() => {});
   }, [uid, active]);
-
-  const doSearch = async () => {
-    const r = await authFetch(`/api/chat/search?q=${encodeURIComponent(q)}`);
-    if (r.error) return setErr(r.error);
-    setResults(r.items || []);
-  };
 
   const createUsername = async () => {
     setErr("");
@@ -327,27 +320,7 @@ export default function ChatPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <div className="space-y-4 lg:col-span-3">
           {identityCard}
-          {/* search */}
-          <div className="bg-[#142036] rounded-2xl p-4 border border-white/5">
-            <p className="text-[10px] font-black uppercase text-white/40 mb-2">Search · phone / username / name / country / referrer</p>
-            <div className="flex gap-2">
-              <input value={q} onChange={(e) => setQ(e.target.value)} className="flex-1 min-w-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none" placeholder="e.g. john, +44..., NG" />
-              <button onClick={doSearch} className="shrink-0 bg-white/10 px-4 rounded-xl text-xs font-black uppercase">Go</button>
-            </div>
-            {results.map((r) => {
-              const uname = (r.usernameLower || r.username || "").toLowerCase();
-              return (
-                <div key={r.id} className="flex items-center justify-between gap-2 py-2 border-b border-white/5 last:border-0">
-                  <div className="flex items-center gap-2 min-w-0 text-xs">
-                    <Avatar username={uname || r.id} size={28} rounded="rounded-lg" />
-                    <span className="truncate"><b>@{r.username || r.usernameLower || r.id.slice(0, 8)}</b>
-                      <span className="text-white/40"> · {r.fullName || r.country || r.phone || r.kind}</span></span>
-                  </div>
-                  {uname && <button onClick={() => startDM(uname)} className="shrink-0 text-[11px] bg-[#8B1E3F] px-3 py-1.5 rounded-lg font-black uppercase">Chat</button>}
-                </div>
-              );
-            })}
-          </div>
+          <PlayerSearch onPick={startDM} />
         </div>
 
         {/* convo list */}
