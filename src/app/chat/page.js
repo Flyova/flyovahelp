@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { db, auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
@@ -15,9 +15,13 @@ import ChatRoom from "@/components/chat/ChatRoom";
 import PlayerSearch from "@/components/chat/PlayerSearch";
 import IdentityBar from "@/components/chat/IdentityBar";
 import ConversationList from "@/components/chat/ConversationList";
+import ChatMessages from "@/components/chat/ChatMessages";
+import ChatComposer from "@/components/chat/ChatComposer";
+import ProfileSheet from "@/components/chat/ProfileSheet";
 import Avatar from "@/components/Avatar";
-import MessageBubble, { ComposerBanner, startsRun } from "@/components/chat/MessageBubble";
-import { Ban, Check, ChevronLeft, Flag, MessagesSquare, MoreHorizontal, SendHorizontal, Users, X } from "lucide-react";
+import { Ban, ChevronLeft, Flag, MessagesSquare, MoreHorizontal, Users, X } from "lucide-react";
+
+const FRESH_MS = 800; // messages that arrived this recently animate in
 
 export default function ChatPage() {
   const router = useRouter();
@@ -35,7 +39,7 @@ export default function ChatPage() {
   const [editing, setEditing] = useState(null); // private thread: own message being edited
   const [chatMenuOpen, setChatMenuOpen] = useState(false);
   const threadInputRef = useRef(null);
-  const threadListRef = useRef(null);
+  const [profileOf, setProfileOf] = useState(null); // username whose profile popup is open
   const [tab, setTab] = useState("room"); // "room" = public chatroom, "private" = 1-to-1 chats & groups
   const [blockedNames, setBlockedNames] = useState([]);
 
@@ -85,21 +89,28 @@ export default function ChatPage() {
     );
   }, [uid, identities]);
 
-  // messages
+  // messages — with metadata changes, so a message shows a clock until the server has it
   useEffect(() => {
     if (!openId) return;
-    return onSnapshot(query(collection(db, "conversations", openId, "messages"), orderBy("createdAt", "asc"), limit(200)),
+    const arrived = new Map(); // id -> when it first arrived after the initial load
+    let initial = true;
+    return onSnapshot(
+      query(collection(db, "conversations", openId, "messages"), orderBy("createdAt", "asc"), limit(200)),
+      { includeMetadataChanges: true },
       (s) => {
-        setMsgs(s.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) })));
+        const now = Date.now();
+        if (!initial) s.docChanges().forEach((c) => c.type === "added" && arrived.set(c.doc.id, now));
+        initial = false;
+        setMsgs(s.docs.map((d) => ({
+          id: d.id,
+          ...d.data({ serverTimestamps: "estimate" }),
+          pending: d.metadata.hasPendingWrites,
+          fresh: now - (arrived.get(d.id) ?? 0) < FRESH_MS,
+        })));
         setMsgsFor(openId);
-      });
+      }
+    );
   }, [openId]);
-
-  // Keep the newest message in view.
-  useEffect(() => {
-    const el = threadListRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [msgs.length, openId]);
 
   // register this device session (listed under Settings → Chat profile)
   useEffect(() => {
@@ -241,12 +252,14 @@ export default function ChatPage() {
     });
   };
   const blockUser = async (targetLower) => {
-    await setDoc(doc(db, "chat_blocks", `${active}_${norm(targetLower)}`), {
-      blocker: active, blocked: norm(targetLower), createdAt: serverTimestamp(),
+    const target = norm(targetLower);
+    if (!active || !confirm(`Block @${target}? They won't be able to message you, and you won't see them in the chatroom.`)) return;
+    await setDoc(doc(db, "chat_blocks", `${active}_${target}`), {
+      blocker: active, blocked: target, createdAt: serverTimestamp(),
     });
-    const c = convos.find((x) => x.id === openId);
-    // Recorded on the conversation too: the rules refuse new messages from anyone listed in `blocked`.
-    if (c) await updateDoc(doc(db, "conversations", openId), { blocked: arrayUnion(norm(targetLower)) });
+    // Recorded on your private chat with them too: the rules refuse new messages from anyone listed in `blocked`.
+    const c = convos.find((x) => x.type !== "group" && (x.participants || []).includes(target));
+    if (c) await updateDoc(doc(db, "conversations", c.id), { blocked: arrayUnion(target) });
   };
   const reportUser = async (targetLower) => {
     const reason = prompt("Reason for report?");
@@ -269,6 +282,8 @@ export default function ChatPage() {
     await startDM(targetLower);
     setTab("private");
   };
+
+  const closeProfile = useCallback(() => setProfileOf(null), []);
 
   const open = convos.find((c) => c.id === openId);
   const others = open ? (open.participants || []).filter((p) => p !== active) : [];
@@ -319,6 +334,7 @@ export default function ChatPage() {
               blocked={blockedNames}
               onMessagePrivately={messagePrivately}
               onReport={reportRoomMessage}
+              onOpenProfile={setProfileOf}
             />
           </div>
         </div>
@@ -339,24 +355,33 @@ export default function ChatPage() {
         </div>
 
         {/* thread */}
-        <section className={`lg:col-span-8 bg-[#142036] rounded-2xl border border-white/5 flex-col min-h-0 h-[calc(100dvh-9.25rem)] md:h-[calc(100dvh-5.25rem)] lg:h-auto ${inThread ? "flex" : "hidden lg:flex"}`}>
+        <section className={`lg:col-span-8 bg-[#142036] rounded-2xl border border-white/5 overflow-hidden flex-col min-h-0 h-[calc(100dvh-9.25rem)] md:h-[calc(100dvh-5.25rem)] lg:h-auto ${inThread ? "flex" : "hidden lg:flex"}`}>
           {openId ? (
             <>
               <div className="relative flex items-center gap-2.5 px-3 py-2.5 border-b border-white/5">
                 <button type="button" onClick={() => openConversation(null)} aria-label="Back to chats" className="lg:hidden shrink-0 w-9 h-9 -ml-1 rounded-xl flex items-center justify-center text-white/80 hover:bg-white/5">
                   <ChevronLeft size={22} />
                 </button>
-                {isGroup ? (
-                  <span className="w-9 h-9 shrink-0 rounded-xl bg-[#2457D6]/25 text-[#8FB0FF] flex items-center justify-center"><Users size={17} /></span>
-                ) : (
-                  others[0] && <Avatar username={others[0]} size={36} />
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-black truncate">{!open ? "Loading…" : isGroup ? open.groupName : others.map((p) => `@${p}`).join(", ")}</p>
-                  <p className="text-[11px] text-white/45 truncate">
-                    {blockedHere ? "You can no longer send messages here" : isGroup ? `${(open?.participants || []).length} members` : open ? "Private chat" : ""}
-                  </p>
-                </div>
+                {/* Tap the name: their profile (private chat) or the member list (group). */}
+                <button
+                  type="button"
+                  disabled={!open}
+                  onClick={() => (isGroup ? setChatMenuOpen((v) => !v) : others[0] && setProfileOf(others[0]))}
+                  aria-label={isGroup ? "Group info" : others[0] ? `View @${others[0]}'s profile` : undefined}
+                  className="min-w-0 flex-1 flex items-center gap-2.5 text-left rounded-xl -my-1 py-1 pr-2 hover:bg-white/[0.04] transition-colors"
+                >
+                  {isGroup ? (
+                    <span className="w-10 h-10 shrink-0 rounded-full bg-[#2457D6]/25 text-[#8FB0FF] flex items-center justify-center"><Users size={18} /></span>
+                  ) : (
+                    others[0] && <Avatar username={others[0]} size={40} rounded="rounded-full" />
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[15px] font-bold truncate">{!open ? "Loading…" : isGroup ? open.groupName : others.map((p) => `@${p}`).join(", ")}</span>
+                    <span className={`block text-[12px] truncate ${blockedHere ? "text-red-300/80" : "text-white/45"}`}>
+                      {blockedHere ? "You can no longer send messages here" : isGroup ? `${(open?.participants || []).length} members` : open ? "tap for profile" : ""}
+                    </span>
+                  </span>
+                </button>
                 {open && (
                   <button
                     type="button"
@@ -398,54 +423,35 @@ export default function ChatPage() {
                 )}
               </div>
 
-              <div ref={threadListRef} className="flex-1 min-h-0 overflow-y-auto px-3 md:px-8 py-3">
-                {msgs.map((m, i) => {
-                  const mine = m.sender === active;
-                  return (
-                    <MessageBubble
-                      key={m.id}
-                      message={m}
-                      mine={mine}
-                      first={startsRun(msgs[i - 1], m)}
-                      onReply={blockedHere ? undefined : startReply}
-                      onEdit={startEdit}
-                      onDelete={mine ? deleteForEveryone : undefined}
-                      onMessagePrivately={isGroup ? startDM : undefined}
-                      onReport={(msg) => reportUser(msg.sender)}
-                    />
-                  );
-                })}
-                {msgsFor !== openId && <p className="text-xs text-white/35 text-center pt-6">Loading messages…</p>}
-                {open && msgsFor === openId && !msgs.length && (
-                  <p className="h-full flex items-center justify-center text-center text-xs text-white/35 px-6">
-                    No messages yet. Say hello{isGroup ? " to the group" : others[0] ? ` to @${others[0]}` : ""}!
-                  </p>
-                )}
-              </div>
+              <ChatMessages
+                messages={msgsFor === openId ? msgs : []}
+                isMine={(m) => m.sender === active}
+                showAvatars={isGroup}
+                showNames={isGroup}
+                loading={msgsFor !== openId}
+                emptyText={`No messages yet. Say hello${isGroup ? " to the group" : others[0] ? ` to @${others[0]}` : ""}!`}
+                onReply={blockedHere ? undefined : startReply}
+                onEdit={startEdit}
+                onDelete={deleteForEveryone}
+                canDelete={(m) => m.sender === active}
+                deleteLabel={() => "Delete for everyone"}
+                onMessagePrivately={isGroup ? startDM : undefined}
+                onReport={(msg) => reportUser(msg.sender)}
+                onOpenProfile={setProfileOf}
+              />
 
-              <div className="p-3 border-t border-white/5">
-                <ComposerBanner mode={editing ? "edit" : replyTo ? "reply" : null} message={editing ?? replyTo} onCancel={cancelThreadMode} />
-                <div className="flex gap-2">
-                  <input
-                    ref={threadInputRef}
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") send(); else if (e.key === "Escape") cancelThreadMode(); }}
-                    disabled={!open || blockedHere}
-                    placeholder="Type a text message…"
-                    className="flex-1 min-w-0 bg-black/40 border border-white/10 focus:border-[#8B1E3F] rounded-xl px-3.5 py-2.5 text-sm outline-none disabled:opacity-50"
-                  />
-                  <button
-                    type="button"
-                    onClick={send}
-                    disabled={!text.trim() || !open || blockedHere}
-                    aria-label={editing ? "Save edit" : "Send message"}
-                    className="shrink-0 w-11 rounded-xl bg-[#8B1E3F] flex items-center justify-center disabled:opacity-40 transition-opacity"
-                  >
-                    {editing ? <Check size={18} /> : <SendHorizontal size={18} />}
-                  </button>
-                </div>
-              </div>
+              <ChatComposer
+                value={text}
+                onChange={setText}
+                onSend={send}
+                onCancel={cancelThreadMode}
+                mode={editing ? "edit" : replyTo ? "reply" : null}
+                modeMessage={editing ?? replyTo}
+                placeholder={blockedHere ? "You can't reply to this chat" : "Message"}
+                disabled={!open || blockedHere}
+                maxLength={2000}
+                inputRef={threadInputRef}
+              />
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-center gap-2 px-8">
@@ -456,6 +462,17 @@ export default function ChatPage() {
           )}
         </section>
       </div>
+      )}
+
+      {profileOf && (
+        <ProfileSheet
+          key={profileOf}
+          username={profileOf}
+          onClose={closeProfile}
+          onMessage={messagePrivately}
+          onBlock={blockUser}
+          onReport={reportUser}
+        />
       )}
     </div>
   );

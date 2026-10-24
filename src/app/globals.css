@@ -148,6 +148,55 @@ div {
 }
 .sw-roll { display: inline-block; animation: sw-roll 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
 
+/* ── CHAT (Telegram-style motion) ─────────────────────────────────────── */
+/* A new message pops in from its own side. */
+@keyframes chat-in-mine {
+  from { opacity: 0; transform: translate(16px, 12px) scale(0.9); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes chat-in-theirs {
+  from { opacity: 0; transform: translate(-16px, 12px) scale(0.9); }
+  to { opacity: 1; transform: none; }
+}
+.chat-in-mine { animation: chat-in-mine 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.15) both; transform-origin: bottom right; }
+.chat-in-theirs { animation: chat-in-theirs 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.15) both; transform-origin: bottom left; }
+
+/* Popups: dimmed, blurred backdrop + a menu that springs open from where you tapped. */
+@keyframes chat-fade { from { opacity: 0; } to { opacity: 1; } }
+.chat-backdrop { animation: chat-fade 0.18s ease-out both; }
+@keyframes chat-pop {
+  from { opacity: 0; transform: scale(0.82); }
+  to { opacity: 1; transform: scale(1); }
+}
+.chat-pop { animation: chat-pop 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.25) both; }
+@keyframes chat-sheet { from { transform: translateY(100%); } to { transform: none; } }
+.chat-sheet { animation: chat-sheet 0.34s cubic-bezier(0.2, 0.9, 0.25, 1) both; }
+@keyframes chat-slide-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.chat-slide-up { animation: chat-slide-up 0.2s ease-out both; }
+
+/* Tapping a reply quote scrolls to the original and flashes it. */
+@keyframes chat-flash {
+  0%, 100% { background-color: transparent; }
+  15%, 55% { background-color: rgba(224, 112, 140, 0.2); }
+}
+.chat-flash { animation: chat-flash 1.5s ease-in-out; }
+
+/* Swipe-to-reply: the bubble springs back when released. */
+.chat-swipe-release { transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.3); }
+
+/* Chat wallpaper: a deep gradient with a faint dot pattern, like Telegram's backgrounds. */
+.chat-wallpaper {
+  background-color: #0e1829;
+  background-image:
+    radial-gradient(rgba(245, 243, 238, 0.045) 1px, transparent 1.4px),
+    radial-gradient(circle at 15% 10%, rgba(139, 30, 63, 0.16), transparent 45%),
+    radial-gradient(circle at 85% 90%, rgba(36, 87, 214, 0.14), transparent 50%);
+  background-size: 20px 20px, 100% 100%, 100% 100%;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sw-float,
   .sw-marquee,
@@ -155,8 +204,18 @@ div {
   .sw-pulse-light,
   .sw-live,
   .sw-roll,
-  .sw-shine::after {
+  .sw-shine::after,
+  .chat-in-mine,
+  .chat-in-theirs,
+  .chat-backdrop,
+  .chat-pop,
+  .chat-sheet,
+  .chat-slide-up,
+  .chat-flash {
     animation: none !important;
+  }
+  .chat-swipe-release {
+    transition: none;
   }
   .sw-shine::after,
   .sw-rise {
