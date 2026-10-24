@@ -47,36 +47,43 @@ export async function GET(req) {
         match: d.id === q ? "exact" : "username",
       });
     }
+    const profiles = new Map(); // uid -> user document data
     const userHits = new Map(); // uid -> match
     for (const [snap, match] of [[byName, "name"], [byPhone, "phone"], [byCountry, "country"], [byReferrer, "referrer"]]) {
       for (const d of snap?.docs || []) {
+        profiles.set(d.id, d.data());
         if (d.id !== caller.uid && !rows.has(d.id) && !userHits.has(d.id)) userHits.set(d.id, match);
       }
     }
-    if (userHits.size) {
-      const owned = await safe(db.collection("usernames").where("uid", "in", [...userHits.keys()].slice(0, 30)).get());
-      for (const d of owned?.docs || []) {
-        const n = d.data();
-        const current = rows.get(n.uid);
-        if (n.deleted || (current && !n.isDefault)) continue;
-        rows.set(n.uid, { uid: n.uid, username: n.username || d.id, usernameLower: d.id, match: userHits.get(n.uid) });
-      }
-    }
 
-    const ranked = [...rows.values()]
-      .sort((a, b) => MATCH_RANK[a.match] - MATCH_RANK[b.match] || a.usernameLower.length - b.usernameLower.length)
-      .slice(0, LIMIT);
+    // Second round, in parallel: chat usernames for players matched by profile,
+    // and profiles for players matched by chat username.
+    const missing = [...rows.keys()].filter((uid) => !profiles.has(uid));
+    const [owned, fetched] = await Promise.all([
+      userHits.size ? safe(db.collection("usernames").where("uid", "in", [...userHits.keys()].slice(0, 30)).get()) : null,
+      missing.length ? db.getAll(...missing.map((uid) => users.doc(uid))) : [],
+    ]);
+    for (const s of fetched) if (s.exists) profiles.set(s.id, s.data());
+    for (const d of owned?.docs || []) {
+      const n = d.data();
+      const current = rows.get(n.uid);
+      if (n.deleted || (current && !n.isDefault)) continue;
+      rows.set(n.uid, { uid: n.uid, username: n.username || d.id, usernameLower: d.id, match: userHits.get(n.uid) });
+    }
 
     // Public profile fields only — any signed-in player can search, so never
     // return email, phone, dob, PIN, OTP or balances from the user document.
-    const profiles = ranked.length ? await db.getAll(...ranked.map((r) => users.doc(r.uid))) : [];
-    const items = ranked
-      .map((r, i) => {
-        const u = profiles[i]?.exists ? profiles[i].data() : {};
-        if (u.deleted || u.deletionRequested) return null;
-        return { id: r.usernameLower, ...r, fullName: u.fullName || "", country: u.country || "" };
+    const items = [...rows.values()]
+      .filter((r) => {
+        const u = profiles.get(r.uid) || {};
+        return !u.deleted && !u.deletionRequested;
       })
-      .filter(Boolean);
+      .sort((a, b) => MATCH_RANK[a.match] - MATCH_RANK[b.match] || a.usernameLower.length - b.usernameLower.length)
+      .slice(0, LIMIT)
+      .map((r) => {
+        const u = profiles.get(r.uid) || {};
+        return { id: r.usernameLower, ...r, fullName: u.fullName || "", country: u.country || "" };
+      });
     return NextResponse.json({ items });
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });

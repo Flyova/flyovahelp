@@ -5,6 +5,7 @@ import { db, auth } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
 import { containsMediaMarker } from "@/lib/chat";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
+import { Check, Loader2, SendHorizontal } from "lucide-react";
 import MessageBubble, { ComposerBanner, startsRun } from "@/components/chat/MessageBubble";
 
 const MAX_LENGTH = 500;
@@ -101,20 +102,21 @@ export default function ChatRoom({ uid, active, blocked = [], onMessagePrivately
   };
 
   return (
-    <div className="bg-[#142036] rounded-2xl p-4 border border-white/5 flex flex-col min-h-[60vh] lg:min-h-[calc(100vh-11rem)]">
-      <div className="flex items-center justify-between mb-3">
-        <div>
+    // Sized to the visible screen (minus header, tabs, identity bar and the phone bottom nav) so the composer never hides.
+    <div className="bg-[#142036] rounded-2xl border border-white/5 flex flex-col h-[calc(100dvh-22rem)] min-h-[340px] md:h-[calc(100dvh-19.5rem)] lg:h-[calc(100vh-14.5rem)] lg:min-h-[520px]">
+      <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-white/5">
+        <div className="min-w-0">
           <p className="text-[10px] font-black uppercase text-white/40 flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-red-500 sw-live" /> Chatroom · everyone
           </p>
-          <p className="text-[11px] text-white/50 mt-0.5">Be kind. Hover a message (or tap ⋯) for reply, edit and more.</p>
+          <p className="text-[11px] text-white/50 mt-0.5">Be kind. Tap ⋯ on a message to reply, edit and more.</p>
         </div>
-        <span className="text-[10px] font-black uppercase text-white/40">{active ? `Posting as @${active}` : "No username yet"}</span>
+        <span className="hidden sm:block shrink-0 text-[10px] font-black uppercase text-white/40 text-right">{active ? `Posting as @${active}` : "No username yet"}</span>
       </div>
 
-      {error && <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-bold p-2.5 rounded-xl mb-2">{error}</div>}
+      {error && <div className="mx-3 mt-3 bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-bold p-2.5 rounded-xl">{error}</div>}
 
-      <div ref={listRef} className="flex-1 overflow-y-auto max-h-[55vh] lg:max-h-[calc(100vh-19rem)] px-1 md:px-10 pb-2 mb-2">
+      <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto px-3 md:px-8 py-3">
         {!loaded && <p className="text-xs text-white/40">Loading chatroom…</p>}
         {loaded && !visible.length && <p className="text-xs text-white/40">No messages yet — say hello to everyone!</p>}
         {visible.map((m, i) => {
@@ -136,6 +138,7 @@ export default function ChatRoom({ uid, active, blocked = [], onMessagePrivately
         })}
       </div>
 
+      <div className="p-3 border-t border-white/5">
       <ComposerBanner mode={editing ? "edit" : replyTo ? "reply" : null} message={editing ?? replyTo} onCancel={cancelMode} />
       <div className="flex gap-2 items-end">
         <textarea
@@ -153,17 +156,20 @@ export default function ChatRoom({ uid, active, blocked = [], onMessagePrivately
           rows={1}
           placeholder={active ? "Message everyone…" : "Claim a username to post"}
           disabled={!active}
-          className="flex-1 resize-none bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none disabled:opacity-50"
+          className="flex-1 min-w-0 resize-none bg-black/40 border border-white/10 focus:border-[#8B1E3F] rounded-xl px-3.5 py-2.5 text-sm outline-none disabled:opacity-50"
         />
         <button
+          type="button"
           onClick={send}
           disabled={!active || sending || !text.trim()}
-          className="bg-[#8B1E3F] px-5 py-2.5 rounded-xl text-xs font-black uppercase disabled:opacity-50"
+          aria-label={editing ? "Save edit" : "Send message"}
+          className="shrink-0 w-11 h-[42px] rounded-xl bg-[#8B1E3F] flex items-center justify-center disabled:opacity-40 transition-opacity"
         >
-          {sending ? "…" : editing ? "Save" : "Send"}
+          {sending ? <Loader2 size={18} className="animate-spin" /> : editing ? <Check size={18} /> : <SendHorizontal size={18} />}
         </button>
       </div>
-      <p className="text-[10px] text-white/30 mt-1 text-right">{text.length}/{MAX_LENGTH}</p>
+      {text.length > MAX_LENGTH * 0.8 && <p className="text-[10px] text-white/35 mt-1 text-right">{text.length}/{MAX_LENGTH}</p>}
+      </div>
     </div>
   );
 }
