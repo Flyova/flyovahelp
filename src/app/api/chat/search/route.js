@@ -25,7 +25,7 @@ export async function GET(req) {
     const prefix = (ref, field, value, n) => ref.where(field, ">=", value).where(field, "<=", value + END).limit(n).get();
     const variants = [...new Set([raw, q, titleCase(raw), raw.toUpperCase()])];
     const digits = raw.replace(/\D/g, "");
-    const looksLikePhone = /^\+?[\d\s()-]{4,}$/.test(raw);
+    const looksLikePhone = /^\+?[\d\s()-]+$/.test(raw) && digits.length >= 3; // "+234" is enough
     // A failing query (e.g. a missing index) shouldn't sink the others.
     const safe = (p) => p.catch(() => null);
 
