@@ -32,3 +32,28 @@ export async function ownedUsername(db, uid, username) {
   const data = snap.data();
   return data.uid === uid && !data.deleted ? { lower, ...data } : null;
 }
+
+// Groups belong to one player: `owner` (older groups only have `createdBy`).
+// The owner and the usernames in `admins` run the group.
+export const MAX_GROUP_MEMBERS = 100;
+export const GROUP_NAME_MAX = 60;
+export const GROUP_DESCRIPTION_MAX = 200;
+export const groupOwner = (convo) => convo?.owner || convo?.createdBy || "";
+export const isGroupAdmin = (convo, name) =>
+  !!name && (groupOwner(convo) === name || (convo?.admins || []).includes(name));
+
+// What a group search is matched on: lowercase, single spaces, at most 40 characters.
+export const groupSearchTerm = (q) => String(q || "").toLowerCase().replace(/\s+/g, " ").trim().slice(0, 40);
+
+// Every prefix of each word in a public group's name, plus of the whole name (for
+// multi-word searches), so one indexed array-contains query finds it.
+export function groupSearchKeys(name) {
+  const whole = groupSearchTerm(name);
+  const keys = new Set();
+  const addPrefixes = (s) => {
+    for (let i = 1; i <= s.length; i++) keys.add(s.slice(0, i));
+  };
+  whole.split(/[^\p{L}\p{N}]+/u).filter(Boolean).forEach(addPrefixes);
+  addPrefixes(whole);
+  return [...keys];
+}

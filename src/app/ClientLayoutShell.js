@@ -25,7 +25,8 @@ export default function ClientLayoutShell({ children }) {
     pathname.startsWith("/admin");
 
   const sidebarNavPaths = ["/dashboard", "/chat", "/history", "/deposit", "/settings", "/support", "/faq", "/about"];
-  const showDesktopBack = !isAuthPage && !sidebarNavPaths.includes(pathname);
+  // The Chats pages (/chat/room, /chat/private, /chat/groups) are top-level too.
+  const showDesktopBack = !isAuthPage && !sidebarNavPaths.includes(pathname) && !pathname.startsWith("/chat/");
 
   return (
     <>

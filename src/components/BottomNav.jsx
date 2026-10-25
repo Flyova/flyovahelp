@@ -86,7 +86,7 @@ export default function BottomNav() {
       <nav className="fixed bottom-0 left-0 right-0 h-16 bg-[#0B1220] border-t border-[#F5F3EE]/10 flex items-center justify-around z-[100] px-2 md:hidden">
         {primaryNavs.map((nav) => {
           const Icon = nav.icon;
-          const isActive = pathname === nav.path;
+          const isActive = pathname === nav.path || (nav.path === "/chat" && pathname.startsWith("/chat/"));
           return (
             <Link
               key={nav.name}

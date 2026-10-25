@@ -1,6 +1,5 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
 import { ChevronDown, Settings2, Trash2 } from "lucide-react";
 import Avatar from "@/components/Avatar";
 
@@ -80,9 +79,6 @@ export default function IdentityBar({ identities, active, onSelect, onCreate, on
               </button>
             </div>
             {error && <p className="text-xs text-red-300 mt-1.5">{error}</p>}
-            <p className="text-[10px] leading-relaxed text-white/40 mt-1.5">
-              Your first extra username is free, then $1 each from your wallet (accounts 8+ months old get 100 free, agents 5).
-            </p>
           </div>
 
           {identities.some((i) => !i.isDefault) && (
@@ -104,11 +100,6 @@ export default function IdentityBar({ identities, active, onSelect, onCreate, on
               ))}
             </div>
           )}
-
-          <p className="text-[10px] leading-relaxed text-white/35">
-            To chat as another account&apos;s username, log in to that account first.{" "}
-            <Link href="/settings#chat-profile" className="font-black uppercase text-[#E0708C] hover:underline">Bio, status &amp; devices →</Link>
-          </p>
         </div>
       )}
     </div>

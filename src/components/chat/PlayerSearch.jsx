@@ -27,9 +27,14 @@ function Handle({ username, query }) {
 /**
  * Player search with live suggestions: results appear under the box as you type
  * (username, name, phone, country or referrer). Click a suggestion — or use the
- * arrow keys and Enter — to open a private chat with that player.
+ * arrow keys and Enter — to pick that player (open a chat, add them to a group…).
  */
-export default function PlayerSearch({ onPick }) {
+export default function PlayerSearch({
+  onPick,
+  label = "Find a player · username, name, phone, country",
+  placeholder = "Start typing… e.g. john, +44…",
+  className = "",
+}) {
   const [q, setQ] = useState("");
   // Results are tagged with the search they answer, so a slow reply for "adm"
   // never shows under "admin".
@@ -85,8 +90,8 @@ export default function PlayerSearch({ onPick }) {
   const showList = status === "done" || status === "loading";
 
   return (
-    <div className="bg-[#142036] rounded-2xl p-4 border border-white/5">
-      <p className="text-[10px] font-black uppercase text-white/40 mb-2">Find a player · username, name, phone, country</p>
+    <div className={`bg-[#142036] rounded-2xl p-4 border border-white/5 ${className}`}>
+      <p className="text-[10px] font-black uppercase text-white/40 mb-2">{label}</p>
       <div className="relative">
         <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/35 pointer-events-none" />
         <input
@@ -100,7 +105,7 @@ export default function PlayerSearch({ onPick }) {
           aria-activedescendant={showList && items[activeIndex] ? `player-${items[activeIndex].usernameLower}` : undefined}
           autoComplete="off"
           spellCheck={false}
-          placeholder="Start typing… e.g. john, +44…"
+          placeholder={placeholder}
           className="w-full bg-black/40 border border-white/10 focus:border-[#8B1E3F] rounded-xl pl-9 pr-9 py-2.5 text-sm outline-none transition-colors"
         />
         {q && (

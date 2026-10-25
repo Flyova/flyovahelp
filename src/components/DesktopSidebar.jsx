@@ -39,7 +39,7 @@ export default function DesktopSidebar({ collapsed, onToggle }) {
     >
       <nav className="p-3 space-y-2 flex-1">
         {navs.map((nav) => {
-          const isActive = nav.path === "/blog" ? pathname === "/blog" || pathname.startsWith("/blog/") : pathname === nav.path;
+          const isActive = nav.path === "/blog" || nav.path === "/chat" ? pathname === nav.path || pathname.startsWith(`${nav.path}/`) : pathname === nav.path;
           const Icon = nav.icon;
           return (
             <Link

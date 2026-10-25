@@ -22,11 +22,14 @@ import {
   Globe,
   Fingerprint,
   X,
-  Clock
+  Clock,
+  ShieldAlert,
+  TriangleAlert
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Avatar from "@/components/Avatar";
 import ChatProfileCard from "@/components/settings/ChatProfileCard";
+import { FREE_USERNAMES_AGENT, FREE_USERNAMES_OLD_ACCOUNT, OLD_ACCOUNT_MONTHS, USERNAME_PRICE } from "@/lib/chat";
 
 export default function Settings() {
   const router = useRouter();
@@ -364,6 +367,25 @@ export default function Settings() {
               {passLoading ? "Processing..." : "Save New Password"}
             </button>
           </form>
+        </div>
+
+        <div id="privacy-policy" className="bg-[#142036] rounded-[2rem] p-6 border border-white/5 shadow-xl scroll-mt-6">
+          <div className="flex items-center space-x-2 mb-4">
+            <ShieldAlert size={18} className="text-[#8B1E3F]" />
+            <h3 className="font-black italic uppercase text-sm">Privacy &amp; Policy</h3>
+          </div>
+          <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl">
+            <p className="flex items-center gap-2 text-[11px] font-black uppercase italic text-amber-500 mb-2">
+              <TriangleAlert size={14} className="shrink-0" /> Buying chat usernames
+            </p>
+            <ul className="list-disc pl-4 space-y-1.5 text-[11px] font-bold leading-relaxed text-white/70 marker:text-amber-500/70">
+              <li>You can create or change a username on your account only once for free.</li>
+              <li>Any other username on your account costs ${USERNAME_PRICE}, paid from your wallet.</li>
+              <li>Accounts older than {OLD_ACCOUNT_MONTHS} months can create up to {FREE_USERNAMES_OLD_ACCOUNT} usernames for free.</li>
+              <li>Agents can create up to {FREE_USERNAMES_AGENT} usernames for free.</li>
+              <li>A username belongs to the account that created it. To chat as another account&apos;s username, log in to that account.</li>
+            </ul>
+          </div>
         </div>
 
         <div className="pt-4 space-y-3">
