@@ -29,7 +29,7 @@ import {
 import { useRouter } from "next/navigation";
 import Avatar from "@/components/Avatar";
 import ChatProfileCard from "@/components/settings/ChatProfileCard";
-import ReadReceiptsSetting from "@/components/settings/ReadReceiptsSetting";
+import { ReadReceiptsSetting, ShowCoinsSetting } from "@/components/settings/ChatPrivacySwitch";
 import { FREE_USERNAMES_AGENT, FREE_USERNAMES_OLD_ACCOUNT, OLD_ACCOUNT_MONTHS, USERNAME_PRICE } from "@/lib/chat";
 
 export default function Settings() {
@@ -376,6 +376,7 @@ export default function Settings() {
             <h3 className="font-black italic uppercase text-sm">Privacy &amp; Policy</h3>
           </div>
           <ReadReceiptsSetting uid={user?.uid} />
+          <ShowCoinsSetting uid={user?.uid} />
           <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl">
             <p className="flex items-center gap-2 text-[11px] font-black uppercase italic text-amber-500 mb-2">
               <TriangleAlert size={14} className="shrink-0" /> Buying chat usernames

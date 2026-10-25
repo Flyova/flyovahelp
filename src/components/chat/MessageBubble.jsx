@@ -1,12 +1,15 @@
 "use client";
 import { useRef, useState } from "react";
-import { Ban, Clock3, CornerUpLeft, MoreHorizontal, Pencil } from "lucide-react";
+import { Ban, Clock3, Coins, CornerUpLeft, MoreHorizontal, Pencil } from "lucide-react";
 import Avatar from "@/components/Avatar";
+import { formatCoins } from "@/lib/chat";
 
 const DELETED_TEXT = "— message deleted —";
 const SWIPE_REPLY = 56; // px to the left before letting go starts a reply
 
 export const isDeleted = (m) => !!m.deletedForEveryone || m.text === DELETED_TEXT;
+/** A "sent N coins to @x" card (posted by the server when coins are sent in the Chatroom or a group). */
+export const isCoinCard = (m) => m.kind === "coins" && !isDeleted(m);
 export const messageMillis = (m) => m.createdAt?.toMillis?.() ?? m.createdAtMs ?? 0;
 
 export const messageTime = (m) => {
@@ -111,12 +114,15 @@ export default function MessageBubble({
     if (lastPointer.current !== "mouse" || e.detail === 0) openMenu(e.clientX, e.clientY);
   };
 
-  const bg = deleted ? null : mine ? "#6E1732" : "#1E2D4A";
+  const coinCard = isCoinCard(m);
+  const bg = deleted ? null : coinCard ? "#D18E1F" : mine ? "#6E1732" : "#1E2D4A";
   const bubble = deleted
     ? "bg-black/20 border border-dashed border-white/15 text-white/45"
-    : mine
-      ? "bg-gradient-to-br from-[#A0284D] to-[#6E1732] text-white"
-      : "bg-[#1E2D4A] text-[#F5F3EE]";
+    : coinCard
+      ? "bg-gradient-to-br from-[#F6C453] to-[#D18E1F] text-[#2B1800] shadow-[0_6px_24px_-8px_rgba(246,196,83,0.6)]"
+      : mine
+        ? "bg-gradient-to-br from-[#A0284D] to-[#6E1732] text-white"
+        : "bg-[#1E2D4A] text-[#F5F3EE]";
   const r = "rounded-[18px]";
   const corners = mine
     ? `${!first ? "rounded-tr-[6px]" : ""} ${last ? "rounded-br-none" : "rounded-br-[6px]"}`
@@ -177,7 +183,7 @@ export default function MessageBubble({
           {last && !deleted && <Tail mine={mine} color={bg} />}
 
           {showName && first && !mine && (
-            <button type="button" data-no-menu onClick={() => onOpenProfile?.(m.sender)} className="block max-w-full truncate text-[12.5px] font-bold text-[#E0708C] hover:underline mb-0.5">
+            <button type="button" data-no-menu onClick={() => onOpenProfile?.(m.sender)} className={`block max-w-full truncate text-[12.5px] font-bold hover:underline mb-0.5 ${coinCard ? "text-[#5A3500]" : "text-[#E0708C]"}`}>
               @{String(m.senderName || m.sender).replace(/^@/, "")}
             </button>
           )}
@@ -198,6 +204,14 @@ export default function MessageBubble({
             <p className="flex items-center gap-1.5 text-[13.5px] italic pr-12">
               <Ban size={13} /> Message deleted
             </p>
+          ) : coinCard ? (
+            <div className="flex items-center gap-2.5 pr-14 py-1">
+              <span className="w-9 h-9 shrink-0 rounded-full bg-white/35 flex items-center justify-center"><Coins size={19} /></span>
+              <span className="min-w-0">
+                <span className="block text-[15px] font-black leading-tight">{formatCoins(m.coins)} coin{m.coins === 1 ? "" : "s"}</span>
+                <span className="block text-[12.5px] font-semibold leading-tight truncate">to @{m.to}</span>
+              </span>
+            </div>
           ) : (
             <p className="text-[14.5px] leading-[1.38] whitespace-pre-wrap break-words">
               {m.text}
@@ -205,7 +219,7 @@ export default function MessageBubble({
             </p>
           )}
 
-          <span className={`absolute right-2.5 bottom-1 flex items-center gap-0.5 text-[11px] leading-none select-none ${mine && !deleted ? "text-white/65" : "text-white/40"}`}>
+          <span className={`absolute right-2.5 bottom-1 flex items-center gap-0.5 text-[11px] leading-none select-none ${coinCard ? "text-[#2B1800]/60" : mine && !deleted ? "text-white/65" : "text-white/40"}`}>
             {edited && <span className="mr-1">edited</span>}
             {time}
             {mine && !deleted && m.pending && <Clock3 size={12} className="ml-0.5" aria-label="Sending" />}

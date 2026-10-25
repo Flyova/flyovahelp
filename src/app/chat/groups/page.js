@@ -22,7 +22,7 @@ export default function GroupsPage() {
   const {
     identities, active, setActive, createUsername, deleteUsername,
     convos, convosLoading, myNameIn, openIds, setOpenId, setErr, typingIn, unread,
-    messagePrivately, openProfile, reportUser,
+    messagePrivately, openProfile, reportUser, sendCoins,
   } = useChat();
   const [creating, setCreating] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -138,7 +138,8 @@ export default function GroupsPage() {
             onModerate={isGroupAdmin(open, me) ? removeMessage : undefined}
             onMessagePrivately={messagePrivately}
             onReport={(m) => reportUser(m.sender)}
-            onOpenProfile={openProfile}
+            onOpenProfile={(u) => openProfile(u, { convoId: openId })}
+            onSendCoins={(u) => sendCoins(u, { convoId: openId })}
           />
         ) : (
           <ThreadPlaceholder icon={Users} title="Select a group" text="Open one of your groups, search for a public group to join, or create your own." />
@@ -154,7 +155,7 @@ export default function GroupsPage() {
           onClose={() => setInfoOpen(false)}
           onOpenProfile={(p) => {
             setInfoOpen(false);
-            openProfile(p);
+            openProfile(p, { convoId: openId });
           }}
           onLeave={leaveGroup}
         />

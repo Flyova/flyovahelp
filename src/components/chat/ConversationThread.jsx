@@ -28,7 +28,7 @@ const lastWhere = (list, test) => {
  *
  * `me` is the username you're in this chat as. `header` = { avatar, title,
  * subtitle, label, onClick }. `menuItems` fill the ⋯ menu. A group admin passes
- * `onModerate` to remove other people's messages.
+ * `onModerate` to remove other people's messages; groups pass `onSendCoins`.
  *
  * While it's open and on screen it records how far you've read (privately for
  * unread counts, and on the conversation for read receipts if you share them)
@@ -48,6 +48,7 @@ export default function ConversationThread({
   onMessagePrivately,
   onReport,
   onOpenProfile,
+  onSendCoins,
 }) {
   const [msgs, setMsgs] = useState([]);
   const [loaded, setLoaded] = useState(false);
@@ -275,6 +276,7 @@ export default function ConversationThread({
         onMessagePrivately={onMessagePrivately}
         onReport={onReport}
         onOpenProfile={onOpenProfile}
+        onSendCoins={onSendCoins}
         seenBy={seenBy}
         sentId={sentId}
         typing={lost ? [] : typers}

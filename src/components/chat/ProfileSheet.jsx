@@ -2,16 +2,19 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { Ban, CalendarDays, Flag, Loader2, MapPin, MessageCircle, X } from "lucide-react";
+import { Ban, CalendarDays, Coins, Flag, Loader2, MapPin, MessageCircle, X } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import { authFetch } from "@/lib/authFetch";
+import { formatCoins } from "@/lib/chat";
 
 /**
  * A player's chat profile, opened by tapping their avatar or name: big avatar,
- * name, status, bio, country and join date, with Send message / Block / Report.
- * A centred card on desktop, a bottom sheet on phones. Key it by username.
+ * name, status, bio, country, join date and (if they show them off) their coins,
+ * with Send message / Send coins / Block / Report. `onSendCoins` only where coins
+ * can be sent (Chatroom and groups). A centred card on desktop, a bottom sheet on
+ * phones. Key it by username.
  */
-export default function ProfileSheet({ username, onClose, onMessage, onBlock, onReport }) {
+export default function ProfileSheet({ username, onClose, onMessage, onSendCoins, onBlock, onReport }) {
   const [profile, setProfile] = useState(null);
   const [error, setError] = useState("");
 
@@ -55,6 +58,11 @@ export default function ProfileSheet({ username, onClose, onMessage, onBlock, on
           </div>
           <h2 className="mt-3 text-xl font-black leading-tight break-all">@{profile?.username || username}</h2>
           {name && <p className="text-sm text-white/60 mt-0.5">{name}</p>}
+          {profile?.coins != null && (
+            <span className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-br from-[#F6C453] to-[#D18E1F] text-[#2B1800] text-xs font-black">
+              <Coins size={13} /> {formatCoins(profile.coins)} coins
+            </span>
+          )}
           {profile?.status && (
             <span className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.06] text-xs text-white/80">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> {profile.status}
@@ -86,6 +94,11 @@ export default function ProfileSheet({ username, onClose, onMessage, onBlock, on
                   {onMessage && (
                     <button type="button" onClick={act(onMessage)} className="mt-5 w-full h-11 rounded-xl bg-gradient-to-br from-[#A0284D] to-[#6E1732] flex items-center justify-center gap-2 text-sm font-black uppercase shadow-[0_8px_24px_-8px_rgba(139,30,63,0.9)]">
                       <MessageCircle size={17} /> Send message
+                    </button>
+                  )}
+                  {onSendCoins && (
+                    <button type="button" onClick={act(onSendCoins)} className="mt-2 w-full h-11 rounded-xl bg-gradient-to-br from-[#F6C453] to-[#D18E1F] text-[#2B1800] flex items-center justify-center gap-2 text-sm font-black uppercase">
+                      <Coins size={17} /> Send coins
                     </button>
                   )}
                   {(onBlock || onReport) && (

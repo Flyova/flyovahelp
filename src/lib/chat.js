@@ -73,3 +73,35 @@ export function typingLabel(names, isGroup) {
   if (names.length === 2) return `@${names[0]} and @${names[1]} are typing…`;
   return `${names.length} people are typing…`;
 }
+
+// Chat coins: one coin is worth $0.10. Buying adds a 7% fee on top; withdrawing coins
+// back to the main wallet keeps 12%; sending coins to another player is free.
+// Money is worked out in whole cents.
+export const COIN_CENTS = 10;
+export const COIN_BUY_FEE = 0.07;
+export const COIN_WITHDRAW_FEE = 0.12;
+export const MAX_COINS_PER_ACTION = 100000; // $10,000 worth
+export const isCoinAmount = (n) => Number.isInteger(n) && n >= 1 && n <= MAX_COINS_PER_ACTION;
+/** Buying `coins`: { value, fee, total } in cents (total is what the main wallet pays). */
+export function coinBuyQuote(coins) {
+  const value = coins * COIN_CENTS;
+  const fee = Math.round(value * COIN_BUY_FEE);
+  return { value, fee, total: value + fee };
+}
+/** Withdrawing `coins`: { value, fee, payout } in cents (payout goes to the main wallet). */
+export function coinWithdrawQuote(coins) {
+  const value = coins * COIN_CENTS;
+  const fee = Math.round(value * COIN_WITHDRAW_FEE);
+  return { value, fee, payout: value - fee };
+}
+export const formatCents = (cents) => `$${(cents / 100).toFixed(2)}`;
+export const formatCoins = (n) => Number(n || 0).toLocaleString("en-US");
+
+// Server helper: the usernames/{lower} doc for a live (not deleted) username, else null.
+export async function liveUsername(db, username) {
+  const lower = norm(String(username || "").replace(/^@/, ""));
+  if (!isValidUsername(lower)) return null;
+  const snap = await db.collection("usernames").doc(lower).get();
+  if (!snap.exists || snap.data().deleted || !snap.data().uid) return null;
+  return { lower, ...snap.data() };
+}

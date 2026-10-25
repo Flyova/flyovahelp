@@ -113,6 +113,7 @@
             && request.resource.data.text == '— message deleted —'
           ) || (
             resource.data.deletedForEveryone == false
+            && resource.data.get('kind', '') != 'coins' // coin cards can't be edited
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt'])
             && request.resource.data.text is string
             && request.resource.data.text.size() > 0
@@ -136,6 +137,17 @@
     // your read-receipts setting. Only you can see or change it.
     match /chat_state/{uid} {
       allow read, write: if chatSignedIn() && request.auth.uid == uid;
+    }
+
+    // Chat coins: balance and history, changed only by the server (/api/chat/coins).
+    match /coin_wallets/{uid} {
+      allow read: if chatSignedIn() && request.auth.uid == uid;
+      allow write: if false;
+
+      match /activity/{entryId} {
+        allow read: if chatSignedIn() && request.auth.uid == uid;
+        allow write: if false;
+      }
     }
 
     match /chat_reports/{reportId} {

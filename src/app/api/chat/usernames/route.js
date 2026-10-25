@@ -77,8 +77,9 @@ export async function POST(req) {
           freeUsernameUsed: true,
         });
         tx.set(db.collection("users").doc(uid).collection("transactions").doc(), {
-          type: "username_purchase", amount: -charge, username: lower,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(), note: `Username @${username}`,
+          type: "username_purchase", category: "finance", status: "completed", amount: -charge, username: lower,
+          title: `Bought chat username @${lower}`, note: `Username @${username}`,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(), timestamp: admin.firestore.FieldValue.serverTimestamp(),
         });
       } else {
         tx.update(userRef, { freeUsernameUsed: true });

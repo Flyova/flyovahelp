@@ -10,6 +10,7 @@ import { auth, db } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
 import { READS_SINCE_MS, TYPING_SHOW_MS, norm } from "@/lib/chat";
 import ProfileSheet from "@/components/chat/ProfileSheet";
+import { CoinWalletSheet, SendCoinsSheet } from "@/components/chat/CoinSheets";
 
 const ChatContext = createContext(null);
 
@@ -77,7 +78,11 @@ export function ChatProvider({ children }) {
   const [convosLoaded, setConvosLoaded] = useState(false);
   const [blockedNames, setBlockedNames] = useState([]);
   const [openIds, setOpenIds] = useState({ private: null, groups: null }); // open chat per page
-  const [profileOf, setProfileOf] = useState(null); // username whose profile popup is open
+  // Profile popup: { username, coinsIn } — coinsIn is where coins can be sent from it
+  // ({} = the Chatroom, { convoId } = a group, null = nowhere, e.g. private chats).
+  const [profileOf, setProfileOf] = useState(null);
+  const [coins, setCoins] = useState(0); // your chat coin balance
+  const [coinSheet, setCoinSheet] = useState(null); // { kind: "wallet" } | { kind: "send", to, convoId }
   const [err, setErr] = useState("");
   const [chatState, setChatState] = useState({ reads: {}, readReceipts: true });
   const [typingIn, setTypingIn] = useState({}); // conversation id -> usernames typing there
@@ -154,6 +159,12 @@ export function ChatProvider({ children }) {
     }), 1000);
     return () => clearInterval(t);
   }, [anyoneTyping, identities]);
+
+  // Your coin balance (written only by /api/chat/coins).
+  useEffect(() => {
+    if (!uid) return;
+    return onSnapshot(doc(db, "coin_wallets", uid), (s) => setCoins(Math.max(0, Number(s.data()?.balance) || 0)), () => {});
+  }, [uid]);
 
   // Your private read positions (for unread counts) and read-receipts setting.
   useEffect(() => {
@@ -265,6 +276,11 @@ export function ChatProvider({ children }) {
   }, [active]);
 
   const closeProfile = useCallback(() => setProfileOf(null), []);
+  const openProfile = useCallback((username, coinsIn = null) => setProfileOf({ username: norm(username), coinsIn }), []);
+  const openCoinWallet = useCallback(() => setCoinSheet({ kind: "wallet" }), []);
+  // Send coins to `to` in the Chatroom (where = {}) or a group (where = { convoId }).
+  const sendCoins = useCallback((to, where = {}) => setCoinSheet({ kind: "send", to: norm(to), convoId: where.convoId || null }), []);
+  const closeCoins = useCallback(() => setCoinSheet(null), []);
   // Without a username there are no conversations to wait for.
   const convosLoading = !identitiesLoaded || (identities.length > 0 && !convosLoaded);
 
@@ -273,20 +289,34 @@ export function ChatProvider({ children }) {
     convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState,
     openIds, setOpenId,
     err, setErr,
-    openProfile: setProfileOf, messagePrivately, blockUser, reportUser,
-  }), [uid, identities, active, createUsername, deleteUsername, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, messagePrivately, blockUser, reportUser]);
+    openProfile, messagePrivately, blockUser, reportUser,
+    coins, openCoinWallet, sendCoins,
+  }), [uid, identities, active, createUsername, deleteUsername, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, openProfile, messagePrivately, blockUser, reportUser, coins, openCoinWallet, sendCoins]);
 
   return (
     <ChatContext.Provider value={value}>
       {children}
       {profileOf && (
         <ProfileSheet
-          key={profileOf}
-          username={profileOf}
+          key={profileOf.username}
+          username={profileOf.username}
           onClose={closeProfile}
           onMessage={messagePrivately}
+          onSendCoins={profileOf.coinsIn ? (u) => sendCoins(u, profileOf.coinsIn) : undefined}
           onBlock={blockUser}
           onReport={reportUser}
+        />
+      )}
+      {coinSheet?.kind === "wallet" && <CoinWalletSheet uid={uid} coins={coins} onClose={closeCoins} />}
+      {coinSheet?.kind === "send" && (
+        <SendCoinsSheet
+          key={coinSheet.to}
+          to={coinSheet.to}
+          convoId={coinSheet.convoId}
+          as={coinSheet.convoId ? myNameIn(convos.find((c) => c.id === coinSheet.convoId)) : active}
+          coins={coins}
+          onClose={closeCoins}
+          onTopUp={openCoinWallet}
         />
       )}
     </ChatContext.Provider>

@@ -16,7 +16,7 @@ const FRESH_MS = 800; // messages that arrived this recently animate in
  * Firestore; sending, editing and deleting go through /api/chat/room (rate limits,
  * bans). Tap (or right-click) a message for its menu, swipe left to reply.
  */
-export default function ChatRoom({ uid, active, blocked = [], onMessagePrivately, onReport, onOpenProfile }) {
+export default function ChatRoom({ uid, active, blocked = [], onMessagePrivately, onReport, onOpenProfile, onSendCoins }) {
   const [messages, setMessages] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [text, setText] = useState("");
@@ -132,6 +132,7 @@ export default function ChatRoom({ uid, active, blocked = [], onMessagePrivately
         onMessagePrivately={onMessagePrivately}
         onReport={onReport}
         onOpenProfile={onOpenProfile}
+        onSendCoins={onSendCoins}
       />
 
       <ChatComposer

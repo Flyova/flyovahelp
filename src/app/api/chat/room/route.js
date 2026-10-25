@@ -87,6 +87,7 @@ async function edit(db, caller, { id, text }) {
   if (!snap.exists) return fail("Message not found.", 404);
   if (snap.data().senderUid !== caller.uid) return fail("You can only edit your own messages.", 403);
   if (snap.data().deletedForEveryone) return fail("Deleted messages can't be edited.", 400);
+  if (snap.data().kind === "coins") return fail("Coin messages can't be edited.", 400);
   await ref.update({ text: body, editedAt: admin.firestore.FieldValue.serverTimestamp() });
   return NextResponse.json({ ok: true });
 }

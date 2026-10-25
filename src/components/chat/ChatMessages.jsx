@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown, Copy, CornerUpLeft, Flag, MessageCircle, Pencil, Trash2, UserRound } from "lucide-react";
-import MessageBubble, { SeenBy, TypingBubble, isDeleted, messageMillis, startsRun } from "@/components/chat/MessageBubble";
+import { ChevronDown, Coins, Copy, CornerUpLeft, Flag, MessageCircle, Pencil, Trash2, UserRound } from "lucide-react";
+import MessageBubble, { SeenBy, TypingBubble, isCoinCard, isDeleted, messageMillis, startsRun } from "@/components/chat/MessageBubble";
 import MessageMenu from "@/components/chat/MessageMenu";
 
 const NEAR_BOTTOM = 120; // px from the bottom that still counts as "reading the latest"
@@ -45,7 +45,8 @@ function byDay(messages) {
  * while its write hasn't reached the server. Handlers left out hide their menu item.
  * `seenBy` (message id -> usernames) puts read-receipt avatars under messages,
  * `sentId` marks your latest message "Sent", and `typing` (usernames) shows a
- * typing bubble at the bottom.
+ * typing bubble at the bottom. `onSendCoins(username)` adds "Send coins" to other
+ * people's messages (Chatroom and groups only).
  */
 export default function ChatMessages({
   messages,
@@ -62,6 +63,7 @@ export default function ChatMessages({
   onReport,
   onMessagePrivately,
   onOpenProfile,
+  onSendCoins,
   seenBy = {},
   sentId = null,
   typing = [],
@@ -120,8 +122,9 @@ export default function ChatMessages({
     return [
       onReply && { label: "Reply", icon: CornerUpLeft, run: () => onReply(m) },
       { label: "Copy text", icon: Copy, run: () => navigator.clipboard?.writeText(m.text).catch(() => {}) },
-      mine && onEdit && { label: "Edit", icon: Pencil, run: () => onEdit(m) },
+      mine && onEdit && !isCoinCard(m) && { label: "Edit", icon: Pencil, run: () => onEdit(m) },
       !mine && onOpenProfile && { label: "View profile", icon: UserRound, run: () => onOpenProfile(m.sender) },
+      !mine && onSendCoins && { label: "Send coins", icon: Coins, run: () => onSendCoins(m.sender) },
       !mine && onMessagePrivately && { label: "Message privately", icon: MessageCircle, run: () => onMessagePrivately(m.sender) },
       onDelete && canDelete(m) && { label: deleteLabel(m), icon: Trash2, danger: true, run: () => onDelete(m) },
       !mine && onReport && { label: "Report", icon: Flag, danger: true, run: () => onReport(m) },

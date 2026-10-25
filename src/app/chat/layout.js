@@ -2,7 +2,8 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { X } from "lucide-react";
+import { Coins, X } from "lucide-react";
+import { formatCoins } from "@/lib/chat";
 import { CHAT_SECTIONS, ChatProvider, LAST_SECTION_KEY, useChat } from "@/components/chat/ChatProvider";
 import MobileNavMenu from "@/components/MobileNavMenu";
 
@@ -21,7 +22,7 @@ export default function ChatLayout({ children }) {
 
 function ChatShell({ children }) {
   const pathname = usePathname();
-  const { openIds, err, setErr, convos, unread } = useChat();
+  const { openIds, err, setErr, convos, unread, coins, openCoinWallet } = useChat();
   const section = pathname.split("/")[2] || "";
   // Chats with unread messages, badged on their tab.
   const unreadChats = {
@@ -49,7 +50,18 @@ function ChatShell({ children }) {
             <h1 className="text-2xl font-black italic uppercase leading-none">Chats</h1>
             <p className="text-[11px] text-white/45 font-bold mt-1.5 uppercase">Text only — no images, voice or video calls.</p>
           </div>
-          <MobileNavMenu className="md:hidden shrink-0" />
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={openCoinWallet}
+              aria-label={`Coin wallet: ${formatCoins(coins)} coins`}
+              className="h-10 pl-1.5 pr-3.5 rounded-full bg-gradient-to-br from-[#F6C453] to-[#D18E1F] text-[#2B1800] flex items-center gap-1.5 text-sm font-black active:scale-95 transition"
+            >
+              <span className="w-7 h-7 rounded-full bg-white/35 flex items-center justify-center"><Coins size={15} /></span>
+              {formatCoins(coins)}
+            </button>
+            <MobileNavMenu className="md:hidden" />
+          </div>
         </div>
 
         <nav className="flex sm:inline-flex w-full sm:w-auto bg-[#142036] border border-white/5 rounded-2xl p-1 mb-4" aria-label="Chats">
