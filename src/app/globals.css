@@ -313,3 +313,10 @@ div {
 .admin-theme .text-slate-300 {
   color: rgba(245, 243, 238, 0.35) !important;
 }
+
+/* Phone menu drawer (Chats): slides in from the left. */
+@keyframes nav-drawer { from { transform: translateX(-100%); } to { transform: none; } }
+.nav-drawer { animation: nav-drawer 0.3s cubic-bezier(0.2, 0.9, 0.25, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .nav-drawer { animation: none !important; }
+}

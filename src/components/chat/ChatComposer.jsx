@@ -9,7 +9,8 @@ const MAX_HEIGHT = 140;
  * Telegram-style composer: a rounded box that grows with your text, the
  * reply/edit bar sliding in above it, and a round send button that springs in
  * once there's something to send. Enter sends, Shift+Enter adds a line, Escape
- * cancels a reply or edit.
+ * cancels a reply or edit. Text is 16px on phones: any smaller and iOS Safari
+ * zooms the page in when the box is tapped.
  */
 export default function ChatComposer({
   value,
@@ -55,7 +56,7 @@ export default function ChatComposer({
               if (ready) onSend();
             } else if (e.key === "Escape" && mode) onCancel();
           }}
-          className="flex-1 min-w-0 resize-none bg-[#0B1220] border border-white/10 focus:border-[#8B1E3F]/80 rounded-[22px] px-4 py-[11px] text-[14.5px] leading-[1.35] outline-none disabled:opacity-50 transition-colors"
+          className="flex-1 min-w-0 resize-none bg-[#0B1220] border border-white/10 focus:border-[#8B1E3F]/80 rounded-[22px] px-4 py-[11px] text-base md:text-[14.5px] leading-[1.35] outline-none disabled:opacity-50 transition-colors"
           style={{ maxHeight: MAX_HEIGHT }}
         />
         <button

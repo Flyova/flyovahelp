@@ -1,35 +1,11 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Home,
-  History,
-  Wallet,
-  Settings,
-  BookOpen,
-  ChevronLeft,
-  ChevronRight,
-  CircleHelp,
-  MessageCircle,
-  Megaphone,
-  Info,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { NAV_ITEMS, isNavActive } from "@/components/navItems";
 
 export default function DesktopSidebar({ collapsed, onToggle }) {
   const pathname = usePathname();
-
-  const navs = [
-    { name: "Home", icon: Home, path: "/dashboard" },
-    { name: "Chats", icon: MessageCircle, path: "/chat" },
-    { name: "History", icon: History, path: "/history" },
-    { name: "Deposit", icon: Wallet, path: "/deposit" },
-    { name: "Blog Post", icon: BookOpen, path: "/blog" },
-    { name: "FAQ", icon: CircleHelp, path: "/faq" },
-    { name: "Contact Support", icon: MessageCircle, path: "/support" },
-    { name: "Advertise with Us", icon: Megaphone, path: "/advertise" },
-    { name: "About Us", icon: Info, path: "/about" },
-    { name: "Settings", icon: Settings, path: "/settings" },
-  ];
 
   return (
     <aside
@@ -38,8 +14,8 @@ export default function DesktopSidebar({ collapsed, onToggle }) {
       }`}
     >
       <nav className="p-3 space-y-2 flex-1">
-        {navs.map((nav) => {
-          const isActive = nav.path === "/blog" || nav.path === "/chat" ? pathname === nav.path || pathname.startsWith(`${nav.path}/`) : pathname === nav.path;
+        {NAV_ITEMS.map((nav) => {
+          const isActive = isNavActive(pathname, nav.path);
           const Icon = nav.icon;
           return (
             <Link

@@ -24,13 +24,16 @@ export default function ClientLayoutShell({ children }) {
     pathname.startsWith("/blog/") ||
     pathname.startsWith("/admin");
 
+  // Chats is full screen on phones: no header or bottom bar (its own menu button opens the nav).
+  const isChat = pathname === "/chat" || pathname.startsWith("/chat/");
+
   const sidebarNavPaths = ["/dashboard", "/chat", "/history", "/deposit", "/settings", "/support", "/faq", "/about"];
   // The Chats pages (/chat/room, /chat/private, /chat/groups) are top-level too.
-  const showDesktopBack = !isAuthPage && !sidebarNavPaths.includes(pathname) && !pathname.startsWith("/chat/");
+  const showDesktopBack = !isAuthPage && !sidebarNavPaths.includes(pathname) && !isChat;
 
   return (
     <>
-      {!isAuthPage && <Header />}
+      {!isAuthPage && <Header hideOnMobile={isChat} />}
       {!isAuthPage && (
         <DesktopSidebar
           collapsed={sidebarCollapsed}
@@ -65,7 +68,7 @@ export default function ClientLayoutShell({ children }) {
         )}
         {children}
       </main>
-      {!isAuthPage && <BottomNav />}
+      {!isAuthPage && !isChat && <BottomNav />}
     </>
   );
 }

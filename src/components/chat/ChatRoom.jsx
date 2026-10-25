@@ -103,8 +103,8 @@ export default function ChatRoom({ uid, active, blocked = [], onMessagePrivately
   };
 
   return (
-    // Sized to the visible screen (minus header, tabs, identity bar and the phone bottom nav) so the composer never hides.
-    <div className="bg-[#142036] rounded-2xl border border-white/5 overflow-hidden flex flex-col h-[calc(100dvh-22rem)] min-h-[340px] md:h-[calc(100dvh-19.5rem)] lg:h-[calc(100vh-14.5rem)] lg:min-h-[520px]">
+    // Sized to the visible screen (minus the app header from md up, the Chats title, tabs and identity bar) so the composer never hides.
+    <div className="bg-[#142036] rounded-2xl border border-white/5 overflow-hidden flex flex-col h-[calc(100dvh-14rem)] min-h-[340px] md:h-[calc(100dvh-19.5rem)] lg:h-[calc(100vh-14.5rem)] lg:min-h-[520px]">
       <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-white/5">
         <div className="min-w-0">
           <p className="text-[10px] font-black uppercase text-white/40 flex items-center gap-2">

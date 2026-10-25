@@ -71,7 +71,7 @@ export default function IdentityBar({ identities, active, onSelect, onCreate, on
                   onKeyDown={(e) => e.key === "Enter" && create()}
                   placeholder="new username"
                   autoComplete="off"
-                  className="w-full bg-black/40 border border-white/10 focus:border-[#8B1E3F] rounded-xl pl-7 pr-3 py-2 text-sm outline-none"
+                  className="w-full bg-black/40 border border-white/10 focus:border-[#8B1E3F] rounded-xl pl-7 pr-3 py-2 text-base md:text-sm outline-none"
                 />
               </div>
               <button type="button" onClick={create} disabled={busy || !name.trim()} className="shrink-0 bg-[#8B1E3F] px-4 rounded-xl text-xs font-black uppercase disabled:opacity-50">

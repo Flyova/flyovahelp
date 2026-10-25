@@ -112,7 +112,7 @@ export default function GroupsPage() {
         <PopularGroups memberOf={memberOf} joining={joining} onOpen={openGroup} onJoin={joinGroup} />
       </div>
 
-      <section className={`lg:col-span-8 bg-[#142036] rounded-2xl border border-white/5 overflow-hidden flex-col min-h-0 h-[calc(100dvh-9.25rem)] md:h-[calc(100dvh-5.25rem)] lg:h-auto ${openId ? "flex" : "hidden lg:flex"}`}>
+      <section className={`lg:col-span-8 bg-[#142036] md:rounded-2xl md:border border-white/5 overflow-hidden flex-col min-h-0 h-dvh md:h-[calc(100dvh-5.25rem)] lg:h-auto ${openId ? "flex" : "hidden lg:flex"}`}>
         {openId ? (
           <ConversationThread
             key={openId}

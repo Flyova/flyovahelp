@@ -18,7 +18,8 @@ import { auth, db } from "@/lib/firebase";
 import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 
-export default function Header() {
+/** `hideOnMobile`: hidden below md but still mounted, so the idle sign-out below keeps running. */
+export default function Header({ hideOnMobile = false }) {
   const router = useRouter();
   const [showBalances, setShowBalances] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -153,7 +154,7 @@ export default function Header() {
         />
       )}
 
-      <header className="sticky top-0 z-[100] w-full bg-[#2457D6] text-[#F5F3EE] shadow-lg" style={{ fontFamily: "Montserrat, sans-serif" }}>
+      <header className={`sticky top-0 z-[100] w-full bg-[#2457D6] text-[#F5F3EE] shadow-lg ${hideOnMobile ? "max-md:hidden" : ""}`} style={{ fontFamily: "Montserrat, sans-serif" }}>
         <div className="container mx-auto px-4 h-14 flex items-center justify-between">
         <div 
           className="flex items-center space-x-2 cursor-pointer"

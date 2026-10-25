@@ -83,7 +83,7 @@ export default function GroupSearch({ memberOf, joining, onOpen, onJoin }) {
           autoComplete="off"
           spellCheck={false}
           placeholder="Search public groups by name…"
-          className="w-full bg-black/40 border border-white/10 focus:border-[#8B1E3F] rounded-xl pl-9 pr-9 py-2.5 text-sm outline-none transition-colors [&::-webkit-search-cancel-button]:hidden"
+          className="w-full bg-black/40 border border-white/10 focus:border-[#8B1E3F] rounded-xl pl-9 pr-9 py-2.5 text-base md:text-sm outline-none transition-colors [&::-webkit-search-cancel-button]:hidden"
         />
         {q && (
           <button type="button" onClick={() => setQ("")} aria-label="Clear search" className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10">
