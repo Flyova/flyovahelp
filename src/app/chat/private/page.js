@@ -1,5 +1,6 @@
 "use client";
 import { Ban, Flag, MessagesSquare, UserRound } from "lucide-react";
+import { presenceOf } from "@/lib/chat";
 import { useChat } from "@/components/chat/ChatProvider";
 import Avatar from "@/components/Avatar";
 import ConversationList from "@/components/chat/ConversationList";
@@ -13,9 +14,9 @@ import PlayerSearch from "@/components/chat/PlayerSearch";
  */
 export default function PrivateChatsPage() {
   const {
-    identities, active, setActive, createUsername, deleteUsername,
+    identities, active, selectIdentity, isLocked, createUsername, deleteUsername,
     convos, convosLoading, myNameIn, openIds, setOpenId, setErr, typingIn, unread,
-    messagePrivately, openProfile, blockUser, reportUser,
+    messagePrivately, openProfile, blockUser, reportUser, presence, presenceNow,
   } = useChat();
   const openId = openIds.private;
   const open = convos.find((c) => c.id === openId);
@@ -23,12 +24,14 @@ export default function PrivateChatsPage() {
   const other = open ? (open.participants || []).find((p) => p !== me) : null;
   const chats = convos.filter((c) => c.type !== "group" && (c.lastMessage || c.id === openId));
   const openChat = (id) => setOpenId("private", id);
+  const status = other ? presenceOf(presence[other], presenceNow) : null;
+  const online = new Set(Object.keys(presence).filter((name) => presenceOf(presence[name], presenceNow)?.online));
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 lg:h-[calc(100vh-14.5rem)] lg:min-h-[520px]">
       {/* identity, search and inbox — hidden on phones while a chat is open */}
       <div className={`lg:col-span-4 flex-col gap-3 min-h-0 ${openId ? "hidden lg:flex" : "flex"}`}>
-        <IdentityBar identities={identities} active={active} onSelect={setActive} onCreate={createUsername} onDelete={deleteUsername} />
+        <IdentityBar identities={identities} active={active} onSelect={selectIdentity} isLocked={isLocked} onCreate={createUsername} onDelete={deleteUsername} />
         <PlayerSearch onPick={messagePrivately} label="Search people · username, name, phone, country" />
         <ConversationList
           className="lg:flex-1"
@@ -36,6 +39,7 @@ export default function PrivateChatsPage() {
           loading={convosLoading}
           typingIn={typingIn}
           unread={unread}
+          online={online}
           myNameIn={myNameIn}
           openId={openId}
           onOpen={openChat}
@@ -56,7 +60,8 @@ export default function PrivateChatsPage() {
             header={{
               avatar: other && <Avatar username={other} size={40} rounded="rounded-full" />,
               title: other ? `@${other}` : "Private chat",
-              subtitle: "tap for profile",
+              subtitle: status?.text || "tap for profile",
+              online: !!status?.online,
               label: other ? `View @${other}'s profile` : undefined,
               onClick: other ? () => openProfile(other) : undefined,
             }}

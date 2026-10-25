@@ -21,7 +21,8 @@ const memberLabel = (n) => `${n} member${n === 1 ? "" : "s"}`;
  * Inbox: one row per private chat or group, newest first. `action` sits beside
  * the title (e.g. a "New group" button); the empty* props fill the empty state,
  * shown once `loading` is over. `typingIn` (id -> usernames) swaps a row's
- * preview for "typing…"; `unread` (id -> count) makes a row bold with a badge.
+ * preview for "typing…"; `unread` (id -> count) makes a row bold with a badge;
+ * `online` (usernames) puts a green dot on private chats with someone online.
  */
 export default function ConversationList({
   convos,
@@ -35,6 +36,7 @@ export default function ConversationList({
   loading = false,
   typingIn = {},
   unread = {},
+  online = new Set(),
   className = "",
 }) {
   return (
@@ -61,7 +63,10 @@ export default function ConversationList({
               {group ? (
                 <GroupAvatar size={40} rounded="rounded-xl" />
               ) : (
-                <Avatar username={others[0]} size={40} />
+                <span className="relative shrink-0">
+                  <Avatar username={others[0]} size={40} />
+                  {online.has(others[0]) && <span className="absolute -right-0.5 -bottom-0.5 w-3.5 h-3.5 rounded-full bg-emerald-400 ring-[3px] ring-[#142036]" aria-label="online" />}
+                </span>
               )}
               <span className="min-w-0 flex-1">
                 <span className="flex items-baseline justify-between gap-2">

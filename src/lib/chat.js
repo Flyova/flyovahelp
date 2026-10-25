@@ -105,3 +105,24 @@ export async function liveUsername(db, username) {
   if (!snap.exists || snap.data().deleted || !snap.data().uid) return null;
   return { lower, ...snap.data() };
 }
+
+// Online status: chat_presence/<username> = { lastActive, hidden }, refreshed every
+// PRESENCE_PING_MS while Chats is open. "Online" = active in the last PRESENCE_ONLINE_MS.
+export const PRESENCE_PING_MS = 60000;
+export const PRESENCE_ONLINE_MS = 150000;
+
+/** { online, text } for a presence doc at time `now` ("online", "last seen 5 min ago"…), or null if hidden/unknown. */
+export function presenceOf(p, now) {
+  const ms = p?.lastActive?.toMillis?.();
+  if (!ms || !now || p.hidden) return null;
+  const ago = now - ms;
+  if (ago < PRESENCE_ONLINE_MS) return { online: true, text: "online" };
+  if (ago < 3600e3) return { online: false, text: `last seen ${Math.max(1, Math.round(ago / 60000))} min ago` };
+  const d = new Date(ms);
+  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const today = new Date(now);
+  const yesterday = new Date(now - 86400e3);
+  if (d.toDateString() === today.toDateString()) return { online: false, text: `last seen today at ${time}` };
+  if (d.toDateString() === yesterday.toDateString()) return { online: false, text: `last seen yesterday at ${time}` };
+  return { online: false, text: `last seen ${d.toLocaleDateString([], { day: "numeric", month: "short" })}` };
+}

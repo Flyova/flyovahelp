@@ -2,7 +2,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Coins, X } from "lucide-react";
+import { Coins, Settings, X } from "lucide-react";
 import { formatCoins } from "@/lib/chat";
 import { CHAT_SECTIONS, ChatProvider, LAST_SECTION_KEY, useChat } from "@/components/chat/ChatProvider";
 import MobileNavMenu from "@/components/MobileNavMenu";
@@ -60,6 +60,14 @@ function ChatShell({ children }) {
               <span className="w-7 h-7 rounded-full bg-white/35 flex items-center justify-center"><Coins size={15} /></span>
               {formatCoins(coins)}
             </button>
+            <Link
+              href="/chat/settings"
+              aria-label="Chat settings"
+              aria-current={section === "settings" ? "page" : undefined}
+              className={`w-10 h-10 rounded-full border border-white/10 flex items-center justify-center transition ${section === "settings" ? "bg-[#8B1E3F] text-white" : "bg-[#142036] text-white/85 hover:text-white hover:bg-[#1B2A45]"}`}
+            >
+              <Settings size={18} />
+            </Link>
             <MobileNavMenu className="md:hidden" />
           </div>
         </div>

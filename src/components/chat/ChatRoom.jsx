@@ -4,6 +4,7 @@ import { collection, doc, getDoc, limit, onSnapshot, orderBy, query } from "fire
 import { db, auth } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
 import { containsMediaMarker } from "@/lib/chat";
+import { playChatSound } from "@/lib/chatSound";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import ChatMessages from "@/components/chat/ChatMessages";
 import ChatComposer from "@/components/chat/ChatComposer";
@@ -15,8 +16,9 @@ const FRESH_MS = 800; // messages that arrived this recently animate in
  * Public chatroom: one room for every signed-in player. Reading is live from
  * Firestore; sending, editing and deleting go through /api/chat/room (rate limits,
  * bans). Tap (or right-click) a message for its menu, swipe left to reply.
+ * `sound`: play the new-message sound when someone else posts.
  */
-export default function ChatRoom({ uid, active, blocked = [], onMessagePrivately, onReport, onOpenProfile, onSendCoins }) {
+export default function ChatRoom({ uid, active, blocked = [], sound = true, onMessagePrivately, onReport, onOpenProfile, onSendCoins }) {
   const [messages, setMessages] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [text, setText] = useState("");
@@ -26,6 +28,10 @@ export default function ChatRoom({ uid, active, blocked = [], onMessagePrivately
   const [editing, setEditing] = useState(null);
   const inputRef = useRef(null);
   const [isStaff, setIsStaff] = useState(false);
+  const soundRef = useRef(sound);
+  useEffect(() => {
+    soundRef.current = sound;
+  }, [sound]);
 
   useEffect(() => {
     if (!uid) return;
@@ -35,7 +41,9 @@ export default function ChatRoom({ uid, active, blocked = [], onMessagePrivately
       query(collection(db, "chatroom_messages"), orderBy("createdAt", "desc"), limit(100)),
       (s) => {
         const now = Date.now();
-        if (!initial) s.docChanges().forEach((c) => c.type === "added" && arrived.set(c.doc.id, now));
+        const added = initial ? [] : s.docChanges().filter((c) => c.type === "added");
+        added.forEach((c) => arrived.set(c.doc.id, now));
+        if (soundRef.current && added.some((c) => c.doc.data().senderUid !== uid)) playChatSound();
         initial = false;
         setMessages(
           s.docs.map((d) => ({ id: d.id, ...d.data(), fresh: now - (arrived.get(d.id) ?? 0) < FRESH_MS })).reverse()

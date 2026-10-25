@@ -139,6 +139,21 @@
       allow read, write: if chatSignedIn() && request.auth.uid == uid;
     }
 
+    // Online status per chat username: { lastActive: now, hidden }, written only by its owner.
+    match /chat_presence/{name} {
+      allow read: if chatSignedIn();
+      allow create, update: if ownsUsername(name)
+        && request.resource.data.keys().hasOnly(['lastActive', 'hidden'])
+        && request.resource.data.lastActive == request.time
+        && request.resource.data.hidden is bool;
+      allow delete: if false;
+    }
+
+    // PINs on chat usernames: hashes, server only (/api/chat/locks).
+    match /username_locks/{name} {
+      allow read, write: if false;
+    }
+
     // Chat coins: balance and history, changed only by the server (/api/chat/coins).
     match /coin_wallets/{uid} {
       allow read: if chatSignedIn() && request.auth.uid == uid;

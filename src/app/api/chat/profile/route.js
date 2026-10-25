@@ -5,8 +5,9 @@ import { getCaller } from "@/lib/apiAuth";
 
 // GET /api/chat/profile?u=username — the public profile shown when you tap a
 // player in chat: chat username, bio and status, plus the name, country and
-// join date that search already shows, and their chat coins only if they chose
-// to show them off. Never email, phone, PIN or money balances.
+// join date that search already shows (country only if they don't hide it), and
+// their chat coins only if they chose to show them off. Never email, phone, PIN or
+// money balances.
 export async function GET(req) {
   try {
     const caller = await getCaller(req);
@@ -27,14 +28,15 @@ export async function GET(req) {
     );
     const p = profileSnap.exists ? profileSnap.data() : {};
     const u = userSnap.exists ? userSnap.data() : {};
-    const showCoins = stateSnap.exists && stateSnap.data().showCoins === true;
+    const state = stateSnap.exists ? stateSnap.data() : {};
+    const showCoins = state.showCoins === true;
     return NextResponse.json({
       username: n.username || lower,
       usernameLower: lower,
       bio: p.bio || "",
       status: p.status || "",
       fullName: u.deleted || u.deletionRequested ? "" : u.fullName || "",
-      country: u.country || "",
+      country: state.hideCountry ? "" : u.country || "",
       memberSince: u.createdAt?.toMillis?.() ?? n.createdAt?.toMillis?.() ?? null,
       isYou: n.uid === caller.uid,
       coins: showCoins ? Math.max(0, Number(coinSnap.exists ? coinSnap.data().balance : 0) || 0) : null,

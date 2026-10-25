@@ -20,7 +20,7 @@ const conversationsApi = (body) => authFetch("/api/chat/conversations", { method
  */
 export default function GroupsPage() {
   const {
-    identities, active, setActive, createUsername, deleteUsername,
+    identities, active, selectIdentity, isLocked, createUsername, deleteUsername,
     convos, convosLoading, myNameIn, openIds, setOpenId, setErr, typingIn, unread,
     messagePrivately, openProfile, reportUser, sendCoins,
   } = useChat();
@@ -87,7 +87,7 @@ export default function GroupsPage() {
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 lg:h-[calc(100vh-14.5rem)] lg:min-h-[520px]">
       {/* identity, search and your groups — hidden on phones while a group is open */}
       <div className={`lg:col-span-4 flex-col gap-3 min-h-0 lg:overflow-y-auto lg:pr-1 ${openId ? "hidden lg:flex" : "flex"}`}>
-        <IdentityBar identities={identities} active={active} onSelect={setActive} onCreate={createUsername} onDelete={deleteUsername} />
+        <IdentityBar identities={identities} active={active} onSelect={selectIdentity} isLocked={isLocked} onCreate={createUsername} onDelete={deleteUsername} />
         <GroupSearch memberOf={memberOf} joining={joining} onOpen={openGroup} onJoin={joinGroup} />
         <ConversationList
           className="shrink-0"

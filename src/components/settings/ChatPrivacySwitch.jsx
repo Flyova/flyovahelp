@@ -8,7 +8,7 @@ import { db } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
 
 // Takes your avatar off every chat where it shows how far you've read.
-async function clearMyReceipts(uid) {
+export async function clearMyReceipts(uid) {
   const mine = ((await authFetch("/api/chat/usernames")).items || []).map((i) => i.usernameLower);
   const snap = await getDocs(query(collection(db, "conversations"), where("participantUids", "array-contains", uid), limit(200)));
   await Promise.all(snap.docs.flatMap((d) => mine

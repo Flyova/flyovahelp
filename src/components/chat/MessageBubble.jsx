@@ -119,7 +119,7 @@ export default function MessageBubble({
   const bubble = deleted
     ? "bg-black/20 border border-dashed border-white/15 text-white/45"
     : coinCard
-      ? "bg-gradient-to-br from-[#F6C453] to-[#D18E1F] text-[#2B1800] shadow-[0_6px_24px_-8px_rgba(246,196,83,0.6)]"
+      ? "bg-gradient-to-br from-[#F6C453] to-[#D18E1F] text-[#2B1800]"
       : mine
         ? "bg-gradient-to-br from-[#A0284D] to-[#6E1732] text-white"
         : "bg-[#1E2D4A] text-[#F5F3EE]";
@@ -205,13 +205,11 @@ export default function MessageBubble({
               <Ban size={13} /> Message deleted
             </p>
           ) : coinCard ? (
-            <div className="flex items-center gap-2.5 pr-14 py-1">
-              <span className="w-9 h-9 shrink-0 rounded-full bg-white/35 flex items-center justify-center"><Coins size={19} /></span>
-              <span className="min-w-0">
-                <span className="block text-[15px] font-black leading-tight">{formatCoins(m.coins)} coin{m.coins === 1 ? "" : "s"}</span>
-                <span className="block text-[12.5px] font-semibold leading-tight truncate">to @{m.to}</span>
-              </span>
-            </div>
+            <p className="flex items-center gap-1.5 pr-[60px] text-[13.5px] leading-[1.38] whitespace-nowrap">
+              <span className="w-[18px] h-[18px] shrink-0 rounded-full bg-white/40 flex items-center justify-center"><Coins size={11} /></span>
+              <span className="font-black">{formatCoins(m.coins)} coin{m.coins === 1 ? "" : "s"}</span>
+              <span className="min-w-0 truncate font-semibold opacity-80">to @{m.to}</span>
+            </p>
           ) : (
             <p className="text-[14.5px] leading-[1.38] whitespace-pre-wrap break-words">
               {m.text}

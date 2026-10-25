@@ -7,6 +7,7 @@ import { ChevronLeft, MoreHorizontal } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { TYPING_PING_MS, containsMediaMarker, isValidText, typingLabel } from "@/lib/chat";
 import { notifyPush } from "@/lib/pushClient";
+import { playChatSound } from "@/lib/chatSound";
 import { useChat } from "@/components/chat/ChatProvider";
 import ChatMessages from "@/components/chat/ChatMessages";
 import { messageMillis } from "@/components/chat/MessageBubble";
@@ -27,7 +28,7 @@ const lastWhere = (list, test) => {
  * live message list and the composer. Key it by conversation id.
  *
  * `me` is the username you're in this chat as. `header` = { avatar, title,
- * subtitle, label, onClick }. `menuItems` fill the ⋯ menu. A group admin passes
+ * subtitle, online, label, onClick }. `menuItems` fill the ⋯ menu. A group admin passes
  * `onModerate` to remove other people's messages; groups pass `onSendCoins`.
  *
  * While it's open and on screen it records how far you've read (privately for
@@ -58,7 +59,14 @@ export default function ConversationThread({
   const [editing, setEditing] = useState(null);
   const [menuAt, setMenuAt] = useState(null);
   const inputRef = useRef(null);
-  const { uid, chatState, typingIn } = useChat();
+  const { uid, chatState, typingIn, soundOn } = useChat();
+  // Sound for messages from others arriving while this chat is open and on screen.
+  const soundRef = useRef(false);
+  const meRef = useRef(me);
+  useEffect(() => {
+    soundRef.current = soundOn(isGroup ? "group" : "private", convoId);
+    meRef.current = me;
+  }, [soundOn, isGroup, convoId, me]);
   const typingSince = useRef(0); // when we last stamped "typing" (0 = not typing)
   const marked = useRef({ private: 0, shared: 0 }); // read positions already written
 
@@ -71,7 +79,9 @@ export default function ConversationThread({
       { includeMetadataChanges: true },
       (s) => {
         const now = Date.now();
-        if (!initial) s.docChanges().forEach((c) => c.type === "added" && arrived.set(c.doc.id, now));
+        const added = initial ? [] : s.docChanges().filter((c) => c.type === "added");
+        added.forEach((c) => arrived.set(c.doc.id, now));
+        if (soundRef.current && document.visibilityState === "visible" && added.some((c) => c.doc.data().sender !== meRef.current)) playChatSound();
         initial = false;
         setMsgs(s.docs.map((d) => ({
           id: d.id,
@@ -244,7 +254,7 @@ export default function ConversationThread({
           {header.avatar}
           <span className="min-w-0 flex-1">
             <span className="block text-[15px] font-bold truncate">{convo ? header.title : lost ? "Chat unavailable" : "Loading…"}</span>
-            <span className={`block text-[12px] truncate ${lost || blockedHere ? "text-red-300/80" : typingNow ? "text-[#E0708C]" : "text-white/45"}`}>{convo || lost ? subtitle : ""}</span>
+            <span className={`block text-[12px] truncate ${lost || blockedHere ? "text-red-300/80" : typingNow ? "text-[#E0708C]" : header.online ? "text-emerald-400" : "text-white/45"}`}>{convo || lost ? subtitle : ""}</span>
           </span>
         </button>
         {convo && menuItems.length > 0 && (

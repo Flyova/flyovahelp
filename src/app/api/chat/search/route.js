@@ -71,18 +71,23 @@ export async function GET(req) {
       rows.set(n.uid, { uid: n.uid, username: n.username || d.id, usernameLower: d.id, match: userHits.get(n.uid) });
     }
 
+    // Players who hide their country (Chat settings) don't show it, and aren't found by it.
+    const uids = [...rows.keys()];
+    const states = uids.length ? await db.getAll(...uids.map((uid) => db.collection("chat_state").doc(uid))) : [];
+    const hidesCountry = new Set(states.filter((s) => s.exists && s.data().hideCountry).map((s) => s.id));
+
     // Public profile fields only — any signed-in player can search, so never
     // return email, phone, dob, PIN, OTP or balances from the user document.
     const items = [...rows.values()]
       .filter((r) => {
         const u = profiles.get(r.uid) || {};
-        return !u.deleted && !u.deletionRequested;
+        return !u.deleted && !u.deletionRequested && !(r.match === "country" && hidesCountry.has(r.uid));
       })
       .sort((a, b) => MATCH_RANK[a.match] - MATCH_RANK[b.match] || a.usernameLower.length - b.usernameLower.length)
       .slice(0, LIMIT)
       .map((r) => {
         const u = profiles.get(r.uid) || {};
-        return { id: r.usernameLower, ...r, fullName: u.fullName || "", country: u.country || "" };
+        return { id: r.usernameLower, ...r, fullName: u.fullName || "", country: hidesCountry.has(r.uid) ? "" : u.country || "" };
       });
     return NextResponse.json({ items });
   } catch (e) {

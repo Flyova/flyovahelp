@@ -1,11 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { doc, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import Link from "next/link";
 import { Ban, CalendarDays, Coins, Flag, Loader2, MapPin, MessageCircle, X } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import { authFetch } from "@/lib/authFetch";
-import { formatCoins } from "@/lib/chat";
+import { formatCoins, presenceOf } from "@/lib/chat";
 
 /**
  * A player's chat profile, opened by tapping their avatar or name: big avatar,
@@ -17,6 +19,9 @@ import { formatCoins } from "@/lib/chat";
 export default function ProfileSheet({ username, onClose, onMessage, onSendCoins, onBlock, onReport }) {
   const [profile, setProfile] = useState(null);
   const [error, setError] = useState("");
+  const [status, setStatus] = useState(null); // { online, text } or null
+
+  useEffect(() => onSnapshot(doc(db, "chat_presence", username), (s) => setStatus(presenceOf(s.data(), Date.now())), () => {}), [username]);
 
   useEffect(() => {
     let live = true;
@@ -58,6 +63,11 @@ export default function ProfileSheet({ username, onClose, onMessage, onSendCoins
           </div>
           <h2 className="mt-3 text-xl font-black leading-tight break-all">@{profile?.username || username}</h2>
           {name && <p className="text-sm text-white/60 mt-0.5">{name}</p>}
+          {status && !profile?.isYou && (
+            <p className={`text-xs mt-1 flex items-center gap-1.5 ${status.online ? "text-emerald-400" : "text-white/45"}`}>
+              {status.online && <span className="w-2 h-2 rounded-full bg-emerald-400" />} {status.online ? "Online" : status.text.replace(/^last/, "Last")}
+            </p>
+          )}
           {profile?.coins != null && (
             <span className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-br from-[#F6C453] to-[#D18E1F] text-[#2B1800] text-xs font-black">
               <Coins size={13} /> {formatCoins(profile.coins)} coins
