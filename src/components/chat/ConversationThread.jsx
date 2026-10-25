@@ -1,18 +1,26 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  addDoc, collection, doc, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc,
+  FieldPath, addDoc, collection, deleteField, doc, limitToLast, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc,
 } from "firebase/firestore";
 import { ChevronLeft, MoreHorizontal } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { containsMediaMarker, isValidText } from "@/lib/chat";
+import { TYPING_PING_MS, containsMediaMarker, isValidText, typingLabel } from "@/lib/chat";
 import { notifyPush } from "@/lib/pushClient";
+import { useChat } from "@/components/chat/ChatProvider";
 import ChatMessages from "@/components/chat/ChatMessages";
+import { messageMillis } from "@/components/chat/MessageBubble";
 import ChatComposer from "@/components/chat/ChatComposer";
 import MessageMenu from "@/components/chat/MessageMenu";
 
 const FRESH_MS = 800; // messages that arrived this recently animate in
 const MENU_WIDTH = 228;
+
+// Array#findLast, which older iPhones (iOS < 15.4) don't have.
+const lastWhere = (list, test) => {
+  for (let i = list.length - 1; i >= 0; i--) if (test(list[i])) return list[i];
+  return null;
+};
 
 /**
  * One open private chat or group: header (back, avatar, name, options), the
@@ -21,6 +29,11 @@ const MENU_WIDTH = 228;
  * `me` is the username you're in this chat as. `header` = { avatar, title,
  * subtitle, label, onClick }. `menuItems` fill the ⋯ menu. A group admin passes
  * `onModerate` to remove other people's messages.
+ *
+ * While it's open and on screen it records how far you've read (privately for
+ * unread counts, and on the conversation for read receipts if you share them)
+ * and that you're typing. Readers' avatars sit under the last message each has
+ * seen, Messenger style.
  */
 export default function ConversationThread({
   convoId,
@@ -44,13 +57,16 @@ export default function ConversationThread({
   const [editing, setEditing] = useState(null);
   const [menuAt, setMenuAt] = useState(null);
   const inputRef = useRef(null);
+  const { uid, chatState, typingIn } = useChat();
+  const typingSince = useRef(0); // when we last stamped "typing" (0 = not typing)
+  const marked = useRef({ private: 0, shared: 0 }); // read positions already written
 
   // Messages — with metadata changes, so a message shows a clock until the server has it.
   useEffect(() => {
     const arrived = new Map(); // id -> when it first arrived after the initial load
     let initial = true;
     return onSnapshot(
-      query(collection(db, "conversations", convoId, "messages"), orderBy("createdAt", "asc"), limit(200)),
+      query(collection(db, "conversations", convoId, "messages"), orderBy("createdAt", "asc"), limitToLast(200)),
       { includeMetadataChanges: true },
       (s) => {
         const now = Date.now();
@@ -73,10 +89,65 @@ export default function ConversationThread({
 
   const blockedHere = !!convo?.blocked?.includes(me);
   const cantSend = !convo || blockedHere || lost;
+  const receipts = chatState.readReceipts;
+
+  // "typing…": stamped at most every TYPING_PING_MS while there's text, cleared on send or leaving.
+  const setTyping = useCallback((on) => {
+    if (!me) return;
+    const now = Date.now();
+    if (on ? now - typingSince.current < TYPING_PING_MS : !typingSince.current) return;
+    typingSince.current = on ? now : 0;
+    updateDoc(doc(db, "conversations", convoId), new FieldPath("typing", me), on ? serverTimestamp() : deleteField(), "presenceBy", me)
+      .catch(() => {});
+  }, [convoId, me]);
+  useEffect(() => () => setTyping(false), [setTyping]);
+
+  // Newest message the server has (and the newest from someone else): how far you've read.
+  const confirmed = useMemo(() => msgs.filter((m) => !m.pending), [msgs]);
+  const latestMs = messageMillis(confirmed[confirmed.length - 1] ?? {});
+  const latestOthersMs = messageMillis(lastWhere(confirmed, (m) => m.sender !== me) ?? {});
+  const privateReadMs = chatState.reads[convoId]?.toMillis?.() ?? 0;
+  const sharedReadMs = convo?.readAt?.[me]?.toMillis?.() ?? 0;
+
+  useEffect(() => {
+    if (!uid || !me || lost || !latestMs) return;
+    const mark = () => {
+      if (document.visibilityState !== "visible") return;
+      if (latestMs > privateReadMs && latestMs > marked.current.private) {
+        marked.current.private = latestMs;
+        setDoc(doc(db, "chat_state", uid), { reads: { [convoId]: serverTimestamp() } }, { merge: true }).catch(() => {});
+      }
+      if (receipts && latestOthersMs > sharedReadMs && latestOthersMs > marked.current.shared) {
+        marked.current.shared = latestOthersMs;
+        updateDoc(doc(db, "conversations", convoId), new FieldPath("readAt", me), serverTimestamp(), "presenceBy", me).catch(() => {});
+      }
+    };
+    mark();
+    document.addEventListener("visibilitychange", mark);
+    return () => document.removeEventListener("visibilitychange", mark);
+  }, [uid, me, lost, convoId, latestMs, latestOthersMs, privateReadMs, sharedReadMs, receipts]);
+
+  // Each other member's avatar goes under the last message they've read, unless
+  // that's their own message. Hidden if you don't share read receipts yourself.
+  const { seenBy, sentId } = useMemo(() => {
+    if (!receipts || !convo) return { seenBy: {}, sentId: null };
+    const out = {};
+    for (const p of convo.participants || []) {
+      const readMs = p === me ? 0 : convo.readAt?.[p]?.toMillis?.();
+      const m = readMs ? lastWhere(confirmed, (x) => messageMillis(x) <= readMs) : null;
+      if (m && m.sender !== p) (out[m.id] ||= []).push(p);
+    }
+    const last = msgs[msgs.length - 1];
+    const sent = last && last.sender === me && !last.pending && !out[last.id] ? last.id : null;
+    return { seenBy: out, sentId: sent };
+  }, [receipts, convo, me, confirmed, msgs]);
+
+  const typers = typingIn[convoId] || [];
 
   const send = async () => {
     onError("");
     if (!me || cantSend) return;
+    setTyping(false);
     if (!isValidText(text)) return onError("Message required (max 2000 chars).");
     if (containsMediaMarker(text)) return onError("Text only — no images, voice or video.");
     const body = text.trim();
@@ -149,11 +220,12 @@ export default function ConversationThread({
     setMenuAt({ x: r.right - MENU_WIDTH, y: r.bottom + 6 });
   };
 
+  const typingNow = typingLabel(typers, isGroup);
   const subtitle = lost
     ? "You're no longer in this chat"
     : blockedHere
       ? "You can no longer send messages here"
-      : header.subtitle;
+      : typingNow || header.subtitle;
 
   return (
     <>
@@ -171,7 +243,7 @@ export default function ConversationThread({
           {header.avatar}
           <span className="min-w-0 flex-1">
             <span className="block text-[15px] font-bold truncate">{convo ? header.title : lost ? "Chat unavailable" : "Loading…"}</span>
-            <span className={`block text-[12px] truncate ${lost || blockedHere ? "text-red-300/80" : "text-white/45"}`}>{convo || lost ? subtitle : ""}</span>
+            <span className={`block text-[12px] truncate ${lost || blockedHere ? "text-red-300/80" : typingNow ? "text-[#E0708C]" : "text-white/45"}`}>{convo || lost ? subtitle : ""}</span>
           </span>
         </button>
         {convo && menuItems.length > 0 && (
@@ -203,11 +275,17 @@ export default function ConversationThread({
         onMessagePrivately={onMessagePrivately}
         onReport={onReport}
         onOpenProfile={onOpenProfile}
+        seenBy={seenBy}
+        sentId={sentId}
+        typing={lost ? [] : typers}
       />
 
       <ChatComposer
         value={text}
-        onChange={setText}
+        onChange={(v) => {
+          setText(v);
+          setTyping(!!v.trim() && !editing);
+        }}
         onSend={send}
         onCancel={cancelMode}
         mode={editing ? "edit" : replyTo ? "reply" : null}

@@ -57,3 +57,19 @@ export function groupSearchKeys(name) {
   addPrefixes(whole);
   return [...keys];
 }
+
+// Seen and typing live on the conversation, keyed by username: readAt.<name> (how
+// far they've read, only if they share read receipts) and typing.<name>.
+export const TYPING_PING_MS = 4000; // a typer refreshes their typing stamp this often
+export const TYPING_SHOW_MS = 6500; // "typing…" lasts this long after the last refresh
+// Unread counts start here: messages from before seen-tracking existed count as read.
+export const READS_SINCE_MS = Date.UTC(2026, 9, 25, 12, 0);
+
+/** "typing…" in a private chat; "@a is typing…", "@a and @b are typing…" or "3 people are typing…" in a group. */
+export function typingLabel(names, isGroup) {
+  if (!names?.length) return "";
+  if (!isGroup) return "typing…";
+  if (names.length === 1) return `@${names[0]} is typing…`;
+  if (names.length === 2) return `@${names[0]} and @${names[1]} are typing…`;
+  return `${names.length} people are typing…`;
+}

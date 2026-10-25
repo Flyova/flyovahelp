@@ -14,7 +14,7 @@ import PlayerSearch from "@/components/chat/PlayerSearch";
 export default function PrivateChatsPage() {
   const {
     identities, active, setActive, createUsername, deleteUsername,
-    convos, convosLoading, myNameIn, openIds, setOpenId, setErr,
+    convos, convosLoading, myNameIn, openIds, setOpenId, setErr, typingIn, unread,
     messagePrivately, openProfile, blockUser, reportUser,
   } = useChat();
   const openId = openIds.private;
@@ -34,6 +34,8 @@ export default function PrivateChatsPage() {
           className="lg:flex-1"
           convos={chats}
           loading={convosLoading}
+          typingIn={typingIn}
+          unread={unread}
           myNameIn={myNameIn}
           openId={openId}
           onOpen={openChat}

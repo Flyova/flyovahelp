@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, Copy, CornerUpLeft, Flag, MessageCircle, Pencil, Trash2, UserRound } from "lucide-react";
-import MessageBubble, { isDeleted, messageMillis, startsRun } from "@/components/chat/MessageBubble";
+import MessageBubble, { SeenBy, TypingBubble, isDeleted, messageMillis, startsRun } from "@/components/chat/MessageBubble";
 import MessageMenu from "@/components/chat/MessageMenu";
 
 const NEAR_BOTTOM = 120; // px from the bottom that still counts as "reading the latest"
@@ -43,6 +43,9 @@ function byDay(messages) {
  *
  * Messages are oldest-first. Mark a message `fresh` to animate it in, `pending`
  * while its write hasn't reached the server. Handlers left out hide their menu item.
+ * `seenBy` (message id -> usernames) puts read-receipt avatars under messages,
+ * `sentId` marks your latest message "Sent", and `typing` (usernames) shows a
+ * typing bubble at the bottom.
  */
 export default function ChatMessages({
   messages,
@@ -59,6 +62,9 @@ export default function ChatMessages({
   onReport,
   onMessagePrivately,
   onOpenProfile,
+  seenBy = {},
+  sentId = null,
+  typing = [],
 }) {
   const listRef = useRef(null);
   const atBottomRef = useRef(true);
@@ -81,6 +87,13 @@ export default function ChatMessages({
     prevLastId.current = lastId;
     if (atBottomRef.current || justSent) scrollToBottom(messages.length > 1);
   }, [lastId, lastMine, messages.length, scrollToBottom]);
+
+  // A typing bubble or seen avatars appearing at the bottom: keep them in view if you're there.
+  const typingKey = typing.join(",");
+  const seenKey = JSON.stringify(seenBy) + sentId;
+  useEffect(() => {
+    if (atBottomRef.current) scrollToBottom(true);
+  }, [typingKey, seenKey, scrollToBottom]);
 
   const onScroll = () => {
     const el = listRef.current;
@@ -149,11 +162,14 @@ export default function ChatMessages({
                     onJumpTo={jumpTo}
                     onOpenProfile={onOpenProfile}
                   />
+                  {(seenBy[m.id]?.length > 0 || sentId === m.id) && <SeenBy names={seenBy[m.id]} sent={sentId === m.id} />}
                 </div>
               );
             })}
           </section>
         ))}
+
+        {!loading && typing.length > 0 && <TypingBubble name={typing[0]} showAvatar={showAvatars} />}
       </div>
 
       {!atBottom && (

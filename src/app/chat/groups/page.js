@@ -21,7 +21,7 @@ const conversationsApi = (body) => authFetch("/api/chat/conversations", { method
 export default function GroupsPage() {
   const {
     identities, active, setActive, createUsername, deleteUsername,
-    convos, convosLoading, myNameIn, openIds, setOpenId, setErr,
+    convos, convosLoading, myNameIn, openIds, setOpenId, setErr, typingIn, unread,
     messagePrivately, openProfile, reportUser,
   } = useChat();
   const [creating, setCreating] = useState(false);
@@ -93,6 +93,8 @@ export default function GroupsPage() {
           className="shrink-0"
           convos={groups}
           loading={convosLoading}
+          typingIn={typingIn}
+          unread={unread}
           myNameIn={myNameIn}
           openId={openId}
           onOpen={openGroup}

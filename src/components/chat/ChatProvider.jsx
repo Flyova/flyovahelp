@@ -1,13 +1,14 @@
 "use client";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import {
-  addDoc, arrayUnion, collection, doc, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
+  Timestamp, addDoc, arrayUnion, collection, doc, getCountFromServer, limit, onSnapshot, orderBy, query,
+  serverTimestamp, setDoc, updateDoc, where,
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
-import { norm } from "@/lib/chat";
+import { READS_SINCE_MS, TYPING_SHOW_MS, norm } from "@/lib/chat";
 import ProfileSheet from "@/components/chat/ProfileSheet";
 
 const ChatContext = createContext(null);
@@ -23,11 +24,47 @@ export const LAST_SECTION_KEY = "chat:lastSection";
 /** The chat state every Chats page shares; only usable inside <ChatProvider>. */
 export const useChat = () => useContext(ChatContext);
 
+const STALE_TYPING_MS = 30000; // a typing stamp this old when first seen is someone who left mid-message
+
+// Records when each typing stamp *arrived here*, so "typing…" timing doesn't
+// depend on other devices' clocks. arrivals: "<convoId>/<name>" -> { ms, at }.
+function noteTypingArrivals(convos, arrivals, now) {
+  const present = new Set();
+  for (const c of convos) {
+    for (const [name, ts] of Object.entries(c.typing || {})) {
+      const key = `${c.id}/${name}`;
+      const ms = ts?.toMillis?.() ?? 0;
+      present.add(key);
+      const prev = arrivals.get(key);
+      if (prev?.ms === ms) continue;
+      arrivals.set(key, { ms, at: !prev && ms && now - ms > STALE_TYPING_MS ? 0 : now });
+    }
+  }
+  for (const key of arrivals.keys()) if (!present.has(key)) arrivals.delete(key);
+}
+
+// conversation id -> usernames typing there now (never your own).
+function whoIsTyping(convos, arrivals, mine, now) {
+  const out = {};
+  for (const c of convos) {
+    const names = Object.keys(c.typing || {})
+      .filter((name) => !mine.includes(name) && now - (arrivals.get(`${c.id}/${name}`)?.at ?? 0) < TYPING_SHOW_MS);
+    if (names.length) out[c.id] = names;
+  }
+  return out;
+}
+
+const sameTyping = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
 /**
  * State shared by the Chatroom, Private and Groups pages, kept while you move
  * between them: who you are (your chat usernames and the one you're using), your
- * conversations, the usernames you've blocked, the chat open on each page, and
- * the profile popup. Also holds the actions those pages share.
+ * conversations, who is typing in them and how many messages you haven't read,
+ * the usernames you've blocked, the chat open on each page, and the profile
+ * popup. Also holds the actions those pages share.
+ *
+ * Your read positions and read-receipts setting live in chat_state/<uid>, which
+ * only you can read; readAt on a conversation is the shared copy others see.
  */
 export function ChatProvider({ children }) {
   const router = useRouter();
@@ -42,6 +79,12 @@ export function ChatProvider({ children }) {
   const [openIds, setOpenIds] = useState({ private: null, groups: null }); // open chat per page
   const [profileOf, setProfileOf] = useState(null); // username whose profile popup is open
   const [err, setErr] = useState("");
+  const [chatState, setChatState] = useState({ reads: {}, readReceipts: true });
+  const [typingIn, setTypingIn] = useState({}); // conversation id -> usernames typing there
+  const [counts, setCounts] = useState({}); // "<id>:<last message ms>:<read since ms>" -> unread count
+  const typingArrivals = useRef(new Map());
+  const convosRef = useRef([]);
+  const countsAsked = useRef(new Set());
 
   useEffect(() => onAuthStateChanged(auth, (u) => {
     if (!u) return router.push("/login");
@@ -85,12 +128,71 @@ export function ChatProvider({ children }) {
     return onSnapshot(
       query(collection(db, "conversations"), where("participantUids", "array-contains", uid), orderBy("lastMessageAt", "desc"), limit(50)),
       (s) => {
-        setConvos(s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((c) => !c.deleted && (c.participants || []).some((p) => lowers.includes(p))));
+        const list = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((c) => !c.deleted && (c.participants || []).some((p) => lowers.includes(p)));
+        const now = Date.now();
+        noteTypingArrivals(list, typingArrivals.current, now);
+        convosRef.current = list;
+        setConvos(list);
+        setTypingIn((prev) => {
+          const next = whoIsTyping(list, typingArrivals.current, lowers, now);
+          return sameTyping(prev, next) ? prev : next;
+        });
         setConvosLoaded(true);
       },
       (e) => setErr(`Could not load conversations: ${e.message}`)
     );
   }, [uid, identities]);
+
+  // "typing…" expires on its own once a typer stops refreshing it.
+  const anyoneTyping = Object.keys(typingIn).length > 0;
+  useEffect(() => {
+    if (!anyoneTyping) return;
+    const lowers = identities.map((i) => i.usernameLower);
+    const t = setInterval(() => setTypingIn((prev) => {
+      const next = whoIsTyping(convosRef.current, typingArrivals.current, lowers, Date.now());
+      return sameTyping(prev, next) ? prev : next;
+    }), 1000);
+    return () => clearInterval(t);
+  }, [anyoneTyping, identities]);
+
+  // Your private read positions (for unread counts) and read-receipts setting.
+  useEffect(() => {
+    if (!uid) return;
+    return onSnapshot(
+      doc(db, "chat_state", uid),
+      (s) => {
+        const d = s.data() || {};
+        setChatState({ reads: d.reads || {}, readReceipts: d.readReceipts !== false });
+      },
+      () => {}
+    );
+  }, [uid]);
+
+  // Unread: chats whose last message is newer than where you've read up to. The
+  // chat you're looking at doesn't count; it's being read.
+  const viewingId = openIds[pathname.split("/")[2]] || null;
+  const unreadCandidates = useMemo(() => convos.flatMap((c) => {
+    const since = Math.max(chatState.reads[c.id]?.toMillis?.() ?? 0, READS_SINCE_MS);
+    const lastMs = c.lastMessageAt?.toMillis?.() ?? 0;
+    if (!c.lastMessage || lastMs <= since || c.id === viewingId) return [];
+    return [{ id: c.id, since, key: `${c.id}:${lastMs}:${since}` }];
+  }), [convos, chatState.reads, viewingId]);
+
+  useEffect(() => {
+    for (const { id, since, key } of unreadCandidates) {
+      if (countsAsked.current.has(key)) continue;
+      countsAsked.current.add(key);
+      getCountFromServer(query(collection(db, "conversations", id, "messages"), where("createdAt", ">", Timestamp.fromMillis(since))))
+        .then((r) => setCounts((p) => ({ ...p, [key]: r.data().count })))
+        .catch(() => setCounts((p) => ({ ...p, [key]: 0 })));
+    }
+  }, [unreadCandidates]);
+
+  const unread = useMemo(() => {
+    const out = {};
+    for (const { id, key } of unreadCandidates) if (counts[key] > 0) out[id] = counts[key];
+    return out;
+  }, [unreadCandidates, counts]);
 
   // Register this device session (listed under Settings → Chat profile).
   useEffect(() => {
@@ -168,11 +270,11 @@ export function ChatProvider({ children }) {
 
   const value = useMemo(() => ({
     uid, identities, active, setActive, createUsername, deleteUsername,
-    convos, convosLoading, blockedNames, myNameIn,
+    convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState,
     openIds, setOpenId,
     err, setErr,
     openProfile: setProfileOf, messagePrivately, blockUser, reportUser,
-  }), [uid, identities, active, createUsername, deleteUsername, convos, convosLoading, blockedNames, myNameIn, openIds, setOpenId, err, messagePrivately, blockUser, reportUser]);
+  }), [uid, identities, active, createUsername, deleteUsername, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, messagePrivately, blockUser, reportUser]);
 
   return (
     <ChatContext.Provider value={value}>

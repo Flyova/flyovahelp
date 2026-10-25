@@ -21,8 +21,13 @@ export default function ChatLayout({ children }) {
 
 function ChatShell({ children }) {
   const pathname = usePathname();
-  const { openIds, err, setErr } = useChat();
+  const { openIds, err, setErr, convos, unread } = useChat();
   const section = pathname.split("/")[2] || "";
+  // Chats with unread messages, badged on their tab.
+  const unreadChats = {
+    private: convos.filter((c) => c.type !== "group" && unread[c.id]).length,
+    groups: convos.filter((c) => c.type === "group" && unread[c.id]).length,
+  };
   // On phones an open private chat or group fills the screen edge to edge (its back button returns to the list).
   const inThread = !!openIds[section];
 
@@ -53,9 +58,17 @@ function ChatShell({ children }) {
               key={key}
               href={`/chat/${key}`}
               aria-current={section === key ? "page" : undefined}
-              className={`flex-1 sm:flex-none text-center px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition ${section === key ? "bg-[#8B1E3F] text-white" : "text-white/50 hover:text-white"}`}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition ${section === key ? "bg-[#8B1E3F] text-white" : "text-white/50 hover:text-white"}`}
             >
               {label}
+              {unreadChats[key] > 0 && (
+                <span
+                  aria-label={`${unreadChats[key]} unread`}
+                  className={`min-w-[18px] h-[18px] px-1 rounded-full text-[10px] tracking-normal flex items-center justify-center ${section === key ? "bg-white text-[#8B1E3F]" : "bg-[#8B1E3F] text-white"}`}
+                >
+                  {unreadChats[key]}
+                </span>
+              )}
             </Link>
           ))}
         </nav>

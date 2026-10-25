@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
-import { Ban, Check, Clock3, CornerUpLeft, MoreHorizontal, Pencil } from "lucide-react";
+import { Ban, Clock3, CornerUpLeft, MoreHorizontal, Pencil } from "lucide-react";
 import Avatar from "@/components/Avatar";
 
 const DELETED_TEXT = "— message deleted —";
@@ -37,8 +37,8 @@ function Tail({ mine, color }) {
 
 /**
  * One chat message, Telegram style: grouped bubbles with a tail on the last one,
- * the time (and a sent tick on your own) tucked into the corner, and a quote of
- * the message it replies to (click it to jump there).
+ * the time (and a clock while your own is still sending) tucked into the corner,
+ * and a quote of the message it replies to (click it to jump there).
  *
  * Touch: tap for the menu, swipe left to reply. Mouse: right-click or the ⋯
  * button for the menu, double-click to reply.
@@ -208,7 +208,7 @@ export default function MessageBubble({
           <span className={`absolute right-2.5 bottom-1 flex items-center gap-0.5 text-[11px] leading-none select-none ${mine && !deleted ? "text-white/65" : "text-white/40"}`}>
             {edited && <span className="mr-1">edited</span>}
             {time}
-            {mine && !deleted && (m.pending ? <Clock3 size={12} className="ml-0.5" aria-label="Sending" /> : <Check size={14} className="ml-0.5" aria-label="Sent" />)}
+            {mine && !deleted && m.pending && <Clock3 size={12} className="ml-0.5" aria-label="Sending" />}
           </span>
         </div>
 
@@ -227,6 +227,47 @@ export default function MessageBubble({
             <MoreHorizontal size={16} />
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+const MAX_SEEN_HEADS = 5;
+
+/**
+ * Messenger-style read receipt under a message: the small avatars of whoever has
+ * read up to here, or "Sent" under your latest message until someone has.
+ */
+export function SeenBy({ names = [], sent = false }) {
+  const label = names.length ? `Seen by ${names.map((n) => `@${n}`).join(", ")}` : "Sent";
+  return (
+    <div className="flex justify-end items-center gap-[3px] h-[18px] mt-[3px] mr-1" title={label} aria-label={label}>
+      {names.length ? (
+        <>
+          {names.slice(0, MAX_SEEN_HEADS).map((n) => (
+            <span key={n} className="chat-pop rounded-full ring-[1.5px] ring-[#0e1829]">
+              <Avatar username={n} size={16} rounded="rounded-full" />
+            </span>
+          ))}
+          {names.length > MAX_SEEN_HEADS && <span className="text-[10px] font-bold text-white/45 ml-0.5">+{names.length - MAX_SEEN_HEADS}</span>}
+        </>
+      ) : (
+        sent && <span className="text-[11px] text-white/40">Sent</span>
+      )}
+    </div>
+  );
+}
+
+/** Three bouncing dots in an incoming bubble while someone types (their avatar beside it in groups). */
+export function TypingBubble({ name, showAvatar = false }) {
+  return (
+    <div className="chat-in-theirs flex items-end gap-2 mt-2" aria-hidden="true">
+      {showAvatar && <Avatar username={name} size={34} rounded="rounded-full" />}
+      <div className="relative ml-[10px] h-[38px] px-3.5 rounded-[18px] rounded-bl-none bg-[#1E2D4A] flex items-center gap-[5px]">
+        <Tail mine={false} color="#1E2D4A" />
+        {[0, 0.16, 0.32].map((delay) => (
+          <span key={delay} className="chat-typing-dot" style={{ animationDelay: `${delay}s` }} />
+        ))}
       </div>
     </div>
   );

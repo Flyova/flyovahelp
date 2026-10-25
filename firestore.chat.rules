@@ -13,7 +13,8 @@
 //   - Conversations are created and joined ONLY by the server
 //     (/api/chat/conversations), which records `participantUids`.
 //   - Members read a conversation and its messages; they may only touch
-//     lastMessage / lastMessageAt / blocked (blocks can be added, not removed).
+//     lastMessage / lastMessageAt / blocked (blocks can be added, not removed),
+//     plus their own entries in readAt (seen) and typing.
 //   - A message must be sent as a username you own, by a member, who is not
 //     blocked in that conversation.
 //   - usernames are server-only; clients never read or write them directly.
@@ -54,6 +55,23 @@
       );
     }
 
+    // A presence change in one of a conversation's per-username maps (readAt or
+    // typing) touches only the entry of `actor`, set to now or removed.
+    function ownPresenceEntry(before, after, actor) {
+      return after.diff(before).affectedKeys().hasOnly([actor])
+        && (!after.diff(before).affectedKeys().hasAny([actor]) || !(actor in after) || after[actor] == request.time);
+    }
+
+    // Seen / typing: a member changes only their own readAt and typing entries,
+    // naming themselves (a username they own) in presenceBy.
+    function ownPresenceChange() {
+      let actor = request.resource.data.get('presenceBy', '');
+      return actor is string && actor.size() > 0
+        && ownsUsername(actor)
+        && ownPresenceEntry(resource.data.get('typing', {}), request.resource.data.get('typing', {}), actor)
+        && ownPresenceEntry(resource.data.get('readAt', {}), request.resource.data.get('readAt', {}), actor);
+    }
+
     match /usernames/{name} {
       allow read, write: if false; // server only (API routes)
     }
@@ -70,8 +88,9 @@
       allow create, delete: if false; // server only
       allow update: if chatSignedIn()
         && request.auth.uid in resource.data.participantUids
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageAt', 'blocked'])
-        && request.resource.data.get('blocked', []).hasAll(resource.data.get('blocked', []));
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageAt', 'blocked', 'typing', 'readAt', 'presenceBy'])
+        && request.resource.data.get('blocked', []).hasAll(resource.data.get('blocked', []))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['typing', 'readAt', 'presenceBy']) || ownPresenceChange());
 
       match /messages/{messageId} {
         allow read: if isChatMember(convoId);
@@ -111,6 +130,12 @@
       allow create, update: if ownsUsername(request.resource.data.blocker)
         && blockId == request.resource.data.blocker + '_' + request.resource.data.blocked;
       allow delete: if ownsUsername(resource.data.blocker);
+    }
+
+    // Your private chat state: how far you've read each chat (unread counts) and
+    // your read-receipts setting. Only you can see or change it.
+    match /chat_state/{uid} {
+      allow read, write: if chatSignedIn() && request.auth.uid == uid;
     }
 
     match /chat_reports/{reportId} {
