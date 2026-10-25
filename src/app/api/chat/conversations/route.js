@@ -2,14 +2,15 @@ import { NextResponse } from "next/server";
 import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import {
-  dmIdFor, isValidUsername, norm, ownedUsername,
+  dmIdFor, isValidUsername, norm, ownedUsername, participantUidsFor, usernameUids,
   GROUP_DESCRIPTION_MAX, GROUP_NAME_MAX, MAX_GROUP_MEMBERS, groupOwner, groupSearchKeys, isGroupAdmin,
 } from "@/lib/chat";
 
 // POST /api/chat/conversations — the only way conversations are created or joined.
 // Firestore rules forbid clients from creating conversations or changing their
 // members, so every conversation carries a trustworthy `participantUids` list
-// (what the rules use to decide who may read and post).
+// (what the rules use to decide who may read and post): every account that can
+// chat as one of its members — the owner, plus accounts logged in to the username.
 //
 //   { action: "dm", as, target }                              -> { id }  open/create a private chat
 //   { action: "group", as, name, description?, visibility? }  -> { id }  create a group (caller owns it)
@@ -32,7 +33,7 @@ async function activeUsername(db, username) {
   if (!isValidUsername(lower)) return null;
   const snap = await db.collection("usernames").doc(lower).get();
   if (!snap.exists || snap.data().deleted) return null;
-  return { lower, uid: snap.data().uid };
+  return { lower, uid: snap.data().uid, uids: usernameUids(snap.data()) };
 }
 
 // Like activeUsername, but also finds deleted usernames (they can still sit in a group).
@@ -41,13 +42,6 @@ async function anyUsername(db, username) {
   if (!isValidUsername(lower)) return null;
   const snap = await db.collection("usernames").doc(lower).get();
   return snap.exists ? { lower, uid: snap.data().uid } : null;
-}
-
-// Every username an account has held: an account stays in a group's participantUids
-// while any of them is still a member.
-async function accountUsernames(db, uid) {
-  const snap = await db.collection("usernames").where("uid", "==", uid).get();
-  return snap.docs.map((d) => d.id);
 }
 
 const visibilityOf = (v) => (v === "public" ? "public" : "private");
@@ -85,7 +79,7 @@ async function openDm(db, caller, { as, target }) {
 
   const id = dmIdFor(me.lower, other.lower);
   const ref = db.collection("conversations").doc(id);
-  const participantUids = [...new Set([caller.uid, other.uid])];
+  const participantUids = [...new Set([...usernameUids(me), ...other.uids])];
   const snap = await ref.get();
   if (!snap.exists) {
     await ref.set({
@@ -97,9 +91,9 @@ async function openDm(db, caller, { as, target }) {
       lastMessage: "",
       lastMessageAt: FV().serverTimestamp(),
     });
-  } else if (!Array.isArray(snap.data().participantUids)) {
-    // Conversation from before participantUids existed.
-    await ref.update({ participantUids });
+  } else if (participantUids.some((u) => !(snap.data().participantUids || []).includes(u))) {
+    // Older conversation, or someone has logged in to one of the usernames since.
+    await ref.update({ participantUids: FV().arrayUnion(...participantUids) });
   }
   return NextResponse.json({ id });
 }
@@ -119,7 +113,7 @@ async function createGroup(db, caller, { as, name, description, visibility }) {
     visibility: vis,
     searchKeys: vis === "public" ? groupSearchKeys(groupName) : [],
     participants: [me.lower],
-    participantUids: [caller.uid],
+    participantUids: usernameUids(me),
     owner: me.lower,
     admins: [me.lower],
     removed: [],
@@ -140,7 +134,7 @@ async function joinGroup(db, caller, { convoId, as }) {
     if (convo.visibility !== "public") return { error: "This group is private. Ask an admin to add you.", status: 403 };
     if ((convo.removed || []).includes(me.lower)) return { error: "An admin removed you from this group.", status: 403 };
     if ((convo.participants || []).length >= MAX_GROUP_MEMBERS) return { error: `This group is full (${MAX_GROUP_MEMBERS} members).`, status: 400 };
-    return { participants: FV().arrayUnion(me.lower), participantUids: FV().arrayUnion(caller.uid) };
+    return { participants: FV().arrayUnion(me.lower), participantUids: FV().arrayUnion(...usernameUids(me)) };
   });
   return refused || NextResponse.json({ id: String(convoId) });
 }
@@ -148,16 +142,15 @@ async function joinGroup(db, caller, { convoId, as }) {
 async function leaveGroup(db, caller, { convoId, as }) {
   const me = await ownedUsername(db, caller.uid, as);
   if (!me) return fail("You can only act as one of your own usernames.", 403);
-  const mine = await accountUsernames(db, caller.uid);
-  const refused = await withGroup(db, convoId, (convo) => {
+  const refused = await withGroup(db, convoId, async (convo, tx) => {
     const participants = convo.participants || [];
     if (!participants.includes(me.lower)) return { error: "You're not in this group.", status: 400 };
     if (groupOwner(convo) === me.lower) return { error: "You own this group. Delete it instead of leaving.", status: 400 };
-    const staying = participants.some((p) => p !== me.lower && mine.includes(p));
+    const remaining = participants.filter((p) => p !== me.lower);
     return {
       participants: FV().arrayRemove(me.lower),
       admins: FV().arrayRemove(me.lower),
-      ...(staying ? {} : { participantUids: FV().arrayRemove(caller.uid) }),
+      participantUids: await participantUidsFor((...refs) => tx.getAll(...refs), db, remaining),
     };
   });
   return refused || NextResponse.json({ ok: true });
@@ -176,7 +169,7 @@ async function addMember(db, caller, { convoId, as, username }) {
     if (participants.length >= MAX_GROUP_MEMBERS) return { error: `Groups are limited to ${MAX_GROUP_MEMBERS} members.`, status: 400 };
     return {
       participants: FV().arrayUnion(other.lower),
-      participantUids: FV().arrayUnion(other.uid),
+      participantUids: FV().arrayUnion(...other.uids),
       removed: FV().arrayRemove(other.lower), // an admin adding someone back lifts their removal
     };
   });
@@ -189,9 +182,8 @@ async function removeMember(db, caller, { convoId, as, username }) {
   const other = await anyUsername(db, username);
   if (!other) return fail("That username doesn't exist.", 404);
   if (other.lower === me.lower) return fail("Use Leave group to remove yourself.");
-  const theirs = await accountUsernames(db, other.uid);
 
-  const refused = await withGroup(db, convoId, (convo) => {
+  const refused = await withGroup(db, convoId, async (convo, tx) => {
     if (!isGroupAdmin(convo, me.lower)) return { error: "Only group admins can remove members.", status: 403 };
     const participants = convo.participants || [];
     if (!participants.includes(other.lower)) return { error: `@${other.lower} isn't in this group.`, status: 400 };
@@ -199,12 +191,12 @@ async function removeMember(db, caller, { convoId, as, username }) {
     if ((convo.admins || []).includes(other.lower) && groupOwner(convo) !== me.lower) {
       return { error: "Only the owner can remove an admin.", status: 403 };
     }
-    const staying = participants.some((p) => p !== other.lower && theirs.includes(p));
+    const remaining = participants.filter((p) => p !== other.lower);
     return {
       participants: FV().arrayRemove(other.lower),
       admins: FV().arrayRemove(other.lower),
       removed: FV().arrayUnion(other.lower), // can't rejoin a public group on their own
-      ...(staying ? {} : { participantUids: FV().arrayRemove(other.uid) }),
+      participantUids: await participantUidsFor((...refs) => tx.getAll(...refs), db, remaining),
     };
   });
   return refused || NextResponse.json({ ok: true });

@@ -8,6 +8,7 @@ const MIN_CHARS = 2;
 const DEBOUNCE_MS = 250;
 
 const matchNote = (item, query) => {
+  if (item.match === "name") return "Name match";
   if (item.match === "phone") return "Phone number match";
   if (item.match === "referrer") return `Referred by ${query}`;
   return "";
@@ -121,7 +122,7 @@ export default function PlayerSearch({
         <ul id="player-suggestions" role="listbox" className="mt-2 -mx-1 max-h-80 overflow-y-auto">
           {items.map((item, i) => {
             const note = matchNote(item, term);
-            const detail = [item.fullName, item.country].filter(Boolean).join(" · ");
+            const detail = item.country || "";
             return (
               <li key={item.usernameLower} id={`player-${item.usernameLower}`} role="option" aria-selected={i === activeIndex}>
                 <button

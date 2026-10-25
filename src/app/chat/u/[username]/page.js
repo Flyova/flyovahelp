@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { doc, onSnapshot } from "firebase/firestore";
 import {
-  ArrowLeft, Ban, CalendarDays, ChevronRight, Coins, Copy, Flag, Loader2, MapPin, MessageCircle, Pencil, Radio,
-  Share2, ShieldCheck, UserPlus, Users,
+  ArrowLeft, Ban, BadgeCheck, Bell, BellOff, ChevronRight, Coins, Copy, Crown, Flag, Globe, Loader2, MapPin, MessageCircle,
+  Pencil, Radio, Share2, ShieldCheck, Store, UserPlus, Users, X,
 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
@@ -40,19 +40,37 @@ function Row({ icon: Icon, children, onClick, danger = false, trailing = null })
   );
 }
 
+const BADGES = {
+  verified: { label: "Verified", icon: BadgeCheck, className: "bg-[#2457D6]/25 text-[#8FB0FF]" },
+  agent: { label: "StraWins Agent", icon: Store, className: "bg-emerald-500/15 text-emerald-300" },
+  staff: { label: "StraWins Team", icon: Crown, className: "bg-amber-400/15 text-amber-300" },
+};
+
+function BadgePill({ label, icon: Icon, className }) {
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black ${className}`}>
+      <Icon size={12} /> {label}
+    </span>
+  );
+}
+
 /**
- * A player's full profile page: photo, online status, bio and details, groups
- * you share, and everything you can do with them — message, send coins (in the
- * Chatroom or a shared group), add them to a group you run, share their profile,
- * block or report.
+ * A player's full profile page: photo (tap to view it big), badges, online
+ * status, bio and details, groups you share and their public groups, and
+ * everything you can do with them — message, send coins (in the Chatroom or a
+ * shared group), add them to a group you run, mute their messages, share their
+ * profile, block or report. Never shows their real name or join date.
  */
 export default function PlayerProfilePage() {
   const router = useRouter();
   const params = useParams();
   const name = norm(decodeURIComponent(String(params?.username || ""))).replace(/^@/, "");
   const {
-    uid, convos, myNameIn, messagePrivately, sendCoins, blockUser, unblockUser, reportUser, blockedNames, setOpenId,
+    uid, active, convos, myNameIn, messagePrivately, sendCoins, blockUser, unblockUser, reportUser, blockedNames, setOpenId,
+    chatState, updateChatState, setErr,
   } = useChat();
+  const [viewingPhoto, setViewingPhoto] = useState(false);
+  const [joining, setJoining] = useState(null); // public group id being joined
   const [profile, setProfile] = useState(null);
   const [error, setError] = useState("");
   const [status, setStatus] = useState(null); // online / last seen
@@ -86,7 +104,22 @@ export default function PlayerProfilePage() {
   const canAddTo = groups.filter((g) => !(g.participants || []).includes(name) && isGroupAdmin(g, myNameIn(g)));
   const blocked = blockedNames.includes(name);
   const isYou = !!profile?.isYou;
-  const joined = profile?.memberSince ? new Date(profile.memberSince).toLocaleDateString([], { month: "long", year: "numeric" }) : "";
+  const muted = chatState.sounds.people?.[name] === false;
+  const theirGroups = (profile?.publicGroups || []).filter((g) => !g.isMember && !shared.some((s) => s.id === g.id));
+
+  const toggleMute = () =>
+    updateChatState({ sounds: { people: { [name]: muted } } })
+      .then(() => flash(muted ? `Sounds on for @${name}.` : `@${name} muted: no sound for their messages.`))
+      .catch((e) => setErr(`Could not save: ${e.message}`));
+
+  const joinGroup = async (g) => {
+    setJoining(g.id);
+    const r = await authFetch("/api/chat/conversations", { method: "POST", body: { action: "join", convoId: g.id, as: active } })
+      .catch((e) => ({ error: e.message }));
+    setJoining(null);
+    if (r.error) return flash(r.error);
+    openGroup(g.id);
+  };
 
   const openGroup = (id) => {
     setOpenId("groups", id);
@@ -129,11 +162,17 @@ export default function PlayerProfilePage() {
         <div className="h-28 sm:h-36 bg-gradient-to-br from-[#8B1E3F] via-[#4A1A3A] to-[#2457D6]/70" />
         <div className="px-5 pb-6 -mt-14 flex flex-col items-center text-center">
           <div className="relative p-1 rounded-full bg-[#142036]">
-            <Avatar username={name} size={112} rounded="rounded-full" />
+            <button type="button" onClick={() => setViewingPhoto(true)} aria-label={`View @${name}'s picture`} className="block rounded-full">
+              <Avatar username={name} size={112} rounded="rounded-full" />
+            </button>
             {status?.online && <span className="absolute right-2 bottom-2 w-5 h-5 rounded-full bg-emerald-400 ring-4 ring-[#142036]" aria-label="online" />}
           </div>
           <h1 className="mt-3 text-2xl font-black leading-tight break-all">@{profile?.username || name}</h1>
-          {profile?.fullName && <p className="text-sm text-white/60 mt-0.5">{profile.fullName}</p>}
+          {profile?.badges?.length > 0 && (
+            <div className="mt-2 flex flex-wrap justify-center gap-1.5">
+              {profile.badges.map((b) => BADGES[b] && <BadgePill key={b} {...BADGES[b]} />)}
+            </div>
+          )}
           {status && !isYou && (
             <p className={`text-xs mt-1 ${status.online ? "text-emerald-400 font-bold" : "text-white/45"}`}>{status.online ? "Online now" : status.text.replace(/^last/, "Last")}</p>
           )}
@@ -185,7 +224,6 @@ export default function PlayerProfilePage() {
             )}
             <div className="divide-y divide-white/5">
               {profile.country && <Row icon={MapPin}>{profile.country}</Row>}
-              {joined && <Row icon={CalendarDays}>Joined {joined}</Row>}
               {status && !isYou && <Row icon={Radio}>{status.online ? "Online now" : status.text.replace(/^last/, "Last")}</Row>}
             </div>
           </Card>
@@ -211,6 +249,25 @@ export default function PlayerProfilePage() {
             </Card>
           )}
 
+          {!isYou && theirGroups.length > 0 && (
+            <Card title="Their public groups" icon={Globe}>
+              <div className="divide-y divide-white/5">
+                {theirGroups.map((g) => (
+                  <div key={g.id} className="flex items-center gap-3 px-3 py-2.5">
+                    <GroupAvatar size={36} rounded="rounded-xl" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[14px] font-bold truncate">{g.groupName}</span>
+                      <span className="block text-[11px] text-white/45">{g.memberCount} member{g.memberCount === 1 ? "" : "s"}</span>
+                    </span>
+                    <button type="button" disabled={joining === g.id} onClick={() => joinGroup(g)} className="shrink-0 h-8 px-3 rounded-lg bg-[#8B1E3F] text-[11px] font-black uppercase disabled:opacity-50">
+                      {joining === g.id ? "…" : "Join"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
           {!isYou && canAddTo.length > 0 && (
             <Card title="Add to a group you run" icon={UserPlus}>
               <div className="divide-y divide-white/5">
@@ -229,6 +286,9 @@ export default function PlayerProfilePage() {
 
           <Card title="More" icon={Share2}>
             <div className="divide-y divide-white/5">
+              {!isYou && (
+                <Row icon={muted ? Bell : BellOff} onClick={toggleMute}>{muted ? `Unmute @${name}` : `Mute @${name}`}</Row>
+              )}
               <Row icon={Copy} onClick={() => copy(`@${name}`, "Username copied.")}>Copy username</Row>
               <Row icon={Share2} onClick={share}>Share profile</Row>
               {!isYou && (blocked ? (
@@ -240,6 +300,16 @@ export default function PlayerProfilePage() {
             </div>
           </Card>
         </>
+      )}
+
+      {viewingPhoto && (
+        <div className="chat-backdrop fixed inset-0 z-[350] bg-[#060b14]/90 backdrop-blur-sm flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-label={`@${name}'s picture`} onClick={() => setViewingPhoto(false)}>
+          <button type="button" aria-label="Close" className="absolute right-4 top-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"><X size={20} /></button>
+          <div className="chat-pop">
+            <Avatar username={name} size={300} rounded="rounded-3xl" className="max-w-[86vw] max-h-[86vw] w-auto h-auto" />
+            <p className="mt-3 text-center font-black">@{profile?.username || name}</p>
+          </div>
+        </div>
       )}
 
       {choosingCoins && (

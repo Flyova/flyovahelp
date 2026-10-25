@@ -87,7 +87,8 @@ export async function GET(req) {
       .slice(0, LIMIT)
       .map((r) => {
         const u = profiles.get(r.uid) || {};
-        return { id: r.usernameLower, ...r, fullName: u.fullName || "", country: hidesCountry.has(r.uid) ? "" : u.country || "" };
+        // Real names are matched on but never shown to other players.
+        return { id: r.usernameLower, username: r.username, usernameLower: r.usernameLower, match: r.match, country: hidesCountry.has(r.uid) ? "" : u.country || "" };
       });
     return NextResponse.json({ items });
   } catch (e) {

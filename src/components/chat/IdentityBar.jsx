@@ -1,15 +1,15 @@
 "use client";
 import { useState } from "react";
-import { ChevronDown, Lock, Settings2, Trash2 } from "lucide-react";
+import { ChevronDown, Link2, Settings2, Trash2 } from "lucide-react";
 import Avatar from "@/components/Avatar";
 
 /**
  * Compact "Chatting as" bar: your chat usernames as chips (tap to switch) and a
  * Manage panel, closed by default, for buying or deleting usernames. Usernames
- * locked with a PIN show a lock (`isLocked`); picking one asks for the PIN.
- * `onCreate(name)` resolves to an error message, or "" on success.
+ * you've logged in to from another account show a link icon (only their owner
+ * can delete them). `onCreate(name)` resolves to an error message, or "" on success.
  */
-export default function IdentityBar({ identities, active, onSelect, onCreate, onDelete, isLocked = () => false }) {
+export default function IdentityBar({ identities, active, onSelect, onCreate, onDelete }) {
   const [manage, setManage] = useState(false);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -41,7 +41,7 @@ export default function IdentityBar({ identities, active, onSelect, onCreate, on
                 className={`shrink-0 flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-xl text-xs font-bold border transition-colors ${selected ? "bg-[#8B1E3F] border-[#8B1E3F] text-white" : "bg-black/25 border-white/10 text-white/70 hover:text-white"}`}
               >
                 <Avatar username={i.usernameLower} size={22} rounded="rounded-lg" />@{i.username}
-                {isLocked(i.usernameLower) && <Lock size={12} className="text-white/60" aria-label="locked" />}
+                {i.linked && <Link2 size={12} className="text-white/60" aria-label="logged in from another account" />}
               </button>
             );
           })}
@@ -93,7 +93,7 @@ export default function IdentityBar({ identities, active, onSelect, onCreate, on
                     <span className="truncate font-bold">@{i.username}</span>
                     {i.isDefault && <span className="text-[9px] font-black uppercase text-white/35">Default</span>}
                   </span>
-                  {!i.isDefault && (
+                  {!i.isDefault && !i.linked && (
                     <button type="button" onClick={() => onDelete(i.usernameLower)} aria-label={`Delete @${i.username}`} className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-red-300/80 hover:text-red-300 hover:bg-white/5">
                       <Trash2 size={14} />
                     </button>

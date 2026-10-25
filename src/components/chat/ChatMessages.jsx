@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, Coins, Copy, CornerUpLeft, Flag, MessageCircle, Pencil, Trash2, UserRound } from "lucide-react";
 import MessageBubble, { SeenBy, TypingBubble, isCoinCard, isDeleted, messageMillis, startsRun } from "@/components/chat/MessageBubble";
 import MessageMenu from "@/components/chat/MessageMenu";
+import CoinBurst from "@/components/chat/CoinBurst";
 
 const NEAR_BOTTOM = 120; // px from the bottom that still counts as "reading the latest"
 
@@ -46,7 +47,8 @@ function byDay(messages) {
  * `seenBy` (message id -> usernames) puts read-receipt avatars under messages,
  * `sentId` marks your latest message "Sent", and `typing` (usernames) shows a
  * typing bubble at the bottom. `onSendCoins(username)` adds "Send coins" to other
- * people's messages (Chatroom and groups only).
+ * people's messages (Chatroom and groups only). `burst` = { id, coins, to, forYou }
+ * plays the coins-sent animation over the list; `onBurstDone` clears it.
  */
 export default function ChatMessages({
   messages,
@@ -67,6 +69,8 @@ export default function ChatMessages({
   seenBy = {},
   sentId = null,
   typing = [],
+  burst = null,
+  onBurstDone,
 }) {
   const listRef = useRef(null);
   const atBottomRef = useRef(true);
@@ -189,6 +193,7 @@ export default function ChatMessages({
         </button>
       )}
 
+      {burst && <CoinBurst key={burst.id} coins={burst.coins} to={burst.to} forYou={burst.forYou} onDone={onBurstDone} />}
       {menu && <MessageMenu at={menu.at} items={menuItems(menu.message)} onClose={() => setMenu(null)} />}
     </div>
   );

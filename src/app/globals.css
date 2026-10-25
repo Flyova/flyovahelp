@@ -321,10 +321,29 @@ div {
 }
 .chat-typing-dot { width: 7px; height: 7px; border-radius: 9999px; background: rgba(245, 243, 238, 0.85); animation: chat-typing 1.2s ease-in-out infinite; }
 
+/* Coins sent: coins and bubbles rise over the chat, and a "+N coins" pops in the middle. */
+@keyframes coin-rise {
+  0% { transform: translate3d(0, 0, 0) rotate(0deg) scale(0.5); opacity: 0; }
+  12% { opacity: 1; }
+  100% { transform: translate3d(var(--drift, 0px), -760px, 0) rotate(var(--spin, 0deg)) scale(1); opacity: 0; }
+}
+.coin-piece { animation: coin-rise 1.6s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+@keyframes coin-pop {
+  0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+  14% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+  24% { transform: translate(-50%, -50%) scale(1); }
+  78% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -62%) scale(0.96); opacity: 0; }
+}
+.coin-pop { animation: coin-pop 2.2s ease-out both; }
+
 /* Phone menu drawer (Chats): slides in from the left. */
 @keyframes nav-drawer { from { transform: translateX(-100%); } to { transform: none; } }
 .nav-drawer { animation: nav-drawer 0.3s cubic-bezier(0.2, 0.9, 0.25, 1) both; }
 @media (prefers-reduced-motion: reduce) {
   .nav-drawer,
-  .chat-typing-dot { animation: none !important; }
+  .chat-typing-dot,
+  .coin-pop { animation: none !important; }
+  .coin-piece { display: none; }
+  .coin-pop { transform: translate(-50%, -50%); }
 }

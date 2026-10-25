@@ -1,17 +1,18 @@
 "use client";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import {
-  Bell, Coins, Eye, Globe2, KeyRound, Lock, LockOpen, Radio, Shield, SlidersHorizontal, Trash2, UserPlus, Users, Wallet,
+  Bell, Coins, Eye, Globe2, KeyRound, Link2, LogIn, LogOut, Radio, Shield, SlidersHorizontal, Trash2, UserPlus, Users, Wallet,
 } from "lucide-react";
 import { db } from "@/lib/firebase";
+import { authFetch } from "@/lib/authFetch";
 import { COIN_CENTS, formatCents, formatCoins } from "@/lib/chat";
 import { useChat } from "@/components/chat/ChatProvider";
 import Avatar from "@/components/Avatar";
 import ChatProfileCard from "@/components/settings/ChatProfileCard";
 import { clearMyReceipts } from "@/components/settings/ChatPrivacySwitch";
-import { ManagePinSheet } from "@/components/chat/PinSheet";
+import UsernamePasswordSheet from "@/components/chat/UsernamePasswordSheet";
 import { CoinIcon } from "@/components/chat/CoinSheets";
 
 function Section({ id, icon: Icon, title, children }) {
@@ -49,19 +50,54 @@ function SwitchRow({ icon: Icon, title, text, on, onChange, disabled = false }) 
 
 /**
  * Chat settings: profile, accounts (your other usernames, adding or buying one,
- * and a PIN for each), the coin wallet, per-chat notification sounds, privacy and
- * settings (online status, hidden country).
+ * a password for each, logging in to another account's username), the coin
+ * wallet, per-chat notification sounds, privacy and settings (online status,
+ * hidden country).
  */
 export default function ChatSettingsPage() {
   const {
-    uid, identities, active, selectIdentity, createUsername, deleteUsername, convos,
-    coins, openCoinWallet, chatState, updateChatState, locked, isLocked, lockNow, refreshLocks, markUnlocked, setErr,
+    uid, identities, active, selectIdentity, refreshIdentities, createUsername, deleteUsername, convos,
+    coins, openCoinWallet, chatState, updateChatState, setErr,
   } = useChat();
   const [newName, setNewName] = useState("");
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState("");
-  const [pinFor, setPinFor] = useState(null); // username whose PIN sheet is open
+  const [passwordFor, setPasswordFor] = useState(null); // username whose password sheet is open
+  const [auth, setAuth] = useState({}); // your usernames -> { hasPassword, otherAccounts }
+  const [login, setLogin] = useState({ username: "", password: "" });
+  const [loggingIn, setLoggingIn] = useState(false);
+  const [loginNote, setLoginNote] = useState({ type: "", msg: "" });
   const [busy, setBusy] = useState("");
+
+  const loadAuth = useCallback(() => authFetch("/api/chat/accounts")
+    .then((d) => setAuth(Object.fromEntries((d.items || []).map((x) => [x.username, x]))))
+    .catch(() => {}), []);
+  useEffect(() => {
+    if (uid) loadAuth();
+  }, [uid, loadAuth]);
+
+  const logIn = async (e) => {
+    e.preventDefault();
+    const username = login.username.trim().replace(/^@/, "");
+    if (!username || !login.password || loggingIn) return;
+    setLoggingIn(true);
+    setLoginNote({ type: "", msg: "" });
+    const r = await authFetch("/api/chat/accounts", { method: "POST", body: { action: "login", username, password: login.password } })
+      .catch((x) => ({ error: x.message }));
+    setLoggingIn(false);
+    if (r.error) return setLoginNote({ type: "error", msg: r.error });
+    setLogin({ username: "", password: "" });
+    setLoginNote({ type: "success", msg: `You're now logged in to @${r.username || username}.` });
+    await refreshIdentities();
+  };
+
+  const logOut = async (name) => {
+    if (!confirm(`Log out of @${name}? You'll need its password to log in again.`)) return;
+    const r = await authFetch("/api/chat/accounts", { method: "POST", body: { action: "logout", username: name } }).catch((x) => ({ error: x.message }));
+    if (r.error) return setErr(r.error);
+    if (name === active) selectIdentity(identities.find((i) => i.isDefault)?.usernameLower || "");
+    await refreshIdentities();
+  };
 
   const groups = convos.filter((c) => c.type === "group");
   const sounds = chatState.sounds;
@@ -107,36 +143,37 @@ export default function ChatSettingsPage() {
         <ul className="rounded-2xl bg-black/20 divide-y divide-white/5">
           {identities.map((i) => {
             const name = i.usernameLower;
-            const hasPin = locked.includes(name);
-            const lockedNow = isLocked(name);
+            const info = auth[name] || { hasPassword: false, otherAccounts: 0 };
+            const labels = i.linked
+              ? ["Logged in from another account"]
+              : [i.isDefault ? "Main username" : "Extra username", info.hasPassword && "Has a password", info.otherAccounts > 0 && `${info.otherAccounts} other account${info.otherAccounts === 1 ? "" : "s"} logged in`];
             return (
               <li key={name} className="flex flex-wrap items-center gap-x-2.5 gap-y-2 px-3 py-3">
                 <Avatar username={name} size={36} rounded="rounded-full" />
                 <span className="min-w-0 flex-1 basis-[calc(100%-46px)] sm:basis-0">
                   <span className="flex items-center gap-1.5 text-[13px] font-bold truncate">
-                    @{i.username} {hasPin && <Lock size={12} className="text-white/50" aria-label="has a PIN" />}
+                    @{i.username} {i.linked && <Link2 size={12} className="text-white/50" aria-label="logged in from another account" />}
                   </span>
                   <span className="block text-[11px] text-white/45">
-                    {[i.isDefault && "Main username", name === active && "Chatting as this", lockedNow && "Locked"].filter(Boolean).join(" · ") || "Extra username"}
+                    {[...labels, name === active && "Chatting as this"].filter(Boolean).join(" · ")}
                   </span>
                 </span>
                 <span className="flex items-center gap-1.5 ml-[46px] sm:ml-0">
                   {name !== active && (
                     <button type="button" onClick={() => selectIdentity(name)} className="h-8 px-3 rounded-lg bg-[#8B1E3F] text-[11px] font-black uppercase">
-                      {lockedNow ? "Unlock" : "Use"}
+                      Use
                     </button>
                   )}
-                  {!i.isDefault && (
-                    <button type="button" onClick={() => setPinFor(name)} aria-label={hasPin ? `Change PIN for @${name}` : `Set a PIN for @${name}`} className="h-8 px-2.5 rounded-lg bg-white/[0.06] hover:bg-white/10 flex items-center gap-1 text-[11px] font-bold">
-                      <KeyRound size={13} /> {hasPin ? "PIN" : "Set PIN"}
+                  {i.linked ? (
+                    <button type="button" onClick={() => logOut(name)} className="h-8 px-2.5 rounded-lg bg-white/[0.06] hover:bg-white/10 flex items-center gap-1 text-[11px] font-bold">
+                      <LogOut size={13} /> Log out
+                    </button>
+                  ) : (
+                    <button type="button" onClick={() => setPasswordFor(name)} aria-label={`Password for @${name}`} className="h-8 px-2.5 rounded-lg bg-white/[0.06] hover:bg-white/10 flex items-center gap-1 text-[11px] font-bold">
+                      <KeyRound size={13} /> Password
                     </button>
                   )}
-                  {hasPin && !lockedNow && (
-                    <button type="button" onClick={() => lockNow(name)} aria-label={`Lock @${name} now`} className="h-8 w-8 rounded-lg bg-white/[0.06] hover:bg-white/10 flex items-center justify-center">
-                      <LockOpen size={14} />
-                    </button>
-                  )}
-                  {!i.isDefault && (
+                  {!i.isDefault && !i.linked && (
                     <button type="button" onClick={() => deleteUsername(name)} aria-label={`Delete @${name}`} className="h-8 w-8 rounded-lg text-red-300/80 hover:text-red-300 hover:bg-white/5 flex items-center justify-center">
                       <Trash2 size={14} />
                     </button>
@@ -168,6 +205,38 @@ export default function ChatSettingsPage() {
           <p className="text-[11px] text-white/40 mt-1.5">
             Prices and limits: <Link href="/settings#privacy-policy" className="font-bold text-[#E0708C] hover:underline">Privacy &amp; Policy</Link>
           </p>
+        </form>
+
+        <form onSubmit={logIn} className="mt-5">
+          <p className="flex items-center gap-1.5 text-[10px] font-black uppercase text-white/40 mb-1.5"><LogIn size={12} /> Log in to a username</p>
+          <p className="text-[11px] text-white/45 mb-2">Have another player&apos;s username and its password? Log in to chat as it from this account.</p>
+          <div className="space-y-2">
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-white/35">@</span>
+              <input
+                value={login.username}
+                onChange={(e) => setLogin((l) => ({ ...l, username: e.target.value }))}
+                placeholder="username"
+                autoComplete="off"
+                autoCapitalize="none"
+                className="w-full bg-black/40 border border-white/10 focus:border-[#8B1E3F] rounded-xl pl-7 pr-3 py-2.5 text-base md:text-sm outline-none"
+              />
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={login.password}
+                onChange={(e) => setLogin((l) => ({ ...l, password: e.target.value }))}
+                placeholder="its password"
+                autoComplete="off"
+                className="flex-1 min-w-0 bg-black/40 border border-white/10 focus:border-[#8B1E3F] rounded-xl px-3 py-2.5 text-base md:text-sm outline-none"
+              />
+              <button type="submit" disabled={loggingIn || !login.username.trim() || !login.password} className="shrink-0 bg-[#8B1E3F] px-4 rounded-xl text-xs font-black uppercase disabled:opacity-50">
+                {loggingIn ? "…" : "Log in"}
+              </button>
+            </div>
+          </div>
+          {loginNote.msg && <p className={`text-xs mt-1.5 ${loginNote.type === "error" ? "text-red-300" : "text-emerald-300"}`}>{loginNote.msg}</p>}
         </form>
       </Section>
 
@@ -252,21 +321,18 @@ export default function ChatSettingsPage() {
             <KeyRound size={15} className="text-[#7A9BEE] shrink-0 mt-0.5" />
             <p className="text-[11px] text-white/55 leading-relaxed">
               <span className="block text-[13px] font-bold text-white mb-0.5">Password for each chat account</span>
-              Give any of your extra usernames its own PIN under <a href="#accounts" className="font-bold text-[#E0708C] hover:underline">Accounts</a>. A locked username, and its chats, stay hidden until the PIN is entered.
+              Give any of your usernames a password under <a href="#accounts" className="font-bold text-[#E0708C] hover:underline">Accounts</a>. Anyone with the username and its password can log in to it from their own StraWins account and chat as it, until they log out or you log them out.
             </p>
           </div>
         </div>
       </Section>
 
-      {pinFor && (
-        <ManagePinSheet
-          username={pinFor}
-          isLocked={locked.includes(pinFor)}
-          onDone={() => {
-            markUnlocked(pinFor); // a PIN you just set doesn't lock you out right away
-            refreshLocks();
-          }}
-          onClose={() => setPinFor(null)}
+      {passwordFor && (
+        <UsernamePasswordSheet
+          username={passwordFor}
+          info={auth[passwordFor] || { hasPassword: false, otherAccounts: 0 }}
+          onChanged={loadAuth}
+          onClose={() => setPasswordFor(null)}
         />
       )}
     </div>

@@ -14,7 +14,7 @@ import PlayerSearch from "@/components/chat/PlayerSearch";
  */
 export default function PrivateChatsPage() {
   const {
-    identities, active, selectIdentity, isLocked, createUsername, deleteUsername,
+    identities, active, selectIdentity, createUsername, deleteUsername,
     convos, convosLoading, myNameIn, openIds, setOpenId, setErr, typingIn, unread,
     messagePrivately, openProfile, blockUser, reportUser, presence, presenceNow,
   } = useChat();
@@ -31,7 +31,7 @@ export default function PrivateChatsPage() {
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 lg:h-[calc(100vh-14.5rem)] lg:min-h-[520px]">
       {/* identity, search and inbox — hidden on phones while a chat is open */}
       <div className={`lg:col-span-4 flex-col gap-3 min-h-0 ${openId ? "hidden lg:flex" : "flex"}`}>
-        <IdentityBar identities={identities} active={active} onSelect={selectIdentity} isLocked={isLocked} onCreate={createUsername} onDelete={deleteUsername} />
+        <IdentityBar identities={identities} active={active} onSelect={selectIdentity} onCreate={createUsername} onDelete={deleteUsername} />
         <PlayerSearch onPick={messagePrivately} label="Search people · username, name, phone, country" />
         <ConversationList
           className="lg:flex-1"

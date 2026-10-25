@@ -10,8 +10,6 @@ import { auth, db } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
 import { playChatSound } from "@/lib/chatSound";
 import { PRESENCE_PING_MS, READS_SINCE_MS, TYPING_SHOW_MS, norm } from "@/lib/chat";
-import ProfileSheet from "@/components/chat/ProfileSheet";
-import PinSheet from "@/components/chat/PinSheet";
 import { CoinWalletSheet, SendCoinsSheet } from "@/components/chat/CoinSheets";
 
 const ChatContext = createContext(null);
@@ -59,17 +57,7 @@ function whoIsTyping(convos, arrivals, mine, now) {
 
 const sameTyping = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-const UNLOCKED_KEY = "chat:unlocked"; // usernames unlocked with their PIN in this browser tab
 const QUIET_START_MS = 4000; // no sounds for the unread counts that load with the page
-
-function saveUnlocked(next) {
-  try {
-    sessionStorage.setItem(UNLOCKED_KEY, JSON.stringify([...next]));
-  } catch {
-    // Storage blocked: the unlock lasts until the page reloads.
-  }
-  return next;
-}
 
 // Your chat_state/<uid> with defaults filled in.
 const readChatState = (d = {}, loaded = false) => ({
@@ -86,13 +74,13 @@ const readChatState = (d = {}, loaded = false) => ({
  * State shared by the Chatroom, Private and Groups pages, kept while you move
  * between them: who you are (your chat usernames and the one you're using), your
  * conversations, who is typing in them and how many messages you haven't read,
- * the usernames you've blocked, the chat open on each page, and the profile
- * popup. Also holds the actions those pages share.
+ * the usernames you've blocked, and the chat open on each page. Also holds the
+ * actions those pages share.
  *
  * Your read positions and settings (read receipts, sounds, online status, hidden
  * country, coins on show) live in chat_state/<uid>, which only you can read;
- * readAt on a conversation is the shared copy others see. Usernames locked with a
- * PIN stay hidden — their chats too — until unlocked in this tab.
+ * readAt on a conversation is the shared copy others see. Your usernames include
+ * other accounts' usernames you've logged in to with their password.
  */
 export function ChatProvider({ children }) {
   const router = useRouter();
@@ -101,18 +89,12 @@ export function ChatProvider({ children }) {
   const [identities, setIdentities] = useState([]);
   const [identitiesLoaded, setIdentitiesLoaded] = useState(false);
   const [active, setActive] = useState(""); // usernameLower you post and start chats as
-  const [allConvos, setAllConvos] = useState([]); // every conversation of the account, locked usernames' too
+  const [allConvos, setAllConvos] = useState([]); // every conversation the account can read
   const [convosLoaded, setConvosLoaded] = useState(false);
-  const [locked, setLocked] = useState([]); // your PIN-locked usernames
-  const [unlocked, setUnlocked] = useState(() => new Set()); // …of which unlocked in this tab
-  const [pinPrompt, setPinPrompt] = useState(null); // username whose PIN is being asked
   const [presence, setPresence] = useState({}); // username -> chat_presence doc (your private-chat partners)
   const [presenceNow, setPresenceNow] = useState(0); // ticks so "online" turns into "last seen" on its own
   const [blockedNames, setBlockedNames] = useState([]);
   const [openIds, setOpenIds] = useState({ private: null, groups: null }); // open chat per page
-  // Profile popup: { username, coinsIn } — coinsIn is where coins can be sent from it
-  // ({} = the Chatroom, { convoId } = a group, null = nowhere, e.g. private chats).
-  const [profileOf, setProfileOf] = useState(null);
   const [coins, setCoins] = useState(0); // your chat coin balance
   const [coinSheet, setCoinSheet] = useState(null); // { kind: "wallet" } | { kind: "send", to, convoId }
   const [err, setErr] = useState("");
@@ -208,29 +190,12 @@ export function ChatProvider({ children }) {
 
   const updateChatState = useCallback((patch) => setDoc(doc(db, "chat_state", uid), patch, { merge: true }), [uid]);
 
-  // PIN-locked usernames, and the ones unlocked in this tab (kept across reloads of it).
-  const refreshLocks = useCallback(() => authFetch("/api/chat/locks").then((d) => setLocked(d.locked || [])).catch(() => {}), []);
-  useEffect(() => {
-    if (uid) refreshLocks();
-  }, [uid, refreshLocks]);
-  useEffect(() => {
-    const t = setTimeout(() => {
-      try {
-        setUnlocked(new Set(JSON.parse(sessionStorage.getItem(UNLOCKED_KEY) || "[]")));
-      } catch {
-        // Storage blocked: locked usernames just ask for their PIN again.
-      }
-    }, 0);
-    return () => clearTimeout(t);
-  }, []);
-
   const myLowers = useMemo(() => identities.map((i) => i.usernameLower), [identities]);
-  const hiddenNames = useMemo(() => new Set(locked.filter((n) => !unlocked.has(n))), [locked, unlocked]);
-  const isLocked = useCallback((name) => hiddenNames.has(name), [hiddenNames]);
-  // Conversations you can see now: at least one of your unlocked usernames is in them.
+  // Conversations one of your usernames is in (an account you logged out of a
+  // username may still be listed in some for a moment).
   const convos = useMemo(
-    () => allConvos.filter((c) => (c.participants || []).some((p) => myLowers.includes(p) && !hiddenNames.has(p))),
-    [allConvos, myLowers, hiddenNames]
+    () => allConvos.filter((c) => (c.participants || []).some((p) => myLowers.includes(p))),
+    [allConvos, myLowers]
   );
 
   // Unread: chats whose last message is newer than where you've read up to. The
@@ -261,12 +226,17 @@ export function ChatProvider({ children }) {
 
   // New-message sounds, switched on or off per chat in Chat settings → Notifications.
   // kind: "room", "private" or "group" (with its id).
+  // A private chat is also silent if you muted that person (sounds.people.<name>).
   const soundOn = useCallback((kind, convoId) => {
     const s = chatState.sounds;
     if (kind === "room") return s.room !== false;
-    if (kind === "private") return s.private !== false;
+    if (kind === "private") {
+      if (s.private === false) return false;
+      const other = (convos.find((c) => c.id === convoId)?.participants || []).find((p) => !myLowers.includes(p));
+      return !other || s.people?.[other] !== false;
+    }
     return s.groups?.[convoId] !== false;
-  }, [chatState.sounds]);
+  }, [chatState.sounds, convos, myLowers]);
 
   useEffect(() => {
     startedAt.current = Date.now();
@@ -346,26 +316,11 @@ export function ChatProvider({ children }) {
   const myNameIn = useCallback((convo) => {
     const parts = convo?.participants || [];
     if (parts.includes(active)) return active;
-    return parts.find((p) => myLowers.includes(p) && !hiddenNames.has(p)) || active;
-  }, [active, myLowers, hiddenNames]);
+    return parts.find((p) => myLowers.includes(p)) || active;
+  }, [active, myLowers]);
 
-  // Switching username: a locked one asks for its PIN first.
-  const selectIdentity = useCallback((name) => (hiddenNames.has(name) ? setPinPrompt(name) : setActive(name)), [hiddenNames]);
-  const markUnlocked = useCallback((name) => setUnlocked((p) => saveUnlocked(new Set(p).add(name))), []);
-  const unlockedWith = useCallback((name) => {
-    markUnlocked(name);
-    setActive(name);
-    setPinPrompt(null);
-  }, [markUnlocked]);
-  // Hides a username (and its chats) again until its PIN is entered.
-  const lockNow = useCallback((name) => {
-    setUnlocked((p) => {
-      const next = new Set(p);
-      next.delete(name);
-      return saveUnlocked(next);
-    });
-    setActive((cur) => (cur === name ? identities.find((i) => i.isDefault)?.usernameLower || "" : cur));
-  }, [identities]);
+  // Reloads your usernames, e.g. after logging in to or out of one.
+  const refreshIdentities = useCallback(() => authFetch("/api/chat/usernames").then(applyIdentities).catch(() => {}), [applyIdentities]);
 
   // Resolves to an error message for IdentityBar to show, or "" on success.
   const createUsername = useCallback(async (username) => {
@@ -432,8 +387,8 @@ export function ChatProvider({ children }) {
     }
   }, [active]);
 
-  const closeProfile = useCallback(() => setProfileOf(null), []);
-  const openProfile = useCallback((username, coinsIn = null) => setProfileOf({ username: norm(username), coinsIn }), []);
+  // A player's full profile page.
+  const openProfile = useCallback((username) => router.push(`/chat/u/${encodeURIComponent(norm(username))}`), [router]);
   const openCoinWallet = useCallback(() => setCoinSheet({ kind: "wallet" }), []);
   // Send coins to `to` in the Chatroom (where = {}) or a group (where = { convoId }).
   const sendCoins = useCallback((to, where = {}) => setCoinSheet({ kind: "send", to: norm(to), convoId: where.convoId || null }), []);
@@ -442,31 +397,18 @@ export function ChatProvider({ children }) {
   const convosLoading = !identitiesLoaded || (identities.length > 0 && !convosLoaded);
 
   const value = useMemo(() => ({
-    uid, identities, active, setActive, createUsername, deleteUsername,
+    uid, identities, active, setActive, selectIdentity: setActive, refreshIdentities, createUsername, deleteUsername,
     convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState,
     openIds, setOpenId,
     err, setErr,
     openProfile, messagePrivately, blockUser, unblockUser, reportUser,
     coins, openCoinWallet, sendCoins,
     updateChatState, soundOn, presence, presenceNow,
-    locked, isLocked, selectIdentity, lockNow, refreshLocks, markUnlocked,
-  }), [uid, identities, active, createUsername, deleteUsername, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, openProfile, messagePrivately, blockUser, unblockUser, reportUser, coins, openCoinWallet, sendCoins, updateChatState, soundOn, presence, presenceNow, locked, isLocked, selectIdentity, lockNow, refreshLocks, markUnlocked]);
+  }), [uid, identities, active, refreshIdentities, createUsername, deleteUsername, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, openProfile, messagePrivately, blockUser, unblockUser, reportUser, coins, openCoinWallet, sendCoins, updateChatState, soundOn, presence, presenceNow]);
 
   return (
     <ChatContext.Provider value={value}>
       {children}
-      {profileOf && (
-        <ProfileSheet
-          key={profileOf.username}
-          username={profileOf.username}
-          onClose={closeProfile}
-          onMessage={messagePrivately}
-          onSendCoins={profileOf.coinsIn ? (u) => sendCoins(u, profileOf.coinsIn) : undefined}
-          onBlock={blockUser}
-          onReport={reportUser}
-        />
-      )}
-      {pinPrompt && <PinSheet username={pinPrompt} onUnlocked={() => unlockedWith(pinPrompt)} onClose={() => setPinPrompt(null)} />}
       {coinSheet?.kind === "wallet" && <CoinWalletSheet uid={uid} coins={coins} onClose={closeCoins} />}
       {coinSheet?.kind === "send" && (
         <SendCoinsSheet

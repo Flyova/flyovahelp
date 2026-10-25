@@ -88,6 +88,7 @@ async function edit(db, caller, { id, text }) {
   if (snap.data().senderUid !== caller.uid) return fail("You can only edit your own messages.", 403);
   if (snap.data().deletedForEveryone) return fail("Deleted messages can't be edited.", 400);
   if (snap.data().kind === "coins") return fail("Coin messages can't be edited.", 400);
+  if (String(snap.data().text || "") === body) return NextResponse.json({ ok: true }); // unchanged: not "edited"
   await ref.update({ text: body, editedAt: admin.firestore.FieldValue.serverTimestamp() });
   return NextResponse.json({ ok: true });
 }

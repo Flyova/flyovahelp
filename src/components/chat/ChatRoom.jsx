@@ -1,10 +1,10 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { collection, doc, getDoc, limit, onSnapshot, orderBy, query } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
 import { containsMediaMarker } from "@/lib/chat";
-import { playChatSound } from "@/lib/chatSound";
+import { playChatSound, playCoinSound } from "@/lib/chatSound";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import ChatMessages from "@/components/chat/ChatMessages";
 import ChatComposer from "@/components/chat/ChatComposer";
@@ -28,10 +28,14 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
   const [editing, setEditing] = useState(null);
   const inputRef = useRef(null);
   const [isStaff, setIsStaff] = useState(false);
+  const [burst, setBurst] = useState(null); // coins-sent animation
+  const clearBurst = useCallback(() => setBurst(null), []);
   const soundRef = useRef(sound);
+  const activeRef = useRef(active);
   useEffect(() => {
     soundRef.current = sound;
-  }, [sound]);
+    activeRef.current = active;
+  }, [sound, active]);
 
   useEffect(() => {
     if (!uid) return;
@@ -43,7 +47,14 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
         const now = Date.now();
         const added = initial ? [] : s.docChanges().filter((c) => c.type === "added");
         added.forEach((c) => arrived.set(c.doc.id, now));
-        if (soundRef.current && added.some((c) => c.doc.data().senderUid !== uid)) playChatSound();
+        const coinCard = added.map((c) => c.doc).find((d) => d.data().kind === "coins");
+        if (coinCard) {
+          const d = coinCard.data();
+          setBurst({ id: coinCard.id, coins: d.coins, to: d.to, forYou: d.to === activeRef.current });
+          if (soundRef.current) playCoinSound();
+        } else if (soundRef.current && added.some((c) => c.doc.data().senderUid !== uid)) {
+          playChatSound();
+        }
         initial = false;
         setMessages(
           s.docs.map((d) => ({ id: d.id, ...d.data(), fresh: now - (arrived.get(d.id) ?? 0) < FRESH_MS })).reverse()
@@ -95,6 +106,12 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
     if (!body) return;
     if (body.length > MAX_LENGTH) return setError(`Keep it under ${MAX_LENGTH} characters.`);
     if (containsMediaMarker(body)) return setError("Text only — no images, voice or video.");
+    // Sending an edit with the text unchanged just leaves edit mode: no "edited" label.
+    if (editing && body === String(editing.text || "").trim()) {
+      setText("");
+      setEditing(null);
+      return;
+    }
     setSending(true);
     const r = editing
       ? await authFetch("/api/chat/room", { method: "POST", body: { action: "edit", id: editing.id, text: body } })
@@ -143,6 +160,8 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
         onReport={onReport}
         onOpenProfile={onOpenProfile}
         onSendCoins={onSendCoins}
+        burst={burst}
+        onBurstDone={clearBurst}
       />
 
       <ChatComposer

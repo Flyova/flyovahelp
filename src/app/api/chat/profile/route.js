@@ -2,12 +2,15 @@ import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebaseAdmin";
 import { norm } from "@/lib/chat";
 import { getCaller } from "@/lib/apiAuth";
+import { resolvePrivilegedRole } from "@/lib/adminAccess";
+
+const MAX_GROUPS = 10;
 
 // GET /api/chat/profile?u=username — the public profile shown when you tap a
-// player in chat: chat username, bio and status, plus the name, country and
-// join date that search already shows (country only if they don't hide it), and
-// their chat coins only if they chose to show them off. Never email, phone, PIN or
-// money balances.
+// player in chat: chat username, bio and status, country (unless they hide it),
+// badges (verified, agent, StraWins staff), the public groups they're in, and
+// their chat coins only if they chose to show them off. Never their real name,
+// join date, email, phone, PIN or money balances.
 export async function GET(req) {
   try {
     const caller = await getCaller(req);
@@ -30,15 +33,32 @@ export async function GET(req) {
     const u = userSnap.exists ? userSnap.data() : {};
     const state = stateSnap.exists ? stateSnap.data() : {};
     const showCoins = state.showCoins === true;
+
+    // Public groups they're in (never private groups or chats).
+    const convoSnap = await db.collection("conversations").where("participants", "array-contains", lower).limit(100).get();
+    const publicGroups = convoSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((g) => g.type === "group" && g.visibility === "public" && !g.deleted)
+      .slice(0, MAX_GROUPS)
+      .map((g) => ({
+        id: g.id,
+        groupName: g.groupName || "Group",
+        memberCount: (g.participants || []).length,
+        isMember: (g.participantUids || []).includes(caller.uid),
+      }));
     return NextResponse.json({
       username: n.username || lower,
       usernameLower: lower,
       bio: p.bio || "",
       status: p.status || "",
-      fullName: u.deleted || u.deletionRequested ? "" : u.fullName || "",
       country: state.hideCountry ? "" : u.country || "",
-      memberSince: u.createdAt?.toMillis?.() ?? n.createdAt?.toMillis?.() ?? null,
-      isYou: n.uid === caller.uid,
+      badges: [
+        u.verified === true && "verified",
+        u.isAgent === true && "agent",
+        resolvePrivilegedRole(u.role, u.email) && "staff",
+      ].filter(Boolean),
+      publicGroups,
+      isYou: n.uid === caller.uid || (n.linkedUids || []).includes(caller.uid),
       coins: showCoins ? Math.max(0, Number(coinSnap.exists ? coinSnap.data().balance : 0) || 0) : null,
     });
   } catch (e) {

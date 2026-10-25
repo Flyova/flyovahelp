@@ -7,7 +7,7 @@ import { ChevronLeft, MoreHorizontal } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { TYPING_PING_MS, containsMediaMarker, isValidText, typingLabel } from "@/lib/chat";
 import { notifyPush } from "@/lib/pushClient";
-import { playChatSound } from "@/lib/chatSound";
+import { playChatSound, playCoinSound } from "@/lib/chatSound";
 import { useChat } from "@/components/chat/ChatProvider";
 import ChatMessages from "@/components/chat/ChatMessages";
 import { messageMillis } from "@/components/chat/MessageBubble";
@@ -58,6 +58,8 @@ export default function ConversationThread({
   const [replyTo, setReplyTo] = useState(null);
   const [editing, setEditing] = useState(null);
   const [menuAt, setMenuAt] = useState(null);
+  const [burst, setBurst] = useState(null); // coins-sent animation
+  const clearBurst = useCallback(() => setBurst(null), []);
   const inputRef = useRef(null);
   const { uid, chatState, typingIn, soundOn } = useChat();
   // Sound for messages from others arriving while this chat is open and on screen.
@@ -81,7 +83,15 @@ export default function ConversationThread({
         const now = Date.now();
         const added = initial ? [] : s.docChanges().filter((c) => c.type === "added");
         added.forEach((c) => arrived.set(c.doc.id, now));
-        if (soundRef.current && document.visibilityState === "visible" && added.some((c) => c.doc.data().sender !== meRef.current)) playChatSound();
+        const coinCard = added.map((c) => c.doc).find((d) => d.data().kind === "coins");
+        const onScreen = document.visibilityState === "visible";
+        if (coinCard) {
+          const d = coinCard.data();
+          setBurst({ id: coinCard.id, coins: d.coins, to: d.to, forYou: d.to === meRef.current });
+          if (soundRef.current && onScreen) playCoinSound();
+        } else if (soundRef.current && onScreen && added.some((c) => c.doc.data().sender !== meRef.current)) {
+          playChatSound();
+        }
         initial = false;
         setMsgs(s.docs.map((d) => ({
           id: d.id,
@@ -167,6 +177,8 @@ export default function ConversationThread({
     if (editing) {
       const target = editing;
       setEditing(null);
+      // Sending the text unchanged just leaves edit mode: no "edited" label.
+      if (body === String(target.text || "").trim()) return;
       await updateDoc(doc(db, "conversations", convoId, "messages", target.id), {
         text: body, editedAt: serverTimestamp(),
       }).catch((e) => {
@@ -290,6 +302,8 @@ export default function ConversationThread({
         seenBy={seenBy}
         sentId={sentId}
         typing={lost ? [] : typers}
+        burst={burst}
+        onBurstDone={clearBurst}
       />
 
       <ChatComposer

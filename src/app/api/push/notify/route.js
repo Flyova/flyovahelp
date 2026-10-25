@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
-import { norm } from "@/lib/chat";
+import { norm, usernameUids } from "@/lib/chat";
 import { sendPushToUsers } from "@/lib/push";
 
 export const runtime = "nodejs";
@@ -31,7 +31,7 @@ async function chatMessage(db, caller, { convoId, messageId }) {
   const msg = msgSnap.data();
   const sender = norm(msg.sender);
   const owner = await db.collection("usernames").doc(sender).get();
-  if (!owner.exists || owner.data().uid !== caller.uid) return { error: "Not your message", status: 403 };
+  if (!owner.exists || !usernameUids(owner.data()).includes(caller.uid)) return { error: "Not your message", status: 403 };
 
   const others = (convo.participants || []).map(norm).filter((p) => p && p !== sender);
   if (!others.length) return { sent: 0 };
@@ -45,10 +45,11 @@ async function chatMessage(db, caller, { convoId, messageId }) {
   others.forEach((p, i) => {
     const o = ownerSnaps[i];
     if (!o.exists || o.data().deleted || blockSnaps[i].exists) return;
-    const uid = o.data().uid;
-    if (!uid || uid === caller.uid) return;
-    // The mobile thread screen needs to know which of the recipient's identities is active.
-    targets.push({ uid, data: { url: `/chat/${convoId}?as=${encodeURIComponent(p)}` } });
+    // The owner and any account logged in to the username. The mobile thread screen
+    // needs to know which of the recipient's identities is active.
+    for (const uid of usernameUids(o.data())) {
+      if (uid !== caller.uid) targets.push({ uid, data: { url: `/chat/${convoId}?as=${encodeURIComponent(p)}` } });
+    }
   });
 
   const isGroup = convo.type === "group";

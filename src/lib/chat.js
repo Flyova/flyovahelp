@@ -23,14 +23,20 @@ export function monthsSince(ts) {
   return (Date.now() - d.getTime()) / (30 * 24 * 3600 * 1000);
 }
 
-// Server helper: the usernames/{lower} doc if `uid` owns it (and it is not deleted), else null.
+// Every account that can chat as a username: its owner (`uid`) plus the accounts that
+// logged in to it with its password (`linkedUids`).
+export const usernameUids = (n) => [...new Set([n?.uid, ...(n?.linkedUids || [])].filter(Boolean))];
+
+// Server helper: the usernames/{lower} doc if `uid` can chat as it — it owns it, or is
+// logged in to it — and it isn't deleted, else null. `owned` tells the two apart.
 export async function ownedUsername(db, uid, username) {
   const lower = norm(username);
   if (!uid || !isValidUsername(lower)) return null;
   const snap = await db.collection("usernames").doc(lower).get();
   if (!snap.exists) return null;
   const data = snap.data();
-  return data.uid === uid && !data.deleted ? { lower, ...data } : null;
+  if (data.deleted || !usernameUids(data).includes(uid)) return null;
+  return { lower, ...data, owned: data.uid === uid };
 }
 
 // Groups belong to one player: `owner` (older groups only have `createdBy`).
@@ -125,4 +131,12 @@ export function presenceOf(p, now) {
   if (d.toDateString() === today.toDateString()) return { online: false, text: `last seen today at ${time}` };
   if (d.toDateString() === yesterday.toDateString()) return { online: false, text: `last seen yesterday at ${time}` };
   return { online: false, text: `last seen ${d.toLocaleDateString([], { day: "numeric", month: "short" })}` };
+}
+
+// Server helper: participantUids for a conversation whose members are `names` — every
+// account that can chat as any of them. `getAll` is db.getAll or a transaction's.
+export async function participantUidsFor(getAll, db, names) {
+  if (!names.length) return [];
+  const snaps = await getAll(...names.map((n) => db.collection("usernames").doc(n)));
+  return [...new Set(snaps.filter((s) => s.exists && !s.data().deleted).flatMap((s) => usernameUids(s.data())))];
 }

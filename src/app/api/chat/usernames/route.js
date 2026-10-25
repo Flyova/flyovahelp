@@ -9,15 +9,26 @@ const unauthorized = () => NextResponse.json({ error: "Sign in again to continue
 // verified ID token; any uid in the query/body is ignored (it used to be trusted,
 // which let anyone create usernames on — and charge — someone else's wallet).
 
-// GET /api/chat/usernames -> identities owned by the signed-in account
+// GET /api/chat/usernames -> the usernames the signed-in account can chat as: its own,
+// plus other accounts' usernames it has logged in to (`linked: true`).
 export async function GET(req) {
   try {
     const caller = await getCaller(req);
     if (!caller) return unauthorized();
     const uid = caller.uid;
     const db = getAdminDb();
-    const snap = await db.collection("usernames").where("uid", "==", uid).get();
-    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => !x.deleted);
+    const [owned, linked] = await Promise.all([
+      db.collection("usernames").where("uid", "==", uid).get(),
+      db.collection("usernames").where("linkedUids", "array-contains", uid).get(),
+    ]);
+    const clean = (d, isLinked) => {
+      const { linkedUids, ...data } = d.data(); // never hand out other accounts' ids
+      return { id: d.id, ...data, linked: isLinked, otherAccounts: isLinked ? undefined : (linkedUids || []).length, ...(isLinked ? { isDefault: false, uid: undefined } : {}) };
+    };
+    const items = [
+      ...owned.docs.filter((d) => !d.data().deleted).map((d) => clean(d, false)),
+      ...linked.docs.filter((d) => !d.data().deleted && d.data().uid !== uid).map((d) => clean(d, true)),
+    ];
     return NextResponse.json({ items });
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });

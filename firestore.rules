@@ -129,12 +129,14 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // True when the signed-in account owns chat username `name`.
+    // True when the signed-in account can chat as username `name`: it owns it, or
+    // has logged in to it with its password (linkedUids).
     function ownsUsername(name) {
       return chatSignedIn()
         && name is string
         && exists(/databases/$(database)/documents/usernames/$(name))
-        && get(/databases/$(database)/documents/usernames/$(name)).data.uid == request.auth.uid
+        && (get(/databases/$(database)/documents/usernames/$(name)).data.uid == request.auth.uid
+          || request.auth.uid in get(/databases/$(database)/documents/usernames/$(name)).data.get('linkedUids', []))
         && get(/databases/$(database)/documents/usernames/$(name)).data.get('deleted', false) == false;
     }
 
@@ -229,6 +231,7 @@ service cloud.firestore {
             resource.data.deletedForEveryone == false
             && resource.data.get('kind', '') != 'coins' // coin cards can't be edited
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt'])
+            && request.resource.data.text != resource.data.text // unchanged text isn't an edit
             && request.resource.data.text is string
             && request.resource.data.text.size() > 0
             && request.resource.data.text.size() <= 2000
@@ -263,8 +266,8 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // PINs on chat usernames: hashes, server only (/api/chat/locks).
-    match /username_locks/{name} {
+    // Chat username passwords: hashes, server only (/api/chat/accounts).
+    match /username_auth/{name} {
       allow read, write: if false;
     }
 
