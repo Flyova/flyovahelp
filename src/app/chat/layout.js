@@ -31,6 +31,8 @@ function ChatShell({ children }) {
   };
   // On phones an open private chat or group fills the screen edge to edge (its back button returns to the list).
   const inThread = !!openIds[section];
+  // A player's full profile (/chat/u/<name>) also gets the whole phone screen.
+  const fullPage = inThread || section === "u";
 
   // /chat reopens the page you used last.
   useEffect(() => {
@@ -44,7 +46,7 @@ function ChatShell({ children }) {
 
   return (
     <div className={`min-h-screen w-full bg-[#0B1220] text-white md:px-8 ${inThread ? "md:pt-3 md:pb-4 lg:pt-8 lg:pb-8" : "px-4 sm:px-6 pt-6 pb-6 md:pt-8 md:pb-8"}`}>
-      <div className={inThread ? "hidden lg:block" : ""}>
+      <div className={fullPage ? "hidden lg:block" : ""}>
         <div className="flex items-center justify-between gap-3 mb-4">
           <div className="min-w-0">
             <h1 className="text-2xl font-black italic uppercase leading-none">Chats</h1>

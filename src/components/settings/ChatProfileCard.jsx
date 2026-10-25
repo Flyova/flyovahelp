@@ -1,13 +1,43 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { collection, doc, getDoc, limit, onSnapshot, query, serverTimestamp, setDoc, where } from "firebase/firestore";
-import { MessageSquare, MonitorSmartphone, CheckCircle, AlertCircle } from "lucide-react";
+import { MessageSquare, MonitorSmartphone, CheckCircle, AlertCircle, Camera, Loader2, Trash2 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
+import { setChatPhoto, useChatPhoto } from "@/lib/chatPhotos";
 import Avatar from "@/components/Avatar";
 
 const BIO_MAX = 160;
 const STATUS_MAX = 80;
+const PHOTO_SIZE = 240; // px, square
+const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+const MAX_PHOTO_CHARS = 90000; // Firestore rules allow up to 100,000
+
+// A centred square crop of an image file, as a small JPEG data URL (stored on the
+// chat profile itself: the project has no Storage bucket).
+async function squarePhoto(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error("That file isn't an image we can read."));
+      i.src = url;
+    });
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    const canvas = document.createElement("canvas");
+    canvas.width = PHOTO_SIZE;
+    canvas.height = PHOTO_SIZE;
+    canvas.getContext("2d").drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, PHOTO_SIZE, PHOTO_SIZE);
+    for (const quality of [0.82, 0.7, 0.55, 0.4]) {
+      const data = canvas.toDataURL("image/jpeg", quality);
+      if (data.startsWith("data:image/jpeg") && data.length <= MAX_PHOTO_CHARS) return data;
+    }
+    throw new Error("Could not make that photo small enough.");
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
 
 // "MacIntel · Mozilla/5.0 (Macintosh; …" → "Mac". The stored string is cut at 60
 // characters, so the browser name is usually lost; the platform is enough.
@@ -23,9 +53,10 @@ const deviceLabel = (device = "") => {
 const timeOf = (s) => s.lastActive?.toDate?.() ?? null;
 
 /**
- * The chat identity's public profile: avatar (generated from the username),
- * bio and status, plus the devices that have used this username in chat.
- * One account can hold several chat usernames; each has its own profile.
+ * The chat identity's public profile: profile photo (or the avatar generated
+ * from the username), bio and status, plus the devices that have used this
+ * username in chat. One account can hold several chat usernames; each has its
+ * own profile. A photo is stored on the profile as a small square JPEG.
  */
 export default function ChatProfileCard({ uid }) {
   const [identities, setIdentities] = useState([]);
@@ -36,6 +67,9 @@ export default function ChatProfileCard({ uid }) {
   const [sessions, setSessions] = useState([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: "", msg: "" });
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const fileRef = useRef(null);
+  const photo = useChatPhoto(selected);
 
   useEffect(() => {
     if (!uid) return;
@@ -86,6 +120,42 @@ export default function ChatProfileCard({ uid }) {
 
   const changed = bio !== saved.bio || status !== saved.status;
 
+  const flash = (type, msg) => {
+    setMessage({ type, msg });
+    setTimeout(() => setMessage({ type: "", msg: "" }), 4000);
+  };
+
+  // Profile photo: square-cropped and shrunk here, then saved on the chat profile.
+  const uploadPhoto = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !selected) return;
+    if (!file.type.startsWith("image/")) return flash("error", "Choose a photo (an image file).");
+    if (file.size > MAX_UPLOAD_BYTES) return flash("error", "That photo is too big (15 MB max).");
+    setPhotoBusy(true);
+    try {
+      const photoURL = await squarePhoto(file);
+      await setDoc(doc(db, "chat_profiles", selected), { photoURL, updatedAt: serverTimestamp() }, { merge: true });
+      setChatPhoto(selected, photoURL);
+      flash("success", "Profile photo updated.");
+    } catch (err) {
+      flash("error", `Could not upload the photo: ${err.message}`);
+    }
+    setPhotoBusy(false);
+  };
+
+  const removePhoto = async () => {
+    if (!selected || !confirm("Remove your profile photo?")) return;
+    setPhotoBusy(true);
+    try {
+      await setDoc(doc(db, "chat_profiles", selected), { photoURL: "", updatedAt: serverTimestamp() }, { merge: true });
+      setChatPhoto(selected, "");
+    } catch (err) {
+      flash("error", `Could not remove the photo: ${err.message}`);
+    }
+    setPhotoBusy(false);
+  };
+
   const save = async (e) => {
     e.preventDefault();
     if (!selected || !changed) return;
@@ -132,12 +202,29 @@ export default function ChatProfileCard({ uid }) {
           )}
 
           <div className="flex items-center gap-4 bg-black/20 p-4 rounded-2xl border border-white/5 mb-4">
-            <Avatar username={selected} size={64} rounded="rounded-2xl" className="border-2 border-white/10" />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={photoBusy}
+              aria-label="Change profile photo"
+              className="relative shrink-0 rounded-2xl"
+            >
+              <Avatar username={selected} size={64} rounded="rounded-2xl" className="border-2 border-white/10" />
+              <span className="absolute -right-1.5 -bottom-1.5 w-7 h-7 rounded-full bg-[#2457D6] ring-4 ring-[#0f1a2c] flex items-center justify-center">
+                {photoBusy ? <Loader2 size={13} className="animate-spin" /> : <Camera size={13} />}
+              </span>
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={uploadPhoto} />
             <div className="min-w-0">
               <p className="font-black italic uppercase text-[#E0708C] truncate">@{identities.find((i) => i.usernameLower === selected)?.username || selected}</p>
               <p className="text-[10px] font-bold text-white/40 mt-1 leading-snug">
-                Your avatar comes from your username — every player gets their own character.
+                {photo ? "Your profile photo for this username." : "Tap the picture to add a profile photo. Until then you get your own pixel character."}
               </p>
+              {photo && (
+                <button type="button" onClick={removePhoto} disabled={photoBusy} className="mt-1.5 flex items-center gap-1 text-[10px] font-black uppercase text-red-300/80 hover:text-red-300 disabled:opacity-50">
+                  <Trash2 size={11} /> Remove photo
+                </button>
+              )}
             </div>
           </div>
 

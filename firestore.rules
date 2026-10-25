@@ -179,10 +179,21 @@ service cloud.firestore {
       allow read, write: if false; // server only (API routes)
     }
 
+    // A profile photo is a small JPEG stored on the profile itself (a data: URL
+    // under 100,000 characters), or "" for none — never an outside link.
+    function validChatPhoto() {
+      return !('photoURL' in request.resource.data)
+        || request.resource.data.photoURL == ''
+        || (request.resource.data.photoURL is string
+          && request.resource.data.photoURL.size() < 100000
+          && request.resource.data.photoURL.matches('^data:image/jpeg;base64,[A-Za-z0-9+/=]+$'));
+    }
+
     match /chat_profiles/{name} {
       allow read: if chatSignedIn();
       allow create, update: if ownsUsername(name)
-        && (!('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid);
+        && (!('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid)
+        && validChatPhoto();
       allow delete: if false;
     }
 

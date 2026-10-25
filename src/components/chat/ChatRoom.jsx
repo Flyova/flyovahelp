@@ -57,7 +57,8 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
     );
   }, [uid]);
 
-  // Staff can remove anyone's message (the server re-checks the role).
+  // StraWins admins/staff can delete anyone's message in the Chatroom (the server
+  // re-checks the role); players can only delete their own.
   useEffect(() => {
     if (!uid) return;
     getDoc(doc(db, "users", uid))
@@ -106,6 +107,7 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
   };
 
   const remove = async (m) => {
+    if (m.senderUid !== uid && !confirm(`Delete @${m.sender}'s message for everyone? Only StraWins admins can do this.`)) return;
     const r = await authFetch("/api/chat/room", { method: "POST", body: { action: "delete", id: m.id } });
     if (r.error) setError(r.error);
   };
@@ -136,7 +138,7 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
         onEdit={startEdit}
         onDelete={remove}
         canDelete={(m) => m.senderUid === uid || isStaff}
-        deleteLabel={(m) => (m.senderUid === uid ? "Delete for everyone" : "Remove (staff)")}
+        deleteLabel={(m) => (m.senderUid === uid ? "Delete for everyone" : "Delete message (admin)")}
         onMessagePrivately={onMessagePrivately}
         onReport={onReport}
         onOpenProfile={onOpenProfile}

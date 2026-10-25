@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { usePathname, useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import {
-  Timestamp, addDoc, arrayUnion, collection, doc, documentId, getCountFromServer, limit, onSnapshot, orderBy, query,
+  Timestamp, addDoc, arrayUnion, collection, deleteDoc, doc, documentId, getCountFromServer, limit, onSnapshot, orderBy, query,
   serverTimestamp, setDoc, updateDoc, where,
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
@@ -407,6 +407,18 @@ export function ChatProvider({ children }) {
     if (c) await updateDoc(doc(db, "conversations", c.id), { blocked: arrayUnion(target) });
   }, [active, convos]);
 
+  const unblockUser = useCallback(async (targetLower) => {
+    const target = norm(targetLower);
+    if (!active) return;
+    try {
+      await deleteDoc(doc(db, "chat_blocks", `${active}_${target}`));
+      const r = await authFetch("/api/chat/conversations", { method: "POST", body: { action: "unblock", as: active, target } });
+      if (r.error) throw new Error(r.error);
+    } catch (e) {
+      setErr(`Could not unblock: ${e.message}`);
+    }
+  }, [active]);
+
   const reportUser = useCallback(async (targetLower, extra = {}) => {
     const reason = prompt(extra.messageId ? `Report @${norm(targetLower)}'s message? Tell us why:` : "Reason for report?");
     if (!reason) return;
@@ -434,11 +446,11 @@ export function ChatProvider({ children }) {
     convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState,
     openIds, setOpenId,
     err, setErr,
-    openProfile, messagePrivately, blockUser, reportUser,
+    openProfile, messagePrivately, blockUser, unblockUser, reportUser,
     coins, openCoinWallet, sendCoins,
     updateChatState, soundOn, presence, presenceNow,
     locked, isLocked, selectIdentity, lockNow, refreshLocks, markUnlocked,
-  }), [uid, identities, active, createUsername, deleteUsername, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, openProfile, messagePrivately, blockUser, reportUser, coins, openCoinWallet, sendCoins, updateChatState, soundOn, presence, presenceNow, locked, isLocked, selectIdentity, lockNow, refreshLocks, markUnlocked]);
+  }), [uid, identities, active, createUsername, deleteUsername, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, openProfile, messagePrivately, blockUser, unblockUser, reportUser, coins, openCoinWallet, sendCoins, updateChatState, soundOn, presence, presenceNow, locked, isLocked, selectIdentity, lockNow, refreshLocks, markUnlocked]);
 
   return (
     <ChatContext.Provider value={value}>

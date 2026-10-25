@@ -21,6 +21,7 @@ import {
 //   { action: "updateGroup", convoId, as, name?, description?, visibility? } -> { ok }  admins
 //   { action: "deleteGroup", convoId, as }                    -> { ok }  owner only
 //   { action: "deleteMessage", convoId, as, messageId }       -> { ok }  admins remove anyone's message
+//   { action: "unblock", as, target }                         -> { ok }  let a player you blocked message you again
 
 const FV = () => admin.firestore.FieldValue;
 const fail = (error, status = 400) => NextResponse.json({ error }, { status });
@@ -277,6 +278,20 @@ async function deleteMessage(db, caller, { convoId, as, messageId }) {
   return refused || NextResponse.json({ ok: true });
 }
 
+// The blocker deletes chat_blocks/<as>_<target> themselves; this lifts the block
+// recorded on your private chat with them (clients may only add to `blocked`).
+async function unblock(db, caller, { as, target }) {
+  const me = await ownedUsername(db, caller.uid, as);
+  if (!me) return fail("You can only act as one of your own usernames.", 403);
+  const other = norm(String(target || "").replace(/^@/, ""));
+  const ref = db.collection("conversations").doc(dmIdFor(me.lower, other));
+  const snap = await ref.get();
+  if (snap.exists && snap.data().type === "dm" && (snap.data().participants || []).includes(me.lower)) {
+    await ref.update({ blocked: FV().arrayRemove(other) });
+  }
+  return NextResponse.json({ ok: true });
+}
+
 const ACTIONS = {
   dm: openDm,
   group: createGroup,
@@ -288,6 +303,7 @@ const ACTIONS = {
   updateGroup,
   deleteGroup,
   deleteMessage,
+  unblock,
 };
 
 export async function POST(req) {

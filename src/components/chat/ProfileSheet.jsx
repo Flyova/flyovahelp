@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import Link from "next/link";
-import { Ban, CalendarDays, Coins, Flag, Loader2, MapPin, MessageCircle, X } from "lucide-react";
+import { Ban, CalendarDays, Coins, Flag, Loader2, MapPin, MessageCircle, UserRound, X } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import { authFetch } from "@/lib/authFetch";
 import { formatCoins, presenceOf } from "@/lib/chat";
@@ -95,14 +95,17 @@ export default function ProfileSheet({ username, onClose, onMessage, onSendCoins
                 {!profile.bio && !profile.country && !joined && <p className="px-4 py-3 text-sm text-white/40">No profile details yet.</p>}
               </div>
 
+              <Link href={`/chat/u/${encodeURIComponent(username)}`} onClick={onClose} className="mt-4 w-full h-10 rounded-xl bg-white/[0.06] hover:bg-white/10 flex items-center justify-center gap-2 text-xs font-black uppercase">
+                <UserRound size={15} /> View full profile
+              </Link>
               {profile.isYou ? (
-                <Link href="/settings#chat-profile" onClick={onClose} className="mt-5 w-full h-11 rounded-xl bg-white/10 hover:bg-white/15 flex items-center justify-center text-sm font-black uppercase">
-                  Edit your bio &amp; status
+                <Link href="/chat/settings" onClick={onClose} className="mt-2 w-full h-11 rounded-xl bg-white/10 hover:bg-white/15 flex items-center justify-center text-sm font-black uppercase">
+                  Edit your profile
                 </Link>
               ) : (
                 <>
                   {onMessage && (
-                    <button type="button" onClick={act(onMessage)} className="mt-5 w-full h-11 rounded-xl bg-gradient-to-br from-[#A0284D] to-[#6E1732] flex items-center justify-center gap-2 text-sm font-black uppercase shadow-[0_8px_24px_-8px_rgba(139,30,63,0.9)]">
+                    <button type="button" onClick={act(onMessage)} className="mt-2 w-full h-11 rounded-xl bg-gradient-to-br from-[#A0284D] to-[#6E1732] flex items-center justify-center gap-2 text-sm font-black uppercase shadow-[0_8px_24px_-8px_rgba(139,30,63,0.9)]">
                       <MessageCircle size={17} /> Send message
                     </button>
                   )}

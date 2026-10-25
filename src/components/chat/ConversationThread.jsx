@@ -282,7 +282,7 @@ export default function ConversationThread({
         onEdit={cantSend ? undefined : startEdit}
         onDelete={deleteMessage}
         canDelete={(m) => m.sender === me || !!onModerate}
-        deleteLabel={(m) => (m.sender === me ? "Delete for everyone" : "Remove (admin)")}
+        deleteLabel={(m) => (m.sender === me ? "Delete for everyone" : "Delete message (group admin)")}
         onMessagePrivately={onMessagePrivately}
         onReport={onReport}
         onOpenProfile={onOpenProfile}
