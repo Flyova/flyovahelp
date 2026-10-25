@@ -3,13 +3,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { collection, doc, getDoc, limit, onSnapshot, orderBy, query } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
-import { containsMediaMarker } from "@/lib/chat";
+import { containsMediaMarker, formatCount } from "@/lib/chat";
 import { playChatSound, playCoinSound } from "@/lib/chatSound";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import ChatMessages from "@/components/chat/ChatMessages";
 import ChatComposer from "@/components/chat/ChatComposer";
 
 const MAX_LENGTH = 500;
+const STATS_EVERY_MS = 60000;
 const FRESH_MS = 800; // messages that arrived this recently animate in
 
 /**
@@ -28,6 +29,7 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
   const [editing, setEditing] = useState(null);
   const inputRef = useRef(null);
   const [isStaff, setIsStaff] = useState(false);
+  const [stats, setStats] = useState(null); // { members, online }
   const [burst, setBurst] = useState(null); // coins-sent animation
   const clearBurst = useCallback(() => setBurst(null), []);
   const soundRef = useRef(sound);
@@ -66,6 +68,15 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
         setError(`Could not load the chatroom: ${e.message}`);
       }
     );
+  }, [uid]);
+
+  // How many players are in the Chatroom (everyone with a chat username) and online now.
+  useEffect(() => {
+    if (!uid) return;
+    const load = () => authFetch("/api/chat/room").then((r) => !r.error && setStats(r)).catch(() => {});
+    load();
+    const t = setInterval(load, STATS_EVERY_MS);
+    return () => clearInterval(t);
   }, [uid]);
 
   // StraWins admins/staff can delete anyone's message in the Chatroom (the server
@@ -135,7 +146,12 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
       <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-white/5">
         <div className="min-w-0">
           <p className="text-[10px] font-black uppercase text-white/40 flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500 sw-live" /> Chatroom · everyone
+            <span className="w-1.5 h-1.5 rounded-full bg-red-500 sw-live" /> Chatroom
+            {stats && (
+              <span className="normal-case font-bold tracking-normal text-white/55">
+                · {formatCount(stats.members)} member{stats.members === 1 ? "" : "s"} · <span className="text-emerald-400">{formatCount(stats.online)} online</span>
+              </span>
+            )}
           </p>
           <p className="text-[11px] text-white/50 mt-0.5">Be kind. Tap a message for options, swipe left to reply.</p>
         </div>

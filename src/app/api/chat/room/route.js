@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
-import { containsMediaMarker, ownedUsername } from "@/lib/chat";
+import { PRESENCE_ONLINE_MS, containsMediaMarker, ownedUsername } from "@/lib/chat";
 
 // POST /api/chat/room — the public chatroom everyone can read (Firestore rules: read-only
 // for signed-in players). Posting goes through here so the server can rate-limit and
@@ -11,6 +11,9 @@ import { containsMediaMarker, ownedUsername } from "@/lib/chat";
 //   { action: "send", as, text, replyTo? } -> { id }   replyTo = id of a chatroom message
 //   { action: "edit", id, text }           -> { ok }   own message only
 //   { action: "delete", id }               -> { ok }   own message, or any message for admin/staff/support
+//
+// GET /api/chat/room -> { members, online }: every chat username, and how many were
+// active in Chats in the last few minutes (counted, never listed).
 
 const ROOM_COLLECTION = "chatroom_messages";
 const RATE_COLLECTION = "chatroom_rate"; // per-account { lastPostAt, lastText } — server only
@@ -106,6 +109,22 @@ async function remove(db, caller, { id }) {
 
   await ref.update({ text: DELETED_TEXT, deletedForEveryone: true, deletedBy: caller.uid });
   return NextResponse.json({ ok: true });
+}
+
+export async function GET(req) {
+  try {
+    const caller = await getCaller(req);
+    if (!caller) return fail("Sign in again to continue.", 401);
+    const db = getAdminDb();
+    const since = admin.firestore.Timestamp.fromMillis(Date.now() - PRESENCE_ONLINE_MS);
+    const [members, online] = await Promise.all([
+      db.collection("usernames").where("deleted", "==", false).count().get(),
+      db.collection("chat_presence").where("lastActive", ">", since).count().get(),
+    ]);
+    return NextResponse.json({ members: members.data().count, online: online.data().count });
+  } catch (e) {
+    return fail(e?.message || "Something went wrong.", 500);
+  }
 }
 
 export async function POST(req) {

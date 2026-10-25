@@ -101,7 +101,8 @@ export function coinWithdrawQuote(coins) {
   return { value, fee, payout: value - fee };
 }
 export const formatCents = (cents) => `$${(cents / 100).toFixed(2)}`;
-export const formatCoins = (n) => Number(n || 0).toLocaleString("en-US");
+export const formatCount = (n) => Number(n || 0).toLocaleString("en-US");
+export const formatCoins = formatCount;
 
 // Server helper: the usernames/{lower} doc for a live (not deleted) username, else null.
 export async function liveUsername(db, username) {

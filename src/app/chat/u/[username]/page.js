@@ -9,7 +9,9 @@ import {
 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
+import { avatarUrl } from "@/lib/avatar";
 import { formatCoins, isGroupAdmin, norm, presenceOf } from "@/lib/chat";
+import { useChatPhoto } from "@/lib/chatPhotos";
 import { useChat } from "@/components/chat/ChatProvider";
 import Avatar from "@/components/Avatar";
 import ChatSheet from "@/components/chat/ChatSheet";
@@ -70,6 +72,7 @@ export default function PlayerProfilePage() {
     chatState, updateChatState, setErr,
   } = useChat();
   const [viewingPhoto, setViewingPhoto] = useState(false);
+  const photo = useChatPhoto(name);
   const [joining, setJoining] = useState(null); // public group id being joined
   const [profile, setProfile] = useState(null);
   const [error, setError] = useState("");
@@ -303,10 +306,16 @@ export default function PlayerProfilePage() {
       )}
 
       {viewingPhoto && (
-        <div className="chat-backdrop fixed inset-0 z-[350] bg-[#060b14]/90 backdrop-blur-sm flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-label={`@${name}'s picture`} onClick={() => setViewingPhoto(false)}>
+        <div className="chat-backdrop fixed inset-0 z-[350] bg-[#060b14]/95 backdrop-blur-sm flex items-center justify-center p-3" role="dialog" aria-modal="true" aria-label={`@${name}'s picture`} onClick={() => setViewingPhoto(false)}>
           <button type="button" aria-label="Close" className="absolute right-4 top-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"><X size={20} /></button>
-          <div className="chat-pop">
-            <Avatar username={name} size={300} rounded="rounded-3xl" className="max-w-[86vw] max-h-[86vw] w-auto h-auto" />
+          <div className="chat-pop w-[min(94vw,560px)]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={photo || avatarUrl(name)}
+              alt={`@${name}`}
+              className="w-full aspect-square rounded-3xl bg-[#142036] object-cover"
+              style={photo ? undefined : { imageRendering: "pixelated" }}
+            />
             <p className="mt-3 text-center font-black">@{profile?.username || name}</p>
           </div>
         </div>

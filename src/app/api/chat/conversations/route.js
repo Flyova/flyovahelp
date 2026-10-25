@@ -45,6 +45,18 @@ async function anyUsername(db, username) {
 }
 
 const visibilityOf = (v) => (v === "public" ? "public" : "private");
+
+/**
+ * Posts a line like "@ade joined the group" in a group (written with the change
+ * itself, in the same transaction or batch) and returns the preview update for
+ * the group. Shown as a small centred line, not a message bubble.
+ */
+function activity(writer, db, convoId, text) {
+  writer.set(db.collection("conversations").doc(convoId).collection("messages").doc(), {
+    kind: "system", sender: "", text, createdAt: FV().serverTimestamp(), deletedForEveryone: false,
+  });
+  return { lastMessage: text, lastMessageAt: FV().serverTimestamp() };
+}
 const cleanName = (name) => String(name || "").trim().replace(/\s+/g, " ").slice(0, GROUP_NAME_MAX);
 const cleanDescription = (d) => String(d || "").trim().slice(0, GROUP_DESCRIPTION_MAX);
 
@@ -106,7 +118,9 @@ async function createGroup(db, caller, { as, name, description, visibility }) {
   const vis = visibilityOf(visibility);
 
   const ref = db.collection("conversations").doc();
-  await ref.set({
+  const batch = db.batch();
+  const preview = activity(batch, db, ref.id, `@${me.lower} created the group`);
+  batch.set(ref, {
     type: "group",
     groupName,
     description: cleanDescription(description),
@@ -119,22 +133,25 @@ async function createGroup(db, caller, { as, name, description, visibility }) {
     removed: [],
     createdBy: me.lower,
     createdAt: FV().serverTimestamp(),
-    lastMessage: "",
-    lastMessageAt: FV().serverTimestamp(),
+    ...preview,
   });
+  await batch.commit();
   return NextResponse.json({ id: ref.id });
 }
 
 async function joinGroup(db, caller, { convoId, as }) {
   const me = await ownedUsername(db, caller.uid, as);
   if (!me) return fail("You can only chat as one of your own usernames.", 403);
-  const refused = await withGroup(db, convoId, (convo) => {
-    // Already in (as this or another of your usernames): nothing to do.
-    if ((convo.participantUids || []).includes(caller.uid)) return null;
+  const refused = await withGroup(db, convoId, (convo, tx) => {
+    if ((convo.participants || []).includes(me.lower)) return null; // already in
     if (convo.visibility !== "public") return { error: "This group is private. Ask an admin to add you.", status: 403 };
     if ((convo.removed || []).includes(me.lower)) return { error: "An admin removed you from this group.", status: 403 };
     if ((convo.participants || []).length >= MAX_GROUP_MEMBERS) return { error: `This group is full (${MAX_GROUP_MEMBERS} members).`, status: 400 };
-    return { participants: FV().arrayUnion(me.lower), participantUids: FV().arrayUnion(...usernameUids(me)) };
+    return {
+      participants: FV().arrayUnion(me.lower),
+      participantUids: FV().arrayUnion(...usernameUids(me)),
+      ...activity(tx, db, convoId, `@${me.lower} joined the group`),
+    };
   });
   return refused || NextResponse.json({ id: String(convoId) });
 }
@@ -147,10 +164,12 @@ async function leaveGroup(db, caller, { convoId, as }) {
     if (!participants.includes(me.lower)) return { error: "You're not in this group.", status: 400 };
     if (groupOwner(convo) === me.lower) return { error: "You own this group. Delete it instead of leaving.", status: 400 };
     const remaining = participants.filter((p) => p !== me.lower);
+    const participantUids = await participantUidsFor((...refs) => tx.getAll(...refs), db, remaining);
     return {
       participants: FV().arrayRemove(me.lower),
       admins: FV().arrayRemove(me.lower),
-      participantUids: await participantUidsFor((...refs) => tx.getAll(...refs), db, remaining),
+      participantUids,
+      ...activity(tx, db, convoId, `@${me.lower} left the group`),
     };
   });
   return refused || NextResponse.json({ ok: true });
@@ -162,7 +181,7 @@ async function addMember(db, caller, { convoId, as, username }) {
   const other = await activeUsername(db, username);
   if (!other) return fail("That username doesn't exist.", 404);
 
-  const refused = await withGroup(db, convoId, (convo) => {
+  const refused = await withGroup(db, convoId, (convo, tx) => {
     if (!isGroupAdmin(convo, me.lower)) return { error: "Only group admins can add members.", status: 403 };
     const participants = convo.participants || [];
     if (participants.includes(other.lower)) return { error: `@${other.lower} is already in this group.`, status: 409 };
@@ -171,6 +190,7 @@ async function addMember(db, caller, { convoId, as, username }) {
       participants: FV().arrayUnion(other.lower),
       participantUids: FV().arrayUnion(...other.uids),
       removed: FV().arrayRemove(other.lower), // an admin adding someone back lifts their removal
+      ...activity(tx, db, convoId, `@${me.lower} added @${other.lower}`),
     };
   });
   return refused || NextResponse.json({ ok: true });
@@ -192,11 +212,13 @@ async function removeMember(db, caller, { convoId, as, username }) {
       return { error: "Only the owner can remove an admin.", status: 403 };
     }
     const remaining = participants.filter((p) => p !== other.lower);
+    const participantUids = await participantUidsFor((...refs) => tx.getAll(...refs), db, remaining);
     return {
       participants: FV().arrayRemove(other.lower),
       admins: FV().arrayRemove(other.lower),
       removed: FV().arrayUnion(other.lower), // can't rejoin a public group on their own
-      participantUids: await participantUidsFor((...refs) => tx.getAll(...refs), db, remaining),
+      participantUids,
+      ...activity(tx, db, convoId, `@${me.lower} removed @${other.lower}`),
     };
   });
   return refused || NextResponse.json({ ok: true });
@@ -207,11 +229,14 @@ async function setAdmin(db, caller, { convoId, as, username, admin: makeAdmin })
   if (!me) return fail("You can only act as one of your own usernames.", 403);
   const lower = norm(String(username || "").replace(/^@/, ""));
 
-  const refused = await withGroup(db, convoId, (convo) => {
+  const refused = await withGroup(db, convoId, (convo, tx) => {
     if (groupOwner(convo) !== me.lower) return { error: "Only the group owner can change admins.", status: 403 };
     if (!(convo.participants || []).includes(lower)) return { error: `@${lower} isn't in this group.`, status: 400 };
     if (lower === me.lower) return { error: "You're the owner already.", status: 400 };
-    return { admins: makeAdmin ? FV().arrayUnion(lower) : FV().arrayRemove(lower) };
+    return {
+      admins: makeAdmin ? FV().arrayUnion(lower) : FV().arrayRemove(lower),
+      ...activity(tx, db, convoId, makeAdmin ? `@${me.lower} made @${lower} an admin` : `@${me.lower} removed @${lower} as admin`),
+    };
   });
   return refused || NextResponse.json({ ok: true });
 }
@@ -221,15 +246,25 @@ async function updateGroup(db, caller, { convoId, as, name, description, visibil
   if (!me) return fail("You can only act as one of your own usernames.", 403);
   if (name !== undefined && !cleanName(name)) return fail("Group name required.");
 
-  const refused = await withGroup(db, convoId, (convo) => {
+  const refused = await withGroup(db, convoId, (convo, tx) => {
     if (!isGroupAdmin(convo, me.lower)) return { error: "Only group admins can edit the group.", status: 403 };
     const groupName = name !== undefined ? cleanName(name) : convo.groupName;
     const vis = visibility !== undefined ? visibilityOf(visibility) : visibilityOf(convo.visibility);
+    const desc = description !== undefined ? cleanDescription(description) : convo.description || "";
+    // One line naming everything that actually changed.
+    const changes = [
+      groupName !== convo.groupName && `renamed the group to "${groupName}"`,
+      desc !== (convo.description || "") && "changed the group description",
+      vis !== visibilityOf(convo.visibility) && `made the group ${vis}`,
+    ].filter(Boolean);
+    const said = changes.length > 1 ? `${changes.slice(0, -1).join(", ")} and ${changes[changes.length - 1]}` : changes[0];
+    const preview = said ? activity(tx, db, convoId, `@${me.lower} ${said}`) : {};
     return {
       groupName,
       visibility: vis,
       searchKeys: vis === "public" ? groupSearchKeys(groupName) : [],
-      ...(description !== undefined ? { description: cleanDescription(description) } : {}),
+      description: desc,
+      ...preview,
     };
   });
   return refused || NextResponse.json({ ok: true });

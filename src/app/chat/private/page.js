@@ -16,7 +16,7 @@ export default function PrivateChatsPage() {
   const {
     identities, active, selectIdentity, createUsername, deleteUsername,
     convos, convosLoading, myNameIn, openIds, setOpenId, setErr, typingIn, unread,
-    messagePrivately, openProfile, blockUser, reportUser, presence, presenceNow,
+    messagePrivately, openProfile, blockUser, unblockUser, reportUser, presence, presenceNow, blockedNames,
   } = useChat();
   const openId = openIds.private;
   const open = convos.find((c) => c.id === openId);
@@ -25,6 +25,7 @@ export default function PrivateChatsPage() {
   const chats = convos.filter((c) => c.type !== "group" && (c.lastMessage || c.id === openId));
   const openChat = (id) => setOpenId("private", id);
   const status = other ? presenceOf(presence[other], presenceNow) : null;
+  const iBlocked = !!other && blockedNames.includes(other);
   const online = new Set(Object.keys(presence).filter((name) => presenceOf(presence[name], presenceNow)?.online));
 
   return (
@@ -40,6 +41,7 @@ export default function PrivateChatsPage() {
           typingIn={typingIn}
           unread={unread}
           online={online}
+          blocked={new Set(blockedNames)}
           myNameIn={myNameIn}
           openId={openId}
           onOpen={openChat}
@@ -67,13 +69,16 @@ export default function PrivateChatsPage() {
             }}
             menuItems={other ? [
               { label: "View profile", icon: UserRound, run: () => openProfile(other) },
-              { label: `Block @${other}`, icon: Ban, danger: true, run: () => blockUser(other) },
+              iBlocked
+                ? { label: `Unblock @${other}`, icon: Ban, run: () => unblockUser(other) }
+                : { label: `Block @${other}`, icon: Ban, danger: true, run: () => blockUser(other) },
               { label: `Report @${other}`, icon: Flag, danger: true, run: () => reportUser(other) },
             ] : []}
             onBack={() => openChat(null)}
             onError={setErr}
             onReport={(m) => reportUser(m.sender)}
             onOpenProfile={openProfile}
+            blockedByMe={iBlocked ? { name: other, onUnblock: () => unblockUser(other) } : null}
           />
         ) : (
           <ThreadPlaceholder icon={MessagesSquare} title="Select a chat" text="Pick a conversation on the left, or search for a player to message them." />

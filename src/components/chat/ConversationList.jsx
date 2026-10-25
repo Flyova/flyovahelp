@@ -22,7 +22,8 @@ const memberLabel = (n) => `${n} member${n === 1 ? "" : "s"}`;
  * the title (e.g. a "New group" button); the empty* props fill the empty state,
  * shown once `loading` is over. `typingIn` (id -> usernames) swaps a row's
  * preview for "typing…"; `unread` (id -> count) makes a row bold with a badge;
- * `online` (usernames) puts a green dot on private chats with someone online.
+ * `online` (usernames) puts a green dot on private chats with someone online;
+ * `blocked` (usernames) marks private chats with people you've blocked.
  */
 export default function ConversationList({
   convos,
@@ -37,6 +38,7 @@ export default function ConversationList({
   typingIn = {},
   unread = {},
   online = new Set(),
+  blocked = new Set(),
   className = "",
 }) {
   return (
@@ -52,6 +54,7 @@ export default function ConversationList({
           const group = c.type === "group";
           const selected = openId === c.id;
           const typing = typingLabel(typingIn[c.id], group);
+          const isBlocked = !group && blocked.has(others[0]);
           const count = unread[c.id] || 0;
           return (
             <button
@@ -74,8 +77,8 @@ export default function ConversationList({
                   <span className={`shrink-0 text-[10px] ${count ? "text-[#E0708C] font-bold" : "text-white/35"}`}>{when(c.lastMessageAt)}</span>
                 </span>
                 <span className="flex items-center justify-between gap-2">
-                  <span className={`min-w-0 truncate text-xs ${typing ? "text-[#E0708C]" : count ? "text-white/85 font-semibold" : "text-white/45"}`}>
-                    {typing || c.lastMessage || (group ? memberLabel((c.participants || []).length) : "No messages yet")}
+                  <span className={`min-w-0 truncate text-xs ${isBlocked ? "text-red-300/80" : typing ? "text-[#E0708C]" : count ? "text-white/85 font-semibold" : "text-white/45"}`}>
+                    {isBlocked ? "Blocked" : typing || c.lastMessage || (group ? memberLabel((c.participants || []).length) : "No messages yet")}
                   </span>
                   {count > 0 && (
                     <span className="shrink-0 min-w-5 h-5 px-1.5 rounded-full bg-[#8B1E3F] text-[11px] font-black flex items-center justify-center" aria-label={`${count} unread`}>

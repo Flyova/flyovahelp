@@ -1,10 +1,9 @@
 "use client";
-import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Coins, Settings, X } from "lucide-react";
 import { formatCoins } from "@/lib/chat";
-import { CHAT_SECTIONS, ChatProvider, LAST_SECTION_KEY, useChat } from "@/components/chat/ChatProvider";
+import { CHAT_SECTIONS, ChatProvider, useChat } from "@/components/chat/ChatProvider";
 import MobileNavMenu from "@/components/MobileNavMenu";
 
 /**
@@ -22,7 +21,7 @@ export default function ChatLayout({ children }) {
 
 function ChatShell({ children }) {
   const pathname = usePathname();
-  const { openIds, err, setErr, convos, unread, coins, openCoinWallet } = useChat();
+  const { openIds, err, setErr, notice, convos, unread, coins, openCoinWallet } = useChat();
   const section = pathname.split("/")[2] || "";
   // Chats with unread messages, badged on their tab.
   const unreadChats = {
@@ -33,16 +32,6 @@ function ChatShell({ children }) {
   const inThread = !!openIds[section];
   // A player's full profile (/chat/u/<name>) also gets the whole phone screen.
   const fullPage = inThread || section === "u";
-
-  // /chat reopens the page you used last.
-  useEffect(() => {
-    if (!CHAT_SECTIONS.some((s) => s.key === section)) return;
-    try {
-      localStorage.setItem(LAST_SECTION_KEY, section);
-    } catch {
-      // Storage blocked (private mode): /chat just opens the chatroom.
-    }
-  }, [section]);
 
   return (
     <div className={`min-h-screen w-full bg-[#0B1220] text-white md:px-8 ${inThread ? "md:pt-3 md:pb-4 lg:pt-8 lg:pb-8" : "px-4 sm:px-6 pt-6 pb-6 md:pt-8 md:pb-8"}`}>
@@ -74,7 +63,8 @@ function ChatShell({ children }) {
           </div>
         </div>
 
-        <nav className="flex sm:inline-flex w-full sm:w-auto bg-[#142036] border border-white/5 rounded-2xl p-1 mb-4" aria-label="Chats">
+        {/* The tabs; Chats home (/chat) shows them as big choices instead. */}
+        {section && <nav className="flex sm:inline-flex w-full sm:w-auto bg-[#142036] border border-white/5 rounded-2xl p-1 mb-4" aria-label="Chats">
           {CHAT_SECTIONS.map(({ key, label }) => (
             <Link
               key={key}
@@ -93,7 +83,7 @@ function ChatShell({ children }) {
               )}
             </Link>
           ))}
-        </nav>
+        </nav>}
       </div>
 
       {err && (
@@ -104,6 +94,12 @@ function ChatShell({ children }) {
       )}
 
       {children}
+
+      {notice && (
+        <div role="status" className="chat-pop fixed left-1/2 bottom-6 md:bottom-8 -translate-x-1/2 z-[360] px-4 py-2.5 rounded-2xl bg-[#17243C] border border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.5)] text-[13px] font-bold whitespace-nowrap">
+          {notice}
+        </div>
+      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { getServiceAccount, googleFetch } from "./credentials";
 
 // A firebase-admin–shaped Firestore client over the Firestore REST API.
 // It covers what the API routes use: refs, get/set/update/create/delete/add,
-// getAll, queries (where/orderBy/limit/select, collection groups),
+// getAll, queries (where/orderBy/limit/select, collection groups, count()),
 // transactions (with retry on contention), batches, FieldValue and Timestamp.
 
 const API = "https://firestore.googleapis.com/v1";
@@ -398,6 +398,21 @@ export class Query {
   }
   get() {
     return this._run();
+  }
+  // query.count().get() -> { data: () => ({ count }) }, as in firebase-admin. Billed
+  // as one read per 1,000 matches, without downloading the documents.
+  count() {
+    return {
+      get: async () => {
+        const parentName = this._parent.length ? `${root()}/${this._parent.join("/")}` : root();
+        const res = await googleFetch(`${urlFor(parentName)}:runAggregationQuery`, {
+          method: "POST",
+          body: { structuredAggregationQuery: { structuredQuery: this._structuredQuery(), aggregations: [{ alias: "count", count: {} }] } },
+        });
+        const count = Number(res?.[0]?.result?.aggregateFields?.count?.integerValue ?? 0);
+        return { data: () => ({ count }) };
+      },
+    };
   }
 }
 

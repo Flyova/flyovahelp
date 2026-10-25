@@ -48,7 +48,8 @@ function byDay(messages) {
  * `sentId` marks your latest message "Sent", and `typing` (usernames) shows a
  * typing bubble at the bottom. `onSendCoins(username)` adds "Send coins" to other
  * people's messages (Chatroom and groups only). `burst` = { id, coins, to, forYou }
- * plays the coins-sent animation over the list; `onBurstDone` clears it.
+ * plays the coins-sent animation over the list; `onBurstDone` clears it. Group
+ * activity ("@ade joined the group", kind "system") shows as a small centred line.
  */
 export default function ChatMessages({
   messages,
@@ -151,6 +152,13 @@ export default function ChatMessages({
               <span className="px-3 py-1 rounded-full bg-[#0B1220]/85 backdrop-blur text-[12px] font-semibold text-white/85 shadow-[0_2px_10px_rgba(0,0,0,0.35)]">{day.label}</span>
             </div>
             {day.items.map((m, i) => {
+              if (m.kind === "system") {
+                return (
+                  <div key={m.id} id={`msg-${m.id}`} className={`flex justify-center px-6 my-2 ${m.fresh ? "chat-slide-up" : ""}`}>
+                    <span className="max-w-full px-3 py-1 rounded-full bg-[#0B1220]/70 text-[12px] font-semibold text-white/65 text-center break-words">{m.text}</span>
+                  </div>
+                );
+              }
               const mine = isMine(m);
               const prev = day.items[i - 1];
               const next = day.items[i + 1];

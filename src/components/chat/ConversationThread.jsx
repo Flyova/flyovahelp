@@ -30,6 +30,8 @@ const lastWhere = (list, test) => {
  * `me` is the username you're in this chat as. `header` = { avatar, title,
  * subtitle, online, label, onClick }. `menuItems` fill the ⋯ menu. A group admin passes
  * `onModerate` to remove other people's messages; groups pass `onSendCoins`.
+ * `blockedByMe` = { name, onUnblock } when you've blocked the other person in a
+ * private chat: you can't write to them until you unblock.
  *
  * While it's open and on screen it records how far you've read (privately for
  * unread counts, and on the conversation for read receipts if you share them)
@@ -50,6 +52,7 @@ export default function ConversationThread({
   onReport,
   onOpenProfile,
   onSendCoins,
+  blockedByMe = null,
 }) {
   const [msgs, setMsgs] = useState([]);
   const [loaded, setLoaded] = useState(false);
@@ -109,7 +112,7 @@ export default function ConversationThread({
   }, [convoId]);
 
   const blockedHere = !!convo?.blocked?.includes(me);
-  const cantSend = !convo || blockedHere || lost;
+  const cantSend = !convo || blockedHere || lost || !!blockedByMe;
   const receipts = chatState.readReceipts;
 
   // "typing…": stamped at most every TYPING_PING_MS while there's text, cleared on send or leaving.
@@ -155,7 +158,7 @@ export default function ConversationThread({
     const out = {};
     for (const p of convo.participants || []) {
       const readMs = p === me ? 0 : convo.readAt?.[p]?.toMillis?.();
-      const m = readMs ? lastWhere(confirmed, (x) => messageMillis(x) <= readMs) : null;
+      const m = readMs ? lastWhere(confirmed, (x) => x.kind !== "system" && messageMillis(x) <= readMs) : null;
       if (m && m.sender !== p) (out[m.id] ||= []).push(p);
     }
     const last = msgs[msgs.length - 1];
@@ -246,9 +249,11 @@ export default function ConversationThread({
   const typingNow = typingLabel(typers, isGroup);
   const subtitle = lost
     ? "You're no longer in this chat"
-    : blockedHere
-      ? "You can no longer send messages here"
-      : typingNow || header.subtitle;
+    : blockedByMe
+      ? `You blocked @${blockedByMe.name}`
+      : blockedHere
+        ? "You can no longer send messages here"
+        : typingNow || header.subtitle;
 
   return (
     <>
@@ -266,7 +271,7 @@ export default function ConversationThread({
           {header.avatar}
           <span className="min-w-0 flex-1">
             <span className="block text-[15px] font-bold truncate">{convo ? header.title : lost ? "Chat unavailable" : "Loading…"}</span>
-            <span className={`block text-[12px] truncate ${lost || blockedHere ? "text-red-300/80" : typingNow ? "text-[#E0708C]" : header.online ? "text-emerald-400" : "text-white/45"}`}>{convo || lost ? subtitle : ""}</span>
+            <span className={`block text-[12px] truncate ${lost || blockedHere || blockedByMe ? "text-red-300/80" : typingNow ? "text-[#E0708C]" : header.online ? "text-emerald-400" : "text-white/45"}`}>{convo || lost ? subtitle : ""}</span>
           </span>
         </button>
         {convo && menuItems.length > 0 && (
@@ -306,21 +311,30 @@ export default function ConversationThread({
         onBurstDone={clearBurst}
       />
 
-      <ChatComposer
-        value={text}
-        onChange={(v) => {
-          setText(v);
-          setTyping(!!v.trim() && !editing);
-        }}
-        onSend={send}
-        onCancel={cancelMode}
-        mode={editing ? "edit" : replyTo ? "reply" : null}
-        modeMessage={editing ?? replyTo}
-        placeholder={lost ? "You're no longer in this chat" : blockedHere ? "You can't reply to this chat" : "Message"}
-        disabled={cantSend}
-        maxLength={2000}
-        inputRef={inputRef}
-      />
+      {blockedByMe ? (
+        <div className="px-4 py-3 border-t border-white/5 bg-[#142036] flex items-center justify-between gap-3">
+          <p className="text-[13px] text-white/60">You blocked @{blockedByMe.name}. They can&apos;t message you.</p>
+          <button type="button" onClick={blockedByMe.onUnblock} className="shrink-0 h-9 px-4 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-black uppercase">
+            Unblock
+          </button>
+        </div>
+      ) : (
+        <ChatComposer
+          value={text}
+          onChange={(v) => {
+            setText(v);
+            setTyping(!!v.trim() && !editing);
+          }}
+          onSend={send}
+          onCancel={cancelMode}
+          mode={editing ? "edit" : replyTo ? "reply" : null}
+          modeMessage={editing ?? replyTo}
+          placeholder={lost ? "You're no longer in this chat" : blockedHere ? "You can't reply to this chat" : "Message"}
+          disabled={cantSend}
+          maxLength={2000}
+          inputRef={inputRef}
+        />
+      )}
 
       {menuAt && <MessageMenu at={menuAt} items={menuItems} onClose={() => setMenuAt(null)} />}
     </>

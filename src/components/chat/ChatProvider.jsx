@@ -14,13 +14,12 @@ import { CoinWalletSheet, SendCoinsSheet } from "@/components/chat/CoinSheets";
 
 const ChatContext = createContext(null);
 
-// The Chats pages, at /chat/<key>. /chat itself reopens the last one used.
+// The Chats pages, at /chat/<key>. /chat itself is Chats home, where you pick one.
 export const CHAT_SECTIONS = [
   { key: "room", label: "Chatroom" },
   { key: "private", label: "Private" },
   { key: "groups", label: "Groups" },
 ];
-export const LAST_SECTION_KEY = "chat:lastSection";
 
 /** The chat state every Chats page shares; only usable inside <ChatProvider>. */
 export const useChat = () => useContext(ChatContext);
@@ -98,6 +97,7 @@ export function ChatProvider({ children }) {
   const [coins, setCoins] = useState(0); // your chat coin balance
   const [coinSheet, setCoinSheet] = useState(null); // { kind: "wallet" } | { kind: "send", to, convoId }
   const [err, setErr] = useState("");
+  const [notice, setNotice] = useState(""); // short confirmation, e.g. "You blocked @ade."
   const [chatState, setChatState] = useState(() => readChatState());
   const [typingIn, setTypingIn] = useState({}); // conversation id -> usernames typing there
   const [counts, setCounts] = useState({}); // "<id>:<last message ms>:<read since ms>" -> unread count
@@ -351,16 +351,26 @@ export function ChatProvider({ children }) {
     if (pathname !== "/chat/private") router.push("/chat/private");
   }, [active, pathname, router, setOpenId]);
 
+  const flashNotice = useCallback((msg) => {
+    setNotice(msg);
+    setTimeout(() => setNotice((cur) => (cur === msg ? "" : cur)), 3000);
+  }, []);
+
   const blockUser = useCallback(async (targetLower) => {
     const target = norm(targetLower);
-    if (!active || !confirm(`Block @${target}? They won't be able to message you, and you won't see them in the chatroom.`)) return;
-    await setDoc(doc(db, "chat_blocks", `${active}_${target}`), {
-      blocker: active, blocked: target, createdAt: serverTimestamp(),
-    });
-    // Recorded on your private chat with them too: the rules refuse new messages from anyone listed in `blocked`.
-    const c = convos.find((x) => x.type !== "group" && (x.participants || []).includes(target));
-    if (c) await updateDoc(doc(db, "conversations", c.id), { blocked: arrayUnion(target) });
-  }, [active, convos]);
+    if (!active || !confirm(`Block @${target}? They won't be able to message you or send you coins, and you won't see them in the Chatroom.`)) return;
+    try {
+      await setDoc(doc(db, "chat_blocks", `${active}_${target}`), {
+        blocker: active, blocked: target, createdAt: serverTimestamp(),
+      });
+      // Recorded on your private chat with them too: the rules refuse new messages from anyone listed in `blocked`.
+      const c = convos.find((x) => x.type !== "group" && (x.participants || []).includes(target) && (x.participants || []).includes(active));
+      if (c) await updateDoc(doc(db, "conversations", c.id), { blocked: arrayUnion(target) });
+      flashNotice(`You blocked @${target}.`);
+    } catch (e) {
+      setErr(`Could not block @${target}: ${e.message}`);
+    }
+  }, [active, convos, flashNotice]);
 
   const unblockUser = useCallback(async (targetLower) => {
     const target = norm(targetLower);
@@ -369,10 +379,11 @@ export function ChatProvider({ children }) {
       await deleteDoc(doc(db, "chat_blocks", `${active}_${target}`));
       const r = await authFetch("/api/chat/conversations", { method: "POST", body: { action: "unblock", as: active, target } });
       if (r.error) throw new Error(r.error);
+      flashNotice(`@${target} is unblocked.`);
     } catch (e) {
       setErr(`Could not unblock: ${e.message}`);
     }
-  }, [active]);
+  }, [active, flashNotice]);
 
   const reportUser = useCallback(async (targetLower, extra = {}) => {
     const reason = prompt(extra.messageId ? `Report @${norm(targetLower)}'s message? Tell us why:` : "Reason for report?");
@@ -400,11 +411,11 @@ export function ChatProvider({ children }) {
     uid, identities, active, setActive, selectIdentity: setActive, refreshIdentities, createUsername, deleteUsername,
     convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState,
     openIds, setOpenId,
-    err, setErr,
+    err, setErr, notice,
     openProfile, messagePrivately, blockUser, unblockUser, reportUser,
     coins, openCoinWallet, sendCoins,
     updateChatState, soundOn, presence, presenceNow,
-  }), [uid, identities, active, refreshIdentities, createUsername, deleteUsername, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, openProfile, messagePrivately, blockUser, unblockUser, reportUser, coins, openCoinWallet, sendCoins, updateChatState, soundOn, presence, presenceNow]);
+  }), [uid, identities, active, refreshIdentities, createUsername, deleteUsername, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, notice, openProfile, messagePrivately, blockUser, unblockUser, reportUser, coins, openCoinWallet, sendCoins, updateChatState, soundOn, presence, presenceNow]);
 
   return (
     <ChatContext.Provider value={value}>
