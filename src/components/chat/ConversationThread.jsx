@@ -213,7 +213,8 @@ export default function ConversationThread({
     return () => offs.forEach((off) => off());
   }, [memberKey]);
   const members = convo?.participants || [];
-  const onlineCount = isGroup ? members.filter((p) => p !== me && presenceOf(memberPresence[p], presenceNow)?.online).length : 0;
+  // You're here, so you count as online; everyone else by their online status.
+  const onlineCount = isGroup ? 1 + members.filter((p) => p !== me && presenceOf(memberPresence[p], presenceNow)?.online).length : 0;
 
   const send = async () => {
     onError("");
@@ -295,7 +296,7 @@ export default function ConversationThread({
 
   const typingNow = typingLabel(typers, isGroup);
   const groupLine = isGroup && convo
-    ? `${formatCount(members.length)} member${members.length === 1 ? "" : "s"}${onlineCount ? ` · ${formatCount(onlineCount)} online` : ""} · ${convo.visibility === "public" ? "public" : "private"}${convo.locked ? " · locked" : ""}`
+    ? `${formatCount(members.length)} member${members.length === 1 ? "" : "s"} · ${formatCount(onlineCount)} online · ${convo.visibility === "public" ? "public" : "private"}${convo.locked ? " · locked" : ""}`
     : "";
   const subtitle = lost
     ? "You're no longer in this chat"
@@ -324,7 +325,7 @@ export default function ConversationThread({
             {isGroup && convo?.description && !lost && (
               <span className="block text-[12.5px] text-white/65 truncate">{convo.description}</span>
             )}
-            <span className={`block text-[12px] truncate ${lost || blockedHere || blockedByMe ? "text-red-300/80" : typingNow ? "text-[#E0708C]" : header.online || onlineCount ? "text-emerald-400" : "text-white/45"}`}>{convo || lost ? subtitle : ""}</span>
+            <span className={`block text-[12px] truncate ${lost || blockedHere || blockedByMe ? "text-red-300/80" : typingNow ? "text-[#E0708C]" : header.online || onlineCount > 1 ? "text-emerald-400" : "text-white/45"}`}>{convo || lost ? subtitle : ""}</span>
           </span>
         </button>
         {convo && !lost && (

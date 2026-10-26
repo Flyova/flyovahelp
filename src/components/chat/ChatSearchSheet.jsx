@@ -32,11 +32,12 @@ function Highlight({ text, q }) {
 }
 
 /**
- * Search inside a chat: its members (groups) and its messages. Messages already
- * on screen are searched at once; "Search older messages" reads further back.
- * Tapping a message on screen jumps to it (`onJump(id)`); a member opens their profile.
+ * Search inside a chat: its members (groups; in the Chatroom, the people posting)
+ * and its messages. Messages already on screen are searched at once; "Search older
+ * messages" reads further back. Tapping a message on screen jumps to it
+ * (`onJump(id)`); a person opens their profile. `convoId` "room" = the Chatroom.
  */
-export default function ChatSearchSheet({ convoId, title, isGroup, members, me, presence, presenceNow, messages, clearedMs, onJump, onOpenProfile, onClose }) {
+export default function ChatSearchSheet({ convoId, title, isGroup, members, me, presence = {}, presenceNow, messages, clearedMs = 0, peopleLabel = "Members", onJump, onOpenProfile, onClose }) {
   const [q, setQ] = useState("");
   const [older, setOlder] = useState({ items: [], loading: false, done: false });
   const term = q.trim().toLowerCase();
@@ -63,7 +64,7 @@ export default function ChatSearchSheet({ convoId, title, isGroup, members, me, 
     setOlder((o) => ({ ...o, loading: true }));
     try {
       const snap = await getDocs(query(
-        collection(db, "conversations", convoId, "messages"),
+        convoId === "room" ? collection(db, "chatroom_messages") : collection(db, "conversations", convoId, "messages"),
         orderBy("createdAt", "desc"),
         startAfter(oldest.createdAt),
         limit(OLDER_PAGE)
@@ -138,7 +139,7 @@ export default function ChatSearchSheet({ convoId, title, isGroup, members, me, 
 
         {isGroup && (memberHits.length > 0 || !nameTerm) && (
           <section className="mt-5">
-            <p className="text-[13px] font-semibold text-white/50 px-1 mb-1">Members · {formatCount(memberHits.length)}{nameTerm ? "" : ` of ${formatCount(members.length)}`}</p>
+            <p className="text-[13px] font-semibold text-white/50 px-1 mb-1">{peopleLabel} · {formatCount(memberHits.length)}{nameTerm ? "" : ` of ${formatCount(members.length)}`}</p>
             <ul className="-mx-2">
               {memberHits.map((p) => {
                 const st = presenceOf(presence[p], presenceNow);

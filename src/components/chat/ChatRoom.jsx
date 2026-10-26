@@ -10,8 +10,7 @@ import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import ChatMessages from "@/components/chat/ChatMessages";
 import ChatComposer from "@/components/chat/ChatComposer";
 import { useChat } from "@/components/chat/ChatProvider";
-import ChatSheet from "@/components/chat/ChatSheet";
-import PlayerSearch from "@/components/chat/PlayerSearch";
+import ChatSearchSheet from "@/components/chat/ChatSearchSheet";
 
 const MAX_LENGTH = 500;
 const STATS_EVERY_MS = 60000;
@@ -27,7 +26,8 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
   const { confirmAction } = useChat();
   const [messages, setMessages] = useState([]);
   const [outbox, setOutbox] = useState([]); // your messages on their way: shown at once, with a clock
-  const [findingPeople, setFindingPeople] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [focus, setFocus] = useState(null); // { id } of a message to scroll to (from search)
   const [loaded, setLoaded] = useState(false);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -202,8 +202,8 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
           <span className="hidden sm:block text-[10px] font-black uppercase text-white/40 text-right">{active ? `Posting as @${active}` : "No username yet"}</span>
           <button
             type="button"
-            onClick={() => setFindingPeople(true)}
-            aria-label="Find people"
+            onClick={() => setSearching(true)}
+            aria-label="Search the Chatroom"
             className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80"
           >
             <Search size={16} />
@@ -232,6 +232,7 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
         onBlock={onBlock}
         burst={burst}
         onBurstDone={clearBurst}
+        focus={focus}
       />
 
       <ChatComposer
@@ -250,19 +251,26 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
         searchPlayers
       />
 
-      {findingPeople && (
-        <ChatSheet label="Find people" onClose={() => setFindingPeople(false)}>
-          <div className="p-5 pt-7">
-            <h2 className="text-lg font-bold mb-3 pr-10">Find people</h2>
-            <PlayerSearch
-              label="Search players · username, name, phone, country"
-              onPick={(u) => {
-                setFindingPeople(false);
-                onOpenProfile?.(u);
-              }}
-            />
-          </div>
-        </ChatSheet>
+      {searching && (
+        <ChatSearchSheet
+          convoId="room"
+          title="the Chatroom"
+          isGroup
+          peopleLabel="People in the Chatroom"
+          members={[...new Set(messages.map((m) => m.sender).filter(Boolean))]}
+          me={active}
+          presenceNow={0}
+          messages={visible}
+          onJump={(id) => {
+            setSearching(false);
+            setFocus({ id });
+          }}
+          onOpenProfile={(p) => {
+            setSearching(false);
+            onOpenProfile?.(p);
+          }}
+          onClose={() => setSearching(false)}
+        />
       )}
     </div>
   );

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Globe, Lock, Users } from "lucide-react";
 import { GROUP_DESCRIPTION_MAX, GROUP_NAME_MAX } from "@/lib/chat";
+import { groupPhotoUrl } from "@/lib/groupPhotos";
 import ChatSheet from "@/components/chat/ChatSheet";
 
 const VISIBILITY = [
@@ -9,8 +10,28 @@ const VISIBILITY = [
   { key: "private", icon: Lock, title: "Private", text: "Only people an admin adds can join." },
 ];
 
-/** The blue group badge used wherever a group is listed. */
-export function GroupAvatar({ size = 40, rounded = "rounded-full" }) {
+/**
+ * A group's picture: its photo when it has one (`groupId` + `version`, the
+ * group's photoVersion), else the blue group badge.
+ */
+export function GroupAvatar({ size = 40, rounded = "rounded-full", groupId = "", version = 0 }) {
+  const [broken, setBroken] = useState("");
+  const src = groupPhotoUrl(groupId, version);
+  if (src && broken !== src) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt=""
+        width={size}
+        height={size}
+        loading="lazy"
+        onError={() => setBroken(src)}
+        style={{ width: size, height: size }}
+        className={`shrink-0 ${rounded} object-cover bg-[#142036]`}
+      />
+    );
+  }
   return (
     <span style={{ width: size, height: size }} className={`shrink-0 ${rounded} bg-[#2457D6]/25 text-[#8FB0FF] flex items-center justify-center`}>
       <Users size={Math.round(size * 0.45)} />

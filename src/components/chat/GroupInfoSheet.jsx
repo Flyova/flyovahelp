@@ -1,12 +1,14 @@
 "use client";
-import { useState } from "react";
-import { Copy, Crown, Globe, Link2, Lock, LockKeyhole, LogOut, MoreHorizontal, Pencil, RefreshCw, Share2, Shield, ShieldOff, Trash2, UserMinus } from "lucide-react";
+import { useRef, useState } from "react";
+import { Camera, Copy, Crown, Loader2, Globe, Link2, Lock, LockKeyhole, LogOut, MoreHorizontal, Pencil, RefreshCw, Share2, Shield, ShieldOff, Trash2, UserMinus } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import ChatSheet from "@/components/chat/ChatSheet";
 import GroupForm, { GroupAvatar } from "@/components/chat/GroupForm";
 import PlayerSearch from "@/components/chat/PlayerSearch";
 import { SettingsSwitch } from "@/components/chat/SettingsList";
 import { groupOwner, isGroupAdmin } from "@/lib/chat";
+import { authFetch } from "@/lib/authFetch";
+import { squareJpeg } from "@/lib/groupPhotos";
 import { useChat } from "@/components/chat/ChatProvider";
 
 const SITE = "https://strawins.com";
@@ -95,6 +97,53 @@ function GroupLink({ convo, amAdmin, act }) {
   );
 }
 
+/** The group's picture; admins tap it to change it, or remove it. */
+function GroupPhoto({ convo, me, amAdmin, onNote }) {
+  const { confirmAction } = useChat();
+  const fileRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+
+  const save = async (photoURL, done) => {
+    setBusy(true);
+    const r = await authFetch("/api/chat/group-photo", { method: "POST", body: { convoId: convo.id, as: me, photoURL } }).catch((e) => ({ error: e.message }));
+    setBusy(false);
+    onNote(r.error ? { type: "error", msg: r.error } : { type: "success", msg: done });
+  };
+  const pick = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return onNote({ type: "error", msg: "Choose a photo (an image file)." });
+    try {
+      await save(await squareJpeg(file), "Group photo updated.");
+    } catch (err) {
+      setBusy(false);
+      onNote({ type: "error", msg: err.message });
+    }
+  };
+  const remove = async () => {
+    if (await confirmAction({ title: "Remove the group photo?", confirmLabel: "Remove" })) save("", "Group photo removed.");
+  };
+
+  if (!amAdmin) return <GroupAvatar size={88} groupId={convo.id} version={convo.photoVersion} />;
+  return (
+    <>
+      <button type="button" onClick={() => fileRef.current?.click()} disabled={busy} aria-label="Change group photo" className="relative rounded-full">
+        <GroupAvatar size={88} groupId={convo.id} version={convo.photoVersion} />
+        <span className="absolute -right-1 -bottom-1 w-8 h-8 rounded-full bg-[#2457D6] ring-4 ring-[#142036] flex items-center justify-center">
+          {busy ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+        </span>
+      </button>
+      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={pick} />
+      {convo.photoVersion ? (
+        <button type="button" onClick={remove} disabled={busy} className="mt-2 text-[11px] font-bold text-red-300/80 hover:text-red-300">Remove photo</button>
+      ) : (
+        <p className="mt-2 text-[11px] text-white/45">Tap to add a group photo</p>
+      )}
+    </>
+  );
+}
+
 const roleRank = (convo, p) => (groupOwner(convo) === p ? 0 : (convo.admins || []).includes(p) ? 1 : 2);
 
 function Badge({ children, tone = "neutral" }) {
@@ -157,7 +206,7 @@ export default function GroupInfoSheet({ convo, me, act, onClose, onOpenProfile,
     <ChatSheet label={`${convo.groupName} info`} onClose={onClose}>
       <div className="p-5 pt-7">
         <div className="flex flex-col items-center text-center px-6">
-          <GroupAvatar size={72} />
+          <GroupPhoto convo={convo} me={me} amAdmin={amAdmin} onNote={setNote} />
           <h2 className="mt-3 text-xl font-black leading-tight break-words">{convo.groupName}</h2>
           <p className="mt-1 flex items-center gap-1.5 text-xs text-white/50">
             {isPublic ? <Globe size={12} /> : <Lock size={12} />}

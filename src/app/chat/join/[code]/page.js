@@ -57,7 +57,7 @@ export default function JoinGroupPage() {
         )}
         {group && (
           <>
-            <GroupAvatar size={80} />
+            <GroupAvatar size={80} groupId={group.id} version={group.photoVersion} />
             <h1 className="mt-4 text-xl font-black leading-tight break-words">{group.groupName}</h1>
             <p className="mt-1.5 flex items-center gap-1.5 text-[13px] text-white/55">
               {group.visibility === "public" ? <Globe size={13} /> : <Lock size={13} />}

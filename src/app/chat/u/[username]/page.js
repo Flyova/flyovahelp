@@ -239,7 +239,7 @@ export default function PlayerProfilePage() {
                 <div className="divide-y divide-white/5">
                   {shared.map((g) => (
                     <button key={g.id} type="button" onClick={() => openGroup(g.id)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-white/[0.05]">
-                      <GroupAvatar size={36} rounded="rounded-xl" />
+                      <GroupAvatar size={36} rounded="rounded-xl" groupId={g.id} version={g.photoVersion} />
                       <span className="min-w-0 flex-1">
                         <span className="block text-[14px] font-bold truncate">{g.groupName}</span>
                         <span className="block text-[11px] text-white/45">{(g.participants || []).length} members</span>
@@ -284,7 +284,7 @@ export default function PlayerProfilePage() {
               <div className="divide-y divide-white/5">
                 {canAddTo.map((g) => (
                   <div key={g.id} className="flex items-center gap-3 px-3 py-2.5">
-                    <GroupAvatar size={36} rounded="rounded-xl" />
+                    <GroupAvatar size={36} rounded="rounded-xl" groupId={g.id} version={g.photoVersion} />
                     <span className="min-w-0 flex-1 text-[14px] font-bold truncate">{g.groupName}</span>
                     <button type="button" disabled={adding === g.id} onClick={() => addToGroup(g)} className="shrink-0 h-8 px-3 rounded-lg bg-[#8B1E3F] text-[11px] font-black uppercase disabled:opacity-50">
                       {adding === g.id ? "…" : "Add"}

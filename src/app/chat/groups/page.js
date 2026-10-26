@@ -156,7 +156,7 @@ export default function GroupsPage() {
             me={me}
             isGroup
             header={{
-              avatar: <GroupAvatar size={40} />,
+              avatar: <GroupAvatar size={44} groupId={openId} version={open?.photoVersion} />,
               title: open?.groupName,
               subtitle: `${memberCount} member${memberCount === 1 ? "" : "s"} · ${open?.visibility === "public" ? "public" : "private"} · tap for info`,
               label: "Group info",

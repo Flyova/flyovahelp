@@ -72,7 +72,7 @@ export default function ConversationList({
                 className={`min-w-0 flex-1 flex items-center gap-3 text-left py-2.5 pl-2.5 ${rowMenu ? "pr-1" : "pr-2.5"}`}
               >
                 {group ? (
-                  <GroupAvatar size={40} rounded="rounded-xl" />
+                  <GroupAvatar size={40} rounded="rounded-xl" groupId={c.id} version={c.photoVersion} />
                 ) : (
                   <span className="relative shrink-0">
                     <Avatar username={others[0]} size={40} />

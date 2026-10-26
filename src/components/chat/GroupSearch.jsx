@@ -45,7 +45,7 @@ function GroupRow({ group, member, busy, onOpen, onJoin }) {
         onClick={() => (member ? onOpen(group.id) : onJoin(group))}
         className="w-full flex items-center gap-3 px-2 py-2 rounded-xl text-left hover:bg-white/[0.05] transition-colors disabled:opacity-60"
       >
-        <GroupAvatar size={38} rounded="rounded-xl" />
+        <GroupAvatar size={38} rounded="rounded-xl" groupId={group.id} version={group.photoVersion} />
         <span className="min-w-0 flex-1">
           <span className="block text-[13px] font-bold truncate">{group.groupName}</span>
           <span className="block text-[11px] text-white/45 truncate">
