@@ -31,8 +31,8 @@ export async function GET(req) {
           memberCount: (d.participants || []).length,
           visibility: d.visibility === "public" ? "public" : "private",
           isMember: (d.participantUids || []).includes(caller.uid),
-        },
           photoVersion: Number(d.photoVersion) || 0,
+        },
       });
     }
     const term = groupSearchTerm(params.get("q"));
@@ -54,8 +54,8 @@ export async function GET(req) {
         memberCount: (g.participants || []).length,
         owner: groupOwner(g),
         isMember: (g.participantUids || []).includes(caller.uid),
-      }));
         photoVersion: Number(g.photoVersion) || 0,
+      }));
     return NextResponse.json({ items });
   } catch (e) {
     console.error("Chat group search error:", e);
