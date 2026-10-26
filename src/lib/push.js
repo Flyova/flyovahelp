@@ -47,7 +47,7 @@ export async function sendPushToUsers(targets, { title, body, data = {} }) {
     seen.add(t.token);
     messages.push({
       to: t.token,
-      title,
+      title: t.title || title,
       body: String(body || "").slice(0, 180),
       data: { ...data, ...(t.data || {}) },
       // Muted chats arrive silently (the app's "chat-silent" Android channel has no sound).

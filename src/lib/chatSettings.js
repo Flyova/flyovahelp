@@ -2,7 +2,7 @@
 // /api/chat/settings (owner or an account logged in to the username). Anything a
 // profile hasn't set yet falls back to its owner account's chat_state, where these
 // settings lived before they were per profile, then to the defaults below.
-export const CHAT_SETTING_DEFAULTS = { readReceipts: true, showOnline: true, hideCountry: false, showCoins: false };
+export const CHAT_SETTING_DEFAULTS = { readReceipts: true, showOnline: true, hideCountry: false, showCoins: false, allowGroupAdds: true };
 
 const bool = (...values) => values.find((v) => typeof v === "boolean");
 

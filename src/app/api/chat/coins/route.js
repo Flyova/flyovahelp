@@ -3,7 +3,7 @@ import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import { sendPushToUsers } from "@/lib/push";
 import {
-  coinBuyQuote, coinWithdrawQuote, formatCents, formatCoins, isCoinAmount, liveUsername, ownedUsername,
+  canPostInGroup, coinBuyQuote, coinWithdrawQuote, formatCents, formatCoins, isCoinAmount, liveUsername, ownedUsername,
   MAX_COINS_PER_ACTION,
 } from "@/lib/chat";
 
@@ -112,6 +112,7 @@ async function send(db, caller, { as, to, coins, convoId }) {
     if (!members.includes(me.lower) || !(c.participantUids || []).includes(caller.uid)) return fail("You're not in this group.", 403);
     if (!members.includes(other.lower)) return fail(`@${other.lower} isn't in this group.`, 400);
     if ((c.blocked || []).includes(me.lower)) return fail("You can't send messages in this group.", 403);
+    if (!canPostInGroup(c, me.lower)) return fail("This group is locked. Only admins can send messages.", 403);
     msgRef = convoRef.collection("messages").doc();
   } else {
     if (user.chatMuted) return fail("You've been muted in the chatroom.", 403);

@@ -3,8 +3,9 @@ import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import {
   dmIdFor, isValidUsername, norm, ownedUsername, participantUidsFor, usernameUids,
-  GROUP_DESCRIPTION_MAX, GROUP_NAME_MAX, MAX_GROUP_MEMBERS, groupOwner, groupSearchKeys, isGroupAdmin,
+  GROUP_DESCRIPTION_MAX, GROUP_NAME_MAX, MAX_GROUP_MEMBERS, groupByInvite, groupOwner, groupSearchKeys, isGroupAdmin,
 } from "@/lib/chat";
+import { chatSettingsFor } from "@/lib/chatSettings";
 
 // POST /api/chat/conversations — the only way conversations are created or joined.
 // Firestore rules forbid clients from creating conversations or changing their
@@ -20,9 +21,13 @@ import {
 //   { action: "removeMember", convoId, as, username }         -> { ok }  admins; only the owner removes admins
 //   { action: "setAdmin", convoId, as, username, admin }      -> { ok }  owner only
 //   { action: "updateGroup", convoId, as, name?, description?, visibility? } -> { ok }  admins
+//   { action: "lockGroup", convoId, as, locked }              -> { ok }  admins: when locked, only admins can send messages
 //   { action: "deleteGroup", convoId, as }                    -> { ok }  owner only
 //   { action: "deleteMessage", convoId, as, messageId }       -> { ok }  admins remove anyone's message
 //   { action: "unblock", as, target }                         -> { ok }  let a player you blocked message you again
+//   { action: "deleteChat", convoId, as }                     -> { ok }  private chat: delete it and its messages for both people
+//   { action: "inviteLink", convoId, as, op }                 -> { code }  admins: op "create", "reset" (new link) or "delete"
+//   { action: "joinByLink", code, as }                        -> { id }  join a group (public or private) with its invite link
 
 const FV = () => admin.firestore.FieldValue;
 const fail = (error, status = 400) => NextResponse.json({ error }, { status });
@@ -180,6 +185,11 @@ async function addMember(db, caller, { convoId, as, username }) {
   if (!me) return fail("You can only act as one of your own usernames.", 403);
   const other = await activeUsername(db, username);
   if (!other) return fail("That username doesn't exist.", 404);
+  // Chat settings → Privacy: some players only join groups themselves.
+  const settings = await chatSettingsFor(db, [{ name: other.lower, uid: other.uid }]);
+  if (settings.get(other.lower)?.allowGroupAdds === false) {
+    return fail(`@${other.lower} only joins groups themselves. Send them the group link instead.`, 403);
+  }
 
   const refused = await withGroup(db, convoId, (convo, tx) => {
     if (!isGroupAdmin(convo, me.lower)) return { error: "Only group admins can add members.", status: 403 };
@@ -270,6 +280,24 @@ async function updateGroup(db, caller, { convoId, as, name, description, visibil
   return refused || NextResponse.json({ ok: true });
 }
 
+// A locked group takes messages only from its owner and admins (Firestore rules
+// enforce it on every message); unlocking lets every member write again.
+async function lockGroup(db, caller, { convoId, as, locked }) {
+  const me = await ownedUsername(db, caller.uid, as);
+  if (!me) return fail("You can only act as one of your own usernames.", 403);
+  const lock = locked === true;
+
+  const refused = await withGroup(db, convoId, (convo, tx) => {
+    if (!isGroupAdmin(convo, me.lower)) return { error: "Only group admins can lock or unlock the group.", status: 403 };
+    if (!!convo.locked === lock) return null;
+    return {
+      locked: lock,
+      ...activity(tx, db, convoId, lock ? `@${me.lower} locked the group. Only admins can send messages` : `@${me.lower} unlocked the group. Everyone can send messages`),
+    };
+  });
+  return refused || NextResponse.json({ ok: true });
+}
+
 // Kept (not erased) so reported messages can still be reviewed; with no members
 // left, nobody can read it.
 async function deleteGroup(db, caller, { convoId, as }) {
@@ -319,6 +347,71 @@ async function unblock(db, caller, { as, target }) {
   return NextResponse.json({ ok: true });
 }
 
+// Deleted for both people: the messages and the chat itself. Writing to each other
+// again starts a fresh chat.
+async function deleteChat(db, caller, { convoId, as }) {
+  const me = await ownedUsername(db, caller.uid, as);
+  if (!me) return fail("You can only act as one of your own usernames.", 403);
+  const ref = db.collection("conversations").doc(String(convoId || ""));
+  const snap = await ref.get();
+  if (!snap.exists) return NextResponse.json({ ok: true });
+  const convo = snap.data();
+  if (convo.type === "group") return fail("Groups can't be deleted this way. Leave the group, or delete it if you own it.");
+  if (!(convo.participants || []).includes(me.lower)) return fail("You're not in this chat.", 403);
+  for (;;) {
+    const page = await ref.collection("messages").limit(400).get();
+    if (page.empty) break;
+    const batch = db.batch();
+    page.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+    if (page.size < 400) break;
+  }
+  await ref.delete();
+  return NextResponse.json({ ok: true });
+}
+
+const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+const newInviteCode = () => Array.from(crypto.getRandomValues(new Uint8Array(10)), (b) => CODE_CHARS[b % CODE_CHARS.length]).join("");
+
+// A group's invite link (/chat/join/<code>): anyone with it can join, even a private
+// group. Admins create it, swap it for a new one (the old link stops working) or delete it.
+async function inviteLink(db, caller, { convoId, as, op }) {
+  const me = await ownedUsername(db, caller.uid, as);
+  if (!me) return fail("You can only act as one of your own usernames.", 403);
+  if (!["create", "reset", "delete"].includes(op)) return fail("Unknown link action.");
+  let code = "";
+  const refused = await withGroup(db, convoId, (convo) => {
+    if (!isGroupAdmin(convo, me.lower)) return { error: "Only group admins can manage the group link.", status: 403 };
+    if (op === "delete") return { inviteCode: "" };
+    if (op === "create" && convo.inviteCode) {
+      code = convo.inviteCode;
+      return null;
+    }
+    code = newInviteCode();
+    return { inviteCode: code };
+  });
+  return refused || NextResponse.json({ code });
+}
+
+async function joinByLink(db, caller, { code, as }) {
+  const me = await ownedUsername(db, caller.uid, as);
+  if (!me) return fail("You can only chat as one of your own usernames.", 403);
+  const group = await groupByInvite(db, code);
+  if (!group) return fail("This group link doesn't work any more. Ask an admin for a new one.", 404);
+  const refused = await withGroup(db, group.id, (convo, tx) => {
+    if ((convo.participants || []).includes(me.lower)) return null; // already in
+    if (convo.inviteCode !== code) return { error: "This group link doesn't work any more. Ask an admin for a new one.", status: 404 };
+    if ((convo.removed || []).includes(me.lower)) return { error: "An admin removed you from this group.", status: 403 };
+    if ((convo.participants || []).length >= MAX_GROUP_MEMBERS) return { error: `This group is full (${MAX_GROUP_MEMBERS} members).`, status: 400 };
+    return {
+      participants: FV().arrayUnion(me.lower),
+      participantUids: FV().arrayUnion(...usernameUids(me)),
+      ...activity(tx, db, group.id, `@${me.lower} joined with the group link`),
+    };
+  });
+  return refused || NextResponse.json({ id: group.id });
+}
+
 const ACTIONS = {
   dm: openDm,
   group: createGroup,
@@ -328,9 +421,13 @@ const ACTIONS = {
   removeMember,
   setAdmin,
   updateGroup,
+  lockGroup,
   deleteGroup,
   deleteMessage,
   unblock,
+  deleteChat,
+  inviteLink,
+  joinByLink,
 };
 
 export async function POST(req) {

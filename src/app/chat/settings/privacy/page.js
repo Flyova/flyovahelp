@@ -1,6 +1,6 @@
 "use client";
 import { FieldPath, collection, deleteField, getDocs, limit, query, updateDoc, where } from "firebase/firestore";
-import { Coins, Eye, Globe2 } from "lucide-react";
+import { Coins, Eye, Globe2, UserPlus } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { useChat } from "@/components/chat/ChatProvider";
 import { SettingsLoading, SettingsPage, SettingsSection, SettingsSwitch, useSaveSetting } from "@/components/chat/SettingsList";
@@ -47,6 +47,14 @@ export default function PrivacySettingsPage() {
           on={s.hideCountry}
           disabled={busy === "country"}
           onChange={(v) => save("country", { hideCountry: v })}
+        />
+        <SettingsSwitch
+          icon={UserPlus}
+          title="Let admins add you to groups"
+          text="Off: nobody can add you to a group. You join groups yourself, from search or a group link."
+          on={s.allowGroupAdds !== false}
+          disabled={busy === "groups"}
+          onChange={(v) => save("groups", { allowGroupAdds: v })}
         />
       </SettingsSection>
     </SettingsPage>

@@ -1,6 +1,6 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, initializeFirestore } from "firebase/firestore";
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 import { getDatabase } from "firebase/database";
 import { getStorage } from "firebase/storage";
 
@@ -16,10 +16,13 @@ const firebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const auth = getAuth(app);
+// In the browser, Firestore keeps what it has read in IndexedDB, so chats and the
+// Chatroom show at once on the next visit while the live data catches up.
 const db = (() => {
   try {
     return initializeFirestore(app, {
       experimentalAutoDetectLongPolling: true,
+      ...(typeof window !== "undefined" ? { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) } : {}),
     });
   } catch {
     return getFirestore(app);

@@ -11,6 +11,7 @@ import { authFetch } from "@/lib/authFetch";
 import { playChatSound } from "@/lib/chatSound";
 import { PRESENCE_PING_MS, READS_SINCE_MS, TYPING_SHOW_MS, norm } from "@/lib/chat";
 import { CoinWalletSheet, SendCoinsSheet } from "@/components/chat/CoinSheets";
+import ChatDialog from "@/components/chat/ChatDialog";
 
 const ChatContext = createContext(null);
 
@@ -75,6 +76,7 @@ const readChatState = (d = {}, loaded = false) => ({
 
 // One chat profile's settings, from /api/chat/settings (or the account fallback above).
 const fallbackSettings = (state) => ({
+  allowGroupAdds: true,
   readReceipts: state.readReceipts,
   showOnline: state.showOnline,
   hideCountry: state.hideCountry,
@@ -129,6 +131,7 @@ export function ChatProvider({ children }) {
   const [coinSheet, setCoinSheet] = useState(null); // { kind: "wallet" } | { kind: "send", to, convoId }
   const [err, setErr] = useState("");
   const [notice, setNotice] = useState(""); // short confirmation, e.g. "You blocked @ade."
+  const [dialog, setDialog] = useState(null); // { title, message, actions, resolve }
   const [chatState, setChatState] = useState(() => readChatState());
   const [profileSettings, setProfileSettings] = useState({}); // usernameLower -> that chat profile's settings
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -177,27 +180,32 @@ export function ChatProvider({ children }) {
   }, [active]);
 
   // My conversations — one listener by account; Firestore rules only return
-  // conversations whose participantUids include me.
+  // conversations whose participantUids include me. It starts as soon as you're
+  // signed in (not after your usernames load), so chats show sooner; which of them
+  // are yours is worked out below once the usernames are in.
+  const lowersRef = useRef([]);
   useEffect(() => {
-    if (!uid || !identities.length) return;
-    const lowers = identities.map((i) => i.usernameLower);
+    lowersRef.current = identities.map((i) => i.usernameLower);
+  }, [identities]);
+  useEffect(() => {
+    if (!uid) return;
     return onSnapshot(
       query(collection(db, "conversations"), where("participantUids", "array-contains", uid), orderBy("lastMessageAt", "desc"), limit(50)),
       (s) => {
-        const list = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((c) => !c.deleted && (c.participants || []).some((p) => lowers.includes(p)));
+        const list = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((c) => !c.deleted);
         const now = Date.now();
         noteTypingArrivals(list, typingArrivals.current, now);
         convosRef.current = list;
         setAllConvos(list);
         setTypingIn((prev) => {
-          const next = whoIsTyping(list, typingArrivals.current, lowers, now);
+          const next = whoIsTyping(list, typingArrivals.current, lowersRef.current, now);
           return sameTyping(prev, next) ? prev : next;
         });
         setConvosLoaded(true);
       },
       (e) => setErr(`Could not load conversations: ${e.message}`)
     );
-  }, [uid, identities]);
+  }, [uid]);
 
   // "typing…" expires on its own once a typer stops refreshing it.
   const anyoneTyping = Object.keys(typingIn).length > 0;
@@ -411,12 +419,27 @@ export function ChatProvider({ children }) {
     return "";
   }, [applyIdentities]);
 
+  // In-app dialogs instead of the browser's confirm(): ask() resolves to the chosen
+  // action's value, or null for Cancel; confirmAction() to true or false.
+  const ask = useCallback((options) => new Promise((resolve) => setDialog({ ...options, resolve })), []);
+  const confirmAction = useCallback(
+    async ({ title, message, confirmLabel, danger = true }) =>
+      (await ask({ title, message, actions: [{ label: confirmLabel, value: true, tone: danger ? "danger" : "primary" }] })) === true,
+    [ask]
+  );
+  const closeDialog = useCallback((value) => {
+    setDialog((d) => {
+      d?.resolve(value);
+      return null;
+    });
+  }, []);
+
   const deleteUsername = useCallback(async (usernameLower) => {
-    if (!confirm(`Permanently delete @${usernameLower}?`)) return;
+    if (!(await confirmAction({ title: `Delete @${usernameLower}?`, message: "This permanently removes the username. It can't be undone.", confirmLabel: "Delete" }))) return;
     const r = await authFetch("/api/chat/usernames", { method: "DELETE", body: { username: usernameLower } });
     if (r.error) return setErr(r.error);
     setIdentities((p) => p.filter((i) => i.usernameLower !== usernameLower));
-  }, []);
+  }, [confirmAction]);
 
   const setOpenId = useCallback((section, id) => setOpenIds((p) => ({ ...p, [section]: id })), []);
 
@@ -450,9 +473,29 @@ export function ChatProvider({ children }) {
   const deleteChat = useCallback((id) => updateChatState({ cleared: { [id]: serverTimestamp() }, archived: { [id]: false } })
     .then(() => {
       setOpenIds((p) => ({ private: p.private === id ? null : p.private, groups: p.groups === id ? null : p.groups }));
-      flashNotice("Chat deleted.");
+      flashNotice("Chat deleted for you.");
     })
     .catch((e) => setErr(`Could not delete the chat: ${e.message}`)), [updateChatState, flashNotice]);
+
+  // Delete a private chat: for both people (its messages are erased) or just for you.
+  const removeChat = useCallback(async (convo) => {
+    const me = (convo.participants || []).find((p) => myLowers.includes(p)) || active;
+    const other = (convo.participants || []).find((p) => p !== me) || "them";
+    const choice = await ask({
+      title: `Delete your chat with @${other}?`,
+      message: `"Delete for everyone" erases every message for both of you. "Delete just for me" clears it on your side only.`,
+      actions: [
+        { label: "Delete for everyone", value: "everyone", tone: "danger" },
+        { label: "Delete just for me", value: "me", tone: "secondary" },
+      ],
+    });
+    if (choice === "me") return deleteChat(convo.id);
+    if (choice !== "everyone") return;
+    const r = await authFetch("/api/chat/conversations", { method: "POST", body: { action: "deleteChat", convoId: convo.id, as: me } });
+    if (r.error) return setErr(r.error);
+    setOpenIds((p) => ({ private: p.private === convo.id ? null : p.private, groups: p.groups === convo.id ? null : p.groups }));
+    flashNotice(`Chat with @${other} deleted for both of you.`);
+  }, [ask, active, myLowers, deleteChat, flashNotice]);
   // Hidden from your lists: deleted with nothing new since, or archived.
   const isDeletedForMe = useCallback((c) => {
     const at = chatState.cleared[c.id]?.toMillis?.();
@@ -462,7 +505,11 @@ export function ChatProvider({ children }) {
   const blockUser = useCallback(async (targetLower) => {
     const target = norm(targetLower);
     if (!active) return needUsername();
-    if (!confirm(`Block @${target}? They won't be able to message you or send you coins, and you won't see them in the Chatroom.`)) return;
+    if (!(await confirmAction({
+      title: `Block @${target}?`,
+      message: "They won't be able to message you or send you coins, and you won't see them in the Chatroom.",
+      confirmLabel: "Block",
+    }))) return;
     try {
       await setDoc(doc(db, "chat_blocks", `${active}_${target}`), {
         blocker: active, blocked: target, createdAt: serverTimestamp(),
@@ -474,7 +521,7 @@ export function ChatProvider({ children }) {
     } catch (e) {
       setErr(`Could not block @${target}: ${e.message}`);
     }
-  }, [active, convos, flashNotice, needUsername]);
+  }, [active, convos, flashNotice, needUsername, confirmAction]);
 
   // `as`: which of your usernames lifts the block (the one you're using by default).
   const unblockUser = useCallback(async (targetLower, as = active) => {
@@ -491,17 +538,21 @@ export function ChatProvider({ children }) {
   }, [active, flashNotice, needUsername]);
 
   const reportUser = useCallback(async (targetLower, extra = {}) => {
-    const reason = prompt(extra.messageId ? `Report @${norm(targetLower)}'s message? Tell us why:` : "Reason for report?");
+    const reason = await ask({
+      title: extra.messageId ? `Report @${norm(targetLower)}'s message?` : `Report @${norm(targetLower)}?`,
+      message: "Tell us what's wrong. Our team reviews every report.",
+      actions: ["Spam or scam", "Abuse or harassment", "Inappropriate messages", "Something else"].map((r) => ({ label: r, value: r, tone: "secondary" })),
+    });
     if (!reason) return;
     try {
       await addDoc(collection(db, "chat_reports"), {
         reporter: active, reported: norm(targetLower), reason, ...extra, createdAt: serverTimestamp(), status: "open",
       });
-      alert("Report submitted.");
+      flashNotice("Report sent. Thanks, our team will review it.");
     } catch (e) {
       setErr(`Could not send the report: ${e.message}`);
     }
-  }, [active]);
+  }, [active, ask, flashNotice]);
 
   // A player's full profile page.
   const openProfile = useCallback((username) => router.push(`/chat/u/${encodeURIComponent(norm(username))}`), [router]);
@@ -524,12 +575,13 @@ export function ChatProvider({ children }) {
     coins, openCoinWallet, sendCoins,
     updateChatState, soundOn, presence, presenceNow,
     settingsFor, updateSettings, settingsLoaded, settingsName, setSettingsName: setSettingsChoice,
-    archiveChat, deleteChat, isDeletedForMe,
-  }), [uid, identities, identitiesLoaded, active, refreshIdentities, createUsername, deleteUsername, usernamePrice, archiveChat, deleteChat, isDeletedForMe, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, notice, flashNotice, openProfile, messagePrivately, blockUser, unblockUser, reportUser, coins, openCoinWallet, sendCoins, updateChatState, soundOn, presence, presenceNow, settingsFor, updateSettings, settingsLoaded, settingsName]);
+    archiveChat, deleteChat, removeChat, isDeletedForMe, ask, confirmAction, needUsername,
+  }), [uid, identities, identitiesLoaded, active, refreshIdentities, createUsername, deleteUsername, usernamePrice, archiveChat, deleteChat, isDeletedForMe, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, notice, flashNotice, openProfile, messagePrivately, blockUser, unblockUser, reportUser, coins, openCoinWallet, sendCoins, updateChatState, soundOn, presence, presenceNow, settingsFor, updateSettings, settingsLoaded, settingsName, removeChat, ask, confirmAction, needUsername]);
 
   return (
     <ChatContext.Provider value={value}>
       {children}
+      {dialog && <ChatDialog title={dialog.title} message={dialog.message} actions={dialog.actions} onDone={closeDialog} />}
       {coinSheet?.kind === "wallet" && <CoinWalletSheet uid={uid} coins={coins} onClose={closeCoins} />}
       {coinSheet?.kind === "send" && (
         <SendCoinsSheet

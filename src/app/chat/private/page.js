@@ -16,10 +16,10 @@ import PlayerSearch from "@/components/chat/PlayerSearch";
  */
 export default function PrivateChatsPage() {
   const {
-    identities, active, selectIdentity, createUsername, deleteUsername, usernamePrice,
+    identities, active, selectIdentity,
     convos, convosLoading, myNameIn, openIds, setOpenId, setErr, typingIn, unread,
     messagePrivately, openProfile, blockUser, unblockUser, reportUser, presence, presenceNow, blockedNames,
-    chatState, archiveChat, deleteChat, isDeletedForMe,
+    chatState, archiveChat, removeChat, isDeletedForMe,
   } = useChat();
   const [showArchived, setShowArchived] = useState(false);
   const openId = openIds.private;
@@ -30,10 +30,6 @@ export default function PrivateChatsPage() {
   const inbox = chats.filter((c) => !chatState.archived[c.id]);
   const archived = chats.filter((c) => chatState.archived[c.id]);
   const archivedUnread = archived.filter((c) => unread[c.id]).length;
-  const otherIn = (c) => (c.participants || []).find((p) => p !== myNameIn(c));
-  const removeChat = (c) => {
-    if (confirm(`Delete your chat with @${otherIn(c)}? Its messages are cleared for you; @${otherIn(c)} keeps theirs.`)) deleteChat(c.id);
-  };
   const chatMenu = (c) => [
     chatState.archived[c.id]
       ? { label: "Unarchive", icon: ArchiveRestore, run: () => archiveChat(c.id, false) }
@@ -52,7 +48,7 @@ export default function PrivateChatsPage() {
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 lg:h-[calc(100vh-14.5rem)] lg:min-h-[520px]">
       {/* identity, search and inbox — hidden on phones while a chat is open */}
       <div className={`lg:col-span-4 flex-col gap-3 min-h-0 ${openId ? "hidden lg:flex" : "flex"}`}>
-        <IdentityBar identities={identities} active={active} onSelect={selectIdentity} onCreate={createUsername} onDelete={deleteUsername} price={usernamePrice} />
+        <IdentityBar identities={identities} active={active} onSelect={selectIdentity} />
         <PlayerSearch onPick={messagePrivately} label="Search people · username, name, phone, country" />
         <ConversationList
           {...listProps}

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
-import { groupOwner, groupSearchTerm } from "@/lib/chat";
+import { groupByInvite, groupOwner, groupSearchTerm } from "@/lib/chat";
 
 const LIMIT = 20;
 const POPULAR_SCAN = 100;
@@ -9,6 +9,7 @@ const POPULAR_SCAN = 100;
 const millis = (ts) => ts?.toMillis?.() ?? 0;
 
 // GET /api/chat/groups?q=... — public groups anyone can find and join.
+// GET /api/chat/groups?code=... — the group an invite link opens (name, description, members).
 // With a search term: groups whose name has a word (or starts with the phrase)
 // beginning with it. Without one: the biggest, then most recently active, groups.
 // Single-field queries only, so no composite index is needed.
@@ -16,7 +17,24 @@ export async function GET(req) {
   try {
     const caller = await getCaller(req);
     if (!caller) return NextResponse.json({ error: "Sign in again to continue." }, { status: 401 });
-    const term = groupSearchTerm(new URL(req.url).searchParams.get("q"));
+    const params = new URL(req.url).searchParams;
+    // ?code=<invite code>: what the group link opens, to show before joining.
+    if (params.has("code")) {
+      const g = await groupByInvite(getAdminDb(), params.get("code"));
+      if (!g) return NextResponse.json({ error: "This group link doesn't work any more. Ask an admin for a new one." }, { status: 404 });
+      const d = g.data();
+      return NextResponse.json({
+        group: {
+          id: g.id,
+          groupName: d.groupName || "Group",
+          description: d.description || "",
+          memberCount: (d.participants || []).length,
+          visibility: d.visibility === "public" ? "public" : "private",
+          isMember: (d.participantUids || []).includes(caller.uid),
+        },
+      });
+    }
+    const term = groupSearchTerm(params.get("q"));
     const groups = getAdminDb().collection("conversations");
 
     const snap = term

@@ -14,8 +14,8 @@ export const dmIdFor = (a, b) => {
   return `dm__${x}__${y}`;
 };
 export const USERNAME_PRICE = 1;
-export const FREE_USERNAMES_OLD_ACCOUNT = 100;
-export const FREE_USERNAMES_AGENT = 5;
+export const FREE_USERNAMES_OLD_ACCOUNT = 10;
+export const FREE_USERNAMES_AGENT = 3;
 export const OLD_ACCOUNT_MONTHS = 8;
 export function monthsSince(ts) {
   if (!ts) return 0;
@@ -47,6 +47,8 @@ export const GROUP_DESCRIPTION_MAX = 200;
 export const groupOwner = (convo) => convo?.owner || convo?.createdBy || "";
 export const isGroupAdmin = (convo, name) =>
   !!name && (groupOwner(convo) === name || (convo?.admins || []).includes(name));
+// A locked group takes messages only from its owner and admins.
+export const canPostInGroup = (convo, name) => !convo?.locked || isGroupAdmin(convo, name);
 
 // What a group search is matched on: lowercase, single spaces, at most 40 characters.
 export const groupSearchTerm = (q) => String(q || "").toLowerCase().replace(/\s+/g, " ").trim().slice(0, 40);
@@ -169,4 +171,29 @@ export function accountLabels(identity, info, active) {
         info?.otherAccounts > 0 && `${info.otherAccounts} other account${info.otherAccounts === 1 ? "" : "s"} logged in`,
       ];
   return [...labels, identity.usernameLower === active && "In use"].filter(Boolean).join(" · ");
+}
+
+// @mentions: "@name" in a message, where name is a chat username.
+const MENTION_RE = /(^|[^a-zA-Z0-9._@])@([a-zA-Z0-9._]{3,30})/g;
+/** Lowercase usernames mentioned in `text` (at most `max`, without trailing dots). */
+export function mentionsIn(text, max = 5) {
+  const out = new Set();
+  for (const m of String(text || "").matchAll(MENTION_RE)) {
+    const name = m[2].replace(/\.+$/, "").toLowerCase();
+    if (isValidUsername(name)) out.add(name);
+    if (out.size >= max) break;
+  }
+  return [...out];
+}
+
+// Group invite links: https://<site>/chat/join/<code>.
+export const INVITE_CODE_RE = /^[A-Za-z0-9]{8,16}$/;
+export const INVITE_LINK_RE = /(?:https?:\/\/)?(?:www\.)?strawins\.com\/chat\/join\/([A-Za-z0-9]{8,16})/;
+
+// Server helper: the live group an invite code belongs to (a document snapshot), or null.
+export async function groupByInvite(db, code) {
+  if (!INVITE_CODE_RE.test(String(code || ""))) return null;
+  const snap = await db.collection("conversations").where("inviteCode", "==", String(code)).limit(1).get();
+  const d = snap.docs[0];
+  return d && d.data().type === "group" && !d.data().deleted ? d : null;
 }

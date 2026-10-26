@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Search } from "lucide-react";
 import { collection, doc, getDoc, limit, onSnapshot, orderBy, query } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
@@ -8,6 +9,9 @@ import { playChatSound, playCoinSound } from "@/lib/chatSound";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import ChatMessages from "@/components/chat/ChatMessages";
 import ChatComposer from "@/components/chat/ChatComposer";
+import { useChat } from "@/components/chat/ChatProvider";
+import ChatSheet from "@/components/chat/ChatSheet";
+import PlayerSearch from "@/components/chat/PlayerSearch";
 
 const MAX_LENGTH = 500;
 const STATS_EVERY_MS = 60000;
@@ -20,7 +24,10 @@ const FRESH_MS = 800; // messages that arrived this recently animate in
  * `sound`: play the new-message sound when someone else posts.
  */
 export default function ChatRoom({ uid, active, blocked = [], sound = true, onMessagePrivately, onReport, onOpenProfile, onSendCoins, onBlock }) {
+  const { confirmAction } = useChat();
   const [messages, setMessages] = useState([]);
+  const [outbox, setOutbox] = useState([]); // your messages on their way: shown at once, with a clock
+  const [findingPeople, setFindingPeople] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -88,9 +95,18 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
       .catch(() => {});
   }, [uid]);
 
-  const visible = useMemo(
-    () => messages.filter((m) => !blocked.includes(m.sender)),
-    [messages, blocked]
+  // Sent messages stay in the outbox until the real one arrives from the server.
+  const visible = useMemo(() => {
+    const arrived = new Set(messages.map((m) => m.id));
+    return [
+      ...messages.filter((m) => !blocked.includes(m.sender)),
+      ...outbox.filter((m) => !m.serverId || !arrived.has(m.serverId)),
+    ];
+  }, [messages, blocked, outbox]);
+  // People to suggest for @mentions: whoever posted recently.
+  const recentPosters = useMemo(
+    () => [...new Set(messages.slice(-60).reverse().map((m) => m.sender).filter((n) => n && n !== active))],
+    [messages, active]
   );
 
   const startReply = (m) => {
@@ -123,19 +139,46 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
       setEditing(null);
       return;
     }
-    setSending(true);
-    const r = editing
-      ? await authFetch("/api/chat/room", { method: "POST", body: { action: "edit", id: editing.id, text: body } })
-      : await authFetch("/api/chat/room", { method: "POST", body: { action: "send", as: active, text: body, ...(replyTo ? { replyTo: replyTo.id } : {}) } });
-    setSending(false);
-    if (r.error) return setError(r.error);
+    if (editing) {
+      setSending(true);
+      const r = await authFetch("/api/chat/room", { method: "POST", body: { action: "edit", id: editing.id, text: body } });
+      setSending(false);
+      if (r.error) return setError(r.error);
+      setText("");
+      setEditing(null);
+      return;
+    }
+    // Show it straight away; the server's copy replaces it when it arrives.
+    const quoted = replyTo;
+    const local = {
+      id: `local-${Date.now()}`,
+      sender: active,
+      senderName: active,
+      senderUid: uid,
+      text: body,
+      createdAtMs: Date.now(),
+      pending: true,
+      fresh: true,
+      ...(quoted ? { replyTo: { id: quoted.id, sender: quoted.sender, text: String(quoted.text || "").slice(0, 140) } } : {}),
+    };
+    setOutbox((o) => [...o, local]);
     setText("");
     setReplyTo(null);
-    setEditing(null);
+    const r = await authFetch("/api/chat/room", { method: "POST", body: { action: "send", as: active, text: body, ...(quoted ? { replyTo: quoted.id } : {}) } })
+      .catch((e) => ({ error: e.message }));
+    if (r.error) {
+      setOutbox((o) => o.filter((m) => m.id !== local.id));
+      setText((cur) => cur || body);
+      setReplyTo(quoted);
+      return setError(r.error);
+    }
+    setOutbox((o) => o.map((m) => (m.id === local.id ? { ...m, serverId: r.id } : m)));
+    // Once the real one is in the list (or after a while anyway), drop the copy.
+    setTimeout(() => setOutbox((o) => o.filter((m) => m.id !== local.id)), 15000);
   };
 
   const remove = async (m) => {
-    if (m.senderUid !== uid && !confirm(`Delete @${m.sender}'s message for everyone? Only StraWins admins can do this.`)) return;
+    if (m.senderUid !== uid && !(await confirmAction({ title: "Delete this message?", message: `@${m.sender}'s message is removed for everyone. Only StraWins admins can do this.`, confirmLabel: "Delete" }))) return;
     const r = await authFetch("/api/chat/room", { method: "POST", body: { action: "delete", id: m.id } });
     if (r.error) setError(r.error);
   };
@@ -155,7 +198,17 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
           </p>
           <p className="text-[11px] text-white/50 mt-0.5">Be kind. Tap a message for options, swipe left to reply.</p>
         </div>
-        <span className="hidden sm:block shrink-0 text-[10px] font-black uppercase text-white/40 text-right">{active ? `Posting as @${active}` : "No username yet"}</span>
+        <div className="shrink-0 flex items-center gap-2">
+          <span className="hidden sm:block text-[10px] font-black uppercase text-white/40 text-right">{active ? `Posting as @${active}` : "No username yet"}</span>
+          <button
+            type="button"
+            onClick={() => setFindingPeople(true)}
+            aria-label="Find people"
+            className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80"
+          >
+            <Search size={16} />
+          </button>
+        </div>
       </div>
 
       {error && <div className="mx-3 mt-3 bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-bold p-2.5 rounded-xl">{error}</div>}
@@ -193,7 +246,24 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
         maxLength={MAX_LENGTH}
         sending={sending}
         inputRef={inputRef}
+        mentionPeople={recentPosters}
+        searchPlayers
       />
+
+      {findingPeople && (
+        <ChatSheet label="Find people" onClose={() => setFindingPeople(false)}>
+          <div className="p-5 pt-7">
+            <h2 className="text-lg font-bold mb-3 pr-10">Find people</h2>
+            <PlayerSearch
+              label="Search players · username, name, phone, country"
+              onPick={(u) => {
+                setFindingPeople(false);
+                onOpenProfile?.(u);
+              }}
+            />
+          </div>
+        </ChatSheet>
+      )}
     </div>
   );
 }

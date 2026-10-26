@@ -35,7 +35,7 @@ export async function GET(req) {
     const p = profileSnap.exists ? profileSnap.data() : {};
     const u = userSnap.exists ? userSnap.data() : {};
     // This chat profile's own settings (Chat settings → Privacy).
-    const { hideCountry, showCoins } = settings.get(lower);
+    const { hideCountry, showCoins, allowGroupAdds } = settings.get(lower);
 
     // Public groups they're in (never private groups or chats).
     const convoSnap = await db.collection("conversations").where("participants", "array-contains", lower).limit(100).get();
@@ -62,6 +62,7 @@ export async function GET(req) {
       ].filter(Boolean),
       publicGroups,
       isYou: n.uid === caller.uid || (n.linkedUids || []).includes(caller.uid),
+      allowsGroupAdds: allowGroupAdds !== false,
       coins: showCoins ? Math.max(0, Number(coinSnap.exists ? coinSnap.data().balance : 0) || 0) : null,
     });
   } catch (e) {

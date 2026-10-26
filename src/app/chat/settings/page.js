@@ -85,7 +85,7 @@ export default function ChatSettingsPage() {
             { key: "profile", icon: UserRound, title: "Profile", text: "Photo, bio and status", href: "/chat/settings/profile", words: "picture photo avatar bio status devices" },
             { key: "notifications", icon: Bell, title: "Notifications", text: "Message sounds for the Chatroom, private chats and groups", value: settingsLoaded ? soundsValue : "", href: "/chat/settings/notifications", words: "sound mute alert" },
             { key: "online", icon: Radio, title: "Online status", text: "Show when you're online or last seen", value: settingsLoaded ? onOff(s.showOnline) : "", href: "/chat/settings/online-status", words: "last seen active offline" },
-            { key: "privacy", icon: Shield, title: "Privacy", text: "Read receipts, coins on your profile, country", href: "/chat/settings/privacy", words: "seen read receipts show off coins hide country" },
+            { key: "privacy", icon: Shield, title: "Privacy", text: "Read receipts, coins on show, country, who can add you to groups", href: "/chat/settings/privacy", words: "seen read receipts show off coins hide country groups add" },
             { key: "blocked", icon: Ban, title: "Blocked", text: "Players this profile has blocked", value: name === active ? blockedNames.length || "" : "", href: "/chat/settings/blocked", words: "unblock block" },
             {
               key: "password",

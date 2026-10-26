@@ -1,8 +1,55 @@
 "use client";
 import { useRef, useState } from "react";
-import { Ban, Clock3, Coins, CornerUpLeft, MoreHorizontal, Pencil } from "lucide-react";
+import Link from "next/link";
+import { Ban, Clock3, Coins, CornerUpLeft, MoreHorizontal, Pencil, Users } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import { formatCoins } from "@/lib/chat";
+
+// "@name" mentions and StraWins group links inside a message.
+const RICH_RE = /(^|[^a-zA-Z0-9._@])@([a-zA-Z0-9._]{3,30})|(?:https?:\/\/)?(?:www\.)?strawins\.com\/chat\/join\/([A-Za-z0-9]{8,16})/g;
+
+/**
+ * Message text with @mentions as tappable names (they open the profile) and group
+ * invite links as a "Join group" button. `mine` picks colours for your own bubble.
+ */
+function RichText({ text, mine, onOpenProfile }) {
+  const parts = [];
+  let last = 0;
+  for (const m of String(text || "").matchAll(RICH_RE)) {
+    const start = m.index + (m[1] ? m[1].length : 0);
+    if (start > last) parts.push(text.slice(last, start));
+    if (m[2]) {
+      const name = m[2].replace(/\.+$/, "");
+      const tail = m[2].slice(name.length);
+      parts.push(
+        <button
+          key={start}
+          type="button"
+          data-no-menu
+          onClick={() => onOpenProfile?.(name.toLowerCase())}
+          className={`font-bold hover:underline ${mine ? "text-white underline decoration-white/40" : "text-[#8FB0FF]"}`}
+        >
+          @{name}
+        </button>
+      );
+      if (tail) parts.push(tail);
+    } else {
+      parts.push(
+        <Link
+          key={start}
+          href={`/chat/join/${m[3]}`}
+          data-no-menu
+          className={`inline-flex items-center gap-1.5 align-middle my-0.5 px-2.5 py-1 rounded-lg text-[13px] font-bold ${mine ? "bg-black/25 text-white" : "bg-[#2457D6]/30 text-[#BFD0FF]"}`}
+        >
+          <Users size={13} /> Join group
+        </Link>
+      );
+    }
+    last = m.index + m[0].length;
+  }
+  if (last < String(text || "").length) parts.push(text.slice(last));
+  return parts;
+}
 
 const DELETED_TEXT = "— message deleted —";
 const SWIPE_REPLY = 56; // px to the left before letting go starts a reply
@@ -212,7 +259,7 @@ export default function MessageBubble({
             </p>
           ) : (
             <p className="text-[14.5px] leading-[1.38] whitespace-pre-wrap break-words">
-              {m.text}
+              <RichText text={m.text} mine={mine} onOpenProfile={onOpenProfile} />
               <span className="inline-block" style={{ width: spacer }} aria-hidden="true" />
             </p>
           )}

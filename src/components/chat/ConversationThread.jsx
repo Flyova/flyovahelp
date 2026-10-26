@@ -1,11 +1,11 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  FieldPath, addDoc, collection, deleteField, doc, limitToLast, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc,
+  FieldPath, addDoc, collection, deleteField, doc, documentId, limitToLast, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
 } from "firebase/firestore";
-import { ChevronLeft, MoreHorizontal } from "lucide-react";
+import { ChevronLeft, LockKeyhole, MoreHorizontal, Search } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { TYPING_PING_MS, containsMediaMarker, isValidText, typingLabel } from "@/lib/chat";
+import { TYPING_PING_MS, canPostInGroup, containsMediaMarker, formatCount, isValidText, presenceOf, typingLabel } from "@/lib/chat";
 import { notifyPush } from "@/lib/pushClient";
 import { playChatSound, playCoinSound } from "@/lib/chatSound";
 import { useChat } from "@/components/chat/ChatProvider";
@@ -13,6 +13,8 @@ import ChatMessages from "@/components/chat/ChatMessages";
 import { messageMillis } from "@/components/chat/MessageBubble";
 import ChatComposer from "@/components/chat/ChatComposer";
 import MessageMenu from "@/components/chat/MessageMenu";
+import ChatSheet from "@/components/chat/ChatSheet";
+import Avatar from "@/components/Avatar";
 
 const FRESH_MS = 800; // messages that arrived this recently animate in
 const MENU_WIDTH = 228;
@@ -57,6 +59,7 @@ export default function ConversationThread({
 }) {
   const [msgs, setMsgs] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [synced, setSynced] = useState(false); // messages confirmed by the server (not just this device's cache)
   const [lost, setLost] = useState(false); // removed from the chat while it was open
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState(null);
@@ -65,7 +68,11 @@ export default function ConversationThread({
   const [burst, setBurst] = useState(null); // coins-sent animation
   const clearBurst = useCallback(() => setBurst(null), []);
   const inputRef = useRef(null);
-  const { uid, chatState, typingIn, soundOn, settingsFor } = useChat();
+  const { uid, chatState, typingIn, soundOn, settingsFor, presenceNow } = useChat();
+  const [memberPresence, setMemberPresence] = useState({}); // group members' online status
+  const [findingMember, setFindingMember] = useState(false);
+  const [memberQuery, setMemberQuery] = useState("");
+
   // Sound for messages from others arriving while this chat is open and on screen.
   const soundRef = useRef(false);
   const meRef = useRef(me);
@@ -73,6 +80,17 @@ export default function ConversationThread({
     soundRef.current = soundOn(isGroup ? "group" : "private", convoId);
     meRef.current = me;
   }, [soundOn, isGroup, convoId, me]);
+  // Where you'd read up to when the chat opened (decided once, when both your read
+  // position and the messages are in): the first newer message from someone else
+  // gets an "Unread messages" line, and the chat scrolls there.
+  const [unreadAtOpen, setUnreadAtOpen] = useState({ decided: false, id: null });
+  if (!unreadAtOpen.decided && chatState.loaded && synced) {
+    const since = Math.max(chatState.reads[convoId]?.toMillis?.() ?? 0, chatState.cleared[convoId]?.toMillis?.() ?? 0);
+    const first = since ? msgs.find((m) => !m.pending && m.sender && m.sender !== me && m.kind !== "system" && messageMillis(m) > since) : null;
+    setUnreadAtOpen({ decided: true, id: first?.id ?? null });
+  }
+  const unreadFromId = unreadAtOpen.id;
+
   const typingSince = useRef(0); // when we last stamped "typing" (0 = not typing)
   const marked = useRef({ private: 0, shared: 0 }); // read positions already written
 
@@ -104,6 +122,7 @@ export default function ConversationThread({
           fresh: now - (arrived.get(d.id) ?? 0) < FRESH_MS,
         })));
         setLoaded(true);
+        if (!s.metadata.fromCache) setSynced(true);
       },
       () => {
         setLoaded(true);
@@ -116,7 +135,9 @@ export default function ConversationThread({
   const clearedMs = chatState.cleared[convoId]?.toMillis?.() ?? 0;
   const shown = useMemo(() => (clearedMs ? msgs.filter((m) => m.pending || messageMillis(m) > clearedMs) : msgs), [msgs, clearedMs]);
   const blockedHere = !!convo?.blocked?.includes(me);
-  const cantSend = !convo || blockedHere || lost || !!blockedByMe;
+  // A locked group takes messages only from its admins.
+  const lockedOut = isGroup && !!convo && !canPostInGroup(convo, me);
+  const cantSend = !convo || blockedHere || lost || !!blockedByMe || lockedOut;
   // Read receipts are a setting of the chat profile you're in this chat as.
   const receipts = settingsFor(me).readReceipts;
 
@@ -172,6 +193,28 @@ export default function ConversationThread({
   }, [receipts, convo, me, confirmed, msgs]);
 
   const typers = typingIn[convoId] || [];
+
+  // Group members' online status, 30 per listener.
+  const memberKey = isGroup ? [...(convo?.participants || [])].sort().join(",") : "";
+  useEffect(() => {
+    if (!memberKey) return;
+    const names = memberKey.split(",");
+    const offs = [];
+    for (let i = 0; i < names.length; i += 30) {
+      offs.push(onSnapshot(
+        query(collection(db, "chat_presence"), where(documentId(), "in", names.slice(i, i + 30))),
+        (s) => setMemberPresence((p) => {
+          const next = { ...p };
+          s.docs.forEach((d) => { next[d.id] = d.data(); });
+          return next;
+        }),
+        () => {}
+      ));
+    }
+    return () => offs.forEach((off) => off());
+  }, [memberKey]);
+  const members = convo?.participants || [];
+  const onlineCount = isGroup ? members.filter((p) => p !== me && presenceOf(memberPresence[p], presenceNow)?.online).length : 0;
 
   const send = async () => {
     onError("");
@@ -252,13 +295,16 @@ export default function ConversationThread({
   };
 
   const typingNow = typingLabel(typers, isGroup);
+  const groupLine = isGroup && convo
+    ? `${formatCount(members.length)} member${members.length === 1 ? "" : "s"}${onlineCount ? ` · ${formatCount(onlineCount)} online` : ""} · ${convo.visibility === "public" ? "public" : "private"}${convo.locked ? " · locked" : ""}`
+    : "";
   const subtitle = lost
     ? "You're no longer in this chat"
     : blockedByMe
       ? `You blocked @${blockedByMe.name}`
       : blockedHere
         ? "You can no longer send messages here"
-        : typingNow || header.subtitle;
+        : typingNow || groupLine || header.subtitle;
 
   return (
     <>
@@ -275,10 +321,23 @@ export default function ConversationThread({
         >
           {header.avatar}
           <span className="min-w-0 flex-1">
-            <span className="block text-[15px] font-bold truncate">{convo ? header.title : lost ? "Chat unavailable" : "Loading…"}</span>
-            <span className={`block text-[12px] truncate ${lost || blockedHere || blockedByMe ? "text-red-300/80" : typingNow ? "text-[#E0708C]" : header.online ? "text-emerald-400" : "text-white/45"}`}>{convo || lost ? subtitle : ""}</span>
+            <span className={`block font-bold truncate ${isGroup ? "text-[18px] font-black leading-tight" : "text-[15px]"}`}>{convo ? header.title : lost ? "Chat unavailable" : "Loading…"}</span>
+            {isGroup && convo?.description && !lost && (
+              <span className="block text-[12.5px] text-white/65 truncate">{convo.description}</span>
+            )}
+            <span className={`block text-[12px] truncate ${lost || blockedHere || blockedByMe ? "text-red-300/80" : typingNow ? "text-[#E0708C]" : header.online || onlineCount ? "text-emerald-400" : "text-white/45"}`}>{convo || lost ? subtitle : ""}</span>
           </span>
         </button>
+        {convo && isGroup && (
+          <button
+            type="button"
+            aria-label="Search members"
+            onClick={() => setFindingMember(true)}
+            className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-white/70 hover:text-white bg-white/5 hover:bg-white/10"
+          >
+            <Search size={16} />
+          </button>
+        )}
         {convo && menuItems.length > 0 && (
           <button
             type="button"
@@ -308,13 +367,14 @@ export default function ConversationThread({
         onMessagePrivately={onMessagePrivately}
         onReport={onReport}
         onOpenProfile={onOpenProfile}
-        onSendCoins={onSendCoins}
+        onSendCoins={lockedOut ? undefined : onSendCoins}
         onBlock={onBlock}
         seenBy={seenBy}
         sentId={sentId}
         typing={lost ? [] : typers}
         burst={burst}
         onBurstDone={clearBurst}
+        unreadFromId={unreadFromId}
       />
 
       {blockedByMe ? (
@@ -324,6 +384,10 @@ export default function ConversationThread({
             Unblock
           </button>
         </div>
+      ) : lockedOut ? (
+        <p className="px-4 py-3.5 border-t border-white/5 bg-[#142036] flex items-center justify-center gap-2 text-[13px] text-white/60">
+          <LockKeyhole size={14} className="shrink-0" /> Only admins can send messages
+        </p>
       ) : (
         <ChatComposer
           value={text}
@@ -339,10 +403,55 @@ export default function ConversationThread({
           disabled={cantSend}
           maxLength={2000}
           inputRef={inputRef}
+          mentionPeople={members.filter((p) => p !== me)}
         />
       )}
 
       {menuAt && <MessageMenu at={menuAt} items={menuItems} onClose={() => setMenuAt(null)} />}
+
+      {findingMember && (
+        <ChatSheet label="Search members" onClose={() => { setFindingMember(false); setMemberQuery(""); }}>
+          <div className="p-5 pt-7">
+            <h2 className="text-lg font-bold pr-10">Members</h2>
+            <p className="text-xs text-white/50 mt-0.5 mb-3">{formatCount(members.length)} in {header.title}</p>
+            <input
+              autoFocus
+              value={memberQuery}
+              onChange={(e) => setMemberQuery(e.target.value)}
+              type="search"
+              placeholder="Search members"
+              aria-label="Search members"
+              className="w-full bg-white/[0.06] border border-white/10 focus:border-[#2457D6] rounded-xl px-3.5 py-2.5 text-base md:text-[15px] outline-none mb-2"
+            />
+            <ul className="max-h-[50vh] overflow-y-auto -mx-2">
+              {members
+                .filter((p) => p.includes(memberQuery.trim().toLowerCase().replace(/^@/, "")))
+                .sort((a, b) => Number(!!presenceOf(memberPresence[b], presenceNow)?.online) - Number(!!presenceOf(memberPresence[a], presenceNow)?.online) || a.localeCompare(b))
+                .map((p) => {
+                  const st = presenceOf(memberPresence[p], presenceNow);
+                  return (
+                    <li key={p}>
+                      <button
+                        type="button"
+                        onClick={() => { setFindingMember(false); setMemberQuery(""); onOpenProfile?.(p); }}
+                        className="w-full flex items-center gap-3 px-2 py-2 rounded-xl text-left hover:bg-white/[0.05]"
+                      >
+                        <span className="relative shrink-0">
+                          <Avatar username={p} size={36} rounded="rounded-full" />
+                          {st?.online && <span className="absolute -right-0.5 -bottom-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-[#142036]" />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[14px] font-semibold truncate">@{p}{p === me ? " (you)" : ""}</span>
+                          {st && <span className={`block text-[11px] ${st.online ? "text-emerald-400" : "text-white/45"}`}>{st.text}</span>}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+            </ul>
+          </div>
+        </ChatSheet>
+      )}
     </>
   );
 }

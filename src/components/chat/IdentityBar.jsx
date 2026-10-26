@@ -1,31 +1,21 @@
 "use client";
 import { useState } from "react";
-import { ChevronDown, Link2, Settings2, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Check, ChevronDown, Link2, UserPlus } from "lucide-react";
 import Avatar from "@/components/Avatar";
-import { usernameOffer } from "@/lib/chat";
 
 /**
- * Compact "Chatting as" bar: your chat usernames as chips (tap to switch) and a
- * Manage panel, closed by default, for buying or deleting usernames. Usernames
- * you've logged in to from another account show a link icon (only their owner
- * can delete them). `onCreate(name)` resolves to an error message, or "" on success;
- * `price` is what the next username costs (0 = free), shown as "Add" or "Buy · $1".
+ * Compact "Chatting as" bar: the usernames already on this account (your own and
+ * the ones you've logged in to, marked with a link icon) as chips to switch
+ * between, plus a list of them, closed by default. Adding, buying or logging in
+ * to another username happens in Chat settings, not here.
  */
-export default function IdentityBar({ identities, active, onSelect, onCreate, onDelete, price = null }) {
-  const offer = usernameOffer(price);
-  const [manage, setManage] = useState(false);
-  const [name, setName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+export default function IdentityBar({ identities, active, onSelect }) {
+  const [open, setOpen] = useState(false);
 
-  const create = async () => {
-    if (!name.trim() || busy) return;
-    setBusy(true);
-    setError("");
-    const problem = await onCreate(name.trim().replace(/^@/, ""));
-    setBusy(false);
-    if (problem) return setError(problem);
-    setName("");
+  const pick = (name) => {
+    onSelect(name);
+    setOpen(false);
   };
 
   return (
@@ -52,59 +42,47 @@ export default function IdentityBar({ identities, active, onSelect, onCreate, on
         </div>
         <button
           type="button"
-          onClick={() => setManage((v) => !v)}
-          aria-expanded={manage}
-          aria-label="Manage chat usernames"
-          className={`shrink-0 flex items-center gap-1 h-8 px-2.5 rounded-xl text-[11px] font-black uppercase transition-colors ${manage ? "bg-white/10 text-white" : "text-white/60 hover:text-white hover:bg-white/5"}`}
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-label="Choose a chat username"
+          className={`shrink-0 flex items-center gap-1 h-8 px-2.5 rounded-xl text-[11px] font-black uppercase transition-colors ${open ? "bg-white/10 text-white" : "text-white/60 hover:text-white hover:bg-white/5"}`}
         >
-          <Settings2 size={14} />
-          <span className="hidden sm:inline">Manage</span>
-          <ChevronDown size={13} className={`transition-transform ${manage ? "rotate-180" : ""}`} />
+          <span className="hidden sm:inline">Switch</span>
+          <ChevronDown size={13} className={`transition-transform ${open ? "rotate-180" : ""}`} />
         </button>
       </div>
 
-      {manage && (
-        <div className="border-t border-white/5 p-3.5 space-y-3">
-          <div>
-            <p className="text-[10px] font-black uppercase text-white/40 mb-1.5">{offer.title}</p>
-            <div className="flex gap-2">
-              <div className="relative flex-1 min-w-0">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-white/35">@</span>
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && create()}
-                  placeholder="new username"
-                  autoComplete="off"
-                  className="w-full bg-black/40 border border-white/10 focus:border-[#8B1E3F] rounded-xl pl-7 pr-3 py-2 text-base md:text-sm outline-none"
-                />
-              </div>
-              <button type="button" onClick={create} disabled={busy || !name.trim()} className="shrink-0 bg-[#8B1E3F] px-4 rounded-xl text-xs font-black uppercase disabled:opacity-50">
-                {busy ? "…" : offer.button}
-              </button>
-            </div>
-            {error && <p className="text-xs text-red-300 mt-1.5">{error}</p>}
-          </div>
-
-          {identities.some((i) => !i.isDefault) && (
-            <div>
-              <p className="text-[10px] font-black uppercase text-white/40 mb-1">Your usernames</p>
-              {identities.map((i) => (
-                <div key={i.usernameLower} className="flex items-center justify-between gap-2 py-1.5 text-xs">
-                  <span className="flex items-center gap-2 min-w-0">
-                    <Avatar username={i.usernameLower} size={22} rounded="rounded-lg" />
-                    <span className="truncate font-bold">@{i.username}</span>
-                    {i.isDefault && <span className="text-[9px] font-black uppercase text-white/35">Default</span>}
-                  </span>
-                  {!i.isDefault && !i.linked && (
-                    <button type="button" onClick={() => onDelete(i.usernameLower)} aria-label={`Delete @${i.username}`} className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-red-300/80 hover:text-red-300 hover:bg-white/5">
-                      <Trash2 size={14} />
+      {open && (
+        <div className="border-t border-white/5 p-2">
+          {identities.length > 0 && (
+            <>
+              <p className="px-1.5 pt-1 pb-1.5 text-[10px] font-black uppercase text-white/40">Your usernames</p>
+              <ul>
+                {identities.map((i) => (
+                  <li key={i.usernameLower}>
+                    <button
+                      type="button"
+                      onClick={() => pick(i.usernameLower)}
+                      className="w-full flex items-center gap-2.5 px-1.5 py-1.5 rounded-xl text-left hover:bg-white/5"
+                    >
+                      <Avatar username={i.usernameLower} size={28} rounded="rounded-lg" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[13px] font-bold truncate">@{i.username}</span>
+                        <span className="block text-[10.5px] text-white/45">{i.linked ? "Logged in from another account" : i.isDefault ? "Main username" : "Extra username"}</span>
+                      </span>
+                      {active === i.usernameLower && <Check size={16} className="shrink-0 text-[#E0708C]" aria-label="In use" />}
                     </button>
-                  )}
-                </div>
-              ))}
-            </div>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
+          <Link
+            href="/chat/settings/accounts"
+            className="mt-1 flex items-center gap-2.5 px-1.5 py-2 rounded-xl text-[12px] font-semibold text-[#8FB0FF] hover:bg-white/5"
+          >
+            <UserPlus size={15} className="shrink-0" /> Add, buy or log in to a username in Chat settings
+          </Link>
         </div>
       )}
     </div>

@@ -22,7 +22,7 @@ export default function AccountPage() {
   const router = useRouter();
   const params = useParams();
   const name = norm(decodeURIComponent(String(params?.username || "")));
-  const { uid, identities, active, setActive, setSettingsName, refreshIdentities, flashNotice } = useChat();
+  const { uid, identities, active, setActive, setSettingsName, refreshIdentities, flashNotice, confirmAction } = useChat();
   const identity = identities.find((i) => i.usernameLower === name);
   const [info, setInfo] = useState(null); // { hasPassword, otherAccounts }
   const [password, setPassword] = useState("");
@@ -62,7 +62,7 @@ export default function AccountPage() {
   };
 
   const logOut = async () => {
-    if (!confirm(`Log out of @${name}? You'll need its password to log in again.`)) return;
+    if (!(await confirmAction({ title: `Log out of @${name}?`, message: "You'll need its password to log in again.", confirmLabel: "Log out" }))) return;
     setBusy("logout");
     const r = await accountsApi({ action: "logout", username: name });
     setBusy("");
@@ -74,7 +74,7 @@ export default function AccountPage() {
   };
 
   const remove = async () => {
-    if (!confirm(`Permanently delete @${name}? This can't be undone.`)) return;
+    if (!(await confirmAction({ title: `Delete @${name}?`, message: "This permanently removes the username. It can't be undone.", confirmLabel: "Delete" }))) return;
     setBusy("delete");
     const r = await authFetch("/api/chat/usernames", { method: "DELETE", body: { username: name } }).catch((e) => ({ error: e.message }));
     setBusy("");
@@ -131,7 +131,7 @@ export default function AccountPage() {
               title="Log out other accounts"
               value={info.otherAccounts}
               disabled={busy === "out"}
-              onClick={() => confirm(`Log every other account out of @${name}?`) && run("out", { action: "logoutOthers", username: name }, "Other accounts logged out.")}
+              onClick={async () => (await confirmAction({ title: `Log every other account out of @${name}?`, confirmLabel: "Log them out" })) && run("out", { action: "logoutOthers", username: name }, "Other accounts logged out.")}
             />
           )}
           {info?.hasPassword && (
@@ -141,7 +141,7 @@ export default function AccountPage() {
               text="Logs every other account out, and no one else can log in"
               danger
               disabled={busy === "remove"}
-              onClick={() => confirm(`Remove the password? Other accounts will be logged out of @${name} and can't log in again.`) && run("remove", { action: "removePassword", username: name }, "Password removed.")}
+              onClick={async () => (await confirmAction({ title: "Remove the password?", message: `Other accounts will be logged out of @${name} and can't log in again.`, confirmLabel: "Remove" })) && run("remove", { action: "removePassword", username: name }, "Password removed.")}
             />
           )}
         </SettingsSection>

@@ -73,6 +73,7 @@ export default function ChatMessages({
   typing = [],
   burst = null,
   onBurstDone,
+  unreadFromId = null,
 }) {
   const listRef = useRef(null);
   const atBottomRef = useRef(true);
@@ -87,6 +88,7 @@ export default function ChatMessages({
   }, []);
 
   // Follow new messages while you're at the bottom, and jump down when you've just sent one.
+  // The first time messages show, open at the "Unread messages" line if there is one.
   const lastId = messages[messages.length - 1]?.id;
   const lastMine = messages.length ? isMine(messages[messages.length - 1]) : false;
   const prevLastId = useRef(null);
@@ -95,6 +97,17 @@ export default function ChatMessages({
     prevLastId.current = lastId;
     if (atBottomRef.current || justSent) scrollToBottom(messages.length > 1);
   }, [lastId, lastMine, messages.length, scrollToBottom]);
+
+  // Opening a chat with unread messages: go to the "Unread messages" line, once.
+  const jumpedToUnread = useRef(false);
+  useEffect(() => {
+    if (!unreadFromId || jumpedToUnread.current) return;
+    const line = document.getElementById("unread-line");
+    if (!line) return;
+    jumpedToUnread.current = true;
+    line.scrollIntoView({ block: "start" });
+    atBottomRef.current = false;
+  }, [unreadFromId]);
 
   // A typing bubble or seen avatars appearing at the bottom: keep them in view if you're there.
   const typingKey = typing.join(",");
@@ -166,6 +179,13 @@ export default function ChatMessages({
               const next = day.items[i + 1];
               return (
                 <div key={m.id} id={`msg-${m.id}`} className={`-mx-2 px-2 rounded-xl ${flashId === m.id ? "chat-flash" : ""}`}>
+                  {m.id === unreadFromId && (
+                    <div id="unread-line" className="flex items-center gap-3 my-3 scroll-mt-12" role="separator">
+                      <span className="flex-1 h-px bg-[#E0708C]/40" />
+                      <span className="text-[11px] font-black uppercase tracking-wider text-[#E0708C]">Unread messages</span>
+                      <span className="flex-1 h-px bg-[#E0708C]/40" />
+                    </div>
+                  )}
                   <MessageBubble
                     message={m}
                     mine={mine}

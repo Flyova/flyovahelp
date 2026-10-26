@@ -20,9 +20,9 @@ const conversationsApi = (body) => authFetch("/api/chat/conversations", { method
  */
 export default function GroupsPage() {
   const {
-    identities, active, selectIdentity, createUsername, deleteUsername, usernamePrice,
+    identities, active, selectIdentity,
     convos, convosLoading, myNameIn, openIds, setOpenId, setErr, typingIn, unread,
-    messagePrivately, openProfile, reportUser, sendCoins, blockUser, chatState, archiveChat,
+    messagePrivately, openProfile, reportUser, sendCoins, blockUser, chatState, archiveChat, confirmAction,
   } = useChat();
   const [showArchived, setShowArchived] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -72,17 +72,17 @@ export default function GroupsPage() {
   };
 
   const leaveGroup = async () => {
-    const ask = amOwner
-      ? `Delete ${open.groupName} for everyone? Members lose the group and its messages.`
-      : `Leave ${open.groupName}?`;
-    if (!confirm(ask)) return;
+    const ok = await confirmAction(amOwner
+      ? { title: `Delete ${open.groupName}?`, message: "Members lose the group and its messages. This can't be undone.", confirmLabel: "Delete group" }
+      : { title: `Leave ${open.groupName}?`, confirmLabel: "Leave group" });
+    if (!ok) return;
     const problem = await act(amOwner ? "deleteGroup" : "leave");
     if (problem) return setErr(problem);
     openGroup(null);
   };
 
   const removeMessage = async (m) => {
-    if (!confirm(`Remove @${m.sender}'s message for everyone?`)) return;
+    if (!(await confirmAction({ title: "Remove this message?", message: `@${m.sender}'s message is removed for everyone in the group.`, confirmLabel: "Remove" }))) return;
     const problem = await act("deleteMessage", { messageId: m.id });
     if (problem) setErr(problem);
   };
@@ -93,7 +93,7 @@ export default function GroupsPage() {
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 lg:h-[calc(100vh-14.5rem)] lg:min-h-[520px]">
       {/* identity, search and your groups — hidden on phones while a group is open */}
       <div className={`lg:col-span-4 flex-col gap-3 min-h-0 lg:overflow-y-auto lg:pr-1 ${openId ? "hidden lg:flex" : "flex"}`}>
-        <IdentityBar identities={identities} active={active} onSelect={selectIdentity} onCreate={createUsername} onDelete={deleteUsername} price={usernamePrice} />
+        <IdentityBar identities={identities} active={active} onSelect={selectIdentity} />
         <GroupSearch memberOf={memberOf} joining={joining} onOpen={openGroup} onJoin={joinGroup} />
         <ConversationList
           className="shrink-0"

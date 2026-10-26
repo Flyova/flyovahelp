@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
-import { PRESENCE_ONLINE_MS, containsMediaMarker, ownedUsername } from "@/lib/chat";
+import { PRESENCE_ONLINE_MS, containsMediaMarker, mentionsIn, ownedUsername, usernameUids } from "@/lib/chat";
+import { sendPushToUsers } from "@/lib/push";
 
 // POST /api/chat/room — the public chatroom everyone can read (Firestore rules: read-only
 // for signed-in players). Posting goes through here so the server can rate-limit and
@@ -33,23 +34,53 @@ function cleanText(text) {
 
 const fail = (error, status = 400) => NextResponse.json({ error }, { status });
 
-async function send(db, caller, { as, text, replyTo }) {
-  const me = await ownedUsername(db, caller.uid, as);
-  if (!me) return fail("You can only post as one of your own usernames.", 403);
+/**
+ * Players @mentioned in a Chatroom message get a notification and a push (unless
+ * they've blocked the sender). At most a few per message.
+ */
+async function notifyMentions(db, me, body, messageId) {
+  const names = mentionsIn(body).filter((n) => n !== me.lower);
+  if (!names.length) return;
+  const [nameSnaps, blockSnaps] = await Promise.all([
+    db.getAll(...names.map((n) => db.collection("usernames").doc(n))),
+    db.getAll(...names.map((n) => db.collection("chat_blocks").doc(`${n}_${me.lower}`))),
+  ]);
+  const title = `@${me.lower} mentioned you in the Chatroom`;
+  const preview = body.slice(0, 120);
+  const targets = [];
+  const writes = [];
+  names.forEach((n, i) => {
+    const s = nameSnaps[i];
+    if (!s.exists || s.data().deleted || blockSnaps[i].exists) return;
+    writes.push(db.collection("notifications").add({
+      toUsername: n, fromUsername: me.lower, kind: "mention", title, body: preview, room: "public", messageId,
+      read: false, createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    }).catch(() => null));
+    for (const uid of usernameUids(s.data())) targets.push({ uid, data: { url: "/chat/room" } });
+  });
+  await Promise.all([...writes, sendPushToUsers(targets, { title, body: preview, data: { kind: "mention", room: "public" } }).catch(() => 0)]);
+}
 
+async function send(db, caller, { as, text, replyTo }) {
   const { body, error } = cleanText(text);
   if (error) return fail(error);
 
+  // Independent reads at once: who you're posting as, your account, and the message you reply to.
+  const [me, userSnap, original] = await Promise.all([
+    ownedUsername(db, caller.uid, as),
+    db.collection("users").doc(caller.uid).get(),
+    replyTo ? db.collection(ROOM_COLLECTION).doc(String(replyTo)).get() : null,
+  ]);
+  if (!me) return fail("You can only post as one of your own usernames.", 403);
+
   // A reply carries a short quote of the original so it renders without a second read.
   let quote = null;
-  if (replyTo) {
-    const original = await db.collection(ROOM_COLLECTION).doc(String(replyTo)).get();
+  if (original) {
     if (!original.exists || original.data().deletedForEveryone) return fail("That message is no longer available to reply to.", 404);
     const o = original.data();
     quote = { id: original.id, sender: o.sender, text: String(o.text || "").slice(0, QUOTE_LENGTH) };
   }
 
-  const userSnap = await db.collection("users").doc(caller.uid).get();
   const user = userSnap.exists ? userSnap.data() : {};
   if (user.isban || user.banned) return fail("Your account can't post in the chatroom.", 403);
   if (user.chatMuted) return fail("You've been muted in the chatroom.", 403);
@@ -79,6 +110,7 @@ async function send(db, caller, { as, text, replyTo }) {
     return null;
   });
   if (refused) return fail(refused.error, refused.status);
+  await notifyMentions(db, me, body, msgRef.id).catch((e) => console.error("Mention notify error:", e));
   return NextResponse.json({ id: msgRef.id });
 }
 

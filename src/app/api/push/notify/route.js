@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
-import { norm, usernameUids } from "@/lib/chat";
+import { mentionsIn, norm, usernameUids } from "@/lib/chat";
 import { sendPushToUsers } from "@/lib/push";
 import { chatSettingsFor } from "@/lib/chatSettings";
 
@@ -61,14 +61,24 @@ async function chatMessage(db, caller, { convoId, messageId }) {
       db.getAll(...targets.map((t) => db.collection("chat_state").doc(t.uid))),
       chatSettingsFor(db, [...new Map(targets.map((t) => [t.name, { name: t.name, uid: t.owner }])).values()]),
     ]);
+    // Being @mentioned always makes a sound.
+    const mentioned = new Set(mentionsIn(msg.text, 20));
     states.forEach((snap, i) => {
+      const t = targets[i];
+      if (mentioned.has(t.name)) {
+        t.mentioned = true;
+        return;
+      }
       const archived = snap.exists && snap.data().archived?.[convoId] === true;
-      const sounds = settings.get(targets[i].name)?.sounds || {};
-      targets[i].silent = archived || (isGroup
+      const sounds = settings.get(t.name)?.sounds || {};
+      t.silent = archived || (isGroup
         ? sounds.groups?.[convoId] === false
         : sounds.private === false || sounds.people?.[sender] === false);
     });
   }
+  // Mentioned players get "@ade mentioned you in <group>"; everyone else the usual title.
+  const mentionTitle = isGroup ? `@${msg.sender} mentioned you in ${convo.groupName || "a group"}` : `@${msg.sender} mentioned you`;
+  for (const t of targets) if (t.mentioned) t.title = mentionTitle;
   const sent = await sendPushToUsers(targets, {
     title: isGroup ? convo.groupName || "New group message" : `@${msg.sender}`,
     body: isGroup ? `@${msg.sender}: ${msg.text || ""}` : msg.text || "New message",

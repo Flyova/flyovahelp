@@ -1,11 +1,99 @@
 "use client";
 import { useState } from "react";
-import { Crown, Globe, Lock, LogOut, MoreHorizontal, Pencil, Shield, ShieldOff, Trash2, UserMinus } from "lucide-react";
+import { Copy, Crown, Globe, Link2, Lock, LockKeyhole, LogOut, MoreHorizontal, Pencil, RefreshCw, Share2, Shield, ShieldOff, Trash2, UserMinus } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import ChatSheet from "@/components/chat/ChatSheet";
 import GroupForm, { GroupAvatar } from "@/components/chat/GroupForm";
 import PlayerSearch from "@/components/chat/PlayerSearch";
+import { SettingsSwitch } from "@/components/chat/SettingsList";
 import { groupOwner, isGroupAdmin } from "@/lib/chat";
+import { useChat } from "@/components/chat/ChatProvider";
+
+const SITE = "https://strawins.com";
+
+/**
+ * The group's invite link: anyone with it can join, even a private group. Every
+ * member can copy or share it; admins create it, swap it for a new one (the old
+ * one stops working) or delete it.
+ */
+function GroupLink({ convo, amAdmin, act }) {
+  const { confirmAction } = useChat();
+  const [busy, setBusy] = useState("");
+  const [note, setNote] = useState({ type: "", msg: "" });
+  const link = convo.inviteCode ? `${SITE}/chat/join/${convo.inviteCode}` : "";
+
+  const run = async (op, done) => {
+    setBusy(op);
+    const problem = await act("inviteLink", { op });
+    setBusy("");
+    setNote(problem ? { type: "error", msg: problem } : { type: "success", msg: done });
+  };
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setNote({ type: "success", msg: "Link copied." });
+    } catch {
+      setNote({ type: "error", msg: "Couldn't copy on this device." });
+    }
+  };
+  const share = () => {
+    if (navigator.share) navigator.share({ title: convo.groupName, text: `Join ${convo.groupName} on StraWins`, url: link }).catch(() => {});
+    else copy();
+  };
+
+  return (
+    <div className="mt-4">
+      <p className="text-[10px] font-black uppercase text-white/40 mb-1.5 px-1">Group link</p>
+      <div className="rounded-2xl bg-black/20 p-3">
+        {link ? (
+          <>
+            <p className="flex items-center gap-2 text-[13px] font-semibold text-[#8FB0FF] break-all"><Link2 size={14} className="shrink-0" /> {link}</p>
+            <p className="text-[11px] text-white/45 mt-1">Anyone with this link can join{convo.visibility === "public" ? "" : ", even though the group is private"}.</p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button type="button" onClick={copy} className="h-9 rounded-xl bg-white/[0.07] hover:bg-white/[0.11] text-[12px] font-bold flex items-center justify-center gap-1.5"><Copy size={13} /> Copy</button>
+              <button type="button" onClick={share} className="h-9 rounded-xl bg-white/[0.07] hover:bg-white/[0.11] text-[12px] font-bold flex items-center justify-center gap-1.5"><Share2 size={13} /> Share</button>
+              {amAdmin && (
+                <>
+                  <button
+                    type="button"
+                    disabled={!!busy}
+                    onClick={async () => (await confirmAction({ title: "Reset the group link?", message: "The current link stops working and a new one is made.", confirmLabel: "Reset link", danger: false })) && run("reset", "New link made. The old one no longer works.")}
+                    className="h-9 rounded-xl bg-white/[0.07] hover:bg-white/[0.11] text-[12px] font-bold flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <RefreshCw size={13} className={busy === "reset" ? "animate-spin" : ""} /> Reset link
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!!busy}
+                    onClick={async () => (await confirmAction({ title: "Delete the group link?", message: "The link stops working. You can make a new one later.", confirmLabel: "Delete link" })) && run("delete", "Group link deleted.")}
+                    className="h-9 rounded-xl bg-white/[0.07] hover:bg-white/[0.11] text-[12px] font-bold text-[#FF8A9B] flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <Trash2 size={13} /> Delete link
+                  </button>
+                </>
+              )}
+            </div>
+          </>
+        ) : amAdmin ? (
+          <>
+            <p className="text-[12px] text-white/55">Make a link people can open to join this group.</p>
+            <button
+              type="button"
+              disabled={!!busy}
+              onClick={() => run("create", "Group link created.")}
+              className="mt-3 w-full h-10 rounded-xl bg-[#8B1E3F] hover:bg-[#A62A4D] text-[12px] font-black uppercase flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <Link2 size={14} /> Create group link
+            </button>
+          </>
+        ) : (
+          <p className="text-[12px] text-white/50">This group has no link yet. Ask an admin to make one.</p>
+        )}
+        {note.msg && <p className={`mt-2 text-xs font-bold ${note.type === "error" ? "text-red-300" : "text-emerald-300"}`}>{note.msg}</p>}
+      </div>
+    </div>
+  );
+}
 
 const roleRank = (convo, p) => (groupOwner(convo) === p ? 0 : (convo.admins || []).includes(p) ? 1 : 2);
 
@@ -20,8 +108,9 @@ function Badge({ children, tone = "neutral" }) {
 
 /**
  * Group info: name, description, who can join and the member list. The owner
- * and admins edit the group and add or remove members; only the owner makes or
- * removes admins and deletes the group. Everyone else can leave.
+ * and admins edit the group, lock it (only admins can send messages) and add or
+ * remove members; only the owner makes or removes admins and deletes the group.
+ * Everyone else can leave.
  *
  * `act(action, body)` calls /api/chat/conversations for this group and resolves
  * to an error message, or "" on success. `onLeave` leaves (or, for the owner,
@@ -32,12 +121,14 @@ export default function GroupInfoSheet({ convo, me, act, onClose, onOpenProfile,
   const [manageOf, setManageOf] = useState(null); // member whose admin actions are showing
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState({ type: "", msg: "" });
+  const { confirmAction } = useChat();
 
   const owner = groupOwner(convo);
   const amOwner = owner === me;
   const amAdmin = isGroupAdmin(convo, me);
   const members = [...(convo.participants || [])].sort((a, b) => roleRank(convo, a) - roleRank(convo, b) || a.localeCompare(b));
   const isPublic = convo.visibility === "public";
+  const locked = !!convo.locked;
 
   const run = async (action, body, done) => {
     setBusy(true);
@@ -72,6 +163,11 @@ export default function GroupInfoSheet({ convo, me, act, onClose, onOpenProfile,
             {isPublic ? <Globe size={12} /> : <Lock size={12} />}
             {isPublic ? "Public group" : "Private group"} · {members.length} member{members.length === 1 ? "" : "s"}
           </p>
+          {locked && (
+            <p className="mt-1.5 flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-400/10 text-[11px] font-bold text-amber-300">
+              <LockKeyhole size={11} /> Locked · only admins can send messages
+            </p>
+          )}
           {convo.description && !editing && (
             <p className="mt-3 text-[14px] leading-relaxed text-white/80 whitespace-pre-wrap break-words">{convo.description}</p>
           )}
@@ -95,8 +191,20 @@ export default function GroupInfoSheet({ convo, me, act, onClose, onOpenProfile,
                 <Pencil size={14} /> Edit group
               </button>
             )}
+            <div className="mt-3 rounded-2xl bg-black/20 overflow-hidden">
+              <SettingsSwitch
+                icon={LockKeyhole}
+                title="Lock group"
+                text={locked ? "Only admins can send messages" : "Everyone can send messages"}
+                on={locked}
+                disabled={busy}
+                onChange={(on) => run("lockGroup", { locked: on }, on ? "Group locked. Only admins can send messages." : "Group unlocked. Everyone can send messages.")}
+              />
+            </div>
           </div>
         )}
+
+        <GroupLink convo={convo} amAdmin={amAdmin} act={act} />
 
         {amAdmin && (
           <PlayerSearch
@@ -151,7 +259,7 @@ export default function GroupInfoSheet({ convo, me, act, onClose, onOpenProfile,
                         <button
                           type="button"
                           disabled={busy}
-                          onClick={() => confirm(`Remove @${p} from ${convo.groupName}?`) && run("removeMember", { username: p }, `Removed @${p}.`)}
+                          onClick={async () => (await confirmAction({ title: `Remove @${p}?`, message: `@${p} will be removed from ${convo.groupName}.`, confirmLabel: "Remove" })) && run("removeMember", { username: p }, `Removed @${p}.`)}
                           className="h-8 px-3 rounded-lg bg-white/[0.06] hover:bg-white/10 flex items-center gap-1.5 text-[11px] font-bold text-[#FF8A9B] disabled:opacity-50"
                         >
                           <UserMinus size={13} /> Remove from group

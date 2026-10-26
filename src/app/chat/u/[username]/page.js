@@ -273,7 +273,13 @@ export default function PlayerProfilePage() {
             </Card>
           )}
 
-          {!isYou && canAddTo.length > 0 && (
+          {!isYou && canAddTo.length > 0 && profile.allowsGroupAdds === false && (
+            <Card title="Add to a group you run" icon={UserPlus}>
+              <p className="px-3 text-[13px] text-white/55">@{name} only joins groups themselves. Send them your group&apos;s link instead (Group info → Group link).</p>
+            </Card>
+          )}
+
+          {!isYou && canAddTo.length > 0 && profile.allowsGroupAdds !== false && (
             <Card title="Add to a group you run" icon={UserPlus}>
               <div className="divide-y divide-white/5">
                 {canAddTo.map((g) => (
