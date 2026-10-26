@@ -107,6 +107,7 @@ export default function PlayerProfilePage() {
   const shared = groups.filter((g) => (g.participants || []).includes(name));
   const canAddTo = groups.filter((g) => !(g.participants || []).includes(name) && isGroupAdmin(g, myNameIn(g)));
   const blocked = blockedNames.includes(name);
+  const asks = profile?.groupAdds !== "everyone"; // adding them sends an invite they accept or decline
   const isYou = !!profile?.isYou;
   const ready = !!active; // your chat username has loaded (actions need it)
   // Muting belongs to the chat profile you're using.
@@ -137,7 +138,7 @@ export default function PlayerProfilePage() {
     const r = await authFetch("/api/chat/conversations", { method: "POST", body: { action: "addMember", convoId: g.id, as: myNameIn(g), username: name } })
       .catch((e) => ({ error: e.message }));
     setAdding(null);
-    flash(r.error || `Added @${name} to ${g.groupName}.`);
+    flash(r.error || (r.invited ? `Invite sent. @${name} can join ${g.groupName} or decline.` : `Added @${name} to ${g.groupName}.`));
   };
 
   const copy = async (text, done) => {
@@ -281,14 +282,15 @@ export default function PlayerProfilePage() {
           )}
 
           {!isYou && canAddTo.length > 0 && profile.allowsGroupAdds !== false && (
-            <Card title="Add to a group you run" icon={UserPlus}>
+            <Card title={asks ? "Invite to a group you run" : "Add to a group you run"} icon={UserPlus}>
+              {asks && <p className="px-3 pb-1 text-[13px] text-white/55">@{name} decides: they get an invite to join or decline.</p>}
               <div className="divide-y divide-white/5">
                 {canAddTo.map((g) => (
                   <div key={g.id} className="flex items-center gap-3 px-3 py-2.5">
                     <GroupAvatar size={36} rounded="rounded-xl" groupId={g.id} version={g.photoVersion} />
                     <span className="min-w-0 flex-1 text-[14px] font-bold truncate">{g.groupName}</span>
                     <button type="button" disabled={adding === g.id} onClick={() => addToGroup(g)} className="shrink-0 h-8 px-3 rounded-lg bg-[#8B1E3F] text-[11px] font-black uppercase disabled:opacity-50">
-                      {adding === g.id ? "…" : "Add"}
+                      {adding === g.id ? "…" : asks ? "Invite" : "Add"}
                     </button>
                   </div>
                 ))}

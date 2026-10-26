@@ -8,14 +8,15 @@ import ConversationList from "@/components/chat/ConversationList";
 import ConversationThread, { ThreadPlaceholder } from "@/components/chat/ConversationThread";
 import { CreateGroupSheet, GroupAvatar } from "@/components/chat/GroupForm";
 import GroupInfoSheet from "@/components/chat/GroupInfoSheet";
+import { GroupInvites, useGroupInvites } from "@/components/chat/GroupInvites";
 import GroupSearch, { PopularGroups } from "@/components/chat/GroupSearch";
 import IdentityBar from "@/components/chat/IdentityBar";
 
 const conversationsApi = (body) => authFetch("/api/chat/conversations", { method: "POST", body });
 
 /**
- * Groups: the groups you're in, a search for public groups to join, and your
- * own groups to create. Each group has one owner; the owner and their admins
+ * Groups: invites waiting for you, the groups you're in, a search for public
+ * groups to join, and your own groups to create. Each group has one owner; the owner and their admins
  * run it from the group info sheet.
  */
 export default function GroupsPage() {
@@ -28,6 +29,7 @@ export default function GroupsPage() {
   const [creating, setCreating] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [joining, setJoining] = useState(null); // id of the group being joined
+  const { invites, respond } = useGroupInvites();
 
   const openId = openIds.groups;
   const groups = convos.filter((c) => c.type === "group");
@@ -51,6 +53,12 @@ export default function GroupsPage() {
   const act = async (action, body = {}) => {
     const r = await conversationsApi({ action, convoId: openId, as: me, ...body });
     return r.error || "";
+  };
+
+  // Joined from an invite: open the group as the username that was invited.
+  const joinedByInvite = (invite) => {
+    if (invite.name !== active) selectIdentity(invite.name);
+    openGroup(invite.id);
   };
 
   const createGroup = async (values) => {
@@ -97,6 +105,7 @@ export default function GroupsPage() {
       {/* identity, search and your groups — hidden on phones while a group is open */}
       <div className={`lg:col-span-4 flex-col gap-3 min-h-0 lg:overflow-y-auto lg:pr-1 ${openId ? "hidden lg:flex" : "flex"}`}>
         <IdentityBar identities={identities} active={active} onSelect={selectIdentity} />
+        <GroupInvites invites={invites} respond={respond} active={active} onJoined={joinedByInvite} />
         <GroupSearch memberOf={memberOf} joining={joining} onOpen={openGroup} onJoin={joinGroup} />
         {archived.length > 0 && (
           <>

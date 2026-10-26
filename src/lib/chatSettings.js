@@ -3,6 +3,9 @@
 // profile hasn't set yet falls back to its owner account's chat_state, where these
 // settings lived before they were per profile, then to the defaults below.
 export const CHAT_SETTING_DEFAULTS = { readReceipts: true, showOnline: true, hideCountry: false, showCoins: false, allowGroupAdds: true };
+// Who can add a profile to a group: anyone running one, admins sending an invite
+// it accepts or declines ("ask", the default), or nobody (it joins groups itself).
+export const GROUP_ADDS = ["everyone", "ask", "nobody"];
 
 const bool = (...values) => values.find((v) => typeof v === "boolean");
 
@@ -10,6 +13,9 @@ const bool = (...values) => values.find((v) => typeof v === "boolean");
 export function effectiveChatSettings(own = {}, account = {}) {
   const out = {};
   for (const [k, def] of Object.entries(CHAT_SETTING_DEFAULTS)) out[k] = bool(own[k], account[k], def);
+  // Before invites, this was the switch allowGroupAdds: off still means nobody.
+  out.groupAdds = GROUP_ADDS.includes(own.groupAdds) ? own.groupAdds : out.allowGroupAdds === false ? "nobody" : "ask";
+  out.allowGroupAdds = out.groupAdds !== "nobody"; // what older apps show
   const o = own.sounds || {};
   const a = account.sounds || {};
   out.sounds = {

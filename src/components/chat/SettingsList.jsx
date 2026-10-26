@@ -102,7 +102,7 @@ export function SettingsRow({ icon: Icon, title, text, value, href, onClick, dan
   if (href) return <Link href={href} className={className}>{body}</Link>;
   if (onClick) {
     return (
-      <button type="button" onClick={onClick} disabled={disabled} role={role} aria-checked={role === "switch" ? checked : undefined} className={className}>
+      <button type="button" onClick={onClick} disabled={disabled} role={role} aria-checked={role === "switch" || role === "radio" ? checked : undefined} className={className}>
         {body}
       </button>
     );
@@ -124,6 +124,26 @@ export function SettingsSwitch({ icon, title, text, on, onChange, disabled = fal
       trailing={(
         <span aria-hidden="true" className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${on ? "bg-[#2457D6]" : "bg-white/15"}`}>
           <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${on ? "translate-x-5" : ""}`} />
+        </span>
+      )}
+    />
+  );
+}
+
+/** One choice of several (wrap them in role="radiogroup"). Like SettingsSwitch, `disabled` only ignores taps. */
+export function SettingsRadio({ icon, title, text, on, onSelect, disabled = false }) {
+  return (
+    <SettingsRow
+      icon={icon}
+      title={title}
+      text={text}
+      onClick={() => !disabled && !on && onSelect()}
+      chevron={false}
+      role="radio"
+      checked={on}
+      trailing={(
+        <span aria-hidden="true" className={`shrink-0 w-[22px] h-[22px] rounded-full border-2 flex items-center justify-center transition-colors ${on ? "border-[#2457D6]" : "border-white/30"}`}>
+          {on && <span className="w-3 h-3 rounded-full bg-[#2457D6]" />}
         </span>
       )}
     />

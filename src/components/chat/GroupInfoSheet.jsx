@@ -189,6 +189,17 @@ export default function GroupInfoSheet({ convo, me, act, onClose, onOpenProfile,
     setManageOf(null);
   };
 
+  // Someone whose settings say "Ask me first" gets an invite instead of being added.
+  const addMember = async (username) => {
+    setBusy(true);
+    setNote({ type: "", msg: "" });
+    const r = await authFetch("/api/chat/conversations", { method: "POST", body: { action: "addMember", convoId: convo.id, as: me, username } })
+      .catch((e) => ({ error: e.message }));
+    setBusy(false);
+    if (r.error) return setNote({ type: "error", msg: r.error });
+    setNote({ type: "success", msg: r.invited ? `Invite sent. @${username} joins if they accept it.` : `Added @${username}.` });
+  };
+
   const save = async (values) => {
     const problem = await act("updateGroup", values);
     if (!problem) {
@@ -260,7 +271,7 @@ export default function GroupInfoSheet({ convo, me, act, onClose, onOpenProfile,
             className="mt-3"
             label="Add members"
             placeholder="Search players to add…"
-            onPick={(username) => run("addMember", { username }, `Added @${username}.`)}
+            onPick={addMember}
           />
         )}
 

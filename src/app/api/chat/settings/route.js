@@ -2,25 +2,32 @@ import { NextResponse } from "next/server";
 import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import { isValidUsername, norm, ownedUsername } from "@/lib/chat";
-import { CHAT_SETTING_DEFAULTS, chatSettingsFor } from "@/lib/chatSettings";
+import { CHAT_SETTING_DEFAULTS, GROUP_ADDS, chatSettingsFor } from "@/lib/chatSettings";
 
 // Settings for each chat profile (username): read receipts, online status, hidden
-// country, coins on show and message sounds. Stored in chat_settings/{username},
+// country, coins on show, who can add it to groups and message sounds. Stored in chat_settings/{username},
 // which only this route writes; any account that can chat as the username (its
 // owner, or an account logged in to it with its password) can read and change them.
 //
 //   GET                              -> { items: { [username]: settings } }  every username you can chat as
 //   POST { username, settings }      -> { settings }  settings = any of { readReceipts, showOnline, hideCountry,
-//                                       showCoins, sounds: { room, private, groups: { id: bool }, people: { name: bool } } }
+//                                       showCoins, groupAdds: "everyone" | "ask" | "nobody",
+//                                       sounds: { room, private, groups: { id: bool }, people: { name: bool } } }
 
 const fail = (error, status = 400) => NextResponse.json({ error }, { status });
 const MAX_KEYS = 50;
 const CONVO_ID = /^[A-Za-z0-9_-]{1,128}$/;
 
-// Only known fields, as booleans.
+// Only known fields, as booleans (and groupAdds, one of GROUP_ADDS).
 function clean(input = {}) {
   const out = {};
   for (const k of Object.keys(CHAT_SETTING_DEFAULTS)) if (typeof input[k] === "boolean") out[k] = input[k];
+  if (GROUP_ADDS.includes(input.groupAdds)) {
+    out.groupAdds = input.groupAdds;
+    out.allowGroupAdds = input.groupAdds !== "nobody";
+  } else if (typeof input.allowGroupAdds === "boolean") {
+    out.groupAdds = input.allowGroupAdds ? "ask" : "nobody"; // the switch in older apps
+  }
   const s = input.sounds || {};
   const sounds = {};
   if (typeof s.room === "boolean") sounds.room = s.room;

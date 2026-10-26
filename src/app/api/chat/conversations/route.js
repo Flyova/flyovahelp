@@ -6,6 +6,8 @@ import {
   GROUP_DESCRIPTION_MAX, GROUP_NAME_MAX, MAX_GROUP_MEMBERS, groupByInvite, groupOwner, groupSearchKeys, isGroupAdmin,
 } from "@/lib/chat";
 import { chatSettingsFor } from "@/lib/chatSettings";
+import { groupInviteRef } from "@/lib/groupInvites";
+import { sendPushToUsers } from "@/lib/push";
 
 // POST /api/chat/conversations — the only way conversations are created or joined.
 // Firestore rules forbid clients from creating conversations or changing their
@@ -17,7 +19,10 @@ import { chatSettingsFor } from "@/lib/chatSettings";
 //   { action: "group", as, name, description?, visibility? }  -> { id }  create a group (caller owns it)
 //   { action: "join", convoId, as }                           -> { id }  join a public group
 //   { action: "leave", convoId, as }                          -> { ok }  leave a group (not the owner)
-//   { action: "addMember", convoId, as, username }            -> { ok }  admins
+//   { action: "addMember", convoId, as, username }            -> { ok, invited? }  admins; players whose settings say
+//                                                                        "Ask me first" get an invite instead (lib/groupInvites)
+//   { action: "acceptInvite", convoId, as }                   -> { id }  join a group you were invited to
+//   { action: "declineInvite", convoId, as }                  -> { ok }
 //   { action: "removeMember", convoId, as, username }         -> { ok }  admins; only the owner removes admins
 //   { action: "setAdmin", convoId, as, username, admin }      -> { ok }  owner only
 //   { action: "updateGroup", convoId, as, name?, description?, visibility? } -> { ok }  admins
@@ -32,6 +37,7 @@ import { chatSettingsFor } from "@/lib/chatSettings";
 const FV = () => admin.firestore.FieldValue;
 const fail = (error, status = 400) => NextResponse.json({ error }, { status });
 const DELETED_TEXT = "— message deleted —";
+const CONVO_ID = /^[A-Za-z0-9_-]{1,128}$/;
 
 async function activeUsername(db, username) {
   const lower = norm(String(username || "").trim().replace(/^@/, ""));
@@ -185,17 +191,28 @@ async function addMember(db, caller, { convoId, as, username }) {
   if (!me) return fail("You can only act as one of your own usernames.", 403);
   const other = await activeUsername(db, username);
   if (!other) return fail("That username doesn't exist.", 404);
-  // Chat settings → Privacy: some players only join groups themselves.
+  // Chat settings → Privacy: who can add them to groups.
   const settings = await chatSettingsFor(db, [{ name: other.lower, uid: other.uid }]);
-  if (settings.get(other.lower)?.allowGroupAdds === false) {
+  const adds = settings.get(other.lower)?.groupAdds || "ask";
+  if (adds === "nobody") {
     return fail(`@${other.lower} only joins groups themselves. Send them the group link instead.`, 403);
   }
+  // "Ask me first": they get an invite to accept or decline, unless it's your own username.
+  const invite = adds === "ask" && !other.uids.includes(caller.uid);
+  let groupName = "";
 
-  const refused = await withGroup(db, convoId, (convo, tx) => {
+  const refused = await withGroup(db, convoId, async (convo, tx) => {
     if (!isGroupAdmin(convo, me.lower)) return { error: "Only group admins can add members.", status: 403 };
     const participants = convo.participants || [];
     if (participants.includes(other.lower)) return { error: `@${other.lower} is already in this group.`, status: 409 };
     if (participants.length >= MAX_GROUP_MEMBERS) return { error: `Groups are limited to ${MAX_GROUP_MEMBERS} members.`, status: 400 };
+    if (invite) {
+      const ref = groupInviteRef(db, convoId, other.lower);
+      if ((await tx.get(ref)).exists) return { error: `@${other.lower} already has an invite to this group.`, status: 409 };
+      tx.set(ref, { convoId, name: other.lower, by: me.lower, createdAt: FV().serverTimestamp() });
+      groupName = convo.groupName || "a group";
+      return null;
+    }
     return {
       participants: FV().arrayUnion(other.lower),
       participantUids: FV().arrayUnion(...other.uids),
@@ -203,7 +220,45 @@ async function addMember(db, caller, { convoId, as, username }) {
       ...activity(tx, db, convoId, `@${me.lower} added @${other.lower}`),
     };
   });
-  return refused || NextResponse.json({ ok: true });
+  if (refused) return refused;
+  if (!invite) return NextResponse.json({ ok: true });
+  await sendPushToUsers(other.uids.map((uid) => ({ uid, data: { url: "/chat/groups" } })), {
+    title: "Group invite",
+    body: `@${me.lower} invited @${other.lower} to ${groupName}. Open Groups to join or decline.`,
+  }).catch(() => 0);
+  return NextResponse.json({ ok: true, invited: true });
+}
+
+// Joins a group one of your usernames was invited to (see addMember).
+async function acceptInvite(db, caller, { convoId, as }) {
+  const me = await ownedUsername(db, caller.uid, as);
+  if (!me) return fail("You can only act as one of your own usernames.", 403);
+  if (!CONVO_ID.test(String(convoId || ""))) return fail("Group not found.", 404);
+  const ref = groupInviteRef(db, convoId, me.lower);
+  const refused = await withGroup(db, convoId, async (convo, tx) => {
+    const invite = await tx.get(ref);
+    if (!invite.exists) return { error: "This invite isn't there any more.", status: 404 };
+    const { by } = invite.data();
+    tx.delete(ref);
+    if ((convo.participants || []).includes(me.lower)) return null; // already in
+    if (!isGroupAdmin(convo, by)) return { error: `@${by} isn't an admin of this group any more, so the invite was withdrawn.`, status: 410 };
+    if ((convo.participants || []).length >= MAX_GROUP_MEMBERS) return { error: `This group is full (${MAX_GROUP_MEMBERS} members).`, status: 400 };
+    return {
+      participants: FV().arrayUnion(me.lower),
+      participantUids: FV().arrayUnion(...usernameUids(me)),
+      removed: FV().arrayRemove(me.lower), // an admin's invite lifts an earlier removal
+      ...activity(tx, db, convoId, `@${me.lower} joined, invited by @${by}`),
+    };
+  });
+  return refused || NextResponse.json({ id: String(convoId) });
+}
+
+async function declineInvite(db, caller, { convoId, as }) {
+  const me = await ownedUsername(db, caller.uid, as);
+  if (!me) return fail("You can only act as one of your own usernames.", 403);
+  if (!CONVO_ID.test(String(convoId || ""))) return fail("Group not found.", 404);
+  await groupInviteRef(db, convoId, me.lower).delete();
+  return NextResponse.json({ ok: true });
 }
 
 async function removeMember(db, caller, { convoId, as, username }) {
@@ -420,6 +475,8 @@ const ACTIONS = {
   join: joinGroup,
   leave: leaveGroup,
   addMember,
+  acceptInvite,
+  declineInvite,
   removeMember,
   setAdmin,
   updateGroup,

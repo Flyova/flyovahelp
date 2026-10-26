@@ -8,6 +8,7 @@ import { formatCount } from "@/lib/chat";
 import { CHAT_SECTIONS, useChat } from "@/components/chat/ChatProvider";
 import { CoinIcon } from "@/components/chat/CoinSheets";
 import IdentityBar from "@/components/chat/IdentityBar";
+import { useGroupInvites } from "@/components/chat/GroupInvites";
 
 const plural = (n, word) => `${formatCount(n)} ${word}${n === 1 ? "" : "s"}`;
 
@@ -42,6 +43,7 @@ export default function ChatsHome() {
   const router = useRouter();
   const { uid, identities, active, selectIdentity, convos, unread, coins, openCoinWallet, chatState, isDeletedForMe } = useChat();
   const [stats, setStats] = useState(null); // Chatroom { members, online }
+  const { invites } = useGroupInvites(); // waiting for any of your usernames
 
   useEffect(() => {
     const tab = new URLSearchParams(window.location.search).get("tab");
@@ -84,8 +86,11 @@ export default function ChatsHome() {
         tint="bg-[#2457D6]/25 text-[#8FB0FF]"
         title="Groups"
         text="Your groups, public groups to join, or start your own."
-        detail={groups.length ? plural(groups.length, "group") : "Find or create a group"}
-        badge={unreadIn(groups)}
+        detail={[
+          invites.length && `${plural(invites.length, "invite")} waiting`,
+          groups.length ? plural(groups.length, "group") : !invites.length && "Find or create a group",
+        ].filter(Boolean).join(" · ")}
+        badge={unreadIn(groups) + invites.length}
       />
 
       <div className="grid grid-cols-2 gap-3 pt-1">
