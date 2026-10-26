@@ -32,7 +32,7 @@ export default function AddUsernamePage() {
     <SettingsPage title="Add a username">
       <SettingsIntro>
         {offer.title}. Each username is its own chat profile with its own chats and settings.{" "}
-        <Link href="/settings#privacy-policy" className="font-semibold text-[#8FB0FF] hover:underline">Prices and limits</Link>
+        <Link href="/chat/settings/prices" className="font-semibold text-[#8FB0FF] hover:underline">Prices and limits</Link>
       </SettingsIntro>
       <form onSubmit={add} className="px-4 pb-5 pt-1 space-y-3">
         <SettingsInput label="Username" prefix="@" value={name} onChange={(e) => setName(e.target.value)} placeholder="new username" autoComplete="off" autoCapitalize="none" spellCheck={false} />

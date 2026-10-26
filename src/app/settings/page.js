@@ -22,17 +22,9 @@ import {
   Globe,
   Fingerprint,
   X,
-  Clock,
-  ShieldAlert,
-  TriangleAlert,
-  MessageSquare,
-  ChevronRight
+  Clock
 } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Avatar from "@/components/Avatar";
-import ChatProfileCard from "@/components/settings/ChatProfileCard";
-import { FREE_USERNAMES_AGENT, FREE_USERNAMES_OLD_ACCOUNT, OLD_ACCOUNT_MONTHS, USERNAME_PRICE } from "@/lib/chat";
 
 export default function Settings() {
   const router = useRouter();
@@ -216,7 +208,10 @@ export default function Settings() {
           </div>
           
           <div className="flex items-center space-x-4 mb-6 relative z-10">
-            <Avatar username={userData?.username} size={64} rounded="rounded-2xl" className="shadow-lg border-2 border-white/10" />
+            {/* The account's initial: profile photos belong to chat profiles (Chat settings). */}
+            <span className="w-16 h-16 shrink-0 rounded-2xl bg-gradient-to-br from-[#8B1E3F] to-[#5A1229] border-2 border-white/10 shadow-lg flex items-center justify-center text-2xl font-black uppercase">
+              {String(userData?.fullName || userData?.username || "S").trim().charAt(0)}
+            </span>
             <div>
               <h2 className="text-2xl font-black italic uppercase text-[#8B1E3F] leading-none">
                 {userData?.fullName || userData?.username || "Merchant"}
@@ -328,8 +323,6 @@ export default function Settings() {
           </form>
         </div>
 
-        <ChatProfileCard uid={user?.uid} />
-
         {passMessage.msg && (
           <div className={`flex items-center p-4 rounded-2xl text-[10px] font-black uppercase tracking-tight ${
             passMessage.type === 'success' ? 'bg-green-500/10 text-green-500 border border-green-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20'
@@ -370,33 +363,6 @@ export default function Settings() {
               {passLoading ? "Processing..." : "Save New Password"}
             </button>
           </form>
-        </div>
-
-        <div id="privacy-policy" className="bg-[#142036] rounded-[2rem] p-6 border border-white/5 shadow-xl scroll-mt-6">
-          <div className="flex items-center space-x-2 mb-4">
-            <ShieldAlert size={18} className="text-[#8B1E3F]" />
-            <h3 className="font-black italic uppercase text-sm">Privacy &amp; Policy</h3>
-          </div>
-          <Link href="/chat/settings" className="flex items-center gap-3 bg-black/20 hover:bg-black/30 p-4 rounded-2xl border border-white/5 mb-4 transition-colors">
-            <MessageSquare size={16} className="text-[#2457D6] shrink-0" />
-            <span className="min-w-0 flex-1">
-              <span className="block text-[11px] font-black uppercase">Chat privacy</span>
-              <span className="block text-[10px] font-bold text-white/45 mt-1">Read receipts, coins on show, online status and country are set for each chat profile in Chat settings.</span>
-            </span>
-            <ChevronRight size={16} className="text-white/40 shrink-0" />
-          </Link>
-          <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl">
-            <p className="flex items-center gap-2 text-[11px] font-black uppercase italic text-amber-500 mb-2">
-              <TriangleAlert size={14} className="shrink-0" /> Buying chat usernames
-            </p>
-            <ul className="list-disc pl-4 space-y-1.5 text-[11px] font-bold leading-relaxed text-white/70 marker:text-amber-500/70">
-              <li>You can create or change a username on your account only once for free.</li>
-              <li>Any other username on your account costs ${USERNAME_PRICE}, paid from your wallet.</li>
-              <li>Accounts older than {OLD_ACCOUNT_MONTHS} months can create up to {FREE_USERNAMES_OLD_ACCOUNT} usernames for free.</li>
-              <li>Agents can create up to {FREE_USERNAMES_AGENT} usernames for free.</li>
-              <li>A username belongs to the account that created it. To chat as another account&apos;s username, log in to it with its password in Chat settings.</li>
-            </ul>
-          </div>
         </div>
 
         <div className="pt-4 space-y-3">

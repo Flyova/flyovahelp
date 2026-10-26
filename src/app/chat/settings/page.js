@@ -120,7 +120,7 @@ export default function ChatSettingsPage() {
     {
       title: "More info and support",
       rows: [
-        { key: "prices", icon: Info, title: "Username prices and limits", href: "/settings#privacy-policy", words: "buy cost free agent" },
+        { key: "prices", icon: Info, title: "Username prices and limits", href: "/chat/settings/prices", words: "buy cost free agent" },
         { key: "help", icon: LifeBuoy, title: "Help and support", href: "/support", words: "contact report problem" },
       ],
     }

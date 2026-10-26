@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import { isValidUsername, norm, usernameUids } from "@/lib/chat";
+import { sendEmail } from "@/lib/resend";
 
 // Chat usernames work like accounts of their own. The owner can give one a password;
 // anyone who has the username and password can then log in to it from their own
@@ -13,8 +14,14 @@ import { isValidUsername, norm, usernameUids } from "@/lib/chat";
 //   POST { action: "setPassword", username, password }   -> { ok }  owner: set or change it
 //   POST { action: "removePassword", username }          -> { ok }  owner: also logs every other account out
 //   POST { action: "logoutOthers", username }            -> { ok }  owner
-//   POST { action: "login", username, password }         -> { ok }  any account; 5 wrong tries pause it 5 min
+//   POST { action: "login", username, password }         -> { ok } or { needsCode, sentTo }  any account; 5 wrong tries pause it 5 min
+//   POST { action: "confirmLogin", username, code }      -> { ok }  the 6-digit code emailed to the username's owner
 //   POST { action: "logout", username }                  -> { ok }  leave a username you logged in to
+//
+// The first time an account logs in to a username, the password isn't enough: a
+// code is emailed to the username's owner, who passes it on only if they agree.
+// After that the account is trusted (username_auth/{name}.trustedUids) until the
+// owner changes or removes the password or logs the other accounts out.
 
 const ITERATIONS = 20000;
 const MAX_TRIES = 5;
@@ -22,6 +29,9 @@ const PAUSE_MS = 5 * 60 * 1000;
 const MIN_PASSWORD = 6;
 const MAX_PASSWORD = 64;
 const WRONG = "Wrong username or password.";
+const CODE_TTL_MS = 10 * 60 * 1000;
+const CODE_RESEND_MS = 60 * 1000;
+const MAX_CODE_TRIES = 5;
 
 const FV = () => admin.firestore.FieldValue;
 const fail = (error, status = 400) => NextResponse.json({ error }, { status });
@@ -33,6 +43,18 @@ async function hashPassword(password, salt) {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: ITERATIONS }, key, 256);
   return toB64(new Uint8Array(bits));
+}
+
+async function sha256(text) {
+  return toB64(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))));
+}
+const newCode = () => String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, "0");
+
+/** "jo•••••@gmail.com" */
+function maskEmail(email) {
+  const [user, domain] = String(email || "").split("@");
+  if (!domain) return "the owner's email";
+  return `${user.slice(0, 2)}${"•".repeat(Math.max(3, user.length - 2))}@${domain}`;
 }
 
 // Compares without stopping at the first difference.
@@ -93,6 +115,8 @@ async function setPassword(db, caller, { username, password }) {
 async function logoutOthers(db, caller, { username }) {
   const { error, name, ref, data } = await ownedOnly(db, caller, username);
   if (error) return error;
+  // Logged-out accounts need a new emailed code to log in again.
+  await db.collection("username_auth").doc(name).update({ trustedUids: [], pending: {} }).catch(() => null);
   if ((data.linkedUids || []).length) {
     await ref.update({ linkedUids: [] });
     await syncConversations(db, name);
@@ -126,6 +150,57 @@ async function login(db, caller, { username, password }) {
     return fail(tries >= MAX_TRIES ? `Too many wrong passwords for @${name}. Try again in 5 min.` : WRONG, 403);
   }
   if (auth.tries) await authSnap.ref.update({ tries: 0, pausedUntil: 0 });
+
+  // A new account: email the owner a code first.
+  if (!(auth.trustedUids || []).includes(caller.uid)) {
+    const pending = auth.pending?.[caller.uid];
+    const ownerSnap = await db.collection("users").doc(n.uid).get();
+    const ownerEmail = ownerSnap.exists ? ownerSnap.data().email : "";
+    if (!ownerEmail) return fail("This username's owner has no email to send a code to, so it can't be logged in to from another account.");
+    if (pending && Date.now() - Number(pending.sentAt || 0) < CODE_RESEND_MS) {
+      return NextResponse.json({ needsCode: true, sentTo: maskEmail(ownerEmail) });
+    }
+    const code = newCode();
+    await authSnap.ref.update({
+      [`pending.${caller.uid}`]: { codeHash: await sha256(`${auth.salt}:${code}`), sentAt: Date.now(), expiresAt: Date.now() + CODE_TTL_MS, tries: 0 },
+    });
+    const sent = await sendEmail(
+      ownerEmail,
+      `Login code for @${name}`,
+      `<p>Someone is trying to log in to your StraWins chat username <strong>@${name}</strong> from another account.</p>
+       <p>If that's you, or someone you trust, the code is <strong style="font-size:20px;letter-spacing:3px">${code}</strong>. It expires in 10 minutes.</p>
+       <p>If you don't know who it is, don't share the code, and change the username's password in Chat settings → Accounts.</p>`
+    );
+    if (!sent.success) return fail("Could not send the login code. Try again in a moment.", 502);
+    return NextResponse.json({ needsCode: true, sentTo: maskEmail(ownerEmail) });
+  }
+
+  await nameSnap.ref.update({ linkedUids: FV().arrayUnion(caller.uid) });
+  await syncConversations(db, name);
+  return NextResponse.json({ ok: true, username: n.username || name });
+}
+
+async function confirmLogin(db, caller, { username, code }) {
+  const name = nameOf(username);
+  if (!isValidUsername(name)) return fail("Wrong code.", 403);
+  const [nameSnap, authSnap] = await db.getAll(db.collection("usernames").doc(name), db.collection("username_auth").doc(name));
+  const n = nameSnap.exists ? nameSnap.data() : null;
+  if (!n || n.deleted || !authSnap.exists) return fail("Start again: log in with the username and password.", 400);
+  const auth = authSnap.data();
+  const pending = auth.pending?.[caller.uid];
+  if (!pending) return fail("Start again: log in with the username and password.", 400);
+  if (Date.now() > Number(pending.expiresAt || 0)) return fail("That code has expired. Log in again to get a new one.", 400);
+  const ok = sameText(await sha256(`${auth.salt}:${String(code || "").replace(/\D/g, "")}`), pending.codeHash);
+  if (!ok) {
+    const tries = Number(pending.tries || 0) + 1;
+    if (tries >= MAX_CODE_TRIES) {
+      await authSnap.ref.update({ [`pending.${caller.uid}`]: FV().delete() });
+      return fail("Too many wrong codes. Log in again to get a new one.", 429);
+    }
+    await authSnap.ref.update({ [`pending.${caller.uid}.tries`]: tries });
+    return fail("Wrong code.", 403);
+  }
+  await authSnap.ref.update({ [`pending.${caller.uid}`]: FV().delete(), trustedUids: FV().arrayUnion(caller.uid) });
   await nameSnap.ref.update({ linkedUids: FV().arrayUnion(caller.uid) });
   await syncConversations(db, name);
   return NextResponse.json({ ok: true, username: n.username || name });
@@ -160,7 +235,7 @@ export async function GET(req) {
   }
 }
 
-const ACTIONS = { setPassword, removePassword, logoutOthers, login, logout };
+const ACTIONS = { setPassword, removePassword, logoutOthers, login, confirmLogin, logout };
 
 export async function POST(req) {
   try {
