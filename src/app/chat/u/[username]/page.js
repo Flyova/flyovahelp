@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { doc, onSnapshot } from "firebase/firestore";
 import {
-  ArrowLeft, Ban, BadgeCheck, Bell, BellOff, ChevronRight, Coins, Copy, Crown, Flag, Globe, Loader2, MapPin, MessageCircle,
-  Pencil, Radio, Share2, ShieldCheck, Store, UserPlus, Users, X,
+  ArrowLeft, Ban, BadgeCheck, Bell, BellOff, ChevronRight, Coins, Copy, Crown, Flag, Globe, Loader2, MapPin, Mars, MessageCircle,
+  Pencil, Radio, Share2, ShieldCheck, Store, UserPlus, Users, Venus, X,
 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
@@ -230,6 +230,7 @@ export default function PlayerProfilePage() {
               <p className="px-3 pb-2 text-[13px] text-white/40">No bio yet.</p>
             )}
             <div className="divide-y divide-white/5">
+              {profile.gender && <Row icon={profile.gender === "female" ? Venus : Mars}>{profile.gender === "female" ? "Female" : "Male"}</Row>}
               {profile.country && <Row icon={MapPin}>{profile.country}</Row>}
               {status && !isYou && <Row icon={Radio}>{status.online ? "Online now" : status.text.replace(/^last/, "Last")}</Row>}
             </div>

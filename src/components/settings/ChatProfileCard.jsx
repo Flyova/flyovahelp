@@ -13,6 +13,13 @@ const STATUS_MAX = 80;
 const PHOTO_SIZE = 360; // px, square: sharp at the profile page's 112px on 3x phone screens
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 const MAX_PHOTO_CHARS = 90000; // Firestore rules allow up to 100,000
+// Stored as `gender` on the chat profile; "" means they'd rather not say.
+const GENDERS = [
+  { value: "male", label: "Male" },
+  { value: "female", label: "Female" },
+  { value: "", label: "Not saying" },
+];
+const genderOf = (value) => (GENDERS.some((g) => g.value === value) ? value : "");
 
 // A centred square crop of an image file, as a small JPEG data URL (stored on the
 // chat profile itself: the project has no Storage bucket).
@@ -68,6 +75,10 @@ const LOOKS = {
     count: "text-[9px] font-bold text-white/30",
     text: "w-full bg-transparent font-bold text-sm outline-none text-white placeholder:text-white/20",
     save: "w-full bg-[#2457D6] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-[#2457D6]/20 transition-all active:scale-95 disabled:opacity-50",
+    choices: "flex gap-1.5",
+    choice: "flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase border transition-all",
+    choiceOn: "bg-[#8B1E3F] border-[#8B1E3F] text-white",
+    choiceOff: "bg-black/30 border-white/10 text-white/60 hover:text-white",
     devices: "text-[9px] font-black uppercase text-white/40 mb-2 flex items-center gap-1.5",
     device: "flex items-center justify-between gap-3 bg-black/20 px-3 py-2 rounded-xl border border-white/5",
     deviceName: "text-[11px] font-bold text-white/70 truncate",
@@ -82,6 +93,10 @@ const LOOKS = {
     count: "text-[12px] text-white/35",
     text: "w-full bg-white/[0.06] border border-white/10 focus:border-[#2457D6] rounded-xl px-3.5 py-3 text-base md:text-[15px] outline-none text-white placeholder:text-white/30 transition-colors",
     save: "w-full h-11 rounded-xl bg-[#8B1E3F] hover:bg-[#A62A4D] text-[15px] font-bold transition-colors disabled:opacity-50",
+    choices: "flex gap-2",
+    choice: "flex-1 h-11 rounded-xl text-[14px] font-semibold border transition-colors",
+    choiceOn: "bg-[#8B1E3F] border-[#8B1E3F] text-white",
+    choiceOff: "bg-white/[0.06] border-white/10 text-white/70 hover:bg-white/10",
     devices: "text-[13px] font-semibold text-white/50 mb-2 flex items-center gap-1.5",
     device: "flex items-center justify-between gap-3 py-2.5 border-b border-white/5 last:border-0",
     deviceName: "text-[14px] text-white/85 truncate",
@@ -91,7 +106,7 @@ const LOOKS = {
 
 /**
  * The chat identity's public profile: profile photo (or the avatar generated
- * from the username), bio and status, plus the devices that have used this
+ * from the username), bio, status and gender, plus the devices that have used this
  * username in chat. One account can hold several chat usernames; each has its
  * own profile. A photo is stored on the profile as a small square JPEG.
  */
@@ -103,7 +118,8 @@ export default function ChatProfileCard({ uid, username = "", bare = false }) {
   const ui = LOOKS[bare ? "page" : "card"];
   const [bio, setBio] = useState("");
   const [status, setStatus] = useState("");
-  const [saved, setSaved] = useState({ bio: "", status: "" });
+  const [gender, setGender] = useState("");
+  const [saved, setSaved] = useState({ bio: "", status: "", gender: "" });
   const [sessions, setSessions] = useState([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: "", msg: "" });
@@ -132,9 +148,10 @@ export default function ChatProfileCard({ uid, username = "", bare = false }) {
     getDoc(doc(db, "chat_profiles", selected)).then((s) => {
       if (cancelled) return;
       const data = s.exists() ? s.data() : {};
-      const next = { bio: data.bio || "", status: data.status || "" };
+      const next = { bio: data.bio || "", status: data.status || "", gender: genderOf(data.gender) };
       setBio(next.bio);
       setStatus(next.status);
+      setGender(next.gender);
       setSaved(next);
     }).catch(() => {});
     return () => { cancelled = true; };
@@ -159,7 +176,7 @@ export default function ChatProfileCard({ uid, username = "", bare = false }) {
     return [...latest.values()].sort((a, b) => (timeOf(b) ?? 0) - (timeOf(a) ?? 0));
   }, [sessions]);
 
-  const changed = bio !== saved.bio || status !== saved.status;
+  const changed = bio !== saved.bio || status !== saved.status || gender !== saved.gender;
 
   const flash = (type, msg) => {
     setMessage({ type, msg });
@@ -207,9 +224,9 @@ export default function ChatProfileCard({ uid, username = "", bare = false }) {
     setSaving(true);
     try {
       await setDoc(doc(db, "chat_profiles", selected), {
-        bio: bio.trim(), status: status.trim(), updatedAt: serverTimestamp(),
+        bio: bio.trim(), status: status.trim(), gender, updatedAt: serverTimestamp(),
       }, { merge: true });
-      setSaved({ bio: bio.trim(), status: status.trim() });
+      setSaved({ bio: bio.trim(), status: status.trim(), gender });
       setBio(bio.trim());
       setStatus(status.trim());
       setMessage({ type: "success", msg: "Chat profile saved." });
@@ -308,6 +325,23 @@ export default function ChatProfileCard({ uid, username = "", bare = false }) {
                 placeholder="What are you up to?"
                 className={ui.text}
               />
+            </div>
+            <div className={ui.field}>
+              <p id="chat-profile-gender" className={`${ui.label} mb-2`}>Gender</p>
+              <div role="radiogroup" aria-labelledby="chat-profile-gender" className={ui.choices}>
+                {GENDERS.map((g) => (
+                  <button
+                    key={g.label}
+                    type="button"
+                    role="radio"
+                    aria-checked={gender === g.value}
+                    onClick={() => setGender(g.value)}
+                    className={`${ui.choice} ${gender === g.value ? ui.choiceOn : ui.choiceOff}`}
+                  >
+                    {g.label}
+                  </button>
+                ))}
+              </div>
             </div>
             {changed && (
               <button type="submit" disabled={saving} className={ui.save}>

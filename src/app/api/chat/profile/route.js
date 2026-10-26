@@ -8,7 +8,7 @@ import { chatSettingsFor } from "@/lib/chatSettings";
 const MAX_GROUPS = 10;
 
 // GET /api/chat/profile?u=username&as=yours — the public profile shown when you tap a
-// player in chat: chat username, bio and status, country (unless they hide it),
+// player in chat: chat username, bio, status and gender, country (unless they hide it),
 // badges (verified, agent, StraWins staff), the public groups they're in, and
 // their chat coins only if they chose to show them off. Never their real name,
 // join date, email, phone, PIN or money balances.
@@ -56,6 +56,7 @@ export async function GET(req) {
       usernameLower: lower,
       bio: p.bio || "",
       status: p.status || "",
+      gender: ["male", "female"].includes(p.gender) ? p.gender : "", // "" when they'd rather not say
       country: hideCountry ? "" : u.country || "",
       badges: [
         u.verified === true && "verified",
