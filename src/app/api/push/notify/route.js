@@ -53,6 +53,18 @@ async function chatMessage(db, caller, { convoId, messageId }) {
   });
 
   const isGroup = convo.type === "group";
+  // A chat the recipient muted in Chat settings → Notifications (or archived) still
+  // notifies them, just without a sound.
+  if (targets.length) {
+    const states = await db.getAll(...targets.map((t) => db.collection("chat_state").doc(t.uid)));
+    states.forEach((snap, i) => {
+      const state = snap.exists ? snap.data() : {};
+      const sounds = state.sounds || {};
+      targets[i].silent = state.archived?.[convoId] === true || (isGroup
+        ? sounds.groups?.[convoId] === false
+        : sounds.private === false || sounds.people?.[sender] === false);
+    });
+  }
   const sent = await sendPushToUsers(targets, {
     title: isGroup ? convo.groupName || "New group message" : `@${msg.sender}`,
     body: isGroup ? `@${msg.sender}: ${msg.text || ""}` : msg.text || "New message",

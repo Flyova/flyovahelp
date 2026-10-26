@@ -386,7 +386,7 @@ export default function Settings() {
               <li>Any other username on your account costs ${USERNAME_PRICE}, paid from your wallet.</li>
               <li>Accounts older than {OLD_ACCOUNT_MONTHS} months can create up to {FREE_USERNAMES_OLD_ACCOUNT} usernames for free.</li>
               <li>Agents can create up to {FREE_USERNAMES_AGENT} usernames for free.</li>
-              <li>A username belongs to the account that created it. To chat as another account&apos;s username, log in to that account.</li>
+              <li>A username belongs to the account that created it. To chat as another account&apos;s username, log in to it with its password in Chat settings.</li>
             </ul>
           </div>
         </div>

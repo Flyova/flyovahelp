@@ -273,7 +273,7 @@ export default function ChatSettingsPage() {
             />
           ))}
         </div>
-        <p className="text-[11px] text-white/40 mt-2">Sounds play while Chats is open.</p>
+        <p className="text-[11px] text-white/40 mt-2">Sounds play while Chats is open. In the StraWins app, push notifications from chats you&apos;ve turned off arrive silently.</p>
       </Section>
 
       {/* Privacy */}

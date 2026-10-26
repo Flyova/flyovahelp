@@ -50,8 +50,9 @@ export async function sendPushToUsers(targets, { title, body, data = {} }) {
       title,
       body: String(body || "").slice(0, 180),
       data: { ...data, ...(t.data || {}) },
-      sound: "default",
-      channelId: "default",
+      // Muted chats arrive silently (the app's "chat-silent" Android channel has no sound).
+      sound: t.silent ? null : "default",
+      channelId: t.silent ? "chat-silent" : "default",
       priority: "high",
     });
     owners.push(t.uid);
