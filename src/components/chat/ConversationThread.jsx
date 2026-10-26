@@ -52,6 +52,7 @@ export default function ConversationThread({
   onReport,
   onOpenProfile,
   onSendCoins,
+  onBlock,
   blockedByMe = null,
 }) {
   const [msgs, setMsgs] = useState([]);
@@ -111,6 +112,9 @@ export default function ConversationThread({
     );
   }, [convoId]);
 
+  // A chat you deleted shows only what was said after you deleted it.
+  const clearedMs = chatState.cleared[convoId]?.toMillis?.() ?? 0;
+  const shown = useMemo(() => (clearedMs ? msgs.filter((m) => m.pending || messageMillis(m) > clearedMs) : msgs), [msgs, clearedMs]);
   const blockedHere = !!convo?.blocked?.includes(me);
   const cantSend = !convo || blockedHere || lost || !!blockedByMe;
   const receipts = chatState.readReceipts;
@@ -289,7 +293,7 @@ export default function ConversationThread({
       </div>
 
       <ChatMessages
-        messages={msgs}
+        messages={shown}
         isMine={(m) => m.sender === me}
         showAvatars={isGroup}
         showNames={isGroup}
@@ -304,6 +308,7 @@ export default function ConversationThread({
         onReport={onReport}
         onOpenProfile={onOpenProfile}
         onSendCoins={onSendCoins}
+        onBlock={onBlock}
         seenBy={seenBy}
         sentId={sentId}
         typing={lost ? [] : typers}

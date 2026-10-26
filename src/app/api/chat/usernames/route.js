@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminDb, admin } from "@/lib/firebaseAdmin";
-import { norm, isValidUsername, monthsSince } from "@/lib/chat";
+import { norm, isValidUsername, monthsSince, usernameCharge } from "@/lib/chat";
 import { getCaller } from "@/lib/apiAuth";
 
 const unauthorized = () => NextResponse.json({ error: "Sign in again to continue." }, { status: 401 });
@@ -9,8 +9,9 @@ const unauthorized = () => NextResponse.json({ error: "Sign in again to continue
 // verified ID token; any uid in the query/body is ignored (it used to be trusted,
 // which let anyone create usernames on — and charge — someone else's wallet).
 
-// GET /api/chat/usernames -> the usernames the signed-in account can chat as: its own,
-// plus other accounts' usernames it has logged in to (`linked: true`).
+// GET /api/chat/usernames -> { items, nextPrice }: the usernames the signed-in account can
+// chat as (its own, plus other accounts' it has logged in to: `linked: true`), and
+// what one more username would cost (0 = free).
 export async function GET(req) {
   try {
     const caller = await getCaller(req);
@@ -29,14 +30,20 @@ export async function GET(req) {
       ...owned.docs.filter((d) => !d.data().deleted).map((d) => clean(d, false)),
       ...linked.docs.filter((d) => !d.data().deleted && d.data().uid !== uid).map((d) => clean(d, true)),
     ];
-    return NextResponse.json({ items });
+    // What adding one more username costs, so the app can say "Add" (free) or "Buy $1".
+    const [userSnap, agentSnap] = await db.getAll(db.collection("users").doc(uid), db.collection("agents").doc(uid));
+    const u = userSnap.exists ? userSnap.data() : {};
+    const nextPrice = usernameCharge({
+      owned: owned.size, ageMonths: monthsSince(u.createdAt), isAgent: !!(u.isAgent || agentSnap.exists), freeUsernameUsed: u.freeUsernameUsed,
+    });
+    return NextResponse.json({ items, nextPrice });
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
 
-// POST /api/chat/usernames { username } — first extra free, then $1 wallet.
-// Accounts >8mo: 100 free. Agents: 5 free.
+// POST /api/chat/usernames { username } — priced by usernameCharge (lib/chat): the
+// first is free, then $1 from the wallet; accounts 8+ months old get 100 free, agents 5.
 export async function POST(req) {
   try {
     const caller = await getCaller(req);
@@ -55,13 +62,8 @@ export async function POST(req) {
     if (!userSnap.exists) return NextResponse.json({ error: "Account not found" }, { status: 404 });
     const u = userSnap.data();
     const owned = (await db.collection("usernames").where("uid", "==", uid).get()).size;
-    const ageMonths = monthsSince(u.createdAt);
     const isAgent = !!(u.isAgent || (await db.collection("agents").doc(uid).get()).exists);
-    const freeQuota = ageMonths >= 8 ? 100 : isAgent ? 5 : 0;
-    const freeUsed = u.freeUsernameUsed === true || owned >= 1 + freeQuota;
-    // Rule: one free create/change, everything after costs $1 (unless quota covers it)
-    let charge = 0;
-    if (freeQuota > 0 ? owned >= 1 + freeQuota : freeUsed) charge = 1;
+    const charge = usernameCharge({ owned, ageMonths: monthsSince(u.createdAt), isAgent, freeUsernameUsed: u.freeUsernameUsed });
     // One transaction: the name check, a fresh balance check, the charge and the
     // records commit together, so two buyers can't both get a name and a
     // concurrent stake can't be overwritten by a stale wallet value.

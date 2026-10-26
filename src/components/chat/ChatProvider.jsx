@@ -66,7 +66,9 @@ const readChatState = (d = {}, loaded = false) => ({
   showOnline: d.showOnline !== false,
   hideCountry: d.hideCountry === true,
   showCoins: d.showCoins === true,
-  sounds: d.sounds || {}, // { room, private, groups: { <id>: bool } } — all on unless false
+  sounds: d.sounds || {}, // { room, private, groups: { <id>: bool }, people: { <name>: bool } } — all on unless false
+  archived: d.archived || {}, // conversation id -> true while archived
+  cleared: d.cleared || {}, // conversation id -> when you deleted the chat (messages before it are gone for you)
 });
 
 /**
@@ -87,6 +89,7 @@ export function ChatProvider({ children }) {
   const [uid, setUid] = useState(null);
   const [identities, setIdentities] = useState([]);
   const [identitiesLoaded, setIdentitiesLoaded] = useState(false);
+  const [usernamePrice, setUsernamePrice] = useState(null); // what one more username costs ($, 0 = free)
   const [active, setActive] = useState(""); // usernameLower you post and start chats as
   const [allConvos, setAllConvos] = useState([]); // every conversation the account can read
   const [convosLoaded, setConvosLoaded] = useState(false);
@@ -123,6 +126,7 @@ export function ChatProvider({ children }) {
     const items = d.items || [];
     setIdentities(items);
     setIdentitiesLoaded(true);
+    if (typeof d.nextPrice === "number") setUsernamePrice(d.nextPrice);
     setActive((cur) => (cur && items.some((i) => i.usernameLower === cur) ? cur : items.find((x) => x.isDefault)?.usernameLower || items[0]?.usernameLower || ""));
   }, []);
 
@@ -202,11 +206,11 @@ export function ChatProvider({ children }) {
   // chat you're looking at doesn't count; it's being read.
   const viewingId = openIds[pathname.split("/")[2]] || null;
   const unreadCandidates = useMemo(() => convos.flatMap((c) => {
-    const since = Math.max(chatState.reads[c.id]?.toMillis?.() ?? 0, READS_SINCE_MS);
+    const since = Math.max(chatState.reads[c.id]?.toMillis?.() ?? 0, chatState.cleared[c.id]?.toMillis?.() ?? 0, READS_SINCE_MS);
     const lastMs = c.lastMessageAt?.toMillis?.() ?? 0;
     if (!c.lastMessage || lastMs <= since || c.id === viewingId) return [];
     return [{ id: c.id, since, key: `${c.id}:${lastMs}:${since}` }];
-  }), [convos, chatState.reads, viewingId]);
+  }), [convos, chatState.reads, chatState.cleared, viewingId]);
 
   useEffect(() => {
     for (const { id, since, key } of unreadCandidates) {
@@ -226,17 +230,20 @@ export function ChatProvider({ children }) {
 
   // New-message sounds, switched on or off per chat in Chat settings → Notifications.
   // kind: "room", "private" or "group" (with its id).
-  // A private chat is also silent if you muted that person (sounds.people.<name>).
+  // A private chat is also silent if you muted that person (sounds.people.<name>);
+  // archived chats are always silent.
   const soundOn = useCallback((kind, convoId) => {
     const s = chatState.sounds;
     if (kind === "room") return s.room !== false;
+    if (chatState.archived[convoId]) return false;
     if (kind === "private") {
       if (s.private === false) return false;
       const other = (convos.find((c) => c.id === convoId)?.participants || []).find((p) => !myLowers.includes(p));
       return !other || s.people?.[other] !== false;
     }
     return s.groups?.[convoId] !== false;
-  }, [chatState.sounds, convos, myLowers]);
+  }, [chatState.sounds, chatState.archived, convos, myLowers]);
+
 
   useEffect(() => {
     startedAt.current = Date.now();
@@ -339,26 +346,49 @@ export function ChatProvider({ children }) {
 
   const setOpenId = useCallback((section, id) => setOpenIds((p) => ({ ...p, [section]: id })), []);
 
+  // Your username isn't known for a moment after a page opens: say so instead of doing nothing.
+  const needUsername = useCallback(() => {
+    setErr(identitiesLoaded ? "Claim a chat username first." : "Still loading your chat username. Try again in a moment.");
+  }, [identitiesLoaded]);
+
   // Opens (creating if needed) your private chat with `target`, on the Private page.
   // Conversations are created server-side (it checks blocks and records participantUids).
   const messagePrivately = useCallback(async (target) => {
     setErr("");
-    if (!active) return setErr("Claim a chat username first.");
+    if (!active) return needUsername();
     if (norm(target) === active) return;
     const r = await authFetch("/api/chat/conversations", { method: "POST", body: { action: "dm", as: active, target: norm(target) } });
     if (r.error) return setErr(r.error);
     setOpenId("private", r.id);
     if (pathname !== "/chat/private") router.push("/chat/private");
-  }, [active, pathname, router, setOpenId]);
+  }, [active, pathname, router, setOpenId, needUsername]);
 
   const flashNotice = useCallback((msg) => {
     setNotice(msg);
     setTimeout(() => setNotice((cur) => (cur === msg ? "" : cur)), 3000);
   }, []);
 
+  // Archive / delete a chat for you only (the other members keep theirs). A deleted
+  // chat comes back, with only new messages, when someone writes in it again.
+  const archiveChat = useCallback((id, on) => updateChatState({ archived: { [id]: on } })
+    .then(() => flashNotice(on ? "Chat archived." : "Chat moved back to your chats."))
+    .catch((e) => setErr(`Could not save: ${e.message}`)), [updateChatState, flashNotice]);
+  const deleteChat = useCallback((id) => updateChatState({ cleared: { [id]: serverTimestamp() }, archived: { [id]: false } })
+    .then(() => {
+      setOpenIds((p) => ({ private: p.private === id ? null : p.private, groups: p.groups === id ? null : p.groups }));
+      flashNotice("Chat deleted.");
+    })
+    .catch((e) => setErr(`Could not delete the chat: ${e.message}`)), [updateChatState, flashNotice]);
+  // Hidden from your lists: deleted with nothing new since, or archived.
+  const isDeletedForMe = useCallback((c) => {
+    const at = chatState.cleared[c.id]?.toMillis?.();
+    return !!at && (c.lastMessageAt?.toMillis?.() ?? 0) <= at;
+  }, [chatState.cleared]);
+
   const blockUser = useCallback(async (targetLower) => {
     const target = norm(targetLower);
-    if (!active || !confirm(`Block @${target}? They won't be able to message you or send you coins, and you won't see them in the Chatroom.`)) return;
+    if (!active) return needUsername();
+    if (!confirm(`Block @${target}? They won't be able to message you or send you coins, and you won't see them in the Chatroom.`)) return;
     try {
       await setDoc(doc(db, "chat_blocks", `${active}_${target}`), {
         blocker: active, blocked: target, createdAt: serverTimestamp(),
@@ -370,11 +400,11 @@ export function ChatProvider({ children }) {
     } catch (e) {
       setErr(`Could not block @${target}: ${e.message}`);
     }
-  }, [active, convos, flashNotice]);
+  }, [active, convos, flashNotice, needUsername]);
 
   const unblockUser = useCallback(async (targetLower) => {
     const target = norm(targetLower);
-    if (!active) return;
+    if (!active) return needUsername();
     try {
       await deleteDoc(doc(db, "chat_blocks", `${active}_${target}`));
       const r = await authFetch("/api/chat/conversations", { method: "POST", body: { action: "unblock", as: active, target } });
@@ -383,7 +413,7 @@ export function ChatProvider({ children }) {
     } catch (e) {
       setErr(`Could not unblock: ${e.message}`);
     }
-  }, [active, flashNotice]);
+  }, [active, flashNotice, needUsername]);
 
   const reportUser = useCallback(async (targetLower, extra = {}) => {
     const reason = prompt(extra.messageId ? `Report @${norm(targetLower)}'s message? Tell us why:` : "Reason for report?");
@@ -408,14 +438,15 @@ export function ChatProvider({ children }) {
   const convosLoading = !identitiesLoaded || (identities.length > 0 && !convosLoaded);
 
   const value = useMemo(() => ({
-    uid, identities, active, setActive, selectIdentity: setActive, refreshIdentities, createUsername, deleteUsername,
+    uid, identities, identitiesLoaded, active, setActive, selectIdentity: setActive, refreshIdentities, createUsername, deleteUsername, usernamePrice,
     convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState,
     openIds, setOpenId,
     err, setErr, notice,
     openProfile, messagePrivately, blockUser, unblockUser, reportUser,
     coins, openCoinWallet, sendCoins,
     updateChatState, soundOn, presence, presenceNow,
-  }), [uid, identities, active, refreshIdentities, createUsername, deleteUsername, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, notice, openProfile, messagePrivately, blockUser, unblockUser, reportUser, coins, openCoinWallet, sendCoins, updateChatState, soundOn, presence, presenceNow]);
+    archiveChat, deleteChat, isDeletedForMe,
+  }), [uid, identities, identitiesLoaded, active, refreshIdentities, createUsername, deleteUsername, usernamePrice, archiveChat, deleteChat, isDeletedForMe, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, notice, openProfile, messagePrivately, blockUser, unblockUser, reportUser, coins, openCoinWallet, sendCoins, updateChatState, soundOn, presence, presenceNow]);
 
   return (
     <ChatContext.Provider value={value}>

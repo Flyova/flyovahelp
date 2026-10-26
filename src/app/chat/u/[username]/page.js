@@ -28,12 +28,12 @@ function Card({ title, icon: Icon, children }) {
   );
 }
 
-function Row({ icon: Icon, children, onClick, danger = false, trailing = null }) {
+function Row({ icon: Icon, children, onClick, danger = false, disabled = false, trailing = null }) {
   const Tag = onClick ? "button" : "div";
   return (
     <Tag
-      {...(onClick ? { type: "button", onClick } : {})}
-      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left text-[14px] ${onClick ? "hover:bg-white/[0.05]" : ""} ${danger ? "text-[#FF8A9B]" : ""}`}
+      {...(onClick ? { type: "button", onClick, disabled } : {})}
+      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left text-[14px] disabled:opacity-40 ${onClick ? "hover:bg-white/[0.05]" : ""} ${danger ? "text-[#FF8A9B]" : ""}`}
     >
       <Icon size={17} className={danger ? "" : "text-white/45"} />
       <span className="min-w-0 flex-1">{children}</span>
@@ -107,6 +107,7 @@ export default function PlayerProfilePage() {
   const canAddTo = groups.filter((g) => !(g.participants || []).includes(name) && isGroupAdmin(g, myNameIn(g)));
   const blocked = blockedNames.includes(name);
   const isYou = !!profile?.isYou;
+  const ready = !!active; // your chat username has loaded (actions need it)
   const muted = chatState.sounds.people?.[name] === false;
   const theirGroups = (profile?.publicGroups || []).filter((g) => !g.isMember && !shared.some((s) => s.id === g.id));
 
@@ -203,10 +204,10 @@ export default function PlayerProfilePage() {
                 </Link>
               ) : (
                 <>
-                  <button type="button" onClick={() => messagePrivately(name)} className="h-11 rounded-xl bg-gradient-to-br from-[#A0284D] to-[#6E1732] flex items-center justify-center gap-2 text-sm font-black uppercase">
+                  <button type="button" disabled={!ready} onClick={() => messagePrivately(name)} className="disabled:opacity-50 h-11 rounded-xl bg-gradient-to-br from-[#A0284D] to-[#6E1732] flex items-center justify-center gap-2 text-sm font-black uppercase">
                     <MessageCircle size={17} /> Message
                   </button>
-                  <button type="button" onClick={() => setChoosingCoins(true)} className="h-11 rounded-xl bg-gradient-to-br from-[#F6C453] to-[#D18E1F] text-[#2B1800] flex items-center justify-center gap-2 text-sm font-black uppercase">
+                  <button type="button" disabled={!ready} onClick={() => setChoosingCoins(true)} className="disabled:opacity-50 h-11 rounded-xl bg-gradient-to-br from-[#F6C453] to-[#D18E1F] text-[#2B1800] flex items-center justify-center gap-2 text-sm font-black uppercase">
                     <Coins size={17} /> Send coins
                   </button>
                 </>
@@ -262,7 +263,7 @@ export default function PlayerProfilePage() {
                       <span className="block text-[14px] font-bold truncate">{g.groupName}</span>
                       <span className="block text-[11px] text-white/45">{g.memberCount} member{g.memberCount === 1 ? "" : "s"}</span>
                     </span>
-                    <button type="button" disabled={joining === g.id} onClick={() => joinGroup(g)} className="shrink-0 h-8 px-3 rounded-lg bg-[#8B1E3F] text-[11px] font-black uppercase disabled:opacity-50">
+                    <button type="button" disabled={joining === g.id || !ready} onClick={() => joinGroup(g)} className="shrink-0 h-8 px-3 rounded-lg bg-[#8B1E3F] text-[11px] font-black uppercase disabled:opacity-50">
                       {joining === g.id ? "…" : "Join"}
                     </button>
                   </div>
@@ -295,11 +296,11 @@ export default function PlayerProfilePage() {
               <Row icon={Copy} onClick={() => copy(`@${name}`, "Username copied.")}>Copy username</Row>
               <Row icon={Share2} onClick={share}>Share profile</Row>
               {!isYou && (blocked ? (
-                <Row icon={Ban} onClick={() => unblockUser(name)}>Unblock @{name}</Row>
+                <Row icon={Ban} disabled={!ready} onClick={() => unblockUser(name)}>Unblock @{name}</Row>
               ) : (
-                <Row icon={Ban} danger onClick={() => blockUser(name)}>Block @{name}</Row>
+                <Row icon={Ban} danger disabled={!ready} onClick={() => blockUser(name)}>Block @{name}</Row>
               ))}
-              {!isYou && <Row icon={Flag} danger onClick={() => reportUser(name)}>Report @{name}</Row>}
+              {!isYou && <Row icon={Flag} danger disabled={!ready} onClick={() => reportUser(name)}>Report @{name}</Row>}
             </div>
           </Card>
         </>

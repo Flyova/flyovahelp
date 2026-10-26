@@ -38,7 +38,7 @@ function Choice({ href, icon: Icon, tint, title, text, detail, badge }) {
  */
 export default function ChatsHome() {
   const router = useRouter();
-  const { uid, convos, unread, coins, openCoinWallet } = useChat();
+  const { uid, convos, unread, coins, openCoinWallet, chatState, isDeletedForMe } = useChat();
   const [stats, setStats] = useState(null); // Chatroom { members, online }
 
   useEffect(() => {
@@ -51,9 +51,9 @@ export default function ChatsHome() {
     authFetch("/api/chat/room").then((r) => !r.error && setStats(r)).catch(() => {});
   }, [uid]);
 
-  const dms = convos.filter((c) => c.type !== "group" && c.lastMessage);
+  const dms = convos.filter((c) => c.type !== "group" && c.lastMessage && !isDeletedForMe(c));
   const groups = convos.filter((c) => c.type === "group");
-  const unreadIn = (list) => list.filter((c) => unread[c.id]).length;
+  const unreadIn = (list) => list.filter((c) => unread[c.id] && !chatState.archived[c.id]).length;
 
   return (
     <div className="max-w-2xl space-y-3 pb-6">

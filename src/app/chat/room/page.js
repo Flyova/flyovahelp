@@ -5,7 +5,7 @@ import IdentityBar from "@/components/chat/IdentityBar";
 
 /** The public chatroom: one room for every signed-in player. */
 export default function ChatroomPage() {
-  const { uid, identities, active, selectIdentity, createUsername, deleteUsername, blockedNames, messagePrivately, reportUser, openProfile, sendCoins, soundOn } = useChat();
+  const { uid, identities, active, selectIdentity, createUsername, deleteUsername, blockedNames, messagePrivately, reportUser, openProfile, sendCoins, soundOn, blockUser, usernamePrice } = useChat();
 
   const reportMessage = (m) =>
     reportUser(m.sender, { room: "public", messageId: m.id, messageText: String(m.text || "").slice(0, 500) });
@@ -13,7 +13,7 @@ export default function ChatroomPage() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4">
       <div className="lg:col-span-3">
-        <IdentityBar identities={identities} active={active} onSelect={selectIdentity} onCreate={createUsername} onDelete={deleteUsername} />
+        <IdentityBar identities={identities} active={active} onSelect={selectIdentity} onCreate={createUsername} onDelete={deleteUsername} price={usernamePrice} />
       </div>
       <div className="lg:col-span-9">
         <ChatRoom
@@ -25,6 +25,7 @@ export default function ChatroomPage() {
           onReport={reportMessage}
           onOpenProfile={(u) => openProfile(u, {})}
           onSendCoins={(u) => sendCoins(u)}
+          onBlock={blockUser}
         />
       </div>
     </div>

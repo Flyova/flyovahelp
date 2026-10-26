@@ -2,14 +2,17 @@
 import { useState } from "react";
 import { ChevronDown, Link2, Settings2, Trash2 } from "lucide-react";
 import Avatar from "@/components/Avatar";
+import { usernameOffer } from "@/lib/chat";
 
 /**
  * Compact "Chatting as" bar: your chat usernames as chips (tap to switch) and a
  * Manage panel, closed by default, for buying or deleting usernames. Usernames
  * you've logged in to from another account show a link icon (only their owner
- * can delete them). `onCreate(name)` resolves to an error message, or "" on success.
+ * can delete them). `onCreate(name)` resolves to an error message, or "" on success;
+ * `price` is what the next username costs (0 = free), shown as "Add" or "Buy · $1".
  */
-export default function IdentityBar({ identities, active, onSelect, onCreate, onDelete }) {
+export default function IdentityBar({ identities, active, onSelect, onCreate, onDelete, price = null }) {
+  const offer = usernameOffer(price);
   const [manage, setManage] = useState(false);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -63,7 +66,7 @@ export default function IdentityBar({ identities, active, onSelect, onCreate, on
       {manage && (
         <div className="border-t border-white/5 p-3.5 space-y-3">
           <div>
-            <p className="text-[10px] font-black uppercase text-white/40 mb-1.5">Add a chat username</p>
+            <p className="text-[10px] font-black uppercase text-white/40 mb-1.5">{offer.title}</p>
             <div className="flex gap-2">
               <div className="relative flex-1 min-w-0">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-white/35">@</span>
@@ -77,7 +80,7 @@ export default function IdentityBar({ identities, active, onSelect, onCreate, on
                 />
               </div>
               <button type="button" onClick={create} disabled={busy || !name.trim()} className="shrink-0 bg-[#8B1E3F] px-4 rounded-xl text-xs font-black uppercase disabled:opacity-50">
-                {busy ? "…" : "Buy"}
+                {busy ? "…" : offer.button}
               </button>
             </div>
             {error && <p className="text-xs text-red-300 mt-1.5">{error}</p>}

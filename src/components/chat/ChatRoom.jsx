@@ -19,7 +19,7 @@ const FRESH_MS = 800; // messages that arrived this recently animate in
  * bans). Tap (or right-click) a message for its menu, swipe left to reply.
  * `sound`: play the new-message sound when someone else posts.
  */
-export default function ChatRoom({ uid, active, blocked = [], sound = true, onMessagePrivately, onReport, onOpenProfile, onSendCoins }) {
+export default function ChatRoom({ uid, active, blocked = [], sound = true, onMessagePrivately, onReport, onOpenProfile, onSendCoins, onBlock }) {
   const [messages, setMessages] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [text, setText] = useState("");
@@ -176,6 +176,7 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
         onReport={onReport}
         onOpenProfile={onOpenProfile}
         onSendCoins={onSendCoins}
+        onBlock={onBlock}
         burst={burst}
         onBurstDone={clearBurst}
       />

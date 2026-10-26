@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown, Coins, Copy, CornerUpLeft, Flag, MessageCircle, Pencil, Trash2, UserRound } from "lucide-react";
+import { Ban, ChevronDown, Coins, Copy, CornerUpLeft, Flag, MessageCircle, Pencil, Trash2, UserRound } from "lucide-react";
 import MessageBubble, { SeenBy, TypingBubble, isCoinCard, isDeleted, messageMillis, startsRun } from "@/components/chat/MessageBubble";
 import MessageMenu from "@/components/chat/MessageMenu";
 import CoinBurst from "@/components/chat/CoinBurst";
@@ -47,7 +47,7 @@ function byDay(messages) {
  * `seenBy` (message id -> usernames) puts read-receipt avatars under messages,
  * `sentId` marks your latest message "Sent", and `typing` (usernames) shows a
  * typing bubble at the bottom. `onSendCoins(username)` adds "Send coins" to other
- * people's messages (Chatroom and groups only). `burst` = { id, coins, to, forYou }
+ * people's messages (Chatroom and groups only); `onBlock(username)` adds Block. `burst` = { id, coins, to, forYou }
  * plays the coins-sent animation over the list; `onBurstDone` clears it. Group
  * activity ("@ade joined the group", kind "system") shows as a small centred line.
  */
@@ -67,6 +67,7 @@ export default function ChatMessages({
   onMessagePrivately,
   onOpenProfile,
   onSendCoins,
+  onBlock,
   seenBy = {},
   sentId = null,
   typing = [],
@@ -132,6 +133,7 @@ export default function ChatMessages({
       !mine && onSendCoins && { label: "Send coins", icon: Coins, run: () => onSendCoins(m.sender) },
       !mine && onMessagePrivately && { label: "Message privately", icon: MessageCircle, run: () => onMessagePrivately(m.sender) },
       onDelete && canDelete(m) && { label: deleteLabel(m), icon: Trash2, danger: true, run: () => onDelete(m) },
+      !mine && onBlock && { label: `Block @${m.sender}`, icon: Ban, danger: true, run: () => onBlock(m.sender) },
       !mine && onReport && { label: "Report", icon: Flag, danger: true, run: () => onReport(m) },
     ].filter(Boolean);
   };

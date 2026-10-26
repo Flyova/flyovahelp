@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
-import { COIN_CENTS, formatCents, formatCoins } from "@/lib/chat";
+import { COIN_CENTS, formatCents, formatCoins, usernameOffer } from "@/lib/chat";
 import { useChat } from "@/components/chat/ChatProvider";
 import Avatar from "@/components/Avatar";
 import ChatProfileCard from "@/components/settings/ChatProfileCard";
@@ -56,7 +56,7 @@ function SwitchRow({ icon: Icon, title, text, on, onChange, disabled = false }) 
  */
 export default function ChatSettingsPage() {
   const {
-    uid, identities, active, selectIdentity, refreshIdentities, createUsername, deleteUsername, convos,
+    uid, identities, active, selectIdentity, refreshIdentities, createUsername, deleteUsername, usernamePrice, convos,
     coins, openCoinWallet, chatState, updateChatState, setErr,
   } = useChat();
   const [newName, setNewName] = useState("");
@@ -185,7 +185,7 @@ export default function ChatSettingsPage() {
         </ul>
 
         <form onSubmit={add} className="mt-4">
-          <p className="flex items-center gap-1.5 text-[10px] font-black uppercase text-white/40 mb-1.5"><UserPlus size={12} /> Add or buy a username</p>
+          <p className="flex items-center gap-1.5 text-[10px] font-black uppercase text-white/40 mb-1.5"><UserPlus size={12} /> {usernameOffer(usernamePrice).title}</p>
           <div className="flex gap-2">
             <div className="relative flex-1 min-w-0">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-white/35">@</span>
@@ -198,7 +198,7 @@ export default function ChatSettingsPage() {
               />
             </div>
             <button type="submit" disabled={adding || !newName.trim()} className="shrink-0 bg-[#8B1E3F] px-4 rounded-xl text-xs font-black uppercase disabled:opacity-50">
-              {adding ? "…" : "Buy"}
+              {adding ? "…" : usernameOffer(usernamePrice).button}
             </button>
           </div>
           {addError && <p className="text-xs text-red-300 mt-1.5">{addError}</p>}

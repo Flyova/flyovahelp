@@ -21,12 +21,13 @@ export default function ChatLayout({ children }) {
 
 function ChatShell({ children }) {
   const pathname = usePathname();
-  const { openIds, err, setErr, notice, convos, unread, coins, openCoinWallet } = useChat();
+  const { openIds, err, setErr, notice, convos, unread, coins, openCoinWallet, chatState } = useChat();
   const section = pathname.split("/")[2] || "";
-  // Chats with unread messages, badged on their tab.
+  // Chats with unread messages, badged on their tab (archived ones don't count).
+  const counted = convos.filter((c) => unread[c.id] && !chatState.archived[c.id]);
   const unreadChats = {
-    private: convos.filter((c) => c.type !== "group" && unread[c.id]).length,
-    groups: convos.filter((c) => c.type === "group" && unread[c.id]).length,
+    private: counted.filter((c) => c.type !== "group").length,
+    groups: counted.filter((c) => c.type === "group").length,
   };
   // On phones an open private chat or group fills the screen edge to edge (its back button returns to the list).
   const inThread = !!openIds[section];

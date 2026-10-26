@@ -141,3 +141,20 @@ export async function participantUidsFor(getAll, db, names) {
   const snaps = await getAll(...names.map((n) => db.collection("usernames").doc(n)));
   return [...new Set(snaps.filter((s) => s.exists && !s.data().deleted).flatMap((s) => usernameUids(s.data())))];
 }
+
+/**
+ * What the next chat username costs, in dollars (0 = free): the first one is free;
+ * accounts 8+ months old get FREE_USERNAMES_OLD_ACCOUNT more free, agents
+ * FREE_USERNAMES_AGENT; otherwise USERNAME_PRICE each. `owned` counts usernames
+ * the account already has (deleted ones too).
+ */
+export function usernameCharge({ owned, ageMonths, isAgent, freeUsernameUsed }) {
+  const freeQuota = ageMonths >= OLD_ACCOUNT_MONTHS ? FREE_USERNAMES_OLD_ACCOUNT : isAgent ? FREE_USERNAMES_AGENT : 0;
+  if (freeQuota > 0) return owned >= 1 + freeQuota ? USERNAME_PRICE : 0;
+  return freeUsernameUsed === true || owned >= 1 ? USERNAME_PRICE : 0;
+}
+
+/** Wording for the add-a-username button and heading, from what it would cost (null = not known yet). */
+export const usernameOffer = (price) => (price > 0
+  ? { button: `Buy · $${price}`, title: `Buy a chat username ($${price} from your wallet)` }
+  : { button: "Add", title: price === 0 ? "Add a chat username (free)" : "Add a chat username" });

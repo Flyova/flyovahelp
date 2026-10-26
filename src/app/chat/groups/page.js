@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Info, LogOut, Plus, Trash2, Users } from "lucide-react";
+import { Archive, ArchiveRestore, ChevronDown, Info, LogOut, Plus, Trash2, Users } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import { groupOwner, isGroupAdmin } from "@/lib/chat";
 import { useChat } from "@/components/chat/ChatProvider";
@@ -20,16 +20,22 @@ const conversationsApi = (body) => authFetch("/api/chat/conversations", { method
  */
 export default function GroupsPage() {
   const {
-    identities, active, selectIdentity, createUsername, deleteUsername,
+    identities, active, selectIdentity, createUsername, deleteUsername, usernamePrice,
     convos, convosLoading, myNameIn, openIds, setOpenId, setErr, typingIn, unread,
-    messagePrivately, openProfile, reportUser, sendCoins,
+    messagePrivately, openProfile, reportUser, sendCoins, blockUser, chatState, archiveChat,
   } = useChat();
+  const [showArchived, setShowArchived] = useState(false);
   const [creating, setCreating] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [joining, setJoining] = useState(null); // id of the group being joined
 
   const openId = openIds.groups;
   const groups = convos.filter((c) => c.type === "group");
+  const inbox = groups.filter((g) => !chatState.archived[g.id]);
+  const archived = groups.filter((g) => chatState.archived[g.id]);
+  const archiveItem = (g) => (chatState.archived[g.id]
+    ? { label: "Unarchive", icon: ArchiveRestore, run: () => archiveChat(g.id, false) }
+    : { label: "Archive", icon: Archive, run: () => archiveChat(g.id, true) });
   const memberOf = new Set(groups.map((g) => g.id));
   const open = groups.find((c) => c.id === openId);
   const me = myNameIn(open);
@@ -87,17 +93,18 @@ export default function GroupsPage() {
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 lg:h-[calc(100vh-14.5rem)] lg:min-h-[520px]">
       {/* identity, search and your groups — hidden on phones while a group is open */}
       <div className={`lg:col-span-4 flex-col gap-3 min-h-0 lg:overflow-y-auto lg:pr-1 ${openId ? "hidden lg:flex" : "flex"}`}>
-        <IdentityBar identities={identities} active={active} onSelect={selectIdentity} onCreate={createUsername} onDelete={deleteUsername} />
+        <IdentityBar identities={identities} active={active} onSelect={selectIdentity} onCreate={createUsername} onDelete={deleteUsername} price={usernamePrice} />
         <GroupSearch memberOf={memberOf} joining={joining} onOpen={openGroup} onJoin={joinGroup} />
         <ConversationList
           className="shrink-0"
-          convos={groups}
+          convos={inbox}
           loading={convosLoading}
           typingIn={typingIn}
           unread={unread}
           myNameIn={myNameIn}
           openId={openId}
           onOpen={openGroup}
+          rowMenu={(g) => [archiveItem(g)]}
           title="Your groups"
           action={(
             <button
@@ -108,9 +115,35 @@ export default function GroupsPage() {
               <Plus size={13} /> New group
             </button>
           )}
-          emptyTitle="No groups yet"
-          emptyText="Create your own group, or find a public one to join."
+          emptyTitle={archived.length ? "No other groups" : "No groups yet"}
+          emptyText={archived.length ? "Your other groups are archived below." : "Create your own group, or find a public one to join."}
         />
+        {archived.length > 0 && (
+          <>
+            <button
+              type="button"
+              onClick={() => setShowArchived((v) => !v)}
+              aria-expanded={showArchived}
+              className="shrink-0 flex items-center justify-between gap-2 px-4 py-3 rounded-2xl bg-[#142036] border border-white/5 text-left"
+            >
+              <span className="flex items-center gap-2 text-[13px] font-bold"><Archive size={15} className="text-white/50" /> Archived groups ({archived.length})</span>
+              <ChevronDown size={16} className={`text-white/50 transition-transform ${showArchived ? "rotate-180" : ""}`} />
+            </button>
+            {showArchived && (
+              <ConversationList
+                className="shrink-0"
+                convos={archived}
+                typingIn={typingIn}
+                unread={unread}
+                myNameIn={myNameIn}
+                openId={openId}
+                onOpen={openGroup}
+                rowMenu={(g) => [archiveItem(g)]}
+                title="Archived groups"
+              />
+            )}
+          </>
+        )}
         <PopularGroups memberOf={memberOf} joining={joining} onOpen={openGroup} onJoin={joinGroup} />
       </div>
 
@@ -131,6 +164,7 @@ export default function GroupsPage() {
             }}
             menuItems={[
               { label: "Group info & members", icon: Info, run: () => setInfoOpen(true) },
+              ...(open ? [archiveItem(open)] : []),
               { label: amOwner ? "Delete group" : "Leave group", icon: amOwner ? Trash2 : LogOut, danger: true, run: leaveGroup },
             ]}
             onBack={() => openGroup(null)}
@@ -140,6 +174,7 @@ export default function GroupsPage() {
             onReport={(m) => reportUser(m.sender)}
             onOpenProfile={(u) => openProfile(u, { convoId: openId })}
             onSendCoins={(u) => sendCoins(u, { convoId: openId })}
+            onBlock={blockUser}
           />
         ) : (
           <ThreadPlaceholder icon={Users} title="Select a group" text="Open one of your groups, search for a public group to join, or create your own." />
