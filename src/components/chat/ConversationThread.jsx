@@ -13,8 +13,7 @@ import ChatMessages from "@/components/chat/ChatMessages";
 import { messageMillis } from "@/components/chat/MessageBubble";
 import ChatComposer from "@/components/chat/ChatComposer";
 import MessageMenu from "@/components/chat/MessageMenu";
-import ChatSheet from "@/components/chat/ChatSheet";
-import Avatar from "@/components/Avatar";
+import ChatSearchSheet from "@/components/chat/ChatSearchSheet";
 
 const FRESH_MS = 800; // messages that arrived this recently animate in
 const MENU_WIDTH = 228;
@@ -70,8 +69,8 @@ export default function ConversationThread({
   const inputRef = useRef(null);
   const { uid, chatState, typingIn, soundOn, settingsFor, presenceNow } = useChat();
   const [memberPresence, setMemberPresence] = useState({}); // group members' online status
-  const [findingMember, setFindingMember] = useState(false);
-  const [memberQuery, setMemberQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [focus, setFocus] = useState(null); // { id } of a message to scroll to (from search)
 
   // Sound for messages from others arriving while this chat is open and on screen.
   const soundRef = useRef(false);
@@ -328,11 +327,11 @@ export default function ConversationThread({
             <span className={`block text-[12px] truncate ${lost || blockedHere || blockedByMe ? "text-red-300/80" : typingNow ? "text-[#E0708C]" : header.online || onlineCount ? "text-emerald-400" : "text-white/45"}`}>{convo || lost ? subtitle : ""}</span>
           </span>
         </button>
-        {convo && isGroup && (
+        {convo && !lost && (
           <button
             type="button"
-            aria-label="Search members"
-            onClick={() => setFindingMember(true)}
+            aria-label="Search this chat"
+            onClick={() => setSearching(true)}
             className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-white/70 hover:text-white bg-white/5 hover:bg-white/10"
           >
             <Search size={16} />
@@ -375,6 +374,7 @@ export default function ConversationThread({
         burst={burst}
         onBurstDone={clearBurst}
         unreadFromId={unreadFromId}
+        focus={focus}
       />
 
       {blockedByMe ? (
@@ -409,48 +409,27 @@ export default function ConversationThread({
 
       {menuAt && <MessageMenu at={menuAt} items={menuItems} onClose={() => setMenuAt(null)} />}
 
-      {findingMember && (
-        <ChatSheet label="Search members" onClose={() => { setFindingMember(false); setMemberQuery(""); }}>
-          <div className="p-5 pt-7">
-            <h2 className="text-lg font-bold pr-10">Members</h2>
-            <p className="text-xs text-white/50 mt-0.5 mb-3">{formatCount(members.length)} in {header.title}</p>
-            <input
-              autoFocus
-              value={memberQuery}
-              onChange={(e) => setMemberQuery(e.target.value)}
-              type="search"
-              placeholder="Search members"
-              aria-label="Search members"
-              className="w-full bg-white/[0.06] border border-white/10 focus:border-[#2457D6] rounded-xl px-3.5 py-2.5 text-base md:text-[15px] outline-none mb-2"
-            />
-            <ul className="max-h-[50vh] overflow-y-auto -mx-2">
-              {members
-                .filter((p) => p.includes(memberQuery.trim().toLowerCase().replace(/^@/, "")))
-                .sort((a, b) => Number(!!presenceOf(memberPresence[b], presenceNow)?.online) - Number(!!presenceOf(memberPresence[a], presenceNow)?.online) || a.localeCompare(b))
-                .map((p) => {
-                  const st = presenceOf(memberPresence[p], presenceNow);
-                  return (
-                    <li key={p}>
-                      <button
-                        type="button"
-                        onClick={() => { setFindingMember(false); setMemberQuery(""); onOpenProfile?.(p); }}
-                        className="w-full flex items-center gap-3 px-2 py-2 rounded-xl text-left hover:bg-white/[0.05]"
-                      >
-                        <span className="relative shrink-0">
-                          <Avatar username={p} size={36} rounded="rounded-full" />
-                          {st?.online && <span className="absolute -right-0.5 -bottom-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-[#142036]" />}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-[14px] font-semibold truncate">@{p}{p === me ? " (you)" : ""}</span>
-                          {st && <span className={`block text-[11px] ${st.online ? "text-emerald-400" : "text-white/45"}`}>{st.text}</span>}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-            </ul>
-          </div>
-        </ChatSheet>
+      {searching && (
+        <ChatSearchSheet
+          convoId={convoId}
+          title={header.title || "chat"}
+          isGroup={isGroup}
+          members={members}
+          me={me}
+          presence={memberPresence}
+          presenceNow={presenceNow}
+          messages={shown}
+          clearedMs={clearedMs}
+          onJump={(id) => {
+            setSearching(false);
+            setFocus({ id });
+          }}
+          onOpenProfile={(p) => {
+            setSearching(false);
+            onOpenProfile?.(p);
+          }}
+          onClose={() => setSearching(false)}
+        />
       )}
     </>
   );

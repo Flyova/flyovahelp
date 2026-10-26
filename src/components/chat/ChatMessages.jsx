@@ -74,6 +74,7 @@ export default function ChatMessages({
   burst = null,
   onBurstDone,
   unreadFromId = null,
+  focus = null,
 }) {
   const listRef = useRef(null);
   const atBottomRef = useRef(true);
@@ -135,6 +136,19 @@ export default function ChatMessages({
     requestAnimationFrame(() => setFlashId(id));
     setTimeout(() => setFlashId((cur) => (cur === id ? null : cur)), 1600);
   };
+
+  // A message picked in chat search: scroll to it and flash it.
+  useEffect(() => {
+    if (!focus?.id) return;
+    const t = setTimeout(() => {
+      const el = document.getElementById(`msg-${focus.id}`);
+      if (!el) return;
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      setFlashId(focus.id);
+      setTimeout(() => setFlashId((cur) => (cur === focus.id ? null : cur)), 1600);
+    }, 80);
+    return () => clearTimeout(t);
+  }, [focus]);
 
   const menuItems = (m) => {
     const mine = isMine(m);
