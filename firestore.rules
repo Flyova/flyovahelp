@@ -148,6 +148,14 @@ service cloud.firestore {
       return chatSignedIn() && request.auth.uid in chatConvo(convoId).participantUids;
     }
 
+    // A locked group takes messages only from its owner and admins.
+    function canPostIn(convoId, sender) {
+      let convo = chatConvo(convoId);
+      return convo.get('locked', false) != true
+        || sender == convo.get('owner', convo.get('createdBy', ''))
+        || sender in convo.get('admins', []);
+    }
+
     // Optional reply quote on a message: { id, sender, text } with a short text.
     function validReplyQuote(data) {
       return !('replyTo' in data) || (
@@ -213,6 +221,7 @@ service cloud.firestore {
         allow create: if isChatMember(convoId)
           && ownsUsername(request.resource.data.sender)
           && !(request.resource.data.sender in chatConvo(convoId).get('blocked', []))
+          && canPostIn(convoId, request.resource.data.sender)
           && request.resource.data.keys().hasOnly(['sender', 'text', 'createdAt', 'deletedForEveryone', 'replyTo'])
           && validReplyQuote(request.resource.data)
           && request.resource.data.text is string
