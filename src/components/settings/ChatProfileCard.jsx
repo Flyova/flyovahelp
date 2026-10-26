@@ -6,10 +6,11 @@ import { db } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
 import { setChatPhoto, useChatPhoto } from "@/lib/chatPhotos";
 import Avatar from "@/components/Avatar";
+import ChatDialog from "@/components/chat/ChatDialog";
 
 const BIO_MAX = 160;
 const STATUS_MAX = 80;
-const PHOTO_SIZE = 240; // px, square
+const PHOTO_SIZE = 360; // px, square: sharp at the profile page's 112px on 3x phone screens
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 const MAX_PHOTO_CHARS = 90000; // Firestore rules allow up to 100,000
 
@@ -28,8 +29,10 @@ async function squarePhoto(file) {
     const canvas = document.createElement("canvas");
     canvas.width = PHOTO_SIZE;
     canvas.height = PHOTO_SIZE;
-    canvas.getContext("2d").drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, PHOTO_SIZE, PHOTO_SIZE);
-    for (const quality of [0.82, 0.7, 0.55, 0.4]) {
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingQuality = "high"; // the default ("low") blurs a big camera photo shrunk this far
+    ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, PHOTO_SIZE, PHOTO_SIZE);
+    for (const quality of [0.86, 0.78, 0.68, 0.55, 0.4]) {
       const data = canvas.toDataURL("image/jpeg", quality);
       if (data.startsWith("data:image/jpeg") && data.length <= MAX_PHOTO_CHARS) return data;
     }
@@ -105,6 +108,7 @@ export default function ChatProfileCard({ uid, username = "", bare = false }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: "", msg: "" });
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
   const fileRef = useRef(null);
   const photo = useChatPhoto(selected);
 
@@ -181,12 +185,16 @@ export default function ChatProfileCard({ uid, username = "", bare = false }) {
     setPhotoBusy(false);
   };
 
+  // Asked in an in-app dialog: iPhone Safari can skip the browser's confirm() and
+  // return false without showing it, which left this button doing nothing.
   const removePhoto = async () => {
-    if (!selected || !confirm("Remove your profile photo?")) return;
+    setConfirmingRemove(false);
+    if (!selected) return;
     setPhotoBusy(true);
     try {
       await setDoc(doc(db, "chat_profiles", selected), { photoURL: "", updatedAt: serverTimestamp() }, { merge: true });
       setChatPhoto(selected, "");
+      flash("success", "Profile photo removed.");
     } catch (err) {
       flash("error", `Could not remove the photo: ${err.message}`);
     }
@@ -260,9 +268,17 @@ export default function ChatProfileCard({ uid, username = "", bare = false }) {
                 {photo ? "Your profile photo for this username." : "Tap the picture to add a profile photo. Until then you get your own pixel character."}
               </p>
               {photo && (
-                <button type="button" onClick={removePhoto} disabled={photoBusy} className={ui.remove}>
+                <button type="button" onClick={() => setConfirmingRemove(true)} disabled={photoBusy} className={ui.remove}>
                   <Trash2 size={11} /> Remove photo
                 </button>
+              )}
+              {confirmingRemove && (
+                <ChatDialog
+                  title="Remove your profile photo?"
+                  message="You'll get your pixel character back."
+                  actions={[{ label: "Remove", value: true, tone: "danger" }]}
+                  onDone={(ok) => (ok ? removePhoto() : setConfirmingRemove(false))}
+                />
               )}
             </div>
           </div>

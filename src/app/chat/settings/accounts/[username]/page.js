@@ -22,7 +22,7 @@ export default function AccountPage() {
   const router = useRouter();
   const params = useParams();
   const name = norm(decodeURIComponent(String(params?.username || "")));
-  const { uid, identities, active, setActive, setSettingsName, refreshIdentities, flashNotice, confirmAction } = useChat();
+  const { uid, identities, active, selectIdentity, setSettingsName, refreshIdentities, flashNotice, confirmAction } = useChat();
   const identity = identities.find((i) => i.usernameLower === name);
   const [info, setInfo] = useState(null); // { hasPassword, otherAccounts }
   const [password, setPassword] = useState("");
@@ -67,18 +67,19 @@ export default function AccountPage() {
     const r = await accountsApi({ action: "logout", username: name });
     setBusy("");
     if (r.error) return setNote({ type: "error", msg: r.error });
-    if (name === active) setActive(identities.find((i) => i.isDefault)?.usernameLower || "");
+    if (name === active) selectIdentity(identities.find((i) => i.isDefault)?.usernameLower || "");
     await refreshIdentities();
     flashNotice(`You logged out of @${name}.`);
     router.replace("/chat/settings/accounts");
   };
 
   const remove = async () => {
-    if (!(await confirmAction({ title: `Delete @${name}?`, message: "This permanently removes the username. It can't be undone.", confirmLabel: "Delete" }))) return;
+    if (!(await confirmAction({ title: `Delete @${name}?`, message: `This permanently removes the username. Its coins move to your main username. It can't be undone.`, confirmLabel: "Delete" }))) return;
     setBusy("delete");
     const r = await authFetch("/api/chat/usernames", { method: "DELETE", body: { username: name } }).catch((e) => ({ error: e.message }));
     setBusy("");
     if (r.error) return setNote({ type: "error", msg: r.error });
+    if (name === active) selectIdentity(identities.find((i) => i.isDefault)?.usernameLower || "");
     await refreshIdentities();
     flashNotice(`@${name} was deleted.`);
     router.replace("/chat/settings/accounts");
@@ -104,7 +105,7 @@ export default function AccountPage() {
         {name === active ? (
           <SettingsRow icon={CheckCircle2} title="You're chatting as this username" text="New chats and Chatroom messages use it" />
         ) : (
-          <SettingsRow icon={CheckCircle2} title="Chat as this username" text="Use it for new chats and the Chatroom" onClick={() => { setActive(name); flashNotice(`You're now chatting as @${name}.`); }} />
+          <SettingsRow icon={CheckCircle2} title="Chat as this username" text="Its own chats, groups, coins and settings" onClick={() => { selectIdentity(name); flashNotice(`You're now chatting as @${name}.`); }} />
         )}
         <SettingsRow icon={SlidersHorizontal} title="Settings for this profile" text="Notifications, online status, privacy, blocked" onClick={() => { setSettingsName(name); router.push("/chat/settings"); }} chevron />
       </SettingsSection>

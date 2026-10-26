@@ -283,7 +283,7 @@ export default function ConversationThread({
   };
 
   const deleteMessage = async (m) => {
-    if (m.sender !== me) return onModerate?.(m);
+    if (m.kind === "system" || m.sender !== me) return onModerate?.(m);
     await updateDoc(doc(db, "conversations", convoId, "messages", m.id), {
       text: "— message deleted —", deletedForEveryone: true,
     }).catch((e) => onError(`Could not delete: ${e.message}`));
@@ -362,8 +362,8 @@ export default function ConversationThread({
         onReply={cantSend ? undefined : startReply}
         onEdit={cantSend ? undefined : startEdit}
         onDelete={deleteMessage}
-        canDelete={(m) => m.sender === me || !!onModerate}
-        deleteLabel={(m) => (m.sender === me ? "Delete for everyone" : "Delete message (group admin)")}
+        canDelete={(m) => (m.kind !== "system" && m.sender === me) || !!onModerate}
+        deleteLabel={(m) => (m.kind === "system" ? "Remove for everyone" : m.sender === me ? "Delete for everyone" : "Delete message (group admin)")}
         onMessagePrivately={onMessagePrivately}
         onReport={onReport}
         onOpenProfile={onOpenProfile}

@@ -7,10 +7,10 @@ import { SettingsIntro, SettingsLoading, SettingsPage, SettingsRow, SettingsSect
 
 /** Message sounds for one chat profile: the Chatroom, private chats, each group, and players muted from their profile. */
 export default function NotificationSettingsPage() {
-  const { settingsName: name, settingsFor, convos, settingsLoaded } = useChat();
+  const { settingsName: name, settingsFor, myConvos, settingsLoaded } = useChat();
   const { busy, save } = useSaveSetting();
   const { sounds } = settingsFor(name);
-  const groups = convos.filter((c) => c.type === "group" && (c.participants || []).includes(name));
+  const groups = myConvos.filter((c) => c.type === "group" && (c.participants || []).includes(name));
   const muted = Object.keys(sounds.people || {}).filter((p) => sounds.people[p] === false).sort();
 
   if (!settingsLoaded) return <SettingsPage title="Notifications"><SettingsLoading /></SettingsPage>;

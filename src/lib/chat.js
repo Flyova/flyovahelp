@@ -49,6 +49,10 @@ export const isGroupAdmin = (convo, name) =>
   !!name && (groupOwner(convo) === name || (convo?.admins || []).includes(name));
 // A locked group takes messages only from its owner and admins.
 export const canPostInGroup = (convo, name) => !convo?.locked || isGroupAdmin(convo, name);
+// Whether account `uid` is in a group as username `as` (each username joins on
+// its own), or as any of its usernames when `as` is empty.
+export const inGroupAs = (convo, uid, as) =>
+  (convo?.participantUids || []).includes(uid) && (!as || (convo?.participants || []).includes(norm(as)));
 
 // What a group search is matched on: lowercase, single spaces, at most 40 characters.
 export const groupSearchTerm = (q) => String(q || "").toLowerCase().replace(/\s+/g, " ").trim().slice(0, 40);

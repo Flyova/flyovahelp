@@ -84,13 +84,14 @@ export default function PlayerProfilePage() {
   useEffect(() => {
     if (!uid || !name) return;
     let live = true;
-    authFetch(`/api/chat/profile?u=${encodeURIComponent(name)}`)
+    // `as`: which of their public groups the username you're using is already in.
+    authFetch(`/api/chat/profile?u=${encodeURIComponent(name)}&as=${encodeURIComponent(active)}`)
       .then((r) => live && (r.error ? setError(r.error) : setProfile(r)))
       .catch(() => live && setError("Could not load this profile."));
     return () => {
       live = false;
     };
-  }, [uid, name]);
+  }, [uid, name, active]);
 
   useEffect(() => {
     if (!uid || !name) return;

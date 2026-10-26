@@ -23,7 +23,7 @@ import { chatSettingsFor } from "@/lib/chatSettings";
 //   { action: "updateGroup", convoId, as, name?, description?, visibility? } -> { ok }  admins
 //   { action: "lockGroup", convoId, as, locked }              -> { ok }  admins: when locked, only admins can send messages
 //   { action: "deleteGroup", convoId, as }                    -> { ok }  owner only
-//   { action: "deleteMessage", convoId, as, messageId }       -> { ok }  admins remove anyone's message
+//   { action: "deleteMessage", convoId, as, messageId }       -> { ok }  admins remove anyone's message, or an activity line ("@ade joined the group")
 //   { action: "unblock", as, target }                         -> { ok }  let a player you blocked message you again
 //   { action: "deleteChat", convoId, as }                     -> { ok }  private chat: delete it and its messages for both people
 //   { action: "inviteLink", convoId, as, op }                 -> { code }  admins: op "create", "reset" (new link) or "delete"
@@ -327,7 +327,9 @@ async function deleteMessage(db, caller, { convoId, as, messageId }) {
     if (!isGroupAdmin(convo, me.lower)) return { error: "Only group admins can remove messages.", status: 403 };
     const msg = await tx.get(msgRef);
     if (!msg.exists) return { error: "Message not found.", status: 404 };
-    tx.update(msgRef, { text: DELETED_TEXT, deletedForEveryone: true, removedBy: me.lower });
+    // Activity lines go without a trace; messages leave "— message deleted —".
+    if (msg.data().kind === "system") tx.delete(msgRef);
+    else tx.update(msgRef, { text: DELETED_TEXT, deletedForEveryone: true, removedBy: me.lower });
     return null;
   });
   return refused || NextResponse.json({ ok: true });

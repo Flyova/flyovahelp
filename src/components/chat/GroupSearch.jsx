@@ -10,29 +10,31 @@ const DEBOUNCE_MS = 250;
 
 /**
  * Public groups from /api/chat/groups for `term` ("" = most popular), tagged with
- * the term they answer. Waits for sign-in to be restored so the request has a token.
+ * the term they answer; `isMember` is for the username you're using. Waits for
+ * sign-in to be restored so the request has a token.
  */
 function useGroups(term) {
-  const { uid } = useChat();
+  const { uid, active } = useChat();
   const [found, setFound] = useState({ key: null, items: [] });
   const [failed, setFailed] = useState({ key: null, message: "" });
   const cache = useRef(new Map());
+  const key = `${active}/${term}`;
 
   useEffect(() => {
     if (!uid) return;
-    const cached = cache.current.get(term);
+    const cached = cache.current.get(key);
     const t = setTimeout(async () => {
-      if (cached) return setFound({ key: term, items: cached });
-      const r = await authFetch(`/api/chat/groups?q=${encodeURIComponent(term)}`).catch((e) => ({ error: e.message }));
-      if (r.error) return setFailed({ key: term, message: r.error });
-      cache.current.set(term, r.items || []);
-      setFound({ key: term, items: r.items || [] });
+      if (cached) return setFound({ key, items: cached });
+      const r = await authFetch(`/api/chat/groups?q=${encodeURIComponent(term)}&as=${encodeURIComponent(active)}`).catch((e) => ({ error: e.message }));
+      if (r.error) return setFailed({ key, message: r.error });
+      cache.current.set(key, r.items || []);
+      setFound({ key, items: r.items || [] });
     }, cached || !term ? 0 : DEBOUNCE_MS);
     return () => clearTimeout(t);
-  }, [term, uid]);
+  }, [key, term, active, uid]);
 
-  const status = found.key === term ? "done" : failed.key === term ? "error" : "loading";
-  return { items: found.key === term ? found.items : [], status, error: failed.message };
+  const status = found.key === key ? "done" : failed.key === key ? "error" : "loading";
+  return { items: found.key === key ? found.items : [], status, error: failed.message };
 }
 
 /** One public group: tap to open it if you're in, or to join. */
@@ -63,7 +65,7 @@ function GroupRow({ group, member, busy, onOpen, onJoin }) {
 
 /**
  * Find public groups by name. Results show under the box while you type.
- * `memberOf` (ids of groups you're in) keeps Open/Join right after you join.
+ * `memberOf` (ids of groups the username you're using is in) keeps Open/Join right after you join.
  */
 export default function GroupSearch({ memberOf, joining, onOpen, onJoin }) {
   const [q, setQ] = useState("");

@@ -7,6 +7,7 @@ import { authFetch } from "@/lib/authFetch";
 import { formatCount } from "@/lib/chat";
 import { CHAT_SECTIONS, useChat } from "@/components/chat/ChatProvider";
 import { CoinIcon } from "@/components/chat/CoinSheets";
+import IdentityBar from "@/components/chat/IdentityBar";
 
 const plural = (n, word) => `${formatCount(n)} ${word}${n === 1 ? "" : "s"}`;
 
@@ -33,12 +34,13 @@ function Choice({ href, icon: Icon, tint, title, text, detail, badge }) {
 
 /**
  * Chats home: where you choose what to open — the Chatroom, your private chats or
- * your groups — instead of landing straight in a chat. Older /chat?tab=… links
- * still go straight to that page.
+ * your groups — instead of landing straight in a chat. Counts and coins are for
+ * the username you're using, picked at the top. Older /chat?tab=… links still go
+ * straight to that page.
  */
 export default function ChatsHome() {
   const router = useRouter();
-  const { uid, convos, unread, coins, openCoinWallet, chatState, isDeletedForMe } = useChat();
+  const { uid, identities, active, selectIdentity, convos, unread, coins, openCoinWallet, chatState, isDeletedForMe } = useChat();
   const [stats, setStats] = useState(null); // Chatroom { members, online }
 
   useEffect(() => {
@@ -57,7 +59,8 @@ export default function ChatsHome() {
 
   return (
     <div className="max-w-2xl space-y-3 pb-6">
-      <p className="text-[11px] font-black uppercase tracking-wider text-white/45 px-1">Where do you want to chat?</p>
+      <IdentityBar identities={identities} active={active} onSelect={selectIdentity} />
+      <p className="text-[11px] font-black uppercase tracking-wider text-white/45 px-1 pt-1">Where do you want to chat?</p>
       <Choice
         href="/chat/room"
         icon={Radio}

@@ -49,7 +49,8 @@ function byDay(messages) {
  * typing bubble at the bottom. `onSendCoins(username)` adds "Send coins" to other
  * people's messages (Chatroom and groups only); `onBlock(username)` adds Block. `burst` = { id, coins, to, forYou }
  * plays the coins-sent animation over the list; `onBurstDone` clears it. Group
- * activity ("@ade joined the group", kind "system") shows as a small centred line.
+ * activity ("@ade joined the group", kind "system") shows as a small centred line;
+ * when `canDelete` allows it (group admins), tapping the line offers to remove it.
  */
 export default function ChatMessages({
   messages,
@@ -151,6 +152,7 @@ export default function ChatMessages({
   }, [focus]);
 
   const menuItems = (m) => {
+    if (m.kind === "system") return [{ label: deleteLabel(m), icon: Trash2, danger: true, run: () => onDelete(m) }];
     const mine = isMine(m);
     return [
       onReply && { label: "Reply", icon: CornerUpLeft, run: () => onReply(m) },
@@ -182,9 +184,27 @@ export default function ChatMessages({
             </div>
             {day.items.map((m, i) => {
               if (m.kind === "system") {
+                const pill = "max-w-full px-3 py-1 rounded-full bg-[#0B1220]/70 text-[12px] font-semibold text-white/65 text-center break-words";
+                const openLineMenu = (e) => {
+                  e.preventDefault();
+                  const box = e.currentTarget.getBoundingClientRect();
+                  setMenu({ message: m, at: { x: box.left, y: box.bottom + 6 } });
+                };
                 return (
                   <div key={m.id} id={`msg-${m.id}`} className={`flex justify-center px-6 my-2 ${m.fresh ? "chat-slide-up" : ""}`}>
-                    <span className="max-w-full px-3 py-1 rounded-full bg-[#0B1220]/70 text-[12px] font-semibold text-white/65 text-center break-words">{m.text}</span>
+                    {onDelete && canDelete(m) ? (
+                      <button
+                        type="button"
+                        onClick={openLineMenu}
+                        onContextMenu={openLineMenu}
+                        aria-haspopup="menu"
+                        className={`${pill} hover:text-white/85 ${menu?.message.id === m.id ? "ring-2 ring-[#E0708C]/70" : ""}`}
+                      >
+                        {m.text}
+                      </button>
+                    ) : (
+                      <span className={pill}>{m.text}</span>
+                    )}
                   </div>
                 );
               }

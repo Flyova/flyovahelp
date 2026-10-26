@@ -33,6 +33,7 @@ export default function GroupsPage() {
   const groups = convos.filter((c) => c.type === "group");
   const inbox = groups.filter((g) => !chatState.archived[g.id]);
   const archived = groups.filter((g) => chatState.archived[g.id]);
+  const archivedUnread = archived.filter((g) => unread[g.id]).length;
   const archiveItem = (g) => (chatState.archived[g.id]
     ? { label: "Unarchive", icon: ArchiveRestore, run: () => archiveChat(g.id, false) }
     : { label: "Archive", icon: Archive, run: () => archiveChat(g.id, true) });
@@ -82,7 +83,9 @@ export default function GroupsPage() {
   };
 
   const removeMessage = async (m) => {
-    if (!(await confirmAction({ title: "Remove this message?", message: `@${m.sender}'s message is removed for everyone in the group.`, confirmLabel: "Remove" }))) return;
+    if (!(await confirmAction(m.kind === "system"
+      ? { title: "Remove this notice?", message: `"${m.text}" is removed for everyone in the group.`, confirmLabel: "Remove" }
+      : { title: "Remove this message?", message: `@${m.sender}'s message is removed for everyone in the group.`, confirmLabel: "Remove" }))) return;
     const problem = await act("deleteMessage", { messageId: m.id });
     if (problem) setErr(problem);
   };
@@ -95,6 +98,35 @@ export default function GroupsPage() {
       <div className={`lg:col-span-4 flex-col gap-3 min-h-0 lg:overflow-y-auto lg:pr-1 ${openId ? "hidden lg:flex" : "flex"}`}>
         <IdentityBar identities={identities} active={active} onSelect={selectIdentity} />
         <GroupSearch memberOf={memberOf} joining={joining} onOpen={openGroup} onJoin={joinGroup} />
+        {archived.length > 0 && (
+          <>
+            <button
+              type="button"
+              onClick={() => setShowArchived((v) => !v)}
+              aria-expanded={showArchived}
+              className="shrink-0 flex items-center justify-between gap-2 px-4 py-3 rounded-2xl bg-[#142036] border border-white/5 text-left"
+            >
+              <span className="flex items-center gap-2 text-[13px] font-bold"><Archive size={15} className="text-white/50" /> Archived groups ({archived.length})</span>
+              <span className="flex items-center gap-2">
+                {archivedUnread > 0 && <span className="min-w-5 h-5 px-1.5 rounded-full bg-white/15 text-[11px] font-black flex items-center justify-center">{archivedUnread}</span>}
+                <ChevronDown size={16} className={`text-white/50 transition-transform ${showArchived ? "rotate-180" : ""}`} />
+              </span>
+            </button>
+            {showArchived && (
+              <ConversationList
+                className="shrink-0"
+                convos={archived}
+                typingIn={typingIn}
+                unread={unread}
+                myNameIn={myNameIn}
+                openId={openId}
+                onOpen={openGroup}
+                rowMenu={(g) => [archiveItem(g)]}
+                title="Archived groups"
+              />
+            )}
+          </>
+        )}
         <ConversationList
           className="shrink-0"
           convos={inbox}
@@ -116,34 +148,8 @@ export default function GroupsPage() {
             </button>
           )}
           emptyTitle={archived.length ? "No other groups" : "No groups yet"}
-          emptyText={archived.length ? "Your other groups are archived below." : "Create your own group, or find a public one to join."}
+          emptyText={archived.length ? "Your other groups are in Archived above." : "Create your own group, or find a public one to join."}
         />
-        {archived.length > 0 && (
-          <>
-            <button
-              type="button"
-              onClick={() => setShowArchived((v) => !v)}
-              aria-expanded={showArchived}
-              className="shrink-0 flex items-center justify-between gap-2 px-4 py-3 rounded-2xl bg-[#142036] border border-white/5 text-left"
-            >
-              <span className="flex items-center gap-2 text-[13px] font-bold"><Archive size={15} className="text-white/50" /> Archived groups ({archived.length})</span>
-              <ChevronDown size={16} className={`text-white/50 transition-transform ${showArchived ? "rotate-180" : ""}`} />
-            </button>
-            {showArchived && (
-              <ConversationList
-                className="shrink-0"
-                convos={archived}
-                typingIn={typingIn}
-                unread={unread}
-                myNameIn={myNameIn}
-                openId={openId}
-                onOpen={openGroup}
-                rowMenu={(g) => [archiveItem(g)]}
-                title="Archived groups"
-              />
-            )}
-          </>
-        )}
         <PopularGroups memberOf={memberOf} joining={joining} onOpen={openGroup} onJoin={joinGroup} />
       </div>
 

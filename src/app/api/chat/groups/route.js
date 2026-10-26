@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
-import { groupByInvite, groupOwner, groupSearchTerm } from "@/lib/chat";
+import { groupByInvite, groupOwner, groupSearchTerm, inGroupAs } from "@/lib/chat";
 
 const LIMIT = 20;
 const POPULAR_SCAN = 100;
@@ -10,6 +10,7 @@ const millis = (ts) => ts?.toMillis?.() ?? 0;
 
 // GET /api/chat/groups?q=... — public groups anyone can find and join.
 // GET /api/chat/groups?code=... — the group an invite link opens (name, description, members).
+// `isMember` is for the username in ?as= (each of your usernames joins on its own).
 // With a search term: groups whose name has a word (or starts with the phrase)
 // beginning with it. Without one: the biggest, then most recently active, groups.
 // Single-field queries only, so no composite index is needed.
@@ -18,6 +19,7 @@ export async function GET(req) {
     const caller = await getCaller(req);
     if (!caller) return NextResponse.json({ error: "Sign in again to continue." }, { status: 401 });
     const params = new URL(req.url).searchParams;
+    const as = params.get("as") || "";
     // ?code=<invite code>: what the group link opens, to show before joining.
     if (params.has("code")) {
       const g = await groupByInvite(getAdminDb(), params.get("code"));
@@ -30,8 +32,8 @@ export async function GET(req) {
           description: d.description || "",
           memberCount: (d.participants || []).length,
           visibility: d.visibility === "public" ? "public" : "private",
-          isMember: (d.participantUids || []).includes(caller.uid),
           photoVersion: Number(d.photoVersion) || 0,
+          isMember: inGroupAs(d, caller.uid, as),
         },
       });
     }
@@ -53,8 +55,8 @@ export async function GET(req) {
         description: g.description || "",
         memberCount: (g.participants || []).length,
         owner: groupOwner(g),
-        isMember: (g.participantUids || []).includes(caller.uid),
         photoVersion: Number(g.photoVersion) || 0,
+        isMember: inGroupAs(g, caller.uid, as),
       }));
     return NextResponse.json({ items });
   } catch (e) {

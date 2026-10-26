@@ -77,15 +77,17 @@ function activityLine(a) {
   if (a.kind === "buy") return { text: `Bought ${formatCoins(a.coins)} coins`, sub: `${formatCents(a.cents)} incl. ${formatCents(a.feeCents)} fee`, delta: a.coins };
   if (a.kind === "withdraw") return { text: `Withdrew ${formatCoins(a.coins)} coins`, sub: `${formatCents(a.cents)} to main balance`, delta: -a.coins };
   if (a.kind === "sent") return { text: `Sent to @${a.to}`, sub: "", delta: -a.coins };
+  if (a.kind === "moved") return { text: a.from ? `Moved from @${a.from}` : "Moved from your account wallet", sub: a.from ? "username deleted" : "", delta: a.coins };
   return { text: `From @${a.from}`, sub: "", delta: a.coins };
 }
 
 /**
- * Your coin wallet: balance, buy coins from the main balance (7% fee), withdraw
- * them back (12% fee) and recent activity. Sending happens from a player in the
- * Chatroom or a group.
+ * A username's coin wallet (`name`; each username has its own): balance, buy
+ * coins from the main balance (7% fee), withdraw them back (12% fee; `canWithdraw`
+ * only for the account that owns the username) and recent activity. Sending
+ * happens from a player in the Chatroom or a group.
  */
-export function CoinWalletSheet({ uid, coins, onClose }) {
+export function CoinWalletSheet({ uid, name, coins, canWithdraw = true, onClose }) {
   const [tab, setTab] = useState("buy");
   const [amount, setAmount] = useState(0);
   const [mainCents, setMainCents] = useState(null);
@@ -95,19 +97,19 @@ export function CoinWalletSheet({ uid, coins, onClose }) {
 
   useEffect(() => {
     if (!uid) return;
-    const offUser = onSnapshot(doc(db, "users", uid), (s) => setMainCents(Math.round(Number(s.data()?.wallet || 0) * 100)), () => {});
-    const offActivity = onSnapshot(
-      query(collection(db, "coin_wallets", uid, "activity"), orderBy("createdAt", "desc"), limit(15)),
+    return onSnapshot(doc(db, "users", uid), (s) => setMainCents(Math.round(Number(s.data()?.wallet || 0) * 100)), () => {});
+  }, [uid]);
+  useEffect(() => {
+    if (!name) return;
+    return onSnapshot(
+      query(collection(db, "username_wallets", name, "activity"), orderBy("createdAt", "desc"), limit(15)),
       (s) => setActivity(s.docs.map((d) => ({ id: d.id, ...d.data() }))),
       () => {}
     );
-    return () => {
-      offUser();
-      offActivity();
-    };
-  }, [uid]);
+  }, [name]);
 
   const buying = tab === "buy";
+  const notOwner = !buying && !canWithdraw; // logged in to someone else's username: no withdrawing its coins
   const valid = isCoinAmount(amount);
   const buyQ = coinBuyQuote(amount || 0);
   const withdrawQ = coinWithdrawQuote(amount || 0);
@@ -122,10 +124,10 @@ export function CoinWalletSheet({ uid, coins, onClose }) {
   };
 
   const submit = async () => {
-    if (!valid || short || busy) return;
+    if (!valid || short || busy || notOwner) return;
     setBusy(true);
     setNote({ type: "", msg: "" });
-    const r = await coinsApi({ action: buying ? "buy" : "withdraw", coins: amount }).catch((e) => ({ error: e.message }));
+    const r = await coinsApi({ action: buying ? "buy" : "withdraw", as: name, coins: amount }).catch((e) => ({ error: e.message }));
     setBusy(false);
     if (r.error) return setNote({ type: "error", msg: r.error });
     setNote({
@@ -142,7 +144,7 @@ export function CoinWalletSheet({ uid, coins, onClose }) {
       <div className="p-5 pt-7">
         <div className="flex flex-col items-center text-center">
           <CoinIcon size={30} />
-          <p className="mt-3 text-[11px] font-black uppercase tracking-wider text-white/45">Coin wallet</p>
+          <p className="mt-3 text-[11px] font-black uppercase tracking-wider text-white/45">Coin wallet · @{name}</p>
           <p className="text-3xl font-black leading-tight">{formatCoins(coins)} <span className="text-lg text-white/60">coins</span></p>
           <p className="text-xs text-white/45 mt-0.5">1 coin = {formatCents(COIN_CENTS)} · worth {formatCents(coins * COIN_CENTS)}</p>
         </div>
@@ -205,7 +207,7 @@ export function CoinWalletSheet({ uid, coins, onClose }) {
         <button
           type="button"
           onClick={submit}
-          disabled={!valid || short || busy}
+          disabled={!valid || short || busy || notOwner}
           className="mt-4 w-full h-12 rounded-xl bg-gradient-to-br from-[#F6C453] to-[#D18E1F] text-[#2B1800] text-sm font-black uppercase disabled:opacity-40 flex items-center justify-center gap-2"
         >
           {busy && <Loader2 size={16} className="animate-spin" />}
@@ -214,7 +216,9 @@ export function CoinWalletSheet({ uid, coins, onClose }) {
             : valid ? `Withdraw ${formatCoins(amount)} coins` : "Choose how many coins"}
         </button>
         <p className="mt-2 text-center text-[11px] text-white/40">
-          {buying ? `Main balance: ${mainCents === null ? "…" : formatCents(mainCents)}` : "Withdrawn coins go to your main balance."} To send coins, tap a player in the Chatroom or a group.
+          {buying
+            ? `Main balance: ${mainCents === null ? "…" : formatCents(mainCents)}`
+            : notOwner ? `Only the account that owns @${name} can withdraw its coins.` : "Withdrawn coins go to your main balance."} To send coins, tap a player in the Chatroom or a group.
         </p>
 
         {activity.length > 0 && (

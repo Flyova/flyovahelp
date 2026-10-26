@@ -280,7 +280,20 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Chat coins: balance and history, changed only by the server (/api/chat/coins).
+    // Chat coins, one wallet per username: balance and history, changed only by
+    // the server (/api/chat/coins). Readable by whoever can chat as the username.
+    match /username_wallets/{name} {
+      allow read: if ownsUsername(name);
+      allow write: if false;
+
+      match /activity/{entryId} {
+        allow read: if ownsUsername(name);
+        allow write: if false;
+      }
+    }
+
+    // The old one-per-account coin wallets, moved to each account's main username
+    // (lib/coinWallets). Still readable by older apps.
     match /coin_wallets/{uid} {
       allow read: if chatSignedIn() && request.auth.uid == uid;
       allow write: if false;

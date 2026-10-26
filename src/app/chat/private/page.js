@@ -12,7 +12,7 @@ import PlayerSearch from "@/components/chat/PlayerSearch";
 /**
  * Private chats: only the people you're actually talking to (a chat shows up
  * once it has a message), plus a search to find anyone else and message them.
- * Each chat can be archived (moved to the Archived section) or deleted for you.
+ * Each chat can be archived (moved to the Archived row above the list) or deleted for you.
  */
 export default function PrivateChatsPage() {
   const {
@@ -50,14 +50,6 @@ export default function PrivateChatsPage() {
       <div className={`lg:col-span-4 flex-col gap-3 min-h-0 ${openId ? "hidden lg:flex" : "flex"}`}>
         <IdentityBar identities={identities} active={active} onSelect={selectIdentity} />
         <PlayerSearch onPick={messagePrivately} label="Search people · username, name, phone, country" />
-        <ConversationList
-          {...listProps}
-          className="lg:flex-1"
-          convos={inbox}
-          title="Private chats"
-          emptyTitle={archived.length ? "No other chats" : "No private chats yet"}
-          emptyText={archived.length ? "Your other chats are archived below." : "Search for a player above and send them a message — they'll show up here."}
-        />
         {archived.length > 0 && (
           <>
             <button
@@ -75,6 +67,14 @@ export default function PrivateChatsPage() {
             {showArchived && <ConversationList {...listProps} convos={archived} title="Archived chats" />}
           </>
         )}
+        <ConversationList
+          {...listProps}
+          className="lg:flex-1"
+          convos={inbox}
+          title="Private chats"
+          emptyTitle={archived.length ? "No other chats" : "No private chats yet"}
+          emptyText={archived.length ? "Your other chats are in Archived above." : "Search for a player above and send them a message — they'll show up here."}
+        />
       </div>
 
       <section className={`lg:col-span-8 bg-[#142036] md:rounded-2xl md:border border-white/5 overflow-hidden flex-col min-h-0 h-dvh md:h-[calc(100dvh-5.25rem)] lg:h-auto ${openId ? "flex" : "hidden lg:flex"}`}>

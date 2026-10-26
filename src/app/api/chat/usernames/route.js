@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminDb, admin } from "@/lib/firebaseAdmin";
 import { norm, isValidUsername, monthsSince, usernameCharge } from "@/lib/chat";
 import { getCaller } from "@/lib/apiAuth";
+import { moveAccountCoins, settleUsernameWallet } from "@/lib/coinWallets";
 
 const unauthorized = () => NextResponse.json({ error: "Sign in again to continue." }, { status: 401 });
 
@@ -11,7 +12,8 @@ const unauthorized = () => NextResponse.json({ error: "Sign in again to continue
 
 // GET /api/chat/usernames -> { items, nextPrice }: the usernames the signed-in account can
 // chat as (its own, plus other accounts' it has logged in to: `linked: true`), and
-// what one more username would cost (0 = free).
+// what one more username would cost (0 = free). Also moves the old account-wide
+// coin balance to the main username, the first time.
 export async function GET(req) {
   try {
     const caller = await getCaller(req);
@@ -30,6 +32,9 @@ export async function GET(req) {
       ...owned.docs.filter((d) => !d.data().deleted).map((d) => clean(d, false)),
       ...linked.docs.filter((d) => !d.data().deleted && d.data().uid !== uid).map((d) => clean(d, true)),
     ];
+    // Coins from before each username had its own wallet go to the main username.
+    await moveAccountCoins(db, uid, items.find((i) => i.isDefault && !i.linked)?.id)
+      .catch((e) => console.error("Moving account coins failed:", e));
     // What adding one more username costs, so the app can say "Add" (free) or "Buy $1".
     const [userSnap, agentSnap] = await db.getAll(db.collection("users").doc(uid), db.collection("agents").doc(uid));
     const u = userSnap.exists ? userSnap.data() : {};
@@ -106,7 +111,8 @@ export async function POST(req) {
   }
 }
 
-// DELETE /api/chat/usernames { username } — permanently delete identity
+// DELETE /api/chat/usernames { username } — permanently delete identity; its coins
+// move to the main username
 export async function DELETE(req) {
   try {
     const caller = await getCaller(req);
@@ -121,6 +127,8 @@ export async function DELETE(req) {
     if (snap.data().uid !== uid) return NextResponse.json({ error: "Not your username" }, { status: 403 });
     if (snap.data().isDefault) return NextResponse.json({ error: "Default username cannot be deleted" }, { status: 400 });
     await ref.update({ deleted: true, deletedAt: admin.firestore.FieldValue.serverTimestamp() });
+    // Each username has its own coin wallet, so its coins aren't left behind.
+    await settleUsernameWallet(db, lower).catch((e) => console.error(`Moving @${lower}'s coins failed:`, e));
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });

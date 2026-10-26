@@ -2,16 +2,30 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Check, ChevronDown, Link2, UserPlus } from "lucide-react";
+import { formatCoins } from "@/lib/chat";
 import Avatar from "@/components/Avatar";
+import { useChat } from "@/components/chat/ChatProvider";
+
+// Unread chats waiting for a username you're not using right now.
+function UnreadBadge({ count, name }) {
+  if (!count) return null;
+  return (
+    <span aria-label={`@${name} has ${count} unread chat${count === 1 ? "" : "s"}`} className="min-w-[18px] h-[18px] px-1 rounded-full bg-[#8B1E3F] text-white text-[10px] font-black flex items-center justify-center">
+      {count}
+    </span>
+  );
+}
 
 /**
  * Compact "Chatting as" bar: the usernames already on this account (your own and
  * the ones you've logged in to, marked with a link icon) as chips to switch
- * between, plus a list of them, closed by default. Adding, buying or logging in
- * to another username happens in Chat settings, not here.
+ * between, plus a list of them, closed by default. Each username has its own
+ * chats, so the others show how many of theirs are unread. Adding, buying or
+ * logging in to another username happens in Chat settings, not here.
  */
 export default function IdentityBar({ identities, active, onSelect }) {
   const [open, setOpen] = useState(false);
+  const { unreadByName = {}, coinsOf } = useChat() || {};
 
   const pick = (name) => {
     onSelect(name);
@@ -35,6 +49,7 @@ export default function IdentityBar({ identities, active, onSelect }) {
               >
                 <Avatar username={i.usernameLower} size={22} rounded="rounded-lg" />@{i.username}
                 {i.linked && <Link2 size={12} className="text-white/60" aria-label="logged in from another account" />}
+                {!selected && <UnreadBadge count={unreadByName[i.usernameLower]} name={i.usernameLower} />}
               </button>
             );
           })}
@@ -68,9 +83,14 @@ export default function IdentityBar({ identities, active, onSelect }) {
                       <Avatar username={i.usernameLower} size={28} rounded="rounded-lg" />
                       <span className="min-w-0 flex-1">
                         <span className="block text-[13px] font-bold truncate">@{i.username}</span>
-                        <span className="block text-[10.5px] text-white/45">{i.linked ? "Logged in from another account" : i.isDefault ? "Main username" : "Extra username"}</span>
+                        <span className="block text-[10.5px] text-white/45">
+                          {i.linked ? "Logged in from another account" : i.isDefault ? "Main username" : "Extra username"}
+                          {coinsOf && ` · ${formatCoins(coinsOf(i.usernameLower))} coins`}
+                        </span>
                       </span>
-                      {active === i.usernameLower && <Check size={16} className="shrink-0 text-[#E0708C]" aria-label="In use" />}
+                      {active === i.usernameLower
+                        ? <Check size={16} className="shrink-0 text-[#E0708C]" aria-label="In use" />
+                        : <UnreadBadge count={unreadByName[i.usernameLower]} name={i.usernameLower} />}
                     </button>
                   </li>
                 ))}

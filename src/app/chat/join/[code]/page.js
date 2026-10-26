@@ -21,13 +21,13 @@ export default function JoinGroupPage() {
   useEffect(() => {
     if (!uid || !code) return;
     let live = true;
-    authFetch(`/api/chat/groups?code=${encodeURIComponent(code)}`)
+    authFetch(`/api/chat/groups?code=${encodeURIComponent(code)}&as=${encodeURIComponent(active)}`)
       .then((r) => live && (r.error ? setError(r.error) : setGroup(r.group)))
       .catch(() => live && setError("Could not open this group link."));
     return () => {
       live = false;
     };
-  }, [uid, code]);
+  }, [uid, code, active]);
 
   const openGroup = (id) => {
     setOpenId("groups", id);

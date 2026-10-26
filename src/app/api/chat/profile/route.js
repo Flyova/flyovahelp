@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebaseAdmin";
-import { norm } from "@/lib/chat";
+import { inGroupAs, norm } from "@/lib/chat";
 import { getCaller } from "@/lib/apiAuth";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import { chatSettingsFor } from "@/lib/chatSettings";
 
 const MAX_GROUPS = 10;
 
-// GET /api/chat/profile?u=username — the public profile shown when you tap a
+// GET /api/chat/profile?u=username&as=yours — the public profile shown when you tap a
 // player in chat: chat username, bio and status, country (unless they hide it),
 // badges (verified, agent, StraWins staff), the public groups they're in, and
 // their chat coins only if they chose to show them off. Never their real name,
@@ -16,7 +16,9 @@ export async function GET(req) {
   try {
     const caller = await getCaller(req);
     if (!caller) return NextResponse.json({ error: "Sign in again to continue." }, { status: 401 });
-    const lower = norm(new URL(req.url).searchParams.get("u")).replace(/^@/, "");
+    const params = new URL(req.url).searchParams;
+    const lower = norm(params.get("u")).replace(/^@/, "");
+    const as = params.get("as") || ""; // the username you're viewing as: which of their groups it's in
     if (!lower) return NextResponse.json({ error: "Username required." }, { status: 400 });
 
     const db = getAdminDb();
@@ -28,7 +30,7 @@ export async function GET(req) {
       db.getAll(
         db.collection("chat_profiles").doc(lower),
         db.collection("users").doc(n.uid),
-        db.collection("coin_wallets").doc(n.uid),
+        db.collection("username_wallets").doc(lower),
       ),
       chatSettingsFor(db, [{ name: lower, uid: n.uid }]),
     ]);
@@ -47,7 +49,7 @@ export async function GET(req) {
         id: g.id,
         groupName: g.groupName || "Group",
         memberCount: (g.participants || []).length,
-        isMember: (g.participantUids || []).includes(caller.uid),
+        isMember: inGroupAs(g, caller.uid, as),
       }));
     return NextResponse.json({
       username: n.username || lower,

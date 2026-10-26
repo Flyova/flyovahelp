@@ -67,12 +67,12 @@ function ProfileSwitcher() {
  * each open their own page.
  */
 export default function ChatSettingsPage() {
-  const { identities, active, usernamePrice, coins, openCoinWallet, blockedNames, convos, settingsName, settingsFor, settingsLoaded } = useChat();
+  const { identities, active, usernamePrice, coinsOf, openCoinWallet, blockedNames, myConvos, settingsName, settingsFor, settingsLoaded } = useChat();
   const [q, setQ] = useState("");
 
   const name = settingsName;
   const s = settingsFor(name);
-  const groups = convos.filter((c) => c.type === "group" && (c.participants || []).includes(name));
+  const groups = myConvos.filter((c) => c.type === "group" && (c.participants || []).includes(name));
   const soundSwitches = [s.sounds.room !== false, s.sounds.private !== false, ...groups.map((g) => s.sounds.groups?.[g.id] !== false)];
   const soundsValue = soundSwitches.every(Boolean) ? "On" : soundSwitches.some(Boolean) ? "Custom" : "Off";
   const linked = identities.find((i) => i.usernameLower === name)?.linked;
@@ -86,6 +86,7 @@ export default function ChatSettingsPage() {
             { key: "notifications", icon: Bell, title: "Notifications", text: "Message sounds for the Chatroom, private chats and groups", value: settingsLoaded ? soundsValue : "", href: "/chat/settings/notifications", words: "sound mute alert" },
             { key: "online", icon: Radio, title: "Online status", text: "Show when you're online or last seen", value: settingsLoaded ? onOff(s.showOnline) : "", href: "/chat/settings/online-status", words: "last seen active offline" },
             { key: "privacy", icon: Shield, title: "Privacy", text: "Read receipts, coins on show, country, who can add you to groups", href: "/chat/settings/privacy", words: "seen read receipts show off coins hide country groups add" },
+            { key: "coins", icon: Wallet, title: "Coin wallet", text: "This username's own coins: buy, withdraw, activity", value: `${formatCoins(coinsOf(name))} coins`, onClick: () => openCoinWallet(name), chevron: true, words: "buy withdraw send balance money" },
             { key: "blocked", icon: Ban, title: "Blocked", text: "Players this profile has blocked", value: name === active ? blockedNames.length || "" : "", href: "/chat/settings/blocked", words: "unblock block" },
             {
               key: "password",
@@ -114,7 +115,6 @@ export default function ChatSettingsPage() {
           words: "buy create new username",
         },
         { key: "login", icon: LogIn, title: "Log in to a username", text: "Chat as another player's username with its password", href: "/chat/settings/login", words: "password other account" },
-        { key: "coins", icon: Wallet, title: "Coin wallet", text: "Buy, withdraw and see your coin activity", value: `${formatCoins(coins)} coins`, onClick: openCoinWallet, chevron: true, words: "buy withdraw send balance money" },
       ],
     },
     {

@@ -112,6 +112,11 @@ const mergeSettings = (cur, patch) => ({
  * country, coins on show) live in chat_state/<uid>, which only you can read;
  * readAt on a conversation is the shared copy others see. Your usernames include
  * other accounts' usernames you've logged in to with their password.
+ *
+ * Each username stands on its own, like a separate account: the chats and groups
+ * listed are the ones the username you're using is in, it has its own coin
+ * wallet and its own settings, and switching username closes the chats open as
+ * the previous one.
  */
 export function ChatProvider({ children }) {
   const router = useRouter();
@@ -127,8 +132,8 @@ export function ChatProvider({ children }) {
   const [presenceNow, setPresenceNow] = useState(0); // ticks so "online" turns into "last seen" on its own
   const [blockedNames, setBlockedNames] = useState([]);
   const [openIds, setOpenIds] = useState({ private: null, groups: null }); // open chat per page
-  const [coins, setCoins] = useState(0); // your chat coin balance
-  const [coinSheet, setCoinSheet] = useState(null); // { kind: "wallet" } | { kind: "send", to, convoId }
+  const [balances, setBalances] = useState({}); // usernameLower -> that username's coin balance
+  const [coinSheet, setCoinSheet] = useState(null); // { kind: "wallet", name } | { kind: "send", to, convoId }
   const [err, setErr] = useState("");
   const [notice, setNotice] = useState(""); // short confirmation, e.g. "You blocked @ade."
   const [dialog, setDialog] = useState(null); // { title, message, actions, resolve }
@@ -219,11 +224,19 @@ export function ChatProvider({ children }) {
     return () => clearInterval(t);
   }, [anyoneTyping, identities]);
 
-  // Your coin balance (written only by /api/chat/coins).
+  // Each username's coin balance, username_wallets/<username> (written only by /api/chat/coins).
+  const walletKey = identities.map((i) => i.usernameLower).sort().join(",");
   useEffect(() => {
-    if (!uid) return;
-    return onSnapshot(doc(db, "coin_wallets", uid), (s) => setCoins(Math.max(0, Number(s.data()?.balance) || 0)), () => {});
-  }, [uid]);
+    if (!walletKey) return;
+    const offs = walletKey.split(",").map((name) => onSnapshot(
+      doc(db, "username_wallets", name),
+      (s) => setBalances((p) => ({ ...p, [name]: Math.max(0, Number(s.data()?.balance) || 0) })),
+      () => {}
+    ));
+    return () => offs.forEach((off) => off());
+  }, [walletKey]);
+  const coinsOf = useCallback((name) => balances[name] || 0, [balances]);
+  const coins = coinsOf(active);
 
   // Your private read positions (for unread counts) and chat settings.
   useEffect(() => {
@@ -274,20 +287,23 @@ export function ChatProvider({ children }) {
   const myLowers = useMemo(() => identities.map((i) => i.usernameLower), [identities]);
   // Conversations one of your usernames is in (an account you logged out of a
   // username may still be listed in some for a moment).
-  const convos = useMemo(
+  const myConvos = useMemo(
     () => allConvos.filter((c) => (c.participants || []).some((p) => myLowers.includes(p))),
     [allConvos, myLowers]
   );
+  // The ones the username you're using is in: what the Chats pages list.
+  const convos = useMemo(() => myConvos.filter((c) => (c.participants || []).includes(active)), [myConvos, active]);
 
   // Unread: chats whose last message is newer than where you've read up to. The
-  // chat you're looking at doesn't count; it's being read.
+  // chat you're looking at doesn't count; it's being read. Counted for every one
+  // of your usernames, so the others can show theirs on the username switcher.
   const viewingId = openIds[pathname.split("/")[2]] || null;
-  const unreadCandidates = useMemo(() => convos.flatMap((c) => {
+  const unreadCandidates = useMemo(() => myConvos.flatMap((c) => {
     const since = Math.max(chatState.reads[c.id]?.toMillis?.() ?? 0, chatState.cleared[c.id]?.toMillis?.() ?? 0, READS_SINCE_MS);
     const lastMs = c.lastMessageAt?.toMillis?.() ?? 0;
     if (!c.lastMessage || lastMs <= since || c.id === viewingId) return [];
     return [{ id: c.id, since, key: `${c.id}:${lastMs}:${since}` }];
-  }), [convos, chatState.reads, chatState.cleared, viewingId]);
+  }), [myConvos, chatState.reads, chatState.cleared, viewingId]);
 
   useEffect(() => {
     for (const { id, since, key } of unreadCandidates) {
@@ -305,16 +321,27 @@ export function ChatProvider({ children }) {
     return out;
   }, [unreadCandidates, counts]);
 
+  // How many chats each of your usernames has unread (archived ones don't count).
+  const unreadByName = useMemo(() => {
+    const out = {};
+    for (const c of myConvos) {
+      if (!unread[c.id] || chatState.archived[c.id]) continue;
+      for (const p of c.participants || []) if (myLowers.includes(p)) out[p] = (out[p] || 0) + 1;
+    }
+    return out;
+  }, [myConvos, unread, chatState.archived, myLowers]);
+
   // New-message sounds, switched on or off per chat in Chat settings → Notifications.
   // kind: "room", "private" or "group" (with its id).
   // A private chat is also silent if you muted that person (sounds.people.<name>);
   // archived chats are always silent.
   // Each chat profile has its own sound settings: the Chatroom uses the username
-  // you're posting as, a chat the username you're in it as.
+  // you're posting as, a chat the username you're in it as (any of yours, not
+  // just the one you're using).
   const soundOn = useCallback((kind, convoId) => {
     if (kind === "room") return settingsFor(active).sounds.room !== false;
     if (chatState.archived[convoId]) return false;
-    const convo = convos.find((c) => c.id === convoId);
+    const convo = myConvos.find((c) => c.id === convoId);
     const parts = convo?.participants || [];
     const s = settingsFor(parts.includes(active) ? active : parts.find((p) => myLowers.includes(p)) || active).sounds;
     if (kind === "private") {
@@ -323,7 +350,7 @@ export function ChatProvider({ children }) {
       return !other || s.people?.[other] !== false;
     }
     return s.groups?.[convoId] !== false;
-  }, [settingsFor, active, chatState.archived, convos, myLowers]);
+  }, [settingsFor, active, chatState.archived, myConvos, myLowers]);
 
 
   useEffect(() => {
@@ -335,11 +362,11 @@ export function ChatProvider({ children }) {
     prevUnread.current = unread;
     if (Date.now() - startedAt.current < QUIET_START_MS) return;
     const ring = Object.entries(unread).some(([id, n]) => {
-      const c = convos.find((x) => x.id === id);
+      const c = myConvos.find((x) => x.id === id);
       return c && n > (prev[id] || 0) && soundOn(c.type === "group" ? "group" : "private", id);
     });
     if (ring) playChatSound();
-  }, [unread, convos, soundOn]);
+  }, [unread, myConvos, soundOn]);
 
   // Online status: while Chats is open and on screen, the username you're using
   // says it's here every minute (hidden if you've switched online status off).
@@ -434,14 +461,15 @@ export function ChatProvider({ children }) {
     });
   }, []);
 
-  const deleteUsername = useCallback(async (usernameLower) => {
-    if (!(await confirmAction({ title: `Delete @${usernameLower}?`, message: "This permanently removes the username. It can't be undone.", confirmLabel: "Delete" }))) return;
-    const r = await authFetch("/api/chat/usernames", { method: "DELETE", body: { username: usernameLower } });
-    if (r.error) return setErr(r.error);
-    setIdentities((p) => p.filter((i) => i.usernameLower !== usernameLower));
-  }, [confirmAction]);
-
   const setOpenId = useCallback((section, id) => setOpenIds((p) => ({ ...p, [section]: id })), []);
+
+  // Switches to another of your usernames: its own chats, groups, coins and
+  // settings. Chats open as the previous one close.
+  const selectIdentity = useCallback((name) => {
+    setActive(name);
+    setOpenIds({ private: null, groups: null });
+    setSettingsChoice("");
+  }, []);
 
   // Your username isn't known for a moment after a page opens: say so instead of doing nothing.
   const needUsername = useCallback(() => {
@@ -556,7 +584,8 @@ export function ChatProvider({ children }) {
 
   // A player's full profile page.
   const openProfile = useCallback((username) => router.push(`/chat/u/${encodeURIComponent(norm(username))}`), [router]);
-  const openCoinWallet = useCallback(() => setCoinSheet({ kind: "wallet" }), []);
+  // A username's coin wallet (the one you're using unless `name` is given; also works as an onClick).
+  const openCoinWallet = useCallback((name) => setCoinSheet({ kind: "wallet", name: typeof name === "string" ? name : "" }), []);
   // Send coins to `to` in the Chatroom (where = {}) or a group (where = { convoId }).
   const sendCoins = useCallback((to, where = {}) => setCoinSheet({ kind: "send", to: norm(to), convoId: where.convoId || null }), []);
   const closeCoins = useCallback(() => setCoinSheet(null), []);
@@ -567,31 +596,44 @@ export function ChatProvider({ children }) {
   const convosLoading = !identitiesLoaded || (identities.length > 0 && !convosLoaded);
 
   const value = useMemo(() => ({
-    uid, identities, identitiesLoaded, active, setActive, selectIdentity: setActive, refreshIdentities, createUsername, deleteUsername, usernamePrice,
-    convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState,
+    uid, identities, identitiesLoaded, active, selectIdentity, refreshIdentities, createUsername, usernamePrice,
+    convos, myConvos, convosLoading, blockedNames, myNameIn, typingIn, unread, unreadByName, chatState,
     openIds, setOpenId,
     err, setErr, notice, flashNotice,
     openProfile, messagePrivately, blockUser, unblockUser, reportUser,
-    coins, openCoinWallet, sendCoins,
+    coins, coinsOf, openCoinWallet, sendCoins,
     updateChatState, soundOn, presence, presenceNow,
     settingsFor, updateSettings, settingsLoaded, settingsName, setSettingsName: setSettingsChoice,
     archiveChat, deleteChat, removeChat, isDeletedForMe, ask, confirmAction, needUsername,
-  }), [uid, identities, identitiesLoaded, active, refreshIdentities, createUsername, deleteUsername, usernamePrice, archiveChat, deleteChat, isDeletedForMe, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, notice, flashNotice, openProfile, messagePrivately, blockUser, unblockUser, reportUser, coins, openCoinWallet, sendCoins, updateChatState, soundOn, presence, presenceNow, settingsFor, updateSettings, settingsLoaded, settingsName, removeChat, ask, confirmAction, needUsername]);
+  }), [uid, identities, identitiesLoaded, active, selectIdentity, myConvos, unreadByName, coinsOf, refreshIdentities, createUsername, usernamePrice, archiveChat, deleteChat, isDeletedForMe, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, notice, flashNotice, openProfile, messagePrivately, blockUser, unblockUser, reportUser, coins, openCoinWallet, sendCoins, updateChatState, soundOn, presence, presenceNow, settingsFor, updateSettings, settingsLoaded, settingsName, removeChat, ask, confirmAction, needUsername]);
+
+  // Whose coins the open coin sheet uses: the wallet's username, or who you send as.
+  const walletName = coinSheet?.name || active;
+  const sendAs = coinSheet?.convoId ? myNameIn(convos.find((c) => c.id === coinSheet.convoId)) : active;
 
   return (
     <ChatContext.Provider value={value}>
       {children}
       {dialog && <ChatDialog title={dialog.title} message={dialog.message} actions={dialog.actions} onDone={closeDialog} />}
-      {coinSheet?.kind === "wallet" && <CoinWalletSheet uid={uid} coins={coins} onClose={closeCoins} />}
+      {coinSheet?.kind === "wallet" && (
+        <CoinWalletSheet
+          key={walletName}
+          uid={uid}
+          name={walletName}
+          coins={coinsOf(walletName)}
+          canWithdraw={!identities.find((i) => i.usernameLower === walletName)?.linked}
+          onClose={closeCoins}
+        />
+      )}
       {coinSheet?.kind === "send" && (
         <SendCoinsSheet
           key={coinSheet.to}
           to={coinSheet.to}
           convoId={coinSheet.convoId}
-          as={coinSheet.convoId ? myNameIn(convos.find((c) => c.id === coinSheet.convoId)) : active}
-          coins={coins}
+          as={sendAs}
+          coins={coinsOf(sendAs)}
           onClose={closeCoins}
-          onTopUp={openCoinWallet}
+          onTopUp={() => openCoinWallet(sendAs)}
         />
       )}
     </ChatContext.Provider>
