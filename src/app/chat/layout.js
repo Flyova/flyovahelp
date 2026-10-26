@@ -31,8 +31,9 @@ function ChatShell({ children }) {
   };
   // On phones an open private chat or group fills the screen edge to edge (its back button returns to the list).
   const inThread = !!openIds[section];
-  // A player's full profile (/chat/u/<name>) also gets the whole phone screen.
-  const fullPage = inThread || section === "u";
+  // A player's full profile (/chat/u/<name>) and Chat settings also get the whole phone screen.
+  // Settings pages bring their own back arrow and title.
+  const fullPage = inThread || section === "u" || section === "settings";
 
   return (
     <div className={`min-h-screen w-full bg-[#0B1220] text-white md:px-8 ${inThread ? "md:pt-3 md:pb-4 lg:pt-8 lg:pb-8" : "px-4 sm:px-6 pt-6 pb-6 md:pt-8 md:pb-8"}`}>
@@ -65,7 +66,7 @@ function ChatShell({ children }) {
         </div>
 
         {/* The tabs; Chats home (/chat) shows them as big choices instead. */}
-        {section && <nav className="flex sm:inline-flex w-full sm:w-auto bg-[#142036] border border-white/5 rounded-2xl p-1 mb-4" aria-label="Chats">
+        {CHAT_SECTIONS.some((s) => s.key === section) && <nav className="flex sm:inline-flex w-full sm:w-auto bg-[#142036] border border-white/5 rounded-2xl p-1 mb-4" aria-label="Chats">
           {CHAT_SECTIONS.map(({ key, label }) => (
             <Link
               key={key}

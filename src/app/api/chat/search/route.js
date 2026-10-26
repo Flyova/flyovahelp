@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebaseAdmin";
 import { norm } from "@/lib/chat";
 import { getCaller } from "@/lib/apiAuth";
+import { chatSettingsFor } from "@/lib/chatSettings";
 
 const LIMIT = 8;
 const END = "";
@@ -71,10 +72,9 @@ export async function GET(req) {
       rows.set(n.uid, { uid: n.uid, username: n.username || d.id, usernameLower: d.id, match: userHits.get(n.uid) });
     }
 
-    // Players who hide their country (Chat settings) don't show it, and aren't found by it.
-    const uids = [...rows.keys()];
-    const states = uids.length ? await db.getAll(...uids.map((uid) => db.collection("chat_state").doc(uid))) : [];
-    const hidesCountry = new Set(states.filter((s) => s.exists && s.data().hideCountry).map((s) => s.id));
+    // Chat profiles that hide their country (Chat settings → Privacy) don't show it, and aren't found by it.
+    const settings = await chatSettingsFor(db, [...rows.values()].map((r) => ({ name: r.usernameLower, uid: r.uid })));
+    const hidesCountry = new Set([...rows.values()].filter((r) => settings.get(r.usernameLower)?.hideCountry).map((r) => r.uid));
 
     // Public profile fields only — any signed-in player can search, so never
     // return email, phone, dob, PIN, OTP or balances from the user document.

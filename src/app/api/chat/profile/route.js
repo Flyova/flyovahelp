@@ -3,6 +3,7 @@ import { getAdminDb } from "@/lib/firebaseAdmin";
 import { norm } from "@/lib/chat";
 import { getCaller } from "@/lib/apiAuth";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
+import { chatSettingsFor } from "@/lib/chatSettings";
 
 const MAX_GROUPS = 10;
 
@@ -23,16 +24,18 @@ export async function GET(req) {
     const n = nameSnap.exists ? nameSnap.data() : null;
     if (!n || n.deleted || !n.uid) return NextResponse.json({ error: "This player no longer exists." }, { status: 404 });
 
-    const [profileSnap, userSnap, stateSnap, coinSnap] = await db.getAll(
-      db.collection("chat_profiles").doc(lower),
-      db.collection("users").doc(n.uid),
-      db.collection("chat_state").doc(n.uid),
-      db.collection("coin_wallets").doc(n.uid),
-    );
+    const [[profileSnap, userSnap, coinSnap], settings] = await Promise.all([
+      db.getAll(
+        db.collection("chat_profiles").doc(lower),
+        db.collection("users").doc(n.uid),
+        db.collection("coin_wallets").doc(n.uid),
+      ),
+      chatSettingsFor(db, [{ name: lower, uid: n.uid }]),
+    ]);
     const p = profileSnap.exists ? profileSnap.data() : {};
     const u = userSnap.exists ? userSnap.data() : {};
-    const state = stateSnap.exists ? stateSnap.data() : {};
-    const showCoins = state.showCoins === true;
+    // This chat profile's own settings (Chat settings → Privacy).
+    const { hideCountry, showCoins } = settings.get(lower);
 
     // Public groups they're in (never private groups or chats).
     const convoSnap = await db.collection("conversations").where("participants", "array-contains", lower).limit(100).get();
@@ -51,7 +54,7 @@ export async function GET(req) {
       usernameLower: lower,
       bio: p.bio || "",
       status: p.status || "",
-      country: state.hideCountry ? "" : u.country || "",
+      country: hideCountry ? "" : u.country || "",
       badges: [
         u.verified === true && "verified",
         u.isAgent === true && "agent",

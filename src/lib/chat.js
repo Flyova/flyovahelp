@@ -158,3 +158,15 @@ export function usernameCharge({ owned, ageMonths, isAgent, freeUsernameUsed }) 
 export const usernameOffer = (price) => (price > 0
   ? { button: `Buy · $${price}`, title: `Buy a chat username ($${price} from your wallet)` }
   : { button: "Add", title: price === 0 ? "Add a chat username (free)" : "Add a chat username" });
+
+/** One line about one of your usernames: main/extra/logged in, password, other accounts, in use. */
+export function accountLabels(identity, info, active) {
+  const labels = identity.linked
+    ? ["Logged in from another account"]
+    : [
+        identity.isDefault ? "Main username" : "Extra username",
+        info?.hasPassword && "Has a password",
+        info?.otherAccounts > 0 && `${info.otherAccounts} other account${info.otherAccounts === 1 ? "" : "s"} logged in`,
+      ];
+  return [...labels, identity.usernameLower === active && "In use"].filter(Boolean).join(" · ");
+}

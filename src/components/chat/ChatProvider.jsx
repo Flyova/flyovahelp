@@ -58,7 +58,9 @@ const sameTyping = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 const QUIET_START_MS = 4000; // no sounds for the unread counts that load with the page
 
-// Your chat_state/<uid> with defaults filled in.
+// Your chat_state/<uid> with defaults filled in. The privacy and sound fields here
+// are the account-wide settings from before settings were per chat profile; a
+// profile that hasn't set its own falls back to them.
 const readChatState = (d = {}, loaded = false) => ({
   loaded,
   reads: d.reads || {},
@@ -69,6 +71,32 @@ const readChatState = (d = {}, loaded = false) => ({
   sounds: d.sounds || {}, // { room, private, groups: { <id>: bool }, people: { <name>: bool } } — all on unless false
   archived: d.archived || {}, // conversation id -> true while archived
   cleared: d.cleared || {}, // conversation id -> when you deleted the chat (messages before it are gone for you)
+});
+
+// One chat profile's settings, from /api/chat/settings (or the account fallback above).
+const fallbackSettings = (state) => ({
+  readReceipts: state.readReceipts,
+  showOnline: state.showOnline,
+  hideCountry: state.hideCountry,
+  showCoins: state.showCoins,
+  sounds: {
+    room: state.sounds.room !== false,
+    private: state.sounds.private !== false,
+    groups: state.sounds.groups || {},
+    people: state.sounds.people || {},
+  },
+});
+
+// Applies a settings change locally (sound maps merge key by key).
+const mergeSettings = (cur, patch) => ({
+  ...cur,
+  ...patch,
+  sounds: {
+    ...cur.sounds,
+    ...(patch.sounds || {}),
+    groups: { ...cur.sounds.groups, ...(patch.sounds?.groups || {}) },
+    people: { ...cur.sounds.people, ...(patch.sounds?.people || {}) },
+  },
 });
 
 /**
@@ -102,6 +130,9 @@ export function ChatProvider({ children }) {
   const [err, setErr] = useState("");
   const [notice, setNotice] = useState(""); // short confirmation, e.g. "You blocked @ade."
   const [chatState, setChatState] = useState(() => readChatState());
+  const [profileSettings, setProfileSettings] = useState({}); // usernameLower -> that chat profile's settings
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [settingsChoice, setSettingsChoice] = useState(""); // the chat profile Chat settings is showing
   const [typingIn, setTypingIn] = useState({}); // conversation id -> usernames typing there
   const [counts, setCounts] = useState({}); // "<id>:<last message ms>:<read since ms>" -> unread count
   const typingArrivals = useRef(new Map());
@@ -194,6 +225,44 @@ export function ChatProvider({ children }) {
 
   const updateChatState = useCallback((patch) => setDoc(doc(db, "chat_state", uid), patch, { merge: true }), [uid]);
 
+  // Each chat profile's own settings (read receipts, online status, hidden country,
+  // coins on show, sounds), kept by the server in chat_settings/<username>.
+  // Profiles changed here since the last load keep their newer local values.
+  const changedSettings = useRef(new Set());
+  useEffect(() => {
+    if (!uid || !identities.length) return;
+    changedSettings.current = new Set();
+    authFetch("/api/chat/settings").then((r) => {
+      if (!r.error) {
+        setProfileSettings((p) => {
+          const next = { ...(r.items || {}) };
+          for (const name of changedSettings.current) if (p[name]) next[name] = p[name];
+          return next;
+        });
+      }
+      setSettingsLoaded(true);
+    }).catch(() => setSettingsLoaded(true));
+  }, [uid, identities]);
+
+  const settingsFor = useCallback(
+    (name) => profileSettings[name] || fallbackSettings(chatState),
+    [profileSettings, chatState]
+  );
+
+  // Changes one chat profile's settings: shown at once, saved by the server.
+  const updateSettings = useCallback(async (name, patch) => {
+    changedSettings.current.add(name);
+    const before = profileSettings[name];
+    setProfileSettings((p) => ({ ...p, [name]: mergeSettings(p[name] || fallbackSettings(chatState), patch) }));
+    const r = await authFetch("/api/chat/settings", { method: "POST", body: { username: name, settings: patch } })
+      .catch((e) => ({ error: e.message }));
+    if (r.error) {
+      setProfileSettings((p) => ({ ...p, [name]: before }));
+      throw new Error(r.error);
+    }
+    setProfileSettings((p) => ({ ...p, [name]: r.settings }));
+  }, [profileSettings, chatState]);
+
   const myLowers = useMemo(() => identities.map((i) => i.usernameLower), [identities]);
   // Conversations one of your usernames is in (an account you logged out of a
   // username may still be listed in some for a moment).
@@ -232,17 +301,21 @@ export function ChatProvider({ children }) {
   // kind: "room", "private" or "group" (with its id).
   // A private chat is also silent if you muted that person (sounds.people.<name>);
   // archived chats are always silent.
+  // Each chat profile has its own sound settings: the Chatroom uses the username
+  // you're posting as, a chat the username you're in it as.
   const soundOn = useCallback((kind, convoId) => {
-    const s = chatState.sounds;
-    if (kind === "room") return s.room !== false;
+    if (kind === "room") return settingsFor(active).sounds.room !== false;
     if (chatState.archived[convoId]) return false;
+    const convo = convos.find((c) => c.id === convoId);
+    const parts = convo?.participants || [];
+    const s = settingsFor(parts.includes(active) ? active : parts.find((p) => myLowers.includes(p)) || active).sounds;
     if (kind === "private") {
       if (s.private === false) return false;
-      const other = (convos.find((c) => c.id === convoId)?.participants || []).find((p) => !myLowers.includes(p));
+      const other = parts.find((p) => !myLowers.includes(p));
       return !other || s.people?.[other] !== false;
     }
     return s.groups?.[convoId] !== false;
-  }, [chatState.sounds, chatState.archived, convos, myLowers]);
+  }, [settingsFor, active, chatState.archived, convos, myLowers]);
 
 
   useEffect(() => {
@@ -262,12 +335,13 @@ export function ChatProvider({ children }) {
 
   // Online status: while Chats is open and on screen, the username you're using
   // says it's here every minute (hidden if you've switched online status off).
+  const showOnline = settingsFor(active).showOnline;
   useEffect(() => {
     if (!active || !chatState.loaded) return;
     const ref = doc(db, "chat_presence", active);
     const ping = () => {
       if (document.visibilityState !== "visible") return;
-      setDoc(ref, { lastActive: serverTimestamp(), hidden: !chatState.showOnline }).catch(() => {});
+      setDoc(ref, { lastActive: serverTimestamp(), hidden: !showOnline }).catch(() => {});
     };
     ping();
     const t = setInterval(ping, PRESENCE_PING_MS);
@@ -276,7 +350,7 @@ export function ChatProvider({ children }) {
       clearInterval(t);
       document.removeEventListener("visibilitychange", ping);
     };
-  }, [active, chatState.loaded, chatState.showOnline]);
+  }, [active, chatState.loaded, showOnline]);
 
   // Your private-chat partners' online status, 30 names per listener.
   const partnerKey = useMemo(() => [...new Set(convos
@@ -402,12 +476,13 @@ export function ChatProvider({ children }) {
     }
   }, [active, convos, flashNotice, needUsername]);
 
-  const unblockUser = useCallback(async (targetLower) => {
+  // `as`: which of your usernames lifts the block (the one you're using by default).
+  const unblockUser = useCallback(async (targetLower, as = active) => {
     const target = norm(targetLower);
-    if (!active) return needUsername();
+    if (!as) return needUsername();
     try {
-      await deleteDoc(doc(db, "chat_blocks", `${active}_${target}`));
-      const r = await authFetch("/api/chat/conversations", { method: "POST", body: { action: "unblock", as: active, target } });
+      await deleteDoc(doc(db, "chat_blocks", `${as}_${target}`));
+      const r = await authFetch("/api/chat/conversations", { method: "POST", body: { action: "unblock", as, target } });
       if (r.error) throw new Error(r.error);
       flashNotice(`@${target} is unblocked.`);
     } catch (e) {
@@ -434,6 +509,9 @@ export function ChatProvider({ children }) {
   // Send coins to `to` in the Chatroom (where = {}) or a group (where = { convoId }).
   const sendCoins = useCallback((to, where = {}) => setCoinSheet({ kind: "send", to: norm(to), convoId: where.convoId || null }), []);
   const closeCoins = useCallback(() => setCoinSheet(null), []);
+  // The chat profile Chat settings is showing: the one picked there, else the one you're using.
+  const settingsName = settingsChoice && myLowers.includes(settingsChoice) ? settingsChoice : active;
+
   // Without a username there are no conversations to wait for.
   const convosLoading = !identitiesLoaded || (identities.length > 0 && !convosLoaded);
 
@@ -441,12 +519,13 @@ export function ChatProvider({ children }) {
     uid, identities, identitiesLoaded, active, setActive, selectIdentity: setActive, refreshIdentities, createUsername, deleteUsername, usernamePrice,
     convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState,
     openIds, setOpenId,
-    err, setErr, notice,
+    err, setErr, notice, flashNotice,
     openProfile, messagePrivately, blockUser, unblockUser, reportUser,
     coins, openCoinWallet, sendCoins,
     updateChatState, soundOn, presence, presenceNow,
+    settingsFor, updateSettings, settingsLoaded, settingsName, setSettingsName: setSettingsChoice,
     archiveChat, deleteChat, isDeletedForMe,
-  }), [uid, identities, identitiesLoaded, active, refreshIdentities, createUsername, deleteUsername, usernamePrice, archiveChat, deleteChat, isDeletedForMe, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, notice, openProfile, messagePrivately, blockUser, unblockUser, reportUser, coins, openCoinWallet, sendCoins, updateChatState, soundOn, presence, presenceNow]);
+  }), [uid, identities, identitiesLoaded, active, refreshIdentities, createUsername, deleteUsername, usernamePrice, archiveChat, deleteChat, isDeletedForMe, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, notice, flashNotice, openProfile, messagePrivately, blockUser, unblockUser, reportUser, coins, openCoinWallet, sendCoins, updateChatState, soundOn, presence, presenceNow, settingsFor, updateSettings, settingsLoaded, settingsName]);
 
   return (
     <ChatContext.Provider value={value}>

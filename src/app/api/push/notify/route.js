@@ -3,6 +3,7 @@ import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import { norm, usernameUids } from "@/lib/chat";
 import { sendPushToUsers } from "@/lib/push";
+import { chatSettingsFor } from "@/lib/chatSettings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,19 +49,22 @@ async function chatMessage(db, caller, { convoId, messageId }) {
     // The owner and any account logged in to the username. The mobile thread screen
     // needs to know which of the recipient's identities is active.
     for (const uid of usernameUids(o.data())) {
-      if (uid !== caller.uid) targets.push({ uid, data: { url: `/chat/${convoId}?as=${encodeURIComponent(p)}` } });
+      if (uid !== caller.uid) targets.push({ uid, name: p, owner: o.data().uid, data: { url: `/chat/${convoId}?as=${encodeURIComponent(p)}` } });
     }
   });
 
   const isGroup = convo.type === "group";
-  // A chat the recipient muted in Chat settings → Notifications (or archived) still
-  // notifies them, just without a sound.
+  // A chat the recipient's chat profile muted (Chat settings → Notifications), or
+  // that they archived, still notifies them, just without a sound.
   if (targets.length) {
-    const states = await db.getAll(...targets.map((t) => db.collection("chat_state").doc(t.uid)));
+    const [states, settings] = await Promise.all([
+      db.getAll(...targets.map((t) => db.collection("chat_state").doc(t.uid))),
+      chatSettingsFor(db, [...new Map(targets.map((t) => [t.name, { name: t.name, uid: t.owner }])).values()]),
+    ]);
     states.forEach((snap, i) => {
-      const state = snap.exists ? snap.data() : {};
-      const sounds = state.sounds || {};
-      targets[i].silent = state.archived?.[convoId] === true || (isGroup
+      const archived = snap.exists && snap.data().archived?.[convoId] === true;
+      const sounds = settings.get(targets[i].name)?.sounds || {};
+      targets[i].silent = archived || (isGroup
         ? sounds.groups?.[convoId] === false
         : sounds.private === false || sounds.people?.[sender] === false);
     });

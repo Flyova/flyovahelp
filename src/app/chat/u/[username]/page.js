@@ -69,7 +69,7 @@ export default function PlayerProfilePage() {
   const name = norm(decodeURIComponent(String(params?.username || ""))).replace(/^@/, "");
   const {
     uid, active, convos, myNameIn, messagePrivately, sendCoins, blockUser, unblockUser, reportUser, blockedNames, setOpenId,
-    chatState, updateChatState, setErr,
+    settingsFor, updateSettings, setErr,
   } = useChat();
   const [viewingPhoto, setViewingPhoto] = useState(false);
   const photo = useChatPhoto(name);
@@ -108,11 +108,12 @@ export default function PlayerProfilePage() {
   const blocked = blockedNames.includes(name);
   const isYou = !!profile?.isYou;
   const ready = !!active; // your chat username has loaded (actions need it)
-  const muted = chatState.sounds.people?.[name] === false;
+  // Muting belongs to the chat profile you're using.
+  const muted = settingsFor(active).sounds.people?.[name] === false;
   const theirGroups = (profile?.publicGroups || []).filter((g) => !g.isMember && !shared.some((s) => s.id === g.id));
 
   const toggleMute = () =>
-    updateChatState({ sounds: { people: { [name]: muted } } })
+    updateSettings(active, { sounds: { people: { [name]: muted } } })
       .then(() => flash(muted ? `Sounds on for @${name}.` : `@${name} muted: no sound for their messages.`))
       .catch((e) => setErr(`Could not save: ${e.message}`));
 

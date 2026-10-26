@@ -24,12 +24,14 @@ import {
   X,
   Clock,
   ShieldAlert,
-  TriangleAlert
+  TriangleAlert,
+  MessageSquare,
+  ChevronRight
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Avatar from "@/components/Avatar";
 import ChatProfileCard from "@/components/settings/ChatProfileCard";
-import { ReadReceiptsSetting, ShowCoinsSetting } from "@/components/settings/ChatPrivacySwitch";
 import { FREE_USERNAMES_AGENT, FREE_USERNAMES_OLD_ACCOUNT, OLD_ACCOUNT_MONTHS, USERNAME_PRICE } from "@/lib/chat";
 
 export default function Settings() {
@@ -375,8 +377,14 @@ export default function Settings() {
             <ShieldAlert size={18} className="text-[#8B1E3F]" />
             <h3 className="font-black italic uppercase text-sm">Privacy &amp; Policy</h3>
           </div>
-          <ReadReceiptsSetting uid={user?.uid} />
-          <ShowCoinsSetting uid={user?.uid} />
+          <Link href="/chat/settings" className="flex items-center gap-3 bg-black/20 hover:bg-black/30 p-4 rounded-2xl border border-white/5 mb-4 transition-colors">
+            <MessageSquare size={16} className="text-[#2457D6] shrink-0" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[11px] font-black uppercase">Chat privacy</span>
+              <span className="block text-[10px] font-bold text-white/45 mt-1">Read receipts, coins on show, online status and country are set for each chat profile in Chat settings.</span>
+            </span>
+            <ChevronRight size={16} className="text-white/40 shrink-0" />
+          </Link>
           <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl">
             <p className="flex items-center gap-2 text-[11px] font-black uppercase italic text-amber-500 mb-2">
               <TriangleAlert size={14} className="shrink-0" /> Buying chat usernames

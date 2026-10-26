@@ -42,6 +42,7 @@ async function squarePhoto(file) {
 // "MacIntel · Mozilla/5.0 (Macintosh; …" → "Mac". The stored string is cut at 60
 // characters, so the browser name is usually lost; the platform is enough.
 const deviceLabel = (device = "") => {
+  if (/StraWins app/i.test(device)) return device.split(" · ").filter((p) => p && p !== "StraWins app").join(" · ") + " (app)";
   if (/iPhone|iPad|iOS/i.test(device)) return "iPhone / iPad";
   if (/Android/i.test(device)) return "Android";
   if (/Mac/i.test(device)) return "Mac";
@@ -52,15 +53,51 @@ const deviceLabel = (device = "") => {
 
 const timeOf = (s) => s.lastActive?.toDate?.() ?? null;
 
+// Class names for the two looks: the card on the Settings page, and the plain
+// page in Chat settings → Profile.
+const LOOKS = {
+  card: {
+    name: "font-black italic uppercase text-[#E0708C] truncate",
+    hint: "text-[10px] font-bold text-white/40 mt-1 leading-snug",
+    remove: "mt-1.5 flex items-center gap-1 text-[10px] font-black uppercase text-red-300/80 hover:text-red-300 disabled:opacity-50",
+    field: "bg-black/20 p-4 rounded-2xl border border-white/5",
+    label: "text-[9px] font-black uppercase text-white/40",
+    count: "text-[9px] font-bold text-white/30",
+    text: "w-full bg-transparent font-bold text-sm outline-none text-white placeholder:text-white/20",
+    save: "w-full bg-[#2457D6] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-[#2457D6]/20 transition-all active:scale-95 disabled:opacity-50",
+    devices: "text-[9px] font-black uppercase text-white/40 mb-2 flex items-center gap-1.5",
+    device: "flex items-center justify-between gap-3 bg-black/20 px-3 py-2 rounded-xl border border-white/5",
+    deviceName: "text-[11px] font-bold text-white/70 truncate",
+    deviceTime: "text-[10px] font-bold text-white/30 shrink-0",
+  },
+  page: {
+    name: "text-lg font-bold truncate",
+    hint: "text-[13px] text-white/50 mt-1 leading-snug max-w-xs",
+    remove: "mt-2 flex items-center gap-1.5 text-[13px] font-semibold text-red-300 hover:text-red-200 disabled:opacity-50",
+    field: "",
+    label: "text-[13px] font-semibold text-white/60",
+    count: "text-[12px] text-white/35",
+    text: "w-full bg-white/[0.06] border border-white/10 focus:border-[#2457D6] rounded-xl px-3.5 py-3 text-base md:text-[15px] outline-none text-white placeholder:text-white/30 transition-colors",
+    save: "w-full h-11 rounded-xl bg-[#8B1E3F] hover:bg-[#A62A4D] text-[15px] font-bold transition-colors disabled:opacity-50",
+    devices: "text-[13px] font-semibold text-white/50 mb-2 flex items-center gap-1.5",
+    device: "flex items-center justify-between gap-3 py-2.5 border-b border-white/5 last:border-0",
+    deviceName: "text-[14px] text-white/85 truncate",
+    deviceTime: "text-[12px] text-white/40 shrink-0",
+  },
+};
+
 /**
  * The chat identity's public profile: profile photo (or the avatar generated
  * from the username), bio and status, plus the devices that have used this
  * username in chat. One account can hold several chat usernames; each has its
  * own profile. A photo is stored on the profile as a small square JPEG.
  */
-export default function ChatProfileCard({ uid }) {
+export default function ChatProfileCard({ uid, username = "", bare = false }) {
   const [identities, setIdentities] = useState([]);
-  const [selected, setSelected] = useState("");
+  const [chosen, setSelected] = useState("");
+  // `username` fixes which profile is edited (Chat settings → Profile); otherwise pick one here.
+  const selected = username || chosen;
+  const ui = LOOKS[bare ? "page" : "card"];
   const [bio, setBio] = useState("");
   const [status, setStatus] = useState("");
   const [saved, setSaved] = useState({ bio: "", status: "" });
@@ -176,17 +213,19 @@ export default function ChatProfileCard({ uid }) {
   };
 
   return (
-    <div id="chat-profile" className="bg-[#142036] rounded-[2rem] p-6 border border-white/5 shadow-xl scroll-mt-6">
-      <div className="flex items-center space-x-2 mb-4">
-        <MessageSquare size={18} className="text-[#8B1E3F]" />
-        <h3 className="font-black italic uppercase text-sm">Chat profile</h3>
-      </div>
+    <div id="chat-profile" className={bare ? "px-4 py-5" : "bg-[#142036] rounded-[2rem] p-6 border border-white/5 shadow-xl scroll-mt-6"}>
+      {!bare && (
+        <div className="flex items-center space-x-2 mb-4">
+          <MessageSquare size={18} className="text-[#8B1E3F]" />
+          <h3 className="font-black italic uppercase text-sm">Chat profile</h3>
+        </div>
+      )}
 
       {!identities.length ? (
         <p className="text-[10px] text-white/40 font-bold uppercase">Open Chats once to set up your username.</p>
       ) : (
         <>
-          {identities.length > 1 && (
+          {!username && identities.length > 1 && (
             <div className="flex flex-wrap gap-2 mb-4">
               {identities.map((i) => (
                 <button
@@ -201,27 +240,27 @@ export default function ChatProfileCard({ uid }) {
             </div>
           )}
 
-          <div className="flex items-center gap-4 bg-black/20 p-4 rounded-2xl border border-white/5 mb-4">
+          <div className={bare ? "flex flex-col items-center text-center gap-3 mb-6" : "flex items-center gap-4 bg-black/20 p-4 rounded-2xl border border-white/5 mb-4"}>
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={photoBusy}
               aria-label="Change profile photo"
-              className="relative shrink-0 rounded-2xl"
+              className={`relative shrink-0 ${bare ? "rounded-full" : "rounded-2xl"}`}
             >
-              <Avatar username={selected} size={64} rounded="rounded-2xl" className="border-2 border-white/10" />
+              <Avatar username={selected} size={bare ? 96 : 64} rounded={bare ? "rounded-full" : "rounded-2xl"} className="border-2 border-white/10" />
               <span className="absolute -right-1.5 -bottom-1.5 w-7 h-7 rounded-full bg-[#2457D6] ring-4 ring-[#0f1a2c] flex items-center justify-center">
                 {photoBusy ? <Loader2 size={13} className="animate-spin" /> : <Camera size={13} />}
               </span>
             </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={uploadPhoto} />
-            <div className="min-w-0">
-              <p className="font-black italic uppercase text-[#E0708C] truncate">@{identities.find((i) => i.usernameLower === selected)?.username || selected}</p>
-              <p className="text-[10px] font-bold text-white/40 mt-1 leading-snug">
+            <div className={`min-w-0 ${bare ? "flex flex-col items-center" : ""}`}>
+              <p className={ui.name}>@{identities.find((i) => i.usernameLower === selected)?.username || selected}</p>
+              <p className={ui.hint}>
                 {photo ? "Your profile photo for this username." : "Tap the picture to add a profile photo. Until then you get your own pixel character."}
               </p>
               {photo && (
-                <button type="button" onClick={removePhoto} disabled={photoBusy} className="mt-1.5 flex items-center gap-1 text-[10px] font-black uppercase text-red-300/80 hover:text-red-300 disabled:opacity-50">
+                <button type="button" onClick={removePhoto} disabled={photoBusy} className={ui.remove}>
                   <Trash2 size={11} /> Remove photo
                 </button>
               )}
@@ -229,33 +268,33 @@ export default function ChatProfileCard({ uid }) {
           </div>
 
           <form onSubmit={save} className="space-y-3">
-            <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
+            <div className={ui.field}>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[9px] font-black uppercase text-white/40">Bio</p>
-                <span className="text-[9px] font-bold text-white/30">{bio.length}/{BIO_MAX}</span>
+                <p className={ui.label}>Bio</p>
+                <span className={ui.count}>{bio.length}/{BIO_MAX}</span>
               </div>
               <textarea
                 value={bio}
                 onChange={(e) => setBio(e.target.value.slice(0, BIO_MAX))}
                 rows={2}
                 placeholder="A line about you"
-                className="w-full resize-none bg-transparent font-bold text-sm outline-none text-white placeholder:text-white/20"
+                className={`${ui.text} resize-none`}
               />
             </div>
-            <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
+            <div className={ui.field}>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[9px] font-black uppercase text-white/40">Status</p>
-                <span className="text-[9px] font-bold text-white/30">{status.length}/{STATUS_MAX}</span>
+                <p className={ui.label}>Status</p>
+                <span className={ui.count}>{status.length}/{STATUS_MAX}</span>
               </div>
               <input
                 value={status}
                 onChange={(e) => setStatus(e.target.value.slice(0, STATUS_MAX))}
                 placeholder="What are you up to?"
-                className="w-full bg-transparent font-bold text-sm outline-none text-white placeholder:text-white/20"
+                className={ui.text}
               />
             </div>
             {changed && (
-              <button type="submit" disabled={saving} className="w-full bg-[#2457D6] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-[#2457D6]/20 transition-all active:scale-95 disabled:opacity-50">
+              <button type="submit" disabled={saving} className={ui.save}>
                 {saving ? "Saving…" : "Save chat profile"}
               </button>
             )}
@@ -269,17 +308,17 @@ export default function ChatProfileCard({ uid }) {
           )}
 
           <div className="mt-5">
-            <p className="text-[9px] font-black uppercase text-white/40 mb-2 flex items-center gap-1.5">
+            <p className={ui.devices}>
               <MonitorSmartphone size={12} /> Devices that used @{selected} in chat
             </p>
             {!devices.length ? (
               <p className="text-[11px] text-white/30 font-bold">None yet.</p>
             ) : (
-              <ul className="space-y-1.5">
+              <ul className={bare ? "" : "space-y-1.5"}>
                 {devices.map((s) => (
-                  <li key={s.id} className="flex items-center justify-between gap-3 bg-black/20 px-3 py-2 rounded-xl border border-white/5" title={s.device}>
-                    <span className="text-[11px] font-bold text-white/70 truncate">{deviceLabel(s.device)}</span>
-                    <span className="text-[10px] font-bold text-white/30 shrink-0">
+                  <li key={s.id} className={ui.device} title={s.device}>
+                    <span className={ui.deviceName}>{deviceLabel(s.device)}</span>
+                    <span className={ui.deviceTime}>
                       {timeOf(s) ? `Last active ${timeOf(s).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}` : "Active"}
                     </span>
                   </li>

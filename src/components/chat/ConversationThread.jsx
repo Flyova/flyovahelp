@@ -65,7 +65,7 @@ export default function ConversationThread({
   const [burst, setBurst] = useState(null); // coins-sent animation
   const clearBurst = useCallback(() => setBurst(null), []);
   const inputRef = useRef(null);
-  const { uid, chatState, typingIn, soundOn } = useChat();
+  const { uid, chatState, typingIn, soundOn, settingsFor } = useChat();
   // Sound for messages from others arriving while this chat is open and on screen.
   const soundRef = useRef(false);
   const meRef = useRef(me);
@@ -117,7 +117,8 @@ export default function ConversationThread({
   const shown = useMemo(() => (clearedMs ? msgs.filter((m) => m.pending || messageMillis(m) > clearedMs) : msgs), [msgs, clearedMs]);
   const blockedHere = !!convo?.blocked?.includes(me);
   const cantSend = !convo || blockedHere || lost || !!blockedByMe;
-  const receipts = chatState.readReceipts;
+  // Read receipts are a setting of the chat profile you're in this chat as.
+  const receipts = settingsFor(me).readReceipts;
 
   // "typing…": stamped at most every TYPING_PING_MS while there's text, cleared on send or leaving.
   const setTyping = useCallback((on) => {
