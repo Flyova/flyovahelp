@@ -85,14 +85,16 @@ service cloud.firestore {
           && request.resource.data.pin.matches('^[0-9]{8}$')));
     }
 
+    // An account (email, phone, date of birth, PIN, balance) is read only by its
+    // player and staff. Sign-up checks, the friends lobby, referrals and transfers
+    // get what they need from the server.
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow list: if true;
+      allow read: if request.auth != null && (request.auth.uid == userId || isStaff());
       // Sign-up: your own account, as a plain player whose only money is the
-      // welcome bonus.
+      // welcome bonus. The email code is made by the server (email_codes).
       allow create: if request.auth != null && request.auth.uid == userId
         && request.resource.data.get('uid', userId) == userId
-        && !request.resource.data.keys().hasAny(['isban', 'banned', 'isAgent', 'chatMuted', 'referralBonus',
+        && !request.resource.data.keys().hasAny(['isban', 'banned', 'isAgent', 'chatMuted', 'referralBonus', 'otp',
           'agent_balance', 'subscription_expires', 'subscription_started_at',
           'restrictDeposit', 'restrictWithdrawal', 'restrictTransfer'])
         && (!('role' in request.resource.data) || isPortalRole(request.resource.data.role))
@@ -131,11 +133,12 @@ service cloud.firestore {
     }
 
     // --- AGENTS ---
-    // Anyone signed in can see agents (to trade with one). An agent edits their
-    // rates, bank details and availability; their balance and approval are changed
-    // by the server (/api/trades) or an admin.
+    // An agent's record (ID photos, contact details, balance) is read only by the
+    // agent and staff; players get agent lists and a trade's bank details from
+    // /api/trades. An agent edits their rates, bank details and availability; their
+    // balance and approval are changed by the server or an admin.
     match /agents/{agentId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null && (request.auth.uid == agentId || isStaff());
       // Applying (or applying again after a rejection).
       allow create: if request.auth != null && request.auth.uid == agentId
         && request.resource.data.application_status == 'pending'

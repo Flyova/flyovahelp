@@ -9,11 +9,7 @@ import {
 } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import { createUserWithEmailAndPassword, updateProfile, signOut } from "firebase/auth";
-import {
-  doc, setDoc, serverTimestamp,
-  collection, query, where, getDocs
-} from "firebase/firestore";
-import { authFetch } from "@/lib/authFetch";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 
 // Fallback list used when the live restcountries.com lookup is blocked or
 // slow on the user's network/device, so the country selector is never empty.
@@ -187,26 +183,23 @@ function RegisterForm() {
         return;
       }
 
-      const usernameSnap = await getDocs(
-        query(collection(db, "users"), where("username", "==", normalizedUsername))
-      );
-      if (!usernameSnap.empty) {
+      // Accounts aren't readable before sign-in, so the server checks these.
+      const normalizedPhone = `${selectedCountry.code}${formData.phone}`;
+      const availability = await fetch(
+        `/api/auth/available?username=${encodeURIComponent(normalizedUsername)}&phone=${encodeURIComponent(normalizedPhone)}`
+      ).then((r) => r.json());
+      if (availability.error) throw new Error(availability.error);
+      if (availability.usernameTaken) {
         setError("This username is already taken. Please choose another.");
         setLoading(false);
         return;
       }
-
-      const normalizedPhone = `${selectedCountry.code}${formData.phone}`;
-      const phoneSnap = await getDocs(
-        query(collection(db, "users"), where("phone", "==", normalizedPhone))
-      );
-      if (!phoneSnap.empty) {
+      if (availability.phoneTaken) {
         setError("This phone number is already linked to another account.");
         setLoading(false);
         return;
       }
 
-      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
       const cred = await createUserWithEmailAndPassword(auth, normalizedEmail, formData.password);
       await updateProfile(cred.user, { displayName: normalizedUsername });
       const userPin = generateUserPin();
@@ -232,27 +225,11 @@ function RegisterForm() {
         ...(claimBonus && { welcomeBonusPaidAt: serverTimestamp() }),
         createdAt: serverTimestamp(),
         verified: false,
-        otp: otpCode,
         referredBy: resolvedReferrerUid ? referrerName : null,
         referrerUid: resolvedReferrerUid || null,
       });
 
-      try {
-        const emailResponse = await authFetch("/api/send-email", {
-          method: "POST",
-          body: {
-            to: normalizedEmail,
-            subject: "Welcome to StraWins - Verify Your Account",
-            html: `<p>Hello ${normalizedFullName || normalizedUsername || "Player"}, your code is ${otpCode}</p>`,
-          },
-        });
-        if (emailResponse.error) {
-          console.error("Registration verification email failed:", emailResponse.error);
-        }
-      } catch (e) {
-        console.error("Email failed", e);
-      }
-
+      // The verify page asks the server to email the 6-digit code.
       // Prevent access to protected pages before verification is completed.
       try {
         await signOut(auth);

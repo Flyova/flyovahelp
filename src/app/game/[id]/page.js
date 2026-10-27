@@ -77,6 +77,7 @@ export default function GamePage() {
   // behind gets treated as offline even if their Firestore doc still says "online".
   const PRESENCE_HEARTBEAT_MS = 15000;
   const PRESENCE_STALE_MS = 45000;
+  const LOBBY_POLL_MS = 5000;
   // Once one friend has won 15 more matches than the other, they can no
   // longer challenge each other until the gap narrows.
   const HEAD_TO_HEAD_WIN_CAP = 15;
@@ -170,18 +171,11 @@ export default function GamePage() {
     // Drives re-filtering of stale players even though their docs haven't changed.
     const staleTicker = setInterval(() => setPresenceNow(Date.now()), 5000);
 
-    const unsubPlayers = onSnapshot(
-      query(
-        collection(db, "users"), 
-        where("status", "==", "online"),
-        where("currentPage", "==", "challenge_friends")
-      ), (snap) => {
-      setOnlinePlayers(
-        snap.docs
-          .map(d => ({ id: d.id, ...d.data() }))
-          .filter(u => u.id !== myId && u.role !== "admin") 
-      );
-    });
+    // Who's in the lobby comes from the server (players can't read other accounts).
+    const loadPlayers = () =>
+      authFetch("/api/game/lobby").then((res) => { if (res.players) setOnlinePlayers(res.players); }).catch(() => {});
+    loadPlayers();
+    const playersPoll = setInterval(loadPlayers, LOBBY_POLL_MS);
 
     const threeMinsAgo = Date.now() - (3 * 60 * 1000);
     
@@ -212,7 +206,7 @@ export default function GamePage() {
     return () => {
         clearInterval(heartbeat);
         clearInterval(staleTicker);
-        unsubPlayers();
+        clearInterval(playersPoll);
         unsubIncoming();
         unsubOutgoing();
         unsubGame();
@@ -595,10 +589,7 @@ export default function GamePage() {
     }
   };
 
-  const activePlayers = onlinePlayers.filter((p) => {
-    const lastSeenMs = p.lastSeen?.toMillis?.() ?? 0;
-    return presenceNow - lastSeenMs <= PRESENCE_STALE_MS;
-  });
+  const activePlayers = onlinePlayers.filter((p) => presenceNow - Number(p.lastSeen || 0) <= PRESENCE_STALE_MS);
 
   const filteredPlayers = activePlayers.filter(p =>
     p.username?.toLowerCase().includes(searchQuery.toLowerCase())

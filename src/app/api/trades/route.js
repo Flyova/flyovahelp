@@ -19,6 +19,10 @@ import { tradeAcceptedEmail, tradeAssignedEmail, tradeCompletedEmail, tradeDecli
 //               accepts -> agent pays the player -> player confirms (agent balance
 //               gets amount − 5%). Declined or expired: the amount goes back.
 //
+//   GET ?view=agents&type=deposit|withdrawal&amount= -> { agents: [{ id, full_name, deposit_rate, withdrawal_rate }] }
+//        approved agents in your country (for a deposit, ones whose balance covers amount + fee)
+//   GET ?view=agent&id=   -> { name, bank? }   a trade's agent; the bank details only for the
+//        depositor, once the agent has accepted (agents' records aren't readable by players)
 //   POST { action: "create", type, agentId, amount } -> { id, balance? }
 //   POST { action: "accept" | "decline" | "confirm" | "expire", id } -> { ok }
 //   POST { action: "agentTopup" | "agentWithdraw", amount } -> { wallet, agentBalance }
@@ -67,7 +71,7 @@ async function create(db, caller, { type, agentId, amount }) {
       // The agent's buy rate for a deposit, sell rate for a withdrawal (local currency per $).
       senderId: caller.uid, agentId, amount: value, rate: Number(agent[type === "deposit" ? "deposit_rate" : "withdrawal_rate"]) || 0,
       type, status: "pending",
-      createdAt: now, senderName: me.fullName || "User",
+      createdAt: now, senderName: me.fullName || "User", agentName: agent.full_name || "Agent",
     };
     if (type === "deposit") {
       tx.set(tradeRef, trade);
@@ -300,6 +304,53 @@ async function staffRefund(db, caller, { id }) {
   });
   if (out.error) return fail(out.error, out.status);
   return NextResponse.json({ ok: true, refunded: out.refunded });
+}
+
+async function agentsView(db, caller, params) {
+  const type = params.get("type") === "withdrawal" ? "withdrawal" : "deposit";
+  const amount = Number(params.get("amount")) || 0;
+  const me = (await db.collection("users").doc(caller.uid).get()).data();
+  if (!me?.country) return NextResponse.json({ agents: [] });
+  const snap = await db.collection("agents").where("application_status", "==", "approved")
+    .where("country", "==", me.country).where("banned", "==", false).limit(30).get();
+  const needC = type === "deposit" ? Math.round(cents(amount) * (1 + AGENT_FEE_RATE.deposit)) : 0;
+  const agents = snap.docs
+    .filter((d) => d.id !== caller.uid && cents(d.data().agent_balance) >= needC)
+    .map((d) => ({
+      id: d.id,
+      full_name: d.data().full_name || "Verified Agent",
+      deposit_rate: Number(d.data().deposit_rate) || 0,
+      withdrawal_rate: Number(d.data().withdrawal_rate) || 0,
+    }));
+  return NextResponse.json({ agents });
+}
+
+async function agentView(db, caller, params) {
+  const snap = await db.collection("trades").doc(String(params.get("id") || "")).get();
+  const t = snap.exists ? snap.data() : null;
+  if (!t || (t.senderId !== caller.uid && t.agentId !== caller.uid)) return fail("Trade not found.", 404);
+  const a = (await db.collection("agents").doc(t.agentId).get()).data() || {};
+  const showBank = t.senderId === caller.uid && t.type === "deposit" && ["acknowledged", "completed"].includes(t.status);
+  return NextResponse.json({
+    name: a.full_name || t.agentName || "Agent",
+    ...(showBank ? { bank: { bankName: a.bankName || "", accountName: a.accountName || "", accountNumber: a.accountNumber || "" } } : {}),
+  });
+}
+
+const VIEWS = { agents: agentsView, agent: agentView };
+
+export async function GET(req) {
+  try {
+    const caller = await getCaller(req);
+    if (!caller) return fail("Sign in again to continue.", 401);
+    const params = new URL(req.url).searchParams;
+    const view = Object.hasOwn(VIEWS, params.get("view")) ? VIEWS[params.get("view")] : null;
+    if (!view) return fail("Unknown view.");
+    return await view(getAdminDb(), caller, params);
+  } catch (e) {
+    console.error("Trades view error:", e);
+    return fail("Something went wrong. Please try again.", 500);
+  }
 }
 
 const ACTIONS = {

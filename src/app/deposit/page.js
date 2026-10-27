@@ -100,7 +100,7 @@ export default function DepositPage() {
 
   useEffect(() => {
     if (method === "agent" && userData.country) {
-      fetchAgents(userData.country, parseFloat(depositAmount) || 0);
+      fetchAgents(parseFloat(depositAmount) || 0);
     }
   }, [depositAmount, method, userData.country]);
 
@@ -131,33 +131,14 @@ export default function DepositPage() {
     }
   };
 
-  const fetchAgents = async (country, amount) => {
+  const fetchAgents = async (amount) => {
     setAgentsLoading(true);
     try {
-        const agentQuery = query(
-          collection(db, "agents"),
-          where("application_status", "==", "approved"),
-          where("country", "==", country),
-          where("banned", "==", false),
-          limit(30)
-        );
-        
-        const agentSnap = await getDocs(agentQuery);
-        
-        const validAgents = agentSnap.docs.map((agentDoc) => {
-            const aData = agentDoc.data();
-            const aId = agentDoc.id;
-            const businessBalance = Number(aData.agent_balance || 0);
-
-            if (aId === userData.uid || businessBalance < amount) return null;
-
-            return {
-                id: aId,
-                agent_balance: businessBalance,
-                full_name: aData.full_name || "Verified Agent", 
-                exchange_rate: Number(aData.deposit_rate || 0),
-            };
-        }).filter(a => a !== null);
+        // Agents' records aren't readable by players: the server lists the ones in
+        // your country whose balance covers this deposit and its fee.
+        const res = await authFetch(`/api/trades?view=agents&type=deposit&amount=${encodeURIComponent(amount || 0)}`);
+        if (res.error) throw new Error(res.error);
+        const validAgents = res.agents.map((a) => ({ id: a.id, full_name: a.full_name, exchange_rate: a.deposit_rate }));
 
         setAgents(validAgents);
     } catch (e) {

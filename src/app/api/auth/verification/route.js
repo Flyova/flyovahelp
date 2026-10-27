@@ -5,6 +5,14 @@ import { sendEmail } from "@/lib/resend";
 export const runtime = "nodejs";
 
 const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
+
+// The current code for an account is kept on email_codes/{uid}, which only the
+// server can read (it used to be users/{uid}.otp, readable by the player, so an
+// account could verify itself). Accounts made before that still have `otp` on
+// their user doc until a new code is sent.
+const MAX_TRIES = 5;
+const RESEND_COOLDOWN_MS = 60 * 1000;
+const codeRef = (uid) => getAdminDb().collection("email_codes").doc(uid);
 const normalizeOtp = (value) => String(value || "").replace(/\D/g, "").slice(0, 6);
 
 async function getUserProfileByEmail(emailInput) {
@@ -62,9 +70,19 @@ async function resendVerificationCode(emailInput) {
     });
   }
 
+  const current = (await codeRef(profile.uid).get()).data();
+  const sinceLast = Date.now() - Number(current?.issuedAt || 0);
+  if (sinceLast < RESEND_COOLDOWN_MS) {
+    return NextResponse.json(
+      { error: `Please wait ${Math.ceil((RESEND_COOLDOWN_MS - sinceLast) / 1000)}s before requesting another code.` },
+      { status: 429 }
+    );
+  }
+
   const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+  await codeRef(profile.uid).set({ code: otpCode, issuedAt: Date.now(), tries: 0 });
   await profile.userRef.update({
-    otp: otpCode,
+    otp: admin.firestore.FieldValue.delete(),
     emailLower: profile.email,
     otpIssuedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
@@ -109,7 +127,8 @@ async function verifySubmittedCode(emailInput, otpInput) {
     });
   }
 
-  const storedOtp = String(profile.userData?.otp || "").trim();
+  const saved = (await codeRef(profile.uid).get()).data();
+  const storedOtp = String(saved?.code || profile.userData?.otp || "").trim();
   if (!storedOtp) {
     return NextResponse.json(
       { error: "No active verification code found. Please re-send code." },
@@ -118,15 +137,32 @@ async function verifySubmittedCode(emailInput, otpInput) {
   }
 
   if (storedOtp !== otp) {
+    // A few wrong guesses use the code up, so it can't be guessed.
+    const tries = Number(saved?.tries || 0) + 1;
+    if (tries >= MAX_TRIES) {
+      await codeRef(profile.uid).delete();
+      return NextResponse.json(
+        { error: "Too many incorrect codes. Please re-send a new code." },
+        { status: 400 }
+      );
+    }
+    if (saved) {
+      await codeRef(profile.uid).update({ tries });
+    } else {
+      // An older account's code moves off its user doc on the first wrong try.
+      await codeRef(profile.uid).set({ code: storedOtp, issuedAt: 0, tries });
+      await profile.userRef.update({ otp: admin.firestore.FieldValue.delete() });
+    }
     return NextResponse.json(
       { error: "The code you entered is incorrect. Please try again." },
       { status: 400 }
     );
   }
 
+  await codeRef(profile.uid).delete();
   await profile.userRef.update({
     verified: true,
-    otp: null,
+    otp: admin.firestore.FieldValue.delete(),
     emailLower: profile.email,
     verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
@@ -157,7 +193,7 @@ export async function POST(request) {
         ok: true,
         exists: true,
         verified: profile.userData?.verified === true,
-        hasOtp: Boolean(profile.userData?.otp),
+        hasOtp: Boolean(profile.userData?.otp) || (await codeRef(profile.uid).get()).exists,
       });
     }
 

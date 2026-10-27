@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { db, auth } from "@/lib/firebase";
 import { 
-  doc, onSnapshot, updateDoc, collection, query, where, getDocs, setDoc, serverTimestamp 
+  doc, onSnapshot, updateDoc, setDoc, serverTimestamp 
 } from "firebase/firestore";
 import { onAuthStateChanged, updatePassword } from "firebase/auth";
 import { 
@@ -77,9 +77,9 @@ export default function Settings() {
       const updates = {};
       
       if (newUsername !== userData.username) {
-        const q = query(collection(db, "users"), where("username", "==", newUsername));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
+        const res = await fetch(`/api/auth/available?username=${encodeURIComponent(newUsername)}`).then((r) => r.json());
+        if (res.error) throw new Error(res.error);
+        if (res.usernameTaken) {
           throw new Error("Username already taken.");
         }
         updates.username = newUsername;

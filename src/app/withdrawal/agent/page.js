@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { auth, db } from "@/lib/firebase";
-import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { authFetch } from "@/lib/authFetch";
 import { Landmark, Globe, Star, ArrowRight, Loader2, ShieldCheck } from "lucide-react";
 import Header from "@/components/Header";
@@ -22,19 +22,10 @@ export default function AgentWithdraw() {
       const country = userSnap.data()?.country || "Nigeria";
       setUserCountry(country);
 
-      // 2. Fetch Approved, Unbanned Agents in that country
-      const q = query(
-        collection(db, "agents"),
-        where("application_status", "==", "approved"),
-        where("country", "==", country),
-        where("banned", "==", false)
-      );
+      // 2. Agents in that country, from the server (players can't read agents' records)
+      const res = await authFetch("/api/trades?view=agents&type=withdrawal");
+      const agentList = res.agents || [];
 
-      const querySnapshot = await getDocs(q);
-      const agentList = querySnapshot.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter(a => a.id !== user.uid); // Exclude self
-      
       setAgents(agentList);
       setLoading(false);
     }

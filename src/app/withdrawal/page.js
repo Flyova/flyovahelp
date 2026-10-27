@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { db, auth } from "@/lib/firebase";
-import { doc, onSnapshot, collection, query, where, getDocs, limit } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { authFetch } from "@/lib/authFetch";
 import { 
@@ -80,39 +80,19 @@ export default function WithdrawalPage() {
   useEffect(() => {
     if (method === "bank" && userData.country) {
       const timer = setTimeout(() => {
-        fetchAgents(userData.country, parseFloat(amount) || 0);
+        fetchAgents();
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [amount, method, userData.country]);
+  }, [method, userData.country]);
 
-  const fetchAgents = async (country, requiredAmount) => {
+  const fetchAgents = async () => {
     setAgentsLoading(true);
     try {
-      const q = query(
-        collection(db, "agents"),
-        where("application_status", "==", "approved"),
-        where("country", "==", country),
-        where("banned", "==", false),
-        limit(30)
-      );
-      
-      const snap = await getDocs(q);
-      
-      const validAgents = snap.docs.map((agentDoc) => {
-        const aData = agentDoc.data();
-        const aId = agentDoc.id;
-        const businessBalance = Number(aData.agent_balance || 0);
-
-        if (aId === userData.uid) return null;
-
-        return {
-          id: aId,
-          full_name: aData.full_name || "Active Agent",
-          exchange_rate: Number(aData.withdrawal_rate || 0),
-          agentBalance: businessBalance 
-        };
-      }).filter(a => a !== null);
+      // Agents' records aren't readable by players: the server lists the ones in your country.
+      const res = await authFetch("/api/trades?view=agents&type=withdrawal");
+      if (res.error) throw new Error(res.error);
+      const validAgents = res.agents.map((a) => ({ id: a.id, full_name: a.full_name, exchange_rate: a.withdrawal_rate }));
 
       setAgents(validAgents);
 

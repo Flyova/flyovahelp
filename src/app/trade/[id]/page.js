@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { db, auth } from "@/lib/firebase";
 import { 
-  doc, onSnapshot, collection, addDoc, serverTimestamp, query, orderBy, getDoc
+  doc, onSnapshot, collection, addDoc, serverTimestamp, query, orderBy
 } from "firebase/firestore";
 import { authFetch } from "@/lib/authFetch";
 import { 
@@ -50,22 +50,20 @@ export default function TradeRoom() {
         const data = { id: snap.id, ...snap.data() };
         setTrade(data);
 
+        // The other side's records aren't readable: the player's name is on the
+        // trade, and the server gives the player the agent's name and, once a
+        // deposit is accepted, their bank details.
         const isAgent = auth.currentUser?.uid === data.agentId;
-        const otherPartyId = isAgent ? data.senderId : data.agentId;
-        const otherPartyCollection = isAgent ? "users" : "agents";
-        
-        const partySnap = await getDoc(doc(db, otherPartyCollection, otherPartyId));
-        if (partySnap.exists()) {
-            const pData = partySnap.data();
-            setOtherPartyName(pData.full_name || pData.fullName || (isAgent ? data.senderName : data.agentName));
-        }
-
-        const isApproved = data.status === "acknowledged" || data.status === "completed";
-        if (data.type === "deposit" && !isAgent && isApproved && !agentBank) {
-            const agentSnap = await getDoc(doc(db, "agents", data.agentId));
-            if (agentSnap.exists()) {
-                setAgentBank(agentSnap.data());
-            }
+        if (isAgent) {
+          setOtherPartyName(data.senderName || "Player");
+        } else {
+          const isApproved = data.status === "acknowledged" || data.status === "completed";
+          const needBank = data.type === "deposit" && isApproved && !agentBank;
+          const agentInfo = await authFetch(`/api/trades?view=agent&id=${encodeURIComponent(snap.id)}`);
+          if (!agentInfo.error) {
+            setOtherPartyName(agentInfo.name);
+            if (needBank && agentInfo.bank) setAgentBank({ ...agentInfo.bank, full_name: agentInfo.name });
+          }
         }
 
         if (expiryTimerRef.current) {

@@ -64,6 +64,8 @@ async function accept(db, caller, { challengeId }) {
     }
     tx.set(gameRef, {
       player1: c.from, player2: caller.uid, scores: { p1: 0, p2: 0 }, roundsPlayed: { p1: 0, p2: 0 },
+      // Shown to the other player (who can't read this one's account).
+      player1Name: challenger.data().username || "Player", player2Name: me.data().username || "Player",
       turn: c.from, round: 1, gameState: "picking", picker: c.from, stakePerRound: cost.stakePerRound,
       wagerPool: { p1: cost.totalWager, p2: cost.totalWager },
       status: "active", numberPool: generateDistinctNumberPool(), createdAt: Date.now(), turnStartedAt: now,
