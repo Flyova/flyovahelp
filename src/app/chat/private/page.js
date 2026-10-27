@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Archive, ArchiveRestore, Ban, ChevronDown, Flag, MessagesSquare, Trash2, UserRound } from "lucide-react";
 import { presenceOf } from "@/lib/chat";
+import { useChatStatusLine } from "@/lib/chatPhotos";
 import { useChat } from "@/components/chat/ChatProvider";
 import Avatar from "@/components/Avatar";
 import ConversationList from "@/components/chat/ConversationList";
@@ -37,6 +38,7 @@ export default function PrivateChatsPage() {
     { label: "Delete chat", icon: Trash2, danger: true, run: () => removeChat(c) },
   ];
   const openChat = (id) => setOpenId("private", id);
+  const statusLine = useChatStatusLine(other); // their status, shown under their name
   const status = other ? presenceOf(presence[other], presenceNow) : null;
   const iBlocked = !!other && blockedNames.includes(other);
   const online = new Set(Object.keys(presence).filter((name) => presenceOf(presence[name], presenceNow)?.online));
@@ -88,6 +90,7 @@ export default function PrivateChatsPage() {
             header={{
               avatar: other && <Avatar username={other} size={40} rounded="rounded-full" />,
               title: other ? `@${other}` : "Private chat",
+              statusLine,
               subtitle: status?.text || "tap for profile",
               online: !!status?.online,
               label: other ? `View @${other}'s profile` : undefined,

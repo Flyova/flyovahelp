@@ -29,7 +29,9 @@ const lastWhere = (list, test) => {
  * live message list and the composer. Key it by conversation id.
  *
  * `me` is the username you're in this chat as. `header` = { avatar, title,
- * subtitle, online, label, onClick }. `menuItems` fill the ⋯ menu. A group admin passes
+ * statusLine, subtitle, online, label, onClick }: a private chat's statusLine (the
+ * other player's status) sits under the name, where a group shows its description.
+ * `menuItems` fill the ⋯ menu. A group admin passes
  * `onModerate` to remove other people's messages; groups pass `onSendCoins`.
  * `blockedByMe` = { name, onUnblock } when you've blocked the other person in a
  * private chat: you can't write to them until you unblock.
@@ -305,6 +307,8 @@ export default function ConversationThread({
       : blockedHere
         ? "You can no longer send messages here"
         : typingNow || groupLine || header.subtitle;
+  // Under the name: a group's description, or the other player's status in a private chat.
+  const aboutLine = lost ? "" : isGroup ? convo?.description : header.statusLine;
 
   return (
     <>
@@ -322,9 +326,7 @@ export default function ConversationThread({
           {header.avatar}
           <span className="min-w-0 flex-1">
             <span className={`block font-bold truncate ${isGroup ? "text-[18px] font-black leading-tight" : "text-[15px]"}`}>{convo ? header.title : lost ? "Chat unavailable" : "Loading…"}</span>
-            {isGroup && convo?.description && !lost && (
-              <span className="block text-[12.5px] text-white/65 truncate">{convo.description}</span>
-            )}
+            {aboutLine && <span className={`text-[12.5px] text-white/65 ${isGroup ? "block truncate" : "line-clamp-2 break-words"}`}>{aboutLine}</span>}
             <span className={`block text-[12px] truncate ${lost || blockedHere || blockedByMe ? "text-red-300/80" : typingNow ? "text-[#E0708C]" : header.online || onlineCount > 1 ? "text-emerald-400" : "text-white/45"}`}>{convo || lost ? subtitle : ""}</span>
           </span>
         </button>
