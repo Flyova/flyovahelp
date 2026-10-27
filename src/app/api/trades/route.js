@@ -64,7 +64,9 @@ async function create(db, caller, { type, agentId, amount }) {
     if (type === "withdrawal" && me.restrictWithdrawal) return { error: "Withdrawals have been restricted on your account. Please contact support.", status: 403 };
     const now = FV().serverTimestamp();
     const trade = {
-      senderId: caller.uid, agentId, amount: value, rate: Number(agent.exchange_rate) || 0, type, status: "pending",
+      // The agent's buy rate for a deposit, sell rate for a withdrawal (local currency per $).
+      senderId: caller.uid, agentId, amount: value, rate: Number(agent[type === "deposit" ? "deposit_rate" : "withdrawal_rate"]) || 0,
+      type, status: "pending",
       createdAt: now, senderName: me.fullName || "User",
     };
     if (type === "deposit") {
