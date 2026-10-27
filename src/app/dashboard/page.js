@@ -12,8 +12,9 @@ import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { 
   doc, onSnapshot, collection, query, where, or, 
-  orderBy, addDoc, serverTimestamp, updateDoc, limit, getDocs, increment
+  orderBy, addDoc, serverTimestamp, updateDoc, limit, getDocs
 } from "firebase/firestore";
+import { authFetch } from "@/lib/authFetch";
 import Header from "@/components/Header";
 
 export default function Dashboard() {
@@ -121,18 +122,9 @@ export default function Dashboard() {
     setClaimingId(jackpot.id);
 
     try {
-      // 1. Update user wallet
-      const userRef = doc(db, "users", user.uid);
-      await updateDoc(userRef, {
-        wallet: increment(jackpot.amount)
-      });
-
-      // 2. Mark jackpot as claimed
-      const jackpotRef = doc(db, "jackpots", jackpot.id);
-      await updateDoc(jackpotRef, {
-        status: "claimed",
-        claimedAt: serverTimestamp()
-      });
+      // The server checks it's yours and unclaimed, then pays it in.
+      const res = await authFetch("/api/wallet", { method: "POST", body: { action: "jackpot", id: jackpot.id } });
+      if (res.error) return alert(res.error);
 
       alert(`Congratulations! $${jackpot.amount} has been added to your wallet.`);
     } catch (e) {

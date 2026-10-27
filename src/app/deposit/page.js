@@ -23,12 +23,11 @@ import {
   query, 
   where, 
   getDocs, 
-  addDoc, 
-  serverTimestamp,
   limit,
   orderBy
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { authFetch } from "@/lib/authFetch";
 
 const DEPOSIT_CLEANUP_STORAGE_KEY = "deposit_cleanup_last_run";
 const DEPOSIT_CLEANUP_INTERVAL_MS = 15 * 60 * 1000;
@@ -176,106 +175,18 @@ export default function DepositPage() {
     setLoading(true);
     try {
       if (method === "usdt") {
-        // ... (Existing USDT logic remains the same)
-        const q = query(
-          collection(db, "deposits"),
-          where("userId", "==", auth.currentUser.uid),
-          where("status", "==", "pending"),
-          orderBy("createdAt", "desc"),
-          limit(1)
-        );
-
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          const lastDeposit = snap.docs[0].data();
-          const lastTime = lastDeposit.createdAt?.toDate().getTime();
-          const now = Date.now();
-          
-          if (lastTime && (now - lastTime) < 1800000) {
-            const minutesLeft = Math.ceil((1800000 - (now - lastTime)) / 60000);
-            alert(`You have an active deposit session. Please wait ${minutesLeft} minutes or complete your current payment.`);
-            return router.push(`/deposit/direct?id=${snap.docs[0].id}&amount=${lastDeposit.amount}`);
-          }
-        }
-
-        const docRef = await addDoc(collection(db, "deposits"), {
-          userId: auth.currentUser.uid,
-          amount: amountNum,
-          type: "deposit",
-          status: "pending",
-          network: "TRC20",
-          addressUsed: "TNpj89XtibkLWcMCNMoe53PmcdAaGYv1nA",
-          createdAt: serverTimestamp(),
-        });
-        
-        router.push(`/deposit/direct?id=${docRef.id}&amount=${amountNum}`);
-
+        // One USDT deposit at a time: the server resumes a pending one from the last 30 minutes.
+        const res = await authFetch("/api/wallet", { method: "POST", body: { action: "deposit", amount: amountNum } });
+        if (res.error) return alert(res.error);
+        if (res.existing) alert(`You have an active deposit session. Please wait ${res.minutesLeft} minutes or complete your current payment.`);
+        router.push(`/deposit/direct?id=${res.id}&amount=${res.amount}`);
       } else {
         // --- AGENT DEPOSIT TRIGGER ---
         if (!selectedAgent) return alert("Please select an agent");
-        
-        const userTradeQ = query(
-          collection(db, "trades"), 
-          where("senderId", "==", auth.currentUser.uid), 
-          where("status", "==", "pending"),
-          limit(1)
-        );
-        const userSnap = await getDocs(userTradeQ);
-        if (!userSnap.empty) {
-          alert("You already have an active pending trade.");
-          setLoading(false);
-          return;
-        }
-
-        // Fetch Agent's email for notification
-        const { getDoc, doc } = await import("firebase/firestore");
-        const agentDoc = await getDoc(doc(db, "agents", selectedAgent.id));
-        const agentEmail = agentDoc.exists() ? agentDoc.data().email : null;
-
-        const tradeRef = await addDoc(collection(db, "trades"), {
-          senderId: auth.currentUser.uid,
-          agentId: selectedAgent.id,
-          amount: amountNum,
-          rate: Number(selectedAgent.exchange_rate),
-          type: "deposit",
-          status: "pending",
-          createdAt: serverTimestamp(),
-          senderName: userData.fullName || "User"
-        });
-
-        // NOTIFY AGENT OF NEW DEPOSIT REQUEST
-        if (agentEmail) {
-          try {
-            await fetch('/api/send-email', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                to: agentEmail,
-                subject: "New Deposit Assignment Received",
-                html: `
-                  <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
-                    <h2 style="color: #000; border-bottom: 1px solid #eee; padding-bottom: 10px;">New Deposit Request</h2>
-                    <p>Hello ${selectedAgent.full_name},</p>
-                    <p>A user has initiated a deposit request to your account.</p>
-                    <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                      <p style="margin: 5px 0;"><strong>User:</strong> ${userData.fullName}</p>
-                      <p style="margin: 5px 0;"><strong>Proposed Amount:</strong> $${amountNum}</p>
-                      <p style="margin: 5px 0;"><strong>Trade ID:</strong> ${tradeRef.id}</p>
-                    </div>
-                    <p>Please log in to your agent panel to confirm the transaction once funds are received.</p>
-                    <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
-                      StraWins Agent Network
-                    </div>
-                  </div>
-                `
-              })
-            });
-          } catch (e) {
-            console.error("Agent notification failed:", e);
-          }
-        }
-        
-        router.push(`/trade/${tradeRef.id}`);
+        // The server checks for an open trade, creates this one and emails the agent.
+        const res = await authFetch("/api/trades", { method: "POST", body: { action: "create", type: "deposit", agentId: selectedAgent.id, amount: amountNum } });
+        if (res.error) return alert(res.error);
+        router.push(`/trade/${res.id}`);
       }
     } catch (e) {
       console.error("GENERAL DEPOSIT ERROR:", e);

@@ -26,6 +26,7 @@ import {
   Image as ImageIcon,
   Link2
 } from "lucide-react";
+import { authFetch } from "@/lib/authFetch";
 
 export default function AdminDepositList() {
   const [deposits, setDeposits] = useState([]);
@@ -176,10 +177,9 @@ export default function AdminDepositList() {
         const userSnap = await getDoc(doc(db, "users", deposit.userId));
         if (userSnap.exists()) {
           const userData = userSnap.data();
-          await fetch('/api/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+          await authFetch("/api/send-email", {
+            method: "POST",
+            body: {
               to: userData.email,
               subject: `Deposit Request ${newStatus === "completed" ? "Approved" : "Declined"}`,
               html: `
@@ -202,7 +202,7 @@ export default function AdminDepositList() {
                   </div>
                 </div>
               `
-            })
+            }
           });
         }
       } catch (e) { console.error("Admin deposit notification failed", e); }

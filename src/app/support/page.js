@@ -13,6 +13,7 @@ import {
   orderBy, addDoc, serverTimestamp, setDoc, 
   updateDoc, arrayUnion 
 } from "firebase/firestore";
+import { authFetch } from "@/lib/authFetch";
 
 export default function SupportChat() {
   const CHAT_NOTIFY_EMAIL = "contact.notifications.surname@gmail.com";
@@ -112,14 +113,13 @@ export default function SupportChat() {
 
       // Admin email notification for new support messages
       try {
-        await fetch("/api/send-email", {
+        await authFetch("/api/send-email", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+          body: {
             to: CHAT_NOTIFY_EMAIL,
             subject: "Support Notification: New User Message",
             html: `<p><strong>Sender:</strong> User (${user.email})</p><p><strong>Message:</strong> ${textToSend}</p>`,
-          }),
+          },
         });
       } catch (err) {
         console.error("Support email notification failed", err);

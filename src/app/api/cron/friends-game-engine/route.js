@@ -1,6 +1,7 @@
 import { getAdminDb, admin } from "@/lib/firebaseAdmin";
 import { generateDistinctNumberPool } from "@/lib/gameNumbers";
 import { NextResponse } from "next/server";
+import { settleMatch } from "@/lib/matches";
 
 // Mirrors the client-side ROUNDS_PER_PLAYER / MAX_ROUNDS / turn length used in
 // src/app/game/[id]/page.js. If a "play with friends" match is abandoned (one
@@ -159,43 +160,9 @@ const archiveCompletedGameHistory = async (adminDb, gameId, game) => {
   });
 };
 
-// Mirrors finalizeAndRefund's credit + delete transaction: re-reads the game
-// inside the transaction, so if a player's own "Claim & Exit" click wins the
-// race, this simply finds the doc already gone and does nothing.
-const settleCompletedGame = async (adminDb, gameId) => {
-  const gameRef = adminDb.collection("games").doc(gameId);
-
-  await adminDb.runTransaction(async (tx) => {
-    const snap = await tx.get(gameRef);
-    if (!snap.exists) return;
-    const data = snap.data() || {};
-    if (data.status !== "completed") return;
-
-    const p1Amt = Number(data.wagerPool?.p1 || 0);
-    const p2Amt = Number(data.wagerPool?.p2 || 0);
-
-    if (p1Amt > 0) {
-      tx.update(adminDb.collection("users").doc(data.player1), {
-        wallet: admin.firestore.FieldValue.increment(p1Amt),
-      });
-      tx.set(adminDb.collection("users").doc(data.player1).collection("transactions").doc(), {
-        title: "Match Settlement", amount: p1Amt, type: "finance", status: "win",
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    }
-    if (p2Amt > 0) {
-      tx.update(adminDb.collection("users").doc(data.player2), {
-        wallet: admin.firestore.FieldValue.increment(p2Amt),
-      });
-      tx.set(adminDb.collection("users").doc(data.player2).collection("transactions").doc(), {
-        title: "Match Settlement", amount: p2Amt, type: "finance", status: "win",
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    }
-
-    tx.delete(gameRef);
-  });
-};
+// Same capped payout as a player's own "Claim & Exit" (lib/matches): if that click
+// wins the race, this finds the doc already gone and does nothing.
+const settleCompletedGame = (adminDb, gameId) => settleMatch(adminDb, gameId);
 
 const sweepUnclaimedCompletedGames = async (adminDb, now) => {
   const completedSnap = await adminDb.collection("games").where("status", "==", "completed").get();

@@ -6,6 +6,7 @@ import { doc, setDoc, onSnapshot, serverTimestamp } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { Loader2, ShieldCheck, Upload, ArrowRight, User, Mail, Phone, AlertCircle } from "lucide-react";
 import Header from "@/components/Header";
+import { authFetch } from "@/lib/authFetch";
 
 export default function AgentApply() {
   const router = useRouter();
@@ -98,10 +99,9 @@ export default function AgentApply() {
 
       // --- ADMIN NOTIFICATION ---
       try {
-        await fetch('/api/send-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        await authFetch("/api/send-email", {
+          method: "POST",
+          body: {
             to: "arbie1877@gmail.com",
             subject: "New Agent Application Submitted",
             html: `
@@ -118,7 +118,7 @@ export default function AgentApply() {
                 </div>
               </div>
             `
-          })
+          }
         });
       } catch (emailErr) {
         console.error("Admin notification failed:", emailErr);

@@ -29,6 +29,7 @@ import {
   Cake,
   Landmark
 } from "lucide-react";
+import { authFetch } from "@/lib/authFetch";
 
 export default function AdminAgentManagement() {
   const [activeTab, setActiveTab] = useState("pending");
@@ -106,10 +107,9 @@ export default function AdminAgentManagement() {
 
       // --- TRIGGER: AGENT NOTIFICATION ---
       try {
-        await fetch('/api/send-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        await authFetch("/api/send-email", {
+          method: "POST",
+          body: {
             to: selectedAgent.email,
             subject: `Agent Application ${newStatus === "approved" ? "Approved" : "Declined"}`,
             html: `
@@ -125,7 +125,7 @@ export default function AdminAgentManagement() {
                 </div>
               </div>
             `
-          })
+          }
         });
       } catch (e) { console.error("Email failed", e); }
 

@@ -22,6 +22,10 @@ const ROUND_GUARD_DOC_ID = "flyova_round_guard";
 const MAX_SWEEP_COMPLETED_GAMES = 120;
 const ENGINE_STEP_TIMEOUT_MS = 8000;
 const ROUND_DURATION_MS = 120000; // 2 min per round
+// A round's winning numbers stay here (server only; Firestore rules deny it) until the
+// round ends, then are copied onto the public timed_games doc. They used to sit on that
+// doc and in the RTDB round from the start, so anyone could read them before betting.
+const SECRETS_COLLECTION = "timed_game_secrets";
 const emptyPendingSweep = (skipped = false) => ({
   pendingScanned: 0,
   pendingSettled: 0,
@@ -336,7 +340,8 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
     if (!activeSnap.empty) {
       const gameDoc = activeSnap.docs[0];
       const gameId = gameDoc.id;
-      const winningNums = Array.isArray(gameDoc.data()?.winners) ? gameDoc.data().winners : [];
+      const secret = await adminDb.collection(SECRETS_COLLECTION).doc(gameId).get();
+      const winningNums = [secret.data()?.winners, gameDoc.data()?.winners].find(Array.isArray) || [];
 
       const settled = await settlePendingForGame({
         adminDb,
@@ -350,7 +355,7 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
       settledNowCount += settled.settledCount;
 
       await Promise.all([
-        gameDoc.ref.update({ status: "completed", completedAt: now }),
+        gameDoc.ref.update({ status: "completed", completedAt: now, winners: winningNums }),
         gameRef.update({ status: "settled", winners: winningNums }),
         roundGuardRef.set({
           status: "settled",
@@ -407,7 +412,6 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
           return {
             created: false,
             gameId: liveDoc.id,
-            winners: liveData.winners || [],
             numbers: liveData.numbers || [],
             startTime: liveData.startTime || (Number(liveData.endTime || endTime) - ROUND_DURATION_MS),
             endTime: liveData.endTime || endTime,
@@ -428,7 +432,6 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
               return {
                 created: false,
                 gameId: guardedRef.id,
-                winners: guardedData.winners || [],
                 numbers: guardedData.numbers || [],
                 startTime: guardedData.startTime || (guardedEndTime - ROUND_DURATION_MS),
                 endTime: guardedEndTime,
@@ -438,13 +441,11 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
         }
 
         const existingSnap = await tx.get(gameDocRef);
-        let finalWinners = winners;
         let finalNumbers = randomizedDisplay;
         let created = false;
 
         if (existingSnap.exists) {
           const existingData = existingSnap.data() || {};
-          finalWinners = existingData.winners || winners;
           finalNumbers = existingData.numbers || randomizedDisplay;
         } else {
           tx.create(gameDocRef, {
@@ -452,9 +453,13 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
             startTime,
             endTime,
             roundDuration: ROUND_DURATION_MS,
+            numbers: randomizedDisplay,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          tx.create(adminDb.collection(SECRETS_COLLECTION).doc(gameDocId), {
             winners,
             allGenerated: pool,
-            numbers: randomizedDisplay,
+            endTime,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
           created = true;
@@ -473,7 +478,6 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
         return {
           created,
           gameId: gameDocId,
-          winners: finalWinners,
           numbers: finalNumbers,
           startTime,
           endTime,
@@ -486,7 +490,6 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
         startTime: createResult.startTime,
         endTime: createResult.endTime,
         roundDuration: ROUND_DURATION_MS,
-        winners: createResult.winners,
         numbers: createResult.numbers,
       });
 

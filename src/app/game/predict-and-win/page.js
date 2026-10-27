@@ -2,11 +2,10 @@
 import { useState, useEffect, useRef } from "react";
 import { db, auth } from "@/lib/firebase";
 import { 
-  doc, onSnapshot, updateDoc, increment, collection, 
-  query, addDoc, serverTimestamp, orderBy, 
-  limit, getDoc, setDoc, Timestamp, runTransaction, where, getDocs 
+  doc, onSnapshot, collection, query, orderBy, limit, where, getDocs 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { authFetch } from "@/lib/authFetch";
 import { Timer, CheckCircle2, Lock, Clock, Trophy, Wallet, XCircle, ArrowLeft, AlertCircle, Calendar, TrendingUp } from "lucide-react";
 import { useRouter } from "next/navigation";
 import ToastNotification from "@/components/ToastNotification";
@@ -188,6 +187,7 @@ export default function PredictAndWin() {
   // 3. Global Round Listener
   useEffect(() => {
     if (!hasSubscribed || !user) return;
+    createNewRound();
     const q = query(collection(db, "predict_games"), orderBy("createdAt", "desc"), limit(1));
     return onSnapshot(q, (snap) => {
       if (!snap.empty) {
@@ -232,18 +232,14 @@ export default function PredictAndWin() {
     }
   };
 
+  // Rounds are made by the server on a fixed clock (60s, then 10s of results); this
+  // makes sure the current one exists. Between rounds it's still the one that ended.
   const createNewRound = async () => {
-    const conditions = ["Odd", "Even", "Both"];
-    await addDoc(collection(db, "predict_games"), {
-      condition: conditions[Math.floor(Math.random() * 3)],
-      n1: Math.floor(Math.random() * 50) + 1,
-      n2: Math.floor(Math.random() * 50) + 1,
-      endTime: Date.now() + (ROUND_DURATION * 1000),
-      createdAt: serverTimestamp(),
-      status: "active"
-    });
+    const round = await authFetch("/api/game/predict?view=round").catch(() => null);
+    if (round && !round.error && round.endTime <= Date.now()) {
+      setTimeout(createNewRound, Math.max(1000, round.nextAt - Date.now()));
+    }
   };
-
   const handlePlanClick = (plan) => {
     setPendingPlan(plan);
     setShowConfirmModal(true);
@@ -260,52 +256,13 @@ const buySubscription = async () => {
 
     setSubmitting(true);
     try {
-        const expiryDate = new Date(Date.now() + pendingPlan.duration);
-        
-        await runTransaction(db, async (transaction) => {
-            const userRef = doc(db, "users", user.uid);
-            transaction.update(userRef, { 
-              wallet: increment(-pendingPlan.price),
-              subscription_expires: Timestamp.fromDate(expiryDate)
-            });
-        });
-
-        await addDoc(collection(db, "users", user.uid, "transactions"), {
-            title: `Predict Stake: ${pendingPlan.name}`, 
-            amount: pendingPlan.price, 
-            type: "stake", 
-            status: "loss", 
-            timestamp: serverTimestamp()
-        });
-
-        // --- TRIGGER: NOTIFY USER OF PLAN ACTIVATION ---
-        try {
-          await fetch('/api/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              to: userData.email,
-              subject: "Predict & Win Plan Activated",
-              html: `
-                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 12px;">
-                  <h2 style="color: #2457D6; border-bottom: 1px solid #eee; padding-bottom: 10px;">Access Granted</h2>
-                  <p>Hello ${userData.fullName || 'User'},</p>
-                  <p>Your stake for the <strong>${pendingPlan.name}</strong> Predict & Win plan was successful.</p>
-                  <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #eee;">
-                    <p style="margin: 5px 0;"><strong>Plan Type:</strong> ${pendingPlan.name}</p>
-                    <p style="margin: 5px 0;"><strong>Stake Amount:</strong> $${pendingPlan.price.toFixed(2)}</p>
-                    <p style="margin: 5px 0; color: #8B1E3F;"><strong>Expires:</strong> ${expiryDate.toLocaleString()}</p>
-                  </div>
-                  <p>You can now place predictions and win rewards for every correct outcome during your session.</p>
-                  <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
-                    StraWins Gaming & Rewards
-                  </div>
-                </div>
-              `
-            })
-          });
-        } catch (e) { console.error("Activation notification failed", e); }
-
+        // The server takes the price, starts the plan and emails you.
+        const res = await authFetch("/api/game/predict", { method: "POST", body: { action: "plan", plan: pendingPlan.id } });
+        if (res.error) {
+          showNotification("warning", "Not Activated", res.error);
+          setShowConfirmModal(false);
+          return;
+        }
         const remainingBalance = Number(userData.wallet || 0) - pendingPlan.price;
         showNotification(
           "success",
@@ -326,16 +283,9 @@ const buySubscription = async () => {
     predictionLockRef.current = true;
     setPlacingPrediction(true);
     try {
-      await addDoc(collection(db, "users", user.uid, "transactions"), {
-          title: "Predict and Win",
-          gameId: currentGame.id,
-          prediction: selectedChoice,
-          amount: 0, 
-          type: "prediction",
-          status: "pending",
-          timestamp: serverTimestamp()
-      });
-      setHasBet(true);
+      const res = await authFetch("/api/game/predict", { method: "POST", body: { action: "predict", gameId: currentGame.id, choice: selectedChoice } });
+      if (res.error) showNotification("warning", "Not Placed", res.error);
+      else setHasBet(true);
     } finally {
       setPlacingPrediction(false);
       predictionLockRef.current = false;
@@ -344,43 +294,31 @@ const buySubscription = async () => {
 
   const processResults = async () => {
     setGameStatus("results");
-    setLastResult({ n1: currentGame.n1, n2: currentGame.n2, condition: currentGame.condition });
-
+    const game = currentGame;
+    // The outcome is only out once the round has ended on the server too, so this
+    // retries for a few seconds in case the clocks differ a little.
+    let outcome = null;
+    for (let tries = 0; tries < 6 && !outcome; tries += 1) {
+      const res = await authFetch(`/api/game/predict?view=result&id=${encodeURIComponent(game.id)}`).catch(() => ({ error: true }));
+      if (!res.error) outcome = res;
+      else await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    if (outcome) setLastResult({ n1: outcome.n1, n2: outcome.n2, condition: outcome.condition });
     if (hasBet && user) {
         try {
-            const q = query(
-                collection(db, "users", user.uid, "transactions"), 
-                where("gameId", "==", currentGame.id),
-                where("status", "==", "pending")
-            );
-            const querySnapshot = await getDocs(q);
-            
-            if (!querySnapshot.empty) {
-                const transDoc = querySnapshot.docs[0];
-                const userChoice = transDoc.data().prediction;
-
-                if (userChoice === currentGame.condition) {
-                    setResultType('win');
-                    await updateDoc(doc(db, "users", user.uid), { wallet: increment(WIN_REWARD) });
-                    await updateDoc(doc(db, "users", user.uid, "transactions", transDoc.id), {
-                        title: "Predict Win", amount: WIN_REWARD, status: "win", type: "win", timestamp: serverTimestamp()
-                    });
-                    setSessionEarnings((prev) => Number((prev + WIN_REWARD).toFixed(2)));
-                } else {
-                    setResultType('lose');
-                    await updateDoc(doc(db, "users", user.uid, "transactions", transDoc.id), {
-                        status: "loss", timestamp: serverTimestamp()
-                    });
-                }
+            // The server pays a correct prediction (and any earlier ones not yet settled).
+            const res = await authFetch("/api/game/predict", { method: "POST", body: { action: "settle" } });
+            const mine = res.results?.find((r) => r.gameId === game.id);
+            if (mine) {
+                setResultType(mine.result);
+                if (mine.result === "win") setSessionEarnings((prev) => Number((prev + WIN_REWARD).toFixed(2)));
                 setShowResultAlert(true);
             }
-        } catch (err) { console.error("Permission or Payout Error:", err); }
+        } catch (err) { console.error("Payout Error:", err); }
     }
-    
     setTimeout(() => { setShowResultAlert(false); }, 7000);
     setTimeout(() => { if (user) createNewRound(); }, 10000);
   };
-
   if (loading) return <div className="min-h-screen bg-[#0B1220] flex items-center justify-center text-white italic font-black uppercase tracking-tighter">Syncing...</div>;
 
   if (!hasSubscribed) {

@@ -1,0 +1,321 @@
+import { NextResponse } from "next/server";
+import { getAdminDb } from "@/lib/firebaseAdmin";
+import { getCaller } from "@/lib/apiAuth";
+import { resolvePrivilegedRole } from "@/lib/adminAccess";
+import {
+  AGENT_FEE_RATE, BONUS_REPAYMENT, FV, MIN_DEPOSIT, MIN_WITHDRAWAL, REFERRAL_COMMISSION, TRADE_EXPIRY_MS, cents,
+  formatUsd, isBanned, isTradingAgent, isValidAccountName, owesBonus, parseAmount, referrerOf, systemSettings, toDollars,
+} from "@/lib/money";
+import { tradeAcceptedEmail, tradeAssignedEmail, tradeCompletedEmail, tradeDeclinedEmail } from "@/lib/moneyEmails";
+
+// Trades with local agents: a player deposits or withdraws by paying (or being paid
+// by) an agent outside the app, and balances move here. Players' and agents' apps
+// can't change trades, wallets or agent balances (Firestore rules); the trade chat
+// (trades/{id}/messages) is still written directly.
+//
+//   deposit:    player creates -> agent accepts (agent balance pays amount + 3%) ->
+//               player pays the agent -> agent confirms (player's wallet gets the amount)
+//   withdrawal: player creates (wallet pays amount + any $3 bonus repayment) -> agent
+//               accepts -> agent pays the player -> player confirms (agent balance
+//               gets amount − 5%). Declined or expired: the amount goes back.
+//
+//   POST { action: "create", type, agentId, amount } -> { id, balance? }
+//   POST { action: "accept" | "decline" | "confirm" | "expire", id } -> { ok }
+//   POST { action: "agentTopup" | "agentWithdraw", amount } -> { wallet, agentBalance }
+//                                                    an agent moving money between their two balances
+//   POST { action: "staffCancel" | "staffRefund", id } -> { ok, refunded? }   admin/staff/support (Agent TX page):
+//                                                    a refund returns a deposit's locked amount + fee to the
+//                                                    agent, or a withdrawal's amount to the player, once
+
+const fail = (error, status = 400) => NextResponse.json({ error }, { status });
+const TYPES = ["deposit", "withdrawal"];
+const createdMs = (t) => t.createdAt?.toMillis?.() || Number(t.createdAt || 0);
+const isExpired = (t) => createdMs(t) > 0 && Date.now() - createdMs(t) >= TRADE_EXPIRY_MS;
+
+/** The trade's entry in the player's history (written when a withdrawal is created), if any. */
+const historyEntry = (db, t, id) =>
+  db.collection("users").doc(t.senderId).collection("transactions").where("tradeId", "==", id).limit(1);
+
+async function create(db, caller, { type, agentId, amount }) {
+  if (!TYPES.includes(type)) return fail("Choose deposit or withdrawal.");
+  const min = type === "deposit" ? MIN_DEPOSIT : MIN_WITHDRAWAL;
+  const value = parseAmount(amount, { min });
+  if (value === null) return fail(`Minimum ${type} is ${formatUsd(min)}.`);
+  if (!agentId || typeof agentId !== "string" || agentId === caller.uid) return fail("Please select an agent.");
+  const settings = await systemSettings(db);
+  if (settings[type === "deposit" ? "depositEnabled" : "withdrawalEnabled"] === false) {
+    return fail(`${type === "deposit" ? "Deposits" : "Withdrawals"} are paused right now. Please try again later.`, 403);
+  }
+  const userRef = db.collection("users").doc(caller.uid);
+  const agentRef = db.collection("agents").doc(agentId);
+  const tradeRef = db.collection("trades").doc();
+  const open = db.collection("trades").where("senderId", "==", caller.uid).where("status", "==", "pending").limit(1);
+
+  const out = await db.runTransaction(async (tx) => {
+    const [u, a] = await tx.getAll(userRef, agentRef);
+    const pending = await tx.get(open);
+    if (!u.exists) return { error: "Account not found.", status: 404 };
+    if (!isTradingAgent(a.exists && a.data())) return { error: "This agent isn't available. Please choose another.", status: 409 };
+    if (!pending.empty) return { error: "You already have an active pending trade.", status: 409 };
+    const me = u.data();
+    const agent = a.data();
+    if (isBanned(me)) return { error: "Your account can't trade.", status: 403 };
+    if (type === "deposit" && me.restrictDeposit) return { error: "Deposits have been restricted on your account. Please contact support.", status: 403 };
+    if (type === "withdrawal" && me.restrictWithdrawal) return { error: "Withdrawals have been restricted on your account. Please contact support.", status: 403 };
+    const now = FV().serverTimestamp();
+    const trade = {
+      senderId: caller.uid, agentId, amount: value, rate: Number(agent.exchange_rate) || 0, type, status: "pending",
+      createdAt: now, senderName: me.fullName || "User",
+    };
+    if (type === "deposit") {
+      tx.set(tradeRef, trade);
+      return { me, agent };
+    }
+    if (!isValidAccountName(me.fullName)) {
+      return { error: "Your account name is incomplete or invalid for withdrawals. It needs a full first and last name (e.g. John Doe); single names or initials aren't accepted. Contact support to update it.", status: 403 };
+    }
+    const bonus = owesBonus(me) ? BONUS_REPAYMENT : 0;
+    const totalC = cents(value) + cents(bonus);
+    if (cents(me.wallet) < totalC) {
+      return { error: `Insufficient balance. You need ${formatUsd(toDollars(totalC))} total (including bonus recovery).`, status: 402 };
+    }
+    tx.update(userRef, {
+      wallet: FV().increment(-toDollars(totalC)),
+      ...(bonus ? { bonusDeducted: true, welcomeBonusStatus: "recovered", welcomeBonusRecoveredAt: now } : {}),
+    });
+    if (bonus) {
+      tx.set(userRef.collection("transactions").doc(), {
+        title: "Bonus Recovery", amount: -bonus, type: "adjustment", status: "completed", timestamp: now, details: "Signup bonus recovery",
+      });
+    }
+    tx.set(tradeRef, { ...trade, fee: 0, bonusRecovered: bonus });
+    tx.set(userRef.collection("transactions").doc(), {
+      amount: -value, fee: 0, bonusRecovered: bonus, type: "withdrawal", method: "agent", agentName: agent.full_name || "",
+      tradeId: tradeRef.id, status: "pending", timestamp: now,
+    });
+    return { me, agent, balance: toDollars(cents(me.wallet) - totalC) };
+  });
+  if (out.error) return fail(out.error, out.status);
+  await tradeAssignedEmail({ to: out.agent.email, agentName: out.agent.full_name, type, senderName: out.me.fullName, amount: value, tradeId: tradeRef.id });
+  return NextResponse.json({ id: tradeRef.id, ...(out.balance !== undefined ? { balance: out.balance } : {}) });
+}
+
+/** Runs `step(tx, trade, refs)` on a live trade; `step` returns an error object or nothing. */
+async function onTrade(db, id, step) {
+  if (!id || typeof id !== "string") return { error: "Trade not found.", status: 404 };
+  const tradeRef = db.collection("trades").doc(id);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(tradeRef);
+    if (!snap.exists) return { error: "Trade not found.", status: 404 };
+    const trade = snap.data();
+    return (await step(tx, trade, tradeRef)) || { trade };
+  });
+}
+
+async function accept(db, caller, { id }) {
+  const agentRef = db.collection("agents").doc(caller.uid);
+  const out = await onTrade(db, id, async (tx, t, tradeRef) => {
+    if (t.agentId !== caller.uid) return { error: "Only this trade's agent can accept it.", status: 403 };
+    if (t.status !== "pending" || t.refunded) return { error: "This trade is no longer pending.", status: 409 };
+    if (isExpired(t)) return { error: "This trade has expired.", status: 409 };
+    const a = await tx.get(agentRef);
+    if (!isTradingAgent(a.exists && a.data())) return { error: "Your agent account can't take trades.", status: 403 };
+    const amount = Number(t.amount);
+    const feeC = Math.round(cents(amount) * AGENT_FEE_RATE[t.type]);
+    const totalC = cents(amount) + feeC;
+    if (t.type === "deposit") {
+      if (cents(a.data().agent_balance) < totalC) {
+        return { error: `Insufficient Agent Balance! Need ${formatUsd(toDollars(totalC))}.`, status: 402 };
+      }
+      tx.update(agentRef, { agent_balance: FV().increment(-toDollars(totalC)) });
+    }
+    tx.update(tradeRef, {
+      status: "acknowledged", acceptedAt: FV().serverTimestamp(), fee: toDollars(feeC), feeCharged: toDollars(feeC),
+      agentImpact: t.type === "deposit" ? -toDollars(totalC) : 0,
+    });
+  });
+  if (out.error) return fail(out.error, out.status);
+  const sender = (await db.collection("users").doc(out.trade.senderId).get()).data();
+  await tradeAcceptedEmail({ to: sender?.email, type: out.trade.type, amount: out.trade.amount, tradeId: id });
+  return NextResponse.json({ ok: true });
+}
+
+/** Withdrawal declined or expired: the amount (not any bonus repayment) goes back to the player. */
+async function refundWithdrawal(tx, db, t, id, description) {
+  const entry = await tx.get(historyEntry(db, t, id));
+  const amount = Number(t.amount || 0);
+  if (amount > 0) tx.update(db.collection("users").doc(t.senderId), { wallet: FV().increment(amount) });
+  if (!entry.empty) tx.update(entry.docs[0].ref, { status: "cancelled", description });
+  return amount;
+}
+
+async function decline(db, caller, { id }) {
+  const out = await onTrade(db, id, async (tx, t, tradeRef) => {
+    if (t.agentId !== caller.uid) return { error: "Only this trade's agent can decline it.", status: 403 };
+    if (t.status !== "pending" || t.refunded) return { error: "This trade is no longer pending.", status: 409 };
+    const update = { status: "cancelled", cancelledAt: FV().serverTimestamp(), declineReason: "Agent Declined" };
+    if (t.type === "withdrawal") {
+      const refunded = await refundWithdrawal(tx, db, t, id, "Withdrawal Declined - Trade Amount Refunded");
+      if (refunded > 0) Object.assign(update, { refunded: true, refundedAt: FV().serverTimestamp(), refundTarget: "client", refundAmount: refunded });
+    }
+    tx.update(tradeRef, update);
+  });
+  if (out.error) return fail(out.error, out.status);
+  const sender = (await db.collection("users").doc(out.trade.senderId).get()).data();
+  await tradeDeclinedEmail({ to: sender?.email, type: out.trade.type, amount: out.trade.amount });
+  return NextResponse.json({ ok: true });
+}
+
+async function expire(db, caller, { id }) {
+  const out = await onTrade(db, id, async (tx, t, tradeRef) => {
+    if (t.senderId !== caller.uid && t.agentId !== caller.uid) return { error: "Trade not found.", status: 404 };
+    if (t.status !== "pending" || t.refunded) return { error: "This trade is no longer pending.", status: 409 };
+    if (!isExpired(t)) return { error: "This trade hasn't expired yet.", status: 409 };
+    const update = { status: "cancelled", reason: "Expired", declineReason: "Trade Timed Out", cancelledAt: FV().serverTimestamp() };
+    if (t.type === "withdrawal") {
+      const refunded = await refundWithdrawal(tx, db, t, id, "Trade Expired - Trade Amount Refunded Automatically");
+      if (refunded > 0) Object.assign(update, { refunded: true, refundedAt: FV().serverTimestamp(), autoRefunded: true, refundTarget: "client", refundAmount: refunded });
+    }
+    tx.update(tradeRef, update);
+  });
+  if (out.error) return fail(out.error, out.status);
+  return NextResponse.json({ ok: true });
+}
+
+async function confirm(db, caller, { id }) {
+  // Deposits pay the depositor's referrer; resolved before the transaction (it may need queries).
+  const first = id && typeof id === "string" ? await db.collection("trades").doc(id).get() : null;
+  if (!first?.exists) return fail("Trade not found.", 404);
+  const senderRef = db.collection("users").doc(first.data().senderId);
+  const senderFirst = (await senderRef.get()).data() || {};
+  const referrerId = first.data().type === "deposit" ? await referrerOf(db, senderRef.id, senderFirst) : null;
+
+  const out = await onTrade(db, id, async (tx, t, tradeRef) => {
+    const confirmer = t.type === "deposit" ? t.agentId : t.senderId;
+    if (confirmer !== caller.uid) {
+      return { error: t.type === "deposit" ? "Only the agent confirms a deposit." : "Only the player confirms a withdrawal.", status: 403 };
+    }
+    if (t.status !== "acknowledged" || t.refunded) return { error: "This trade can't be confirmed now.", status: 409 };
+    const amount = Number(t.amount);
+    const feeC = Math.round(cents(amount) * AGENT_FEE_RATE[t.type]);
+    const now = FV().serverTimestamp();
+    if (t.type === "deposit") {
+      const referrer = referrerId ? await tx.get(db.collection("users").doc(referrerId)) : null;
+      tx.update(senderRef, { wallet: FV().increment(amount) });
+      if (referrer?.exists) {
+        const reward = toDollars(cents(amount) * REFERRAL_COMMISSION.agent);
+        const referrerRef = db.collection("users").doc(referrerId);
+        tx.update(referrerRef, { referralBonus: FV().increment(reward) });
+        tx.set(referrerRef.collection("transactions").doc(), {
+          amount: reward, type: "referral_reward", status: "completed",
+          description: `3.5% commission from @${senderFirst.username || ""}'s deposit`,
+          createdAt: now, fromUser: senderFirst.username || "", tradeId: id,
+        });
+      }
+    } else {
+      const entry = await tx.get(historyEntry(db, t, id));
+      tx.update(db.collection("agents").doc(t.agentId), { agent_balance: FV().increment(toDollars(cents(amount) - feeC)) });
+      if (!entry.empty) tx.update(entry.docs[0].ref, { status: "completed" });
+    }
+    const gone = FV().delete();
+    tx.update(tradeRef, {
+      status: "completed", completedAt: now, finalFee: toDollars(feeC),
+      cancelledAt: gone, cancelledBy: gone, declineReason: gone, reason: gone, refunded: gone, refundedAt: gone, autoRefunded: gone,
+    });
+  });
+  if (out.error) return fail(out.error, out.status);
+  await tradeCompletedEmail({ to: senderFirst.email, type: out.trade.type, amount: out.trade.amount });
+  return NextResponse.json({ ok: true });
+}
+
+/** An agent moving money between their main wallet and their agent balance. */
+async function moveAgentBalance(db, caller, amount, toAgent) {
+  const value = parseAmount(amount);
+  if (value === null) return fail("Please enter a valid amount.");
+  const userRef = db.collection("users").doc(caller.uid);
+  const agentRef = db.collection("agents").doc(caller.uid);
+  const out = await db.runTransaction(async (tx) => {
+    const [u, a] = await tx.getAll(userRef, agentRef);
+    if (!u.exists || !isTradingAgent(a.exists && a.data())) return { error: "Only approved agents have an agent balance.", status: 403 };
+    if (isBanned(u.data())) return { error: "Your account can't move money.", status: 403 };
+    const walletC = cents(u.data().wallet);
+    const agentC = cents(a.data().agent_balance);
+    const fromC = toAgent ? walletC : agentC;
+    if (fromC < cents(value)) {
+      return { error: `Insufficient funds in your ${toAgent ? "main wallet" : "agent balance"}. Available: ${formatUsd(toDollars(fromC))}.`, status: 402 };
+    }
+    const sign = toAgent ? 1 : -1;
+    tx.update(userRef, { wallet: FV().increment(-sign * value) });
+    tx.update(agentRef, { agent_balance: FV().increment(sign * value) });
+    return { wallet: toDollars(walletC - sign * cents(value)), agentBalance: toDollars(agentC + sign * cents(value)) };
+  });
+  if (out.error) return fail(out.error, out.status);
+  return NextResponse.json(out);
+}
+
+/** Admin, staff and support accounts (the Agent TX page). */
+async function isStaffCaller(db, caller) {
+  const me = (await db.collection("users").doc(caller.uid).get()).data();
+  return !!resolvePrivilegedRole(me?.role, caller.email);
+}
+
+async function staffCancel(db, caller, { id }) {
+  if (!(await isStaffCaller(db, caller))) return fail("Staff only.", 403);
+  const out = await onTrade(db, id, async (tx, t, tradeRef) => {
+    if (["completed", "cancelled", "refunded"].includes(t.status) || t.refunded) {
+      return { error: "This trade can no longer be cancelled.", status: 409 };
+    }
+    tx.update(tradeRef, { status: "cancelled", cancelledAt: FV().serverTimestamp(), cancelledBy: "admin" });
+  });
+  if (out.error) return fail(out.error, out.status);
+  return NextResponse.json({ ok: true });
+}
+
+async function staffRefund(db, caller, { id }) {
+  if (!(await isStaffCaller(db, caller))) return fail("Staff only.", 403);
+  const out = await onTrade(db, id, async (tx, t, tradeRef) => {
+    if (t.refunded) return { error: "This trade has already been refunded.", status: 409 };
+    if (t.status === "completed") return { error: "A completed trade can't be refunded.", status: 409 };
+    const now = FV().serverTimestamp();
+    let refundC;
+    if (t.type === "deposit") {
+      // The agent's balance is only charged (amount + fee) when they accept.
+      if (!(Number(t.agentImpact) < 0) && !t.acceptedAt) return { error: "The agent's balance wasn't charged for this trade.", status: 409 };
+      refundC = cents(t.amount) + cents(t.fee || t.feeCharged || t.finalFee || 0);
+      const agentRef = db.collection("agents").doc(t.agentId);
+      if (!(await tx.get(agentRef)).exists) return { error: "Agent profile not found. Cannot process deposit refund.", status: 404 };
+      tx.update(agentRef, { agent_balance: FV().increment(toDollars(refundC)) });
+    } else {
+      const entry = await tx.get(historyEntry(db, t, id));
+      refundC = cents(t.amount);
+      tx.update(db.collection("users").doc(t.senderId), { wallet: FV().increment(toDollars(refundC)) });
+      if (!entry.empty) tx.update(entry.docs[0].ref, { status: "refunded", description: "Admin Manual Refund Processed" });
+    }
+    tx.update(tradeRef, {
+      refunded: true, refundedAt: now, refundTarget: t.type === "deposit" ? "agent" : "client", refundAmount: toDollars(refundC),
+    });
+    return { trade: t, refunded: toDollars(refundC) };
+  });
+  if (out.error) return fail(out.error, out.status);
+  return NextResponse.json({ ok: true, refunded: out.refunded });
+}
+
+const ACTIONS = {
+  create, accept, decline, confirm, expire, staffCancel, staffRefund,
+  agentTopup: (db, caller, body) => moveAgentBalance(db, caller, body.amount, true),
+  agentWithdraw: (db, caller, body) => moveAgentBalance(db, caller, body.amount, false),
+};
+
+export async function POST(req) {
+  try {
+    const caller = await getCaller(req);
+    if (!caller) return fail("Sign in again to continue.", 401);
+    const body = await req.json().catch(() => ({}));
+    const run = Object.hasOwn(ACTIONS, body.action) ? ACTIONS[body.action] : null;
+    if (!run) return fail("Unknown action.");
+    return await run(getAdminDb(), caller, body);
+  } catch (e) {
+    console.error("Trades error:", e);
+    return fail("Something went wrong. Please try again.", 500);
+  }
+}

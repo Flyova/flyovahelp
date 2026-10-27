@@ -28,6 +28,7 @@ import {
   Copy,
   CheckCheck
 } from "lucide-react";
+import { authFetch } from "@/lib/authFetch";
 
 export default function AdminWithdrawalList() {
   const [withdrawals, setWithdrawals] = useState([]);
@@ -215,10 +216,9 @@ export default function AdminWithdrawalList() {
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
           const userData = userSnap.data();
-          await fetch('/api/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+          await authFetch("/api/send-email", {
+            method: "POST",
+            body: {
               to: userData.email,
               subject: `Withdrawal Request ${newStatus === "approved" ? "Approved" : "Declined"}`,
               html: `
@@ -241,7 +241,7 @@ export default function AdminWithdrawalList() {
                   </div>
                 </div>
               `
-            })
+            }
           });
         }
       } catch (e) { console.error("Admin withdrawal notification failed", e); }

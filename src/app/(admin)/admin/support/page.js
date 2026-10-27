@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import { authFetch } from "@/lib/authFetch";
 
 const CHAT_NOTIFY_EMAIL = "contact.notifications.surname@gmail.com";
 const CLEANUP_STORAGE_KEY = "support_cleanup_last_run";
@@ -267,14 +268,13 @@ export default function AdminSupport() {
       }
 
       try {
-        await fetch("/api/send-email", {
+        await authFetch("/api/send-email", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+          body: {
             to: CHAT_NOTIFY_EMAIL,
             subject: "Support Notification: Admin Reply Sent",
             html: `<p><strong>Sender:</strong> Admin</p><p><strong>User:</strong> ${selectedChat.userEmail}</p><p><strong>Message:</strong> ${text}</p>`,
-          }),
+          },
         });
       } catch (e) {
         console.error("Admin live chat notification email failed:", e);

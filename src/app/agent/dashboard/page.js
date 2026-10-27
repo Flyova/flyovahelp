@@ -8,15 +8,11 @@ import {
   onSnapshot, 
   doc, 
   updateDoc,
-  increment,
-  writeBatch,
-  serverTimestamp,
   orderBy,
-  limit,
-  getDoc,
-  getDocs
+  limit
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { authFetch } from "@/lib/authFetch";
 import { useRouter } from "next/navigation";
 import { 
   Check, 
@@ -122,14 +118,8 @@ export default function AgentDashboard() {
 
     setTopupLoading(true);
     try {
-      const batch = writeBatch(db);
-      const userRef = doc(db, "users", auth.currentUser.uid);
-      const agentRef = doc(db, "agents", auth.currentUser.uid);
-
-      batch.update(userRef, { wallet: increment(-amount) });
-      batch.update(agentRef, { agent_balance: increment(amount) });
-
-      await batch.commit();
+      const res = await authFetch("/api/trades", { method: "POST", body: { action: "agentTopup", amount } });
+      if (res.error) return alert("Transfer failed: " + res.error);
       setIsTopupModalOpen(false);
       setTopupAmount("");
       alert("Topup Successful!");
@@ -151,14 +141,8 @@ export default function AgentDashboard() {
 
     setWithdrawLoading(true);
     try {
-      const batch = writeBatch(db);
-      const userRef = doc(db, "users", auth.currentUser.uid);
-      const agentRef = doc(db, "agents", auth.currentUser.uid);
-
-      batch.update(agentRef, { agent_balance: increment(-amount) });
-      batch.update(userRef, { wallet: increment(amount) });
-
-      await batch.commit();
+      const res = await authFetch("/api/trades", { method: "POST", body: { action: "agentWithdraw", amount } });
+      if (res.error) return alert("Transfer failed: " + res.error);
       setIsWithdrawModalOpen(false);
       setWithdrawAmount("");
       alert("Transfer to Main Wallet Successful!");
@@ -189,29 +173,9 @@ export default function AgentDashboard() {
   const handleAcceptTrade = async (trade) => {
     setActionLoading(trade.id);
     try {
-      const batch = writeBatch(db);
-      const agentRef = doc(db, "agents", auth.currentUser.uid);
-      
-      const amount = Number(trade.amount);
-      const feePercent = trade.type === "deposit" ? 0.03 : 0.05;
-      const totalToLock = amount + (amount * feePercent);
-
-      if (trade.type === "deposit") {
-        if ((agent.agent_balance || 0) < totalToLock) {
-           alert("Insufficient Agent Balance to cover trade + fee!");
-           setActionLoading(null);
-           return;
-        }
-        batch.update(agentRef, { agent_balance: increment(-totalToLock) });
-      }
-
-      batch.update(doc(db, "trades", trade.id), { 
-        status: "acknowledged", 
-        acceptedAt: serverTimestamp(),
-        feeCharged: amount * feePercent
-      });
-
-      await batch.commit();
+      // A deposit's amount + 3% comes out of your agent balance (the server checks it).
+      const res = await authFetch("/api/trades", { method: "POST", body: { action: "accept", id: trade.id } });
+      if (res.error) alert("Accept error: " + res.error);
     } catch (e) {
       alert("Accept error: " + e.message);
     } finally {
@@ -224,62 +188,9 @@ export default function AgentDashboard() {
 
     setActionLoading(trade.id);
     try {
-      const batch = writeBatch(db);
-
-      // Refund only applies to withdrawal requests because funds were already locked from user wallet.
-      if (trade.type === "withdrawal") {
-        const refundAmount = Number(trade.amount || 0);
-        const userRef = doc(db, "users", trade.senderId);
-        batch.update(userRef, { wallet: increment(refundAmount) });
-
-        const transQ = query(
-          collection(db, "users", trade.senderId, "transactions"),
-          where("tradeId", "==", trade.id),
-          limit(1)
-        );
-        const transSnap = await getDocs(transQ);
-        if (!transSnap.empty) {
-          batch.update(transSnap.docs[0].ref, {
-            status: "cancelled",
-            description: "Withdrawal Declined - Trade Amount Refunded",
-          });
-        }
-      }
-
-      batch.update(doc(db, "trades", trade.id), {
-        status: "cancelled",
-        cancelledAt: serverTimestamp(),
-        declineReason: "Agent Declined",
-      });
-
-      await batch.commit();
-
-      try {
-        const userSnap = await getDoc(doc(db, "users", trade.senderId));
-        if (userSnap.exists()) {
-          await fetch("/api/send-email", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              to: userSnap.data().email,
-              subject: "Trade Request Declined",
-              html: `
-                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
-                  <h2 style="color: #e11d48; border-bottom: 1px solid #eee; padding-bottom: 10px;">Request Declined</h2>
-                  <p>Hello,</p>
-                  <p>Your ${trade.type} request for $${trade.amount} has been declined by the agent.</p>
-                  <p>${trade.type === "withdrawal"
-                    ? "The original trade amount has been refunded to your wallet balance."
-                    : "This transaction has been cancelled. No funds were charged."}</p>
-                  <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">StraWins</div>
-                </div>
-              `,
-            }),
-          });
-        }
-      } catch (emailErr) {
-        console.error("Decline email failed:", emailErr);
-      }
+      // A withdrawal's amount goes back to the player; the server emails them.
+      const res = await authFetch("/api/trades", { method: "POST", body: { action: "decline", id: trade.id } });
+      if (res.error) alert("Decline error: " + res.error);
     } catch (e) {
       alert("Decline error: " + e.message);
     } finally {

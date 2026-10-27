@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
 import { auth, db } from "@/lib/firebase";
-import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
+import { authFetch } from "@/lib/authFetch";
 import { Landmark, Globe, Star, ArrowRight, Loader2, ShieldCheck } from "lucide-react";
 import Header from "@/components/Header";
 
@@ -46,15 +47,9 @@ export default function AgentWithdraw() {
 
     setRequesting(true);
     try {
-      await addDoc(collection(db, "trades"), {
-        senderId: auth.currentUser.uid,
-        agentId: agent.id,
-        amount: parseFloat(amount),
-        rate: agent.withdrawal_rate || 0,
-        status: "pending", // Waiting for agent to accept
-        type: "withdrawal",
-        createdAt: serverTimestamp(),
-      });
+      // The server takes the amount from the wallet when it creates the trade.
+      const res = await authFetch("/api/trades", { method: "POST", body: { action: "create", type: "withdrawal", agentId: agent.id, amount: parseFloat(amount) } });
+      if (res.error) return alert(res.error);
       alert("Withdrawal request sent to agent!");
     } catch (error) {
       alert("Error initiating trade.");

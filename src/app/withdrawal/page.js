@@ -2,22 +2,9 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { db, auth } from "@/lib/firebase";
-import { 
-  doc, 
-  onSnapshot, 
-  serverTimestamp, 
-  collection, 
-  addDoc, 
-  increment, 
-  updateDoc, 
-  query, 
-  where, 
-  getDocs,
-  getDoc,
-  limit,
-  writeBatch
-} from "firebase/firestore";
+import { doc, onSnapshot, collection, query, where, getDocs, limit } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { authFetch } from "@/lib/authFetch";
 import { 
   ChevronLeft, 
   Landmark, 
@@ -197,240 +184,20 @@ const handleWithdraw = async () => {
     setLoading(true);
 
     try {
-      if (method === "usdt") {
-        // ... (Existing USDT logic remains the same)
-        const withdrawalRef = doc(collection(db, "withdrawals"));
-        const userTxRef = doc(collection(db, "users", user.uid, "transactions"));
-
-        const txData = {
-          userId: user.uid,
-          amount: withdrawAmount,
-          fee: fee,
-          bonusRecovered: bonusDeduction,
-          totalDeducted: totalDeduct,
-          type: "withdrawal",
-          status: "pending",
-          method: "usdt",
-          details: { usdtAddress },
-          timestamp: serverTimestamp(),
-          withdrawalId: withdrawalRef.id,
-          userTransactionId: userTxRef.id,
-        };
-
-        if (isEligibleForBonusDeduction) {
-          await updateDoc(doc(db, "users", user.uid), { 
-            wallet: increment(-totalDeduct),
-            bonusDeducted: true,
-            welcomeBonusStatus: "recovered",
-            welcomeBonusRecoveredAt: serverTimestamp()
-          });
-          
-          await addDoc(collection(db, "users", user.uid, "transactions"), {
-            title: "Bonus Recovery",
-            amount: -3.00,
-            type: "adjustment",
-            status: "completed",
-            timestamp: serverTimestamp(),
-            details: "Signup bonus recovery"
-          });
-        } else {
-          await updateDoc(doc(db, "users", user.uid), { wallet: increment(-totalDeduct) });
-        }
-
-        const requestBatch = writeBatch(db);
-        requestBatch.set(withdrawalRef, txData);
-        requestBatch.set(userTxRef, {
-          ...txData,
-          title: "Withdrawal Requested",
-          amount: -withdrawAmount,
-        });
-        await requestBatch.commit();
-
-        // --- EMAIL NOTIFICATION ONLY FOR USDT ---
-        try {
-          await fetch('/api/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              to: "arbie1877@gmail.com",
-              subject: "New USDT Withdrawal Request",
-              html: `
-                <div style="font-family: sans-serif; padding: 20px; color: #333; border: 1px solid #eee; border-radius: 20px;">
-                  <h2 style="color: #8B1E3F;">Withdrawal Alert</h2>
-                  <p><strong>User:</strong> ${userData.fullName} (${user.uid})</p>
-                  <p><strong>Amount:</strong> $${withdrawAmount}</p>
-                  <p><strong>Network Fee:</strong> $${fee}</p>
-                  <p><strong>Address:</strong> <code style="background: #f4f4f5; padding: 4px 8px; border-radius: 5px;">${usdtAddress}</code></p>
-                  <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-                  <p style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 1px;">Action required in Admin Panel</p>
-                </div>
-              `
-            })
-          });
-        } catch (emailErr) {
-          console.error("Email notification failed:", emailErr);
-        }
-
-        // --- USER CONFIRMATION EMAIL ---
-        if (user.email) {
-          try {
-            await fetch('/api/send-email', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                to: user.email,
-                subject: "Withdrawal Request Received",
-                html: `
-                  <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 30px 20px; color: #333;">
-                    <div style="background: #0B1220; padding: 30px; border-radius: 20px; text-align: center; margin-bottom: 24px;">
-                      <h1 style="color: #8B1E3F; font-style: italic; text-transform: uppercase; margin: 0; font-size: 22px; letter-spacing: 1px;">StraWins</h1>
-                    </div>
-                    <h2 style="font-size: 20px; margin-bottom: 8px;">Withdrawal Request Received</h2>
-                    <p style="color: #555; margin-bottom: 24px;">Hi ${userData.fullName}, your USDT withdrawal request has been submitted and is now being reviewed.</p>
-                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-                      <table style="width: 100%; border-collapse: collapse;">
-                        <tr>
-                          <td style="padding: 8px 0; color: #666; font-size: 13px;">Withdrawal Amount</td>
-                          <td style="padding: 8px 0; font-weight: bold; text-align: right;">$${withdrawAmount.toFixed(2)}</td>
-                        </tr>
-                        <tr>
-                          <td style="padding: 8px 0; color: #666; font-size: 13px;">Service Fee</td>
-                          <td style="padding: 8px 0; font-weight: bold; text-align: right; color: #e11d48;">$${fee.toFixed(2)}</td>
-                        </tr>
-                        ${bonusDeduction > 0 ? `
-                        <tr>
-                          <td style="padding: 8px 0; color: #666; font-size: 13px;">Bonus Recovery</td>
-                          <td style="padding: 8px 0; font-weight: bold; text-align: right; color: #d97706;">$${bonusDeduction.toFixed(2)}</td>
-                        </tr>` : ''}
-                        <tr style="border-top: 1px solid #e2e8f0;">
-                          <td style="padding: 12px 0 8px; font-weight: bold; font-size: 14px;">Total Deducted</td>
-                          <td style="padding: 12px 0 8px; font-weight: bold; text-align: right; font-size: 16px; color: #8B1E3F;">$${totalDeduct.toFixed(2)}</td>
-                        </tr>
-                        <tr>
-                          <td style="padding: 8px 0; color: #666; font-size: 13px;">Network</td>
-                          <td style="padding: 8px 0; font-weight: bold; text-align: right;">TRC20 (USDT)</td>
-                        </tr>
-                        <tr>
-                          <td style="padding: 8px 0; color: #666; font-size: 13px;">Destination</td>
-                          <td style="padding: 8px 0; font-weight: bold; text-align: right; font-size: 11px; word-break: break-all;">${usdtAddress}</td>
-                        </tr>
-                      </table>
-                    </div>
-                    <p style="color: #555; font-size: 13px; line-height: 1.6;">Our team typically processes USDT withdrawals within <strong>24 hours</strong>. You will receive another email once your withdrawal has been approved or declined.</p>
-                    <p style="color: #999; font-size: 11px; margin-top: 24px; text-transform: uppercase; letter-spacing: 1px;">If you did not request this withdrawal, please contact support immediately.</p>
-                    <div style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; font-size: 11px; color: #aaa; text-align: center;">
-                      StraWins Gaming Platform
-                    </div>
-                  </div>
-                `
-              })
-            });
-          } catch (userEmailErr) {
-            console.error("User confirmation email failed:", userEmailErr);
-          }
-        }
-        
+      // The server checks the balance, fee and bonus recovery again, moves the money
+      // and sends the emails.
+      const res = method === "usdt"
+        ? await authFetch("/api/wallet", { method: "POST", body: { action: "withdraw", amount: withdrawAmount, address: usdtAddress } })
+        : await authFetch("/api/trades", { method: "POST", body: { action: "create", type: "withdrawal", agentId: selectedAgent.id, amount: withdrawAmount } });
+      if (res.error) {
+        alert(res.error);
         setLoading(false);
-        setResultingBalance(Number(userData.main || 0) - totalDeduct);
-        setShowSuccess(true);
-        setTimeout(() => router.push("/dashboard"), 3000);
-
-      } else {
-        // --- AGENT WITHDRAWAL TRIGGER ---
-        const userTradeQ = query(collection(db, "trades"), where("senderId", "==", auth.currentUser.uid), where("status", "==", "pending"), limit(1));
-        const userSnap = await getDocs(userTradeQ);
-        if (!userSnap.empty) {
-          alert("You have an active pending trade.");
-          setLoading(false);
-          return;
-        }
-
-        // Fetch Agent's email for notification
-        const agentDoc = await getDoc(doc(db, "agents", selectedAgent.id));
-        const agentEmail = agentDoc.exists() ? agentDoc.data().email : null;
-
-        if (isEligibleForBonusDeduction) {
-          await updateDoc(doc(db, "users", user.uid), {
-            wallet: increment(-totalDeduct),
-            bonusDeducted: true,
-            welcomeBonusStatus: "recovered",
-            welcomeBonusRecoveredAt: serverTimestamp()
-          });
-
-          await addDoc(collection(db, "users", user.uid, "transactions"), {
-            title: "Bonus Recovery",
-            amount: -3.00,
-            type: "adjustment",
-            status: "completed",
-            timestamp: serverTimestamp(),
-            details: "Signup bonus recovery"
-          });
-        } else {
-          await updateDoc(doc(db, "users", user.uid), { wallet: increment(-totalDeduct) });
-        }
-
-        const tradeRef = await addDoc(collection(db, "trades"), {
-          senderId: auth.currentUser.uid,
-          agentId: selectedAgent.id,
-          amount: withdrawAmount,
-          fee: 0,
-          bonusRecovered: bonusDeduction,
-          rate: Number(selectedAgent.exchange_rate),
-          type: "withdrawal",
-          status: "pending",
-          createdAt: serverTimestamp(),
-          senderName: userData.fullName || "User"
-        });
-
-        await addDoc(collection(db, "users", user.uid, "transactions"), {
-          amount: -withdrawAmount,
-          fee: 0,
-          bonusRecovered: bonusDeduction,
-          type: "withdrawal",
-          method: "agent",
-          agentName: selectedAgent.full_name,
-          tradeId: tradeRef.id,
-          status: "pending",
-          timestamp: serverTimestamp()
-        });
-
-        // NOTIFY AGENT OF NEW WITHDRAWAL ASSIGNMENT
-        if (agentEmail) {
-            try {
-              await fetch('/api/send-email', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  to: agentEmail,
-                  subject: "New Withdrawal Assignment Received",
-                  html: `
-                    <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
-                      <h2 style="color: #000; border-bottom: 1px solid #eee; padding-bottom: 10px;">New Payout Request</h2>
-                      <p>Hello ${selectedAgent.full_name},</p>
-                      <p>A user has initiated a withdrawal through your agency.</p>
-                      <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                        <p style="margin: 5px 0;"><strong>Sender:</strong> ${userData.fullName}</p>
-                        <p style="margin: 5px 0;"><strong>Amount:</strong> $${withdrawAmount}</p>
-                        <p style="margin: 5px 0;"><strong>Trade ID:</strong> ${tradeRef.id}</p>
-                      </div>
-                      <p>Please log in to your agent panel to view the user's bank details and complete the transfer.</p>
-                      <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
-                        StraWins Agent Network
-                      </div>
-                    </div>
-                  `
-                })
-              });
-            } catch (e) {
-              console.error("Agent notification failed:", e);
-            }
-        }
-        
-        setLoading(false);
-        setResultingBalance(Number(userData.main || 0) - totalDeduct);
-        setShowSuccess(true);
-        setTimeout(() => router.push(`/trade/${tradeRef.id}`), 3000);
+        return;
       }
+      setLoading(false);
+      setResultingBalance(res.balance ?? Number(userData.main || 0) - totalDeduct);
+      setShowSuccess(true);
+      setTimeout(() => router.push(method === "usdt" ? "/dashboard" : `/trade/${res.id}`), 3000);
     } catch (err) {
       console.error(err);
       alert("Transaction failed.");

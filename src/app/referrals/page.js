@@ -1,10 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
 import { db, auth } from "@/lib/firebase";
-import { 
-  doc, onSnapshot, collection, query, where, getDocs, updateDoc, increment, addDoc, serverTimestamp 
-} from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { authFetch } from "@/lib/authFetch";
 import Avatar from "@/components/Avatar";
 import {
   ChevronLeft,
@@ -27,28 +26,6 @@ import { useRouter } from "next/navigation";
 const MIN_QUALIFIED_REFERRALS = 3;
 const MIN_QUALIFYING_DEPOSIT = 10;
 
-// A referral "counts" once they've completed at least one deposit (agent trade or direct USDT) of at least $10.
-async function checkReferralHasQualifyingDeposit(referralUid) {
-  const tradeQ = query(
-    collection(db, "trades"),
-    where("senderId", "==", referralUid),
-    where("type", "==", "deposit"),
-    where("status", "==", "completed")
-  );
-  const depositQ = query(
-    collection(db, "deposits"),
-    where("userId", "==", referralUid),
-    where("status", "==", "completed")
-  );
-
-  const [tradeSnap, depositSnap] = await Promise.all([getDocs(tradeQ), getDocs(depositQ)]);
-
-  const hasQualifyingTrade = tradeSnap.docs.some((d) => Number(d.data().amount || 0) >= MIN_QUALIFYING_DEPOSIT);
-  const hasQualifyingDeposit = depositSnap.docs.some((d) => Number(d.data().amount || 0) >= MIN_QUALIFYING_DEPOSIT);
-
-  return hasQualifyingTrade || hasQualifyingDeposit;
-}
-
 export default function ReferralsPage() {
   const router = useRouter();
   const [user, setUser] = useState(null);
@@ -68,49 +45,25 @@ export default function ReferralsPage() {
       if (!u) return router.push("/login");
       setUser(u);
 
-      const fetchReferrals = async (selfData = {}) => {
+      // Who you referred and whether each has made a qualifying deposit: worked out by
+      // the server (players can't read other players' accounts or deposits).
+      const fetchReferrals = async () => {
         try {
-          const map = new Map();
-
-          // Primary referral mapping (new schema)
-          const qPrimary = query(collection(db, "users"), where("referrerUid", "==", u.uid));
-          const primarySnap = await getDocs(qPrimary);
-          primarySnap.forEach((d) => map.set(d.id, { id: d.id, ...d.data() }));
-
-          // Legacy fallback mapping (old schema)
-          const candidates = [selfData.username, selfData.fullName].filter(Boolean);
-          for (const label of candidates) {
-            const qLegacy = query(collection(db, "users"), where("referredBy", "==", label));
-            const legacySnap = await getDocs(qLegacy);
-            legacySnap.forEach((d) => map.set(d.id, { id: d.id, ...d.data() }));
-          }
-
-          const referralList = Array.from(map.values());
-          setReferrals(referralList);
-          setLoading(false);
-
-          // Check deposit qualification per-referral in the background so the page renders immediately.
-          setReferralsChecked(false);
-          const withDepositStatus = await Promise.all(
-            referralList.map(async (ref) => ({
-              ...ref,
-              hasDeposited: await checkReferralHasQualifyingDeposit(ref.id),
-            }))
-          );
-          setReferrals(withDepositStatus);
-          setReferralsChecked(true);
+          const res = await authFetch("/api/wallet?view=referrals");
+          if (res.error) throw new Error(res.error);
+          setReferrals(res.referrals);
         } catch (err) {
           console.error("Error fetching referrals:", err);
+        } finally {
           setLoading(false);
           setReferralsChecked(true);
         }
       };
+      fetchReferrals();
 
       const unsubUser = onSnapshot(doc(db, "users", u.uid), (snap) => {
         if (snap.exists()) {
-          const selfData = snap.data();
-          setUserData(selfData);
-          fetchReferrals(selfData);
+          setUserData(snap.data());
         } else {
           setLoading(false);
         }
@@ -147,21 +100,9 @@ export default function ReferralsPage() {
 
     setWithdrawLoading(true);
     try {
-      const userRef = doc(db, "users", user.uid);
-      
-      await updateDoc(userRef, {
-        referralBonus: increment(-amount),
-        wallet: increment(amount)
-      });
-
-      await addDoc(collection(db, "users", user.uid, "transactions"), {
-        title: "Referral Bonus Withdrawal",
-        amount: amount,
-        type: "referral_withdrawal",
-        status: "completed",
-        timestamp: serverTimestamp(),
-        description: `Transferred $${amount} from referral bonus to main wallet`
-      });
+      // The server checks the qualified referrals and the bonus balance again.
+      const res = await authFetch("/api/wallet", { method: "POST", body: { action: "referral", amount } });
+      if (res.error) return alert(res.error);
 
       setShowWithdrawModal(false);
       setWithdrawAmount("");

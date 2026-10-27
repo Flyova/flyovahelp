@@ -13,6 +13,7 @@ import {
   doc, setDoc, serverTimestamp,
   collection, query, where, getDocs
 } from "firebase/firestore";
+import { authFetch } from "@/lib/authFetch";
 
 // Fallback list used when the live restcountries.com lookup is blocked or
 // slow on the user's network/device, so the country selector is never empty.
@@ -237,18 +238,16 @@ function RegisterForm() {
       });
 
       try {
-        const emailResponse = await fetch("/api/send-email", {
+        const emailResponse = await authFetch("/api/send-email", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+          body: {
             to: normalizedEmail,
             subject: "Welcome to StraWins - Verify Your Account",
             html: `<p>Hello ${normalizedFullName || normalizedUsername || "Player"}, your code is ${otpCode}</p>`,
-          }),
+          },
         });
-        if (!emailResponse.ok) {
-          const emailPayload = await emailResponse.json().catch(() => ({}));
-          console.error("Registration verification email failed:", emailPayload?.error || "Unknown error");
+        if (emailResponse.error) {
+          console.error("Registration verification email failed:", emailResponse.error);
         }
       } catch (e) {
         console.error("Email failed", e);

@@ -4,18 +4,15 @@ import { db, auth } from "@/lib/firebase";
 import {
   doc,
   onSnapshot,
-  increment,
   collection,
   query,
   where,
-  addDoc,
-  serverTimestamp,
   orderBy,
   limit,
-  getDocs,
-  runTransaction
+  getDocs
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { authFetch } from "@/lib/authFetch";
 import { rtdb } from "@/lib/firebase";
 import { ref as rtdbRef, onValue as rtdbOnValue } from "firebase/database";
 import { Timer, CheckCircle2, Trophy, History, XCircle, RefreshCw, Loader2, X } from "lucide-react";
@@ -152,9 +149,18 @@ export default function StraWinsToDollars() {
     maybeKickGameEngine("reveal-results", { urgent: true });
 
     setGameStatus("results");
-    const gameWinners = [...(currentGame.winners || [])]; // capture before any awaits
-    const capturedNumbers = [...(currentGame.numbers || [])]; // freeze grid before game switches
+    const game = currentGame; // capture before any awaits
+    const capturedNumbers = [...(game.numbers || [])]; // freeze grid before game switches
     setLastGameNumbers(capturedNumbers);
+
+    // The winning numbers stay on the server until the round ends there too, so this
+    // retries for a few seconds in case the clocks differ a little.
+    let gameWinners = [];
+    for (let tries = 0; tries < 6 && !gameWinners.length; tries += 1) {
+      const res = await authFetch(`/api/game/flyova?view=result&id=${encodeURIComponent(game.id)}`).catch(() => ({ error: true }));
+      if (!res.error && Array.isArray(res.winners)) gameWinners = res.winners;
+      else await new Promise((resolve) => setTimeout(resolve, 800));
+    }
 
     // Show winning numbers green immediately — start 6s timer now so it's anchored to round end,
     // not to whenever async processing finishes.
@@ -174,7 +180,7 @@ export default function StraWinsToDollars() {
         // already flipped status by the time this client reveals results.
         const q = query(
           collection(db, "users", user.uid, "transactions"),
-          where("gameId", "==", currentGame.id),
+          where("gameId", "==", game.id),
           where("type", "==", "stake")
         );
         const betsSnap = await getDocs(q);
@@ -195,7 +201,7 @@ export default function StraWinsToDollars() {
 
           for (const betDoc of betsSnap.docs) {
             const { picks = [], amount: betStake } = betDoc.data();
-            const matchCount = currentGame.winners.filter(w => picks.includes(w)).length;
+            const matchCount = gameWinners.filter(w => picks.includes(w)).length;
 
             if (matchCount === 2) {
               const payout = parseFloat((betStake * WIN_MULTIPLIER).toFixed(2));
@@ -440,25 +446,12 @@ export default function StraWinsToDollars() {
     if (!stakeAmount || stakeAmount < 1 || stakeAmount > myWallet) return;
     setPlacingBet(true);
     try {
-      // Verify balance and deduct stake atomically
-      await runTransaction(db, async (transaction) => {
-        const userRef = doc(db, "users", user.uid);
-        const userSnap = await transaction.get(userRef);
-        const balance = userSnap.data()?.wallet || 0;
-        if (balance < stakeAmount) throw new Error("Insufficient balance");
-        transaction.update(userRef, { wallet: increment(-stakeAmount) });
+      // The server checks the round is still open and the balance, then takes the stake.
+      const res = await authFetch("/api/game/flyova", {
+        method: "POST",
+        body: { action: "stake", gameId: currentGame.id, picks: [...selectedNumbers], amount: stakeAmount },
       });
-
-      // Record stake with picks and gameId for payout computation
-      await addDoc(collection(db, "users", user.uid, "transactions"), {
-        title: "StraWins Stake",
-        amount: stakeAmount,
-        picks: [...selectedNumbers],
-        gameId: currentGame.id,
-        type: "stake",
-        status: "pending",
-        timestamp: serverTimestamp()
-      });
+      if (res.error) throw new Error(res.error);
 
       setActiveBets(prev => [...prev, { picks: [...selectedNumbers], amount: stakeAmount }]);
       setSelectedNumbers([]);

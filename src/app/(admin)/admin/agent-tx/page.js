@@ -9,15 +9,10 @@ import {
   limit, 
   startAfter, 
   getDocs,
-  doc,
-  getDoc,
   documentId,
   where,
-  writeBatch,
-  increment,
-  serverTimestamp,
-  updateDoc,
 } from "firebase/firestore";
+import { authFetch } from "@/lib/authFetch";
 import { 
   ArrowUpRight, 
   ArrowDownLeft, 
@@ -217,44 +212,10 @@ export default function AgentTransactions() {
       : Number(trade.amount);
     if (!window.confirm(`Refund $${totalRefund.toFixed(2)} to ${targetLabel}?`)) return;
     setActionLoading(trade.id + "_ref");
-    const batch = writeBatch(db);
     try {
-      const tradeRef = doc(db, "trades", trade.id);
-      if (trade.type === "deposit") {
-        const agentRef = doc(db, "agents", trade.agentId);
-        const agentSnap = await getDoc(agentRef);
-        if (!agentSnap.exists()) {
-          alert("Agent profile not found. Cannot process deposit refund.");
-          setActionLoading(null);
-          return;
-        }
-        batch.update(agentRef, { agent_balance: increment(totalRefund) });
-      } else {
-        const userRef = doc(db, "users", trade.senderId);
-        batch.update(userRef, { wallet: increment(totalRefund) });
-
-        const transQ = query(
-          collection(db, "users", trade.senderId, "transactions"), 
-          where("tradeId", "==", trade.id),
-          limit(1)
-        );
-        const transSnap = await getDocs(transQ);
-        if (!transSnap.empty) {
-          batch.update(transSnap.docs[0].ref, { 
-            status: "refunded", 
-            description: "Admin Manual Refund Processed" 
-          });
-        }
-      }
-
-      batch.update(tradeRef, { 
-        refunded: true, 
-        refundedAt: serverTimestamp(),
-        refundTarget: trade.type === "deposit" ? "agent" : "client",
-        refundAmount: totalRefund
-      });
-
-      await batch.commit();
+      // The server pays it back (once) and records the refund on the trade.
+      const res = await authFetch("/api/trades", { method: "POST", body: { action: "staffRefund", id: trade.id } });
+      if (res.error) return alert("Refund failed: " + res.error);
       alert("Refund successful!");
     } catch (err) {
       alert("Refund failed: " + err.message);
@@ -272,11 +233,8 @@ export default function AgentTransactions() {
     if (!window.confirm(`Cancel trade ${trade.id}?`)) return;
     setActionLoading(trade.id + "_cancel");
     try {
-      await updateDoc(doc(db, "trades", trade.id), {
-        status: "cancelled",
-        cancelledAt: serverTimestamp(),
-        cancelledBy: "admin"
-      });
+      const res = await authFetch("/api/trades", { method: "POST", body: { action: "staffCancel", id: trade.id } });
+      if (res.error) return alert("Cancel failed: " + res.error);
       alert("Trade cancelled.");
     } catch (err) {
       alert("Cancel failed: " + err.message);

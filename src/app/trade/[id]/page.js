@@ -3,9 +3,9 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { db, auth } from "@/lib/firebase";
 import { 
-  doc, onSnapshot, updateDoc, increment, 
-  collection, addDoc, serverTimestamp, query, orderBy, writeBatch, getDoc, where, getDocs, limit, runTransaction, deleteField
+  doc, onSnapshot, collection, addDoc, serverTimestamp, query, orderBy, getDoc
 } from "firebase/firestore";
+import { authFetch } from "@/lib/authFetch";
 import { 
   Send, ShieldCheck, Landmark, AlertCircle, 
   CheckCircle2, Loader2, MessageSquare, Info, Paperclip, ImageIcon, Clock, XCircle, ArrowLeft, Receipt, Copy
@@ -34,63 +34,10 @@ export default function TradeRoom() {
   const expirePendingTrade = async () => {
     if (!id || autoExpireBusyRef.current) return;
     autoExpireBusyRef.current = true;
-
-    let refundedUserId = null;
-    let shouldSyncUserTx = false;
-
     try {
-      await runTransaction(db, async (transaction) => {
-        const tradeRef = doc(db, "trades", id);
-        const liveTradeSnap = await transaction.get(tradeRef);
-        if (!liveTradeSnap.exists()) return;
-
-        const liveTrade = liveTradeSnap.data();
-        const createdAtMs = liveTrade?.createdAt?.toDate
-          ? liveTrade.createdAt.toDate().getTime()
-          : Number(liveTrade?.createdAt || 0);
-        const isExpired = createdAtMs > 0 && (Date.now() - createdAtMs) >= (15 * 60 * 1000);
-
-        if (liveTrade?.status !== "pending" || !isExpired) return;
-
-        const tradeUpdate = {
-          status: "cancelled",
-          reason: "Expired",
-          declineReason: "Trade Timed Out",
-          cancelledAt: serverTimestamp(),
-        };
-
-        if (liveTrade?.type === "withdrawal") {
-          const refundAmount = Number(liveTrade?.amount || 0);
-          if (refundAmount > 0 && liveTrade?.senderId) {
-            const userRef = doc(db, "users", liveTrade.senderId);
-            transaction.update(userRef, { wallet: increment(refundAmount) });
-            tradeUpdate.refundedAt = serverTimestamp();
-            tradeUpdate.autoRefunded = true;
-            tradeUpdate.refundAmount = refundAmount;
-            refundedUserId = liveTrade.senderId;
-            shouldSyncUserTx = true;
-          }
-        }
-
-        transaction.update(tradeRef, tradeUpdate);
-      });
-
-      if (shouldSyncUserTx && refundedUserId) {
-        const txQ = query(
-          collection(db, "users", refundedUserId, "transactions"),
-          where("tradeId", "==", id),
-          limit(1)
-        );
-        const txSnap = await getDocs(txQ);
-        if (!txSnap.empty) {
-          await updateDoc(txSnap.docs[0].ref, {
-            status: "cancelled",
-            description: "Trade Expired - Trade Amount Refunded Automatically",
-          });
-        }
-      }
-    } catch (err) {
-      console.error("Auto-expire refund failed:", err);
+      // The server cancels it (refunding a withdrawal) only if it really is 15 minutes old.
+      const res = await authFetch("/api/trades", { method: "POST", body: { action: "expire", id } });
+      if (res.error) console.error("Auto-expire refund failed:", res.error);
     } finally {
       autoExpireBusyRef.current = false;
     }
@@ -207,7 +154,6 @@ export default function TradeRoom() {
     // Apply Fix: 3% for Deposit, 5% for Withdrawal
     const feePercent = trade.type === "deposit" ? 0.03 : 0.05;
     const feeAmount = amount * feePercent;
-    const totalRequired = amount + feeAmount;
 
     const confirmMsg = trade.type === "deposit" 
       ? `Accept trade? You'll be charged $${amount} + $${feeAmount.toFixed(2)} (3% admin fee).`
@@ -217,56 +163,9 @@ export default function TradeRoom() {
     
     setLoading(true);
     try {
-      const batch = writeBatch(db);
-      
-      if (trade.type === "deposit") {
-        const agentRef = doc(db, "agents", auth.currentUser.uid);
-        const agentSnap = await getDoc(agentRef);
-        if ((agentSnap.data().agent_balance || 0) < totalRequired) {
-          alert(`Insufficient Agent Balance! Need $${totalRequired.toFixed(2)}`);
-          setLoading(false);
-          return;
-        }
-        batch.update(agentRef, { agent_balance: increment(-totalRequired) });
-      } 
-
-      batch.update(doc(db, "trades", id), { 
-        status: "acknowledged", 
-        acceptedAt: serverTimestamp(),
-        fee: feeAmount, // Update actual fee in trade doc
-        feeCharged: feeAmount,
-        agentImpact: trade.type === "deposit" ? -totalRequired : 0 
-      });
-
-      await batch.commit();
-
-      // TRIGGER: NOTIFY USER OF ACCEPTANCE
-      try {
-        const userSnap = await getDoc(doc(db, "users", trade.senderId));
-        if (userSnap.exists()) {
-          await fetch('/api/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              to: userSnap.data().email,
-              subject: "Trade Request Accepted",
-              html: `
-                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
-                  <h2 style="color: #2457D6; border-bottom: 1px solid #eee; padding-bottom: 10px;">Agent Accepted Trade</h2>
-                  <p>Hello,</p>
-                  <p><strong>Trade ID:</strong> ${id}</p>
-                  <p>The agent has accepted your ${trade.type} request for $${trade.amount}.</p>
-                  <p>${trade.type === 'deposit' 
-                    ? "Please return to the Trade Room to view the agent's bank details and make your payment." 
-                    : "The agent is now processing your payout. Please check the trade chat for payment confirmation."}</p>
-                  <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">StraWins Global Network</div>
-                </div>
-              `
-            })
-          });
-        }
-      } catch (emailErr) { console.error("Acceptance email failed:", emailErr); }
-
+      // The server takes a deposit's amount + fee from your agent balance and emails the player.
+      const res = await authFetch("/api/trades", { method: "POST", body: { action: "accept", id } });
+      if (res.error) alert(res.error);
     } catch (e) { alert(e.message); } finally { setLoading(false); }
   };
 
@@ -276,136 +175,10 @@ export default function TradeRoom() {
     if (!window.confirm("Confirm payment received?")) return;
     setLoading(true);
     try {
-      const batch = writeBatch(db);
-      const userRef = doc(db, "users", trade.senderId);
-      const agentRef = doc(db, "agents", trade.agentId);
-      const amount = Number(trade.amount);
-      
-      // Re-calculate fee based on type for final transaction
-      const feePercent = trade.type === "deposit" ? 0.03 : 0.05;
-      const feeAmount = amount * feePercent;
-
-      if (trade.type === "deposit") {
-        batch.update(userRef, { wallet: increment(amount) });
-        const userSnap = await getDoc(userRef);
-        
-        if (userSnap.exists()) {
-          const userData = userSnap.data();
-
-          const rewardAmount = amount * 0.035;
-          const applyReferralReward = (referrerDocId) => {
-            const referrerRef = doc(db, "users", referrerDocId);
-            batch.update(referrerRef, { referralBonus: increment(rewardAmount) });
-
-            const rewardLogRef = doc(collection(db, "users", referrerDocId, "transactions"));
-            batch.set(rewardLogRef, {
-              amount: rewardAmount,
-              type: "referral_reward",
-              status: "completed",
-              description: `3.5% commission from @${userData.username}'s deposit`,
-              createdAt: serverTimestamp(),
-              fromUser: userData.username,
-              tradeId: id
-            });
-          };
-
-          let referrerDocId = null;
-
-          // Primary mapping (current schema): referrer UID
-          if (userData.referrerUid && userData.referrerUid !== trade.senderId) {
-            const referrerByUidSnap = await getDoc(doc(db, "users", userData.referrerUid));
-            if (referrerByUidSnap.exists()) {
-              referrerDocId = referrerByUidSnap.id;
-            }
-          }
-
-          // Legacy fallback mapping by username/fullName label
-          if (!referrerDocId && userData.referredBy) {
-            const referrerByUsernameQ = query(
-              collection(db, "users"),
-              where("username", "==", userData.referredBy),
-              limit(1)
-            );
-            const referrerByUsernameSnap = await getDocs(referrerByUsernameQ);
-            if (!referrerByUsernameSnap.empty) {
-              referrerDocId = referrerByUsernameSnap.docs[0].id;
-            } else {
-              const referrerByNameQ = query(
-                collection(db, "users"),
-                where("fullName", "==", userData.referredBy),
-                limit(1)
-              );
-              const referrerByNameSnap = await getDocs(referrerByNameQ);
-              if (!referrerByNameSnap.empty) referrerDocId = referrerByNameSnap.docs[0].id;
-            }
-          }
-
-          if (referrerDocId) {
-            applyReferralReward(referrerDocId);
-          } else if (userData.referrerUid || userData.referredBy) {
-            console.warn("Referrer not resolved for deposit commission:", {
-              referrerUid: userData.referrerUid,
-              referredBy: userData.referredBy
-            });
-          }
-        }
-      } else {
-        // Withdrawal: Agent gets Amount MINUS 5% fee
-        const netToAgent = amount - feeAmount;
-        batch.update(agentRef, { agent_balance: increment(netToAgent) });
-        const transQ = query(
-          collection(db, "users", trade.senderId, "transactions"), 
-          where("tradeId", "==", id),
-          limit(1)
-        );
-        const transSnap = await getDocs(transQ);
-        if (!transSnap.empty) {
-          batch.update(transSnap.docs[0].ref, { status: "completed" });
-        }
-      }
-
-      // Update the main trade document
-      batch.update(doc(db, "trades", id), { 
-        status: "completed", 
-        completedAt: serverTimestamp(),
-        finalFee: feeAmount,
-        cancelledAt: deleteField(),
-        cancelledBy: deleteField(),
-        declineReason: deleteField(),
-        reason: deleteField(),
-        refunded: deleteField(),
-        refundedAt: deleteField(),
-        autoRefunded: deleteField(),
-      });
-      
-      await batch.commit();
-
-      // TRIGGER: NOTIFY USER OF COMPLETION
-      try {
-        const userSnap = await getDoc(doc(db, "users", trade.senderId));
-        if (userSnap.exists()) {
-          await fetch('/api/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              to: userSnap.data().email,
-              subject: "Trade Successfully Completed",
-              html: `
-                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
-                  <h2 style="color: #10b981; border-bottom: 1px solid #eee; padding-bottom: 10px;">Transaction Success</h2>
-                  <p>Hello,</p>
-                  <p>Your ${trade.type} of $${trade.amount} has been successfully verified and completed.</p>
-                  <p>${trade.type === 'deposit' 
-                    ? "The funds have been credited to your StraWins wallet." 
-                    : "The funds have been sent to your provided account details."}</p>
-                  <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">StraWins Global Network</div>
-                </div>
-              `
-            })
-          });
-        }
-      } catch (e) { console.error("Completion email failed", e); }
-
+      // Deposit: the player's wallet gets the amount (and their referrer 3.5%).
+      // Withdrawal: your agent balance gets the amount less 5%. The server emails the player.
+      const res = await authFetch("/api/trades", { method: "POST", body: { action: "confirm", id } });
+      if (res.error) alert("Error completing trade: " + res.error);
     } catch (e) { 
       console.error("!!! FINAL CONFIRM ERROR !!!", e);
       alert("Error completing trade: " + e.message); 
@@ -543,60 +316,9 @@ export default function TradeRoom() {
                 if(window.confirm("Decline this trade?")) {
                   setLoading(true);
                   try {
-                    const batch = writeBatch(db);
-
-                    // REFUND LOGIC: Only refund the Trade Amount (exclude fee)
-                    if (trade.type === "withdrawal") {
-                      const refundAmount = Number(trade.amount);
-                      const userRef = doc(db, "users", trade.senderId);
-                      batch.update(userRef, { wallet: increment(refundAmount) });
-
-                      const transQ = query(
-                        collection(db, "users", trade.senderId, "transactions"), 
-                        where("tradeId", "==", id),
-                        limit(1)
-                      );
-                      const transSnap = await getDocs(transQ);
-                      if (!transSnap.empty) {
-                        batch.update(transSnap.docs[0].ref, { 
-                          status: "cancelled", 
-                          description: "Withdrawal Declined - Trade Amount Refunded" 
-                        });
-                      }
-                    }
-
-                    batch.update(doc(db, "trades", id), { 
-                      status: "cancelled", 
-                      cancelledAt: serverTimestamp(),
-                      declineReason: "Agent Declined" 
-                    });
-                    
-                    await batch.commit();
-
-                    try {
-                      const userSnap = await getDoc(doc(db, "users", trade.senderId));
-                      if (userSnap.exists()) {
-                        await fetch('/api/send-email', {
-                          method: 'POST', 
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            to: userSnap.data().email,
-                            subject: "Trade Request Declined",
-                            html: `
-                              <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
-                                <h2 style="color: #e11d48; border-bottom: 1px solid #eee; padding-bottom: 10px;">Request Declined</h2>
-                                <p>Hello,</p>
-                                <p>Your ${trade.type} request for $${trade.amount} has been declined by the agent.</p>
-                                <p>${trade.type === 'withdrawal' 
-                                  ? "The original trade amount has been refunded to your wallet balance." 
-                                  : "This transaction has been cancelled. No funds were charged."}</p>
-                                <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">StraWins Global Network</div>
-                              </div>
-                            `
-                          })
-                        });
-                      }
-                    } catch (e) { console.error("Decline email failed", e); }
+                    // A withdrawal's amount goes back to the player; the server emails them.
+                    const res = await authFetch("/api/trades", { method: "POST", body: { action: "decline", id } });
+                    if (res.error) alert("Failed to decline trade: " + res.error);
                   } catch (err) {
                     alert("Failed to decline trade: " + err.message);
                   } finally {

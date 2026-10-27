@@ -8,6 +8,7 @@ import {
   serverTimestamp, or, orderBy, limit, runTransaction
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { authFetch } from "@/lib/authFetch";
 import { User, Zap, Wallet, ShieldCheck, Trophy, Ghost, MessageSquare, Send, X as CloseIcon, Search, Users, Timer as TimerIcon, RefreshCw, Loader2 } from "lucide-react";
 import ToastNotification from "@/components/ToastNotification";
 import { generateDistinctNumberPool } from "@/lib/gameNumbers";
@@ -489,48 +490,12 @@ export default function GamePage() {
         return deleteDoc(doc(db, "challenges", chal.id)).catch(() => {});
       }
 
-      // Tie the game ID to the challenge ID and settle everything (stake
-      // deduction, game creation, challenge close-out) inside one transaction.
-      // A duplicate accept (double-tap, retry, second device) re-reads the
-      // same challenge doc, finds it already non-pending, and is a no-op —
-      // so the stake can never be charged twice for one challenge.
-      const gameId = `match_${chal.id}`;
-      const challengeRef = doc(db, "challenges", chal.id);
-      const gameRef = doc(db, "games", gameId);
-
-      const accepted = await runTransaction(db, async (transaction) => {
-        const chalSnap = await transaction.get(challengeRef);
-        if (!chalSnap.exists() || chalSnap.data().status !== "pending") return false;
-
-        // No need to read gameRef first: it can only exist if a prior run of
-        // this exact transaction already committed, but that would have also
-        // flipped/deleted the challenge doc above, so the pending check alone
-        // already guarantees this game doesn't exist yet. (Reading a
-        // not-yet-existent doc can also trip security rules that dereference
-        // resource.data on a null resource.)
-        transaction.update(doc(db, "users", user.uid), { wallet: increment(-totalCost) });
-        transaction.update(doc(db, "users", chal.from), { wallet: increment(-totalCost) });
-
-        transaction.set(gameRef, {
-          player1: chal.from, player2: user.uid, scores: { p1: 0, p2: 0 },
-          roundsPlayed: { p1: 0, p2: 0 },
-          turn: chal.from, round: 1, gameState: "picking", picker: chal.from,
-          stakePerRound: chal.stakePerRound,
-          wagerPool: { p1: chal.totalWager, p2: chal.totalWager },
-          status: "active", numberPool: generateDistinctNumberPool(), createdAt: Date.now(),
-          turnStartedAt: serverTimestamp()
-        });
-
-        const log = { title: "Match Stake", amount: totalCost, type: "stake", status: "loss", timestamp: serverTimestamp() };
-        transaction.set(doc(collection(db, "users", user.uid, "transactions")), log);
-        transaction.set(doc(collection(db, "users", chal.from, "transactions")), log);
-        transaction.delete(challengeRef);
-
-        return true;
-      });
-
-      if (!accepted) {
-        showNotification("info", "Already Handled", "This challenge was already accepted or is no longer available.");
+      // The server takes both stakes, opens the match (its id is tied to the
+      // challenge) and closes the challenge in one transaction, so a duplicate
+      // accept (double-tap, retry, second device) can never charge twice.
+      const res = await authFetch("/api/game/match", { method: "POST", body: { action: "accept", challengeId: chal.id } });
+      if (res.error) {
+        showNotification(res.error.startsWith("This challenge was already") ? "info" : "warning", "Not Accepted", res.error);
       }
     } catch (e) {
       console.error("Accept challenge error:", e);
@@ -614,35 +579,10 @@ export default function GamePage() {
         return;
       }
 
-      const gameRef = doc(db, "games", activeGame.id);
-
-      // Run the credit + delete as a single atomic transaction so that
-      // duplicate clicks (or retries) can never pay out more than once:
-      // once the doc is gone, a re-entrant call simply finds nothing to settle.
-      await runTransaction(db, async (transaction) => {
-        const snap = await transaction.get(gameRef);
-        if (!snap.exists()) return;
-        const data = snap.data();
-        if (data.status !== "completed") return;
-
-        const p1Amt = Number(data.wagerPool?.p1 || 0);
-        const p2Amt = Number(data.wagerPool?.p2 || 0);
-
-        if (p1Amt > 0) {
-          transaction.update(doc(db, "users", data.player1), { wallet: increment(p1Amt) });
-          transaction.set(doc(collection(db, "users", data.player1, "transactions")), {
-            title: "Match Settlement", amount: p1Amt, type: "finance", status: "win", timestamp: serverTimestamp()
-          });
-        }
-        if (p2Amt > 0) {
-          transaction.update(doc(db, "users", data.player2), { wallet: increment(p2Amt) });
-          transaction.set(doc(collection(db, "users", data.player2, "transactions")), {
-            title: "Match Settlement", amount: p2Amt, type: "finance", status: "win", timestamp: serverTimestamp()
-          });
-        }
-
-        transaction.delete(gameRef);
-      });
+      // The server pays out the pools (never more than both stakes) and removes the
+      // match; a duplicate click finds it gone and pays nothing.
+      const res = await authFetch("/api/game/match", { method: "POST", body: { action: "settle", gameId: activeGame.id } });
+      if (res.error) throw new Error(res.error);
 
       setActiveGame(null);
       router.push('/dashboard');

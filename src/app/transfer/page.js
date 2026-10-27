@@ -2,20 +2,9 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { db, auth } from "@/lib/firebase";
-import { 
-  doc, 
-  onSnapshot, 
-  serverTimestamp, 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  getDoc,
-  writeBatch,
-  increment,
-  limit
-} from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { authFetch } from "@/lib/authFetch";
 import {
   ChevronLeft,
   Send,
@@ -102,14 +91,8 @@ export default function TransferPage() {
     if (recipientPin === userData.pin) return; 
     setSearching(true);
     try {
-      const q = query(collection(db, "users"), where("pin", "==", recipientPin), limit(1));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        const d = snap.docs[0].data();
-        setRecipientData({ id: snap.docs[0].id, name: d.fullName || d.username });
-      } else {
-        setRecipientData(null);
-      }
+      const res = await authFetch(`/api/wallet?view=recipient&pin=${encodeURIComponent(recipientPin)}`);
+      setRecipientData(res.name ? { name: res.name } : null);
     } catch (e) { console.error(e); } finally { setSearching(false); }
   };
 
@@ -134,85 +117,10 @@ export default function TransferPage() {
 
     setLoading(true);
     try {
-      const recipientRef = doc(db, "users", recipientData.id);
-      const recipientSnap = await getDoc(recipientRef);
-      const recipientEmail = recipientSnap.exists() ? recipientSnap.data().email : null;
-      const recipientPinValue = recipientSnap.exists() ? (recipientSnap.data().pin || recipientPin) : recipientPin;
-
-      const batch = writeBatch(db);
-      const senderRef = doc(db, "users", user.uid);
-      const receiverRef = doc(db, "users", recipientData.id);
-      
-      // 1. Deduct total amount (Value + Fee + Bonus if applicable)
-      batch.update(senderRef, { 
-        wallet: increment(-totalDeduct),
-        // Mark bonus as recovered only once.
-        ...(shouldRepayBonus && {
-          bonusClaimed: false,
-          bonusDeducted: true,
-          welcomeBonusStatus: "recovered",
-          welcomeBonusRecoveredAt: serverTimestamp()
-        })
-      });
-
-      // 2. Credit only the base value to the receiver
-      batch.update(receiverRef, { wallet: increment(val) });
-
-      const txId = `TX-${Date.now()}`;
-      const logData = {
-        amount: val,
-        fee: fee,
-        bonusRepaid: bonusRepayment, // Log the repayment for transparency
-        senderId: user.uid,
-        senderName: userData.fullName,
-        senderPin: userData.pin || "",
-        receiverId: recipientData.id,
-        receiverName: recipientData.name,
-        receiverPin: recipientPinValue || "",
-        type: "p2p_transfer",
-        timestamp: serverTimestamp(),
-        status: "completed",
-        txId
-      };
-
-      const senderLogRef = doc(collection(db, "users", user.uid, "transactions"));
-      const receiverLogRef = doc(collection(db, "users", recipientData.id, "transactions"));
-      
-      batch.set(senderLogRef, { ...logData, amount: -val, direction: "out" });
-      batch.set(receiverLogRef, { ...logData, direction: "in" });
-
-      await batch.commit();
-
-      if (recipientEmail) {
-        try {
-          await fetch('/api/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              to: recipientEmail,
-              subject: "Funds Received - P2P Transfer",
-              html: `
-                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 12px;">
-                  <h2 style="color: #2457D6; border-bottom: 1px solid #eee; padding-bottom: 10px;">Payment Received</h2>
-                  <p>Hello ${recipientData.name},</p>
-                  <p>You have received a P2P transfer from another user on the StraWins Network.</p>
-                  <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #eee;">
-                    <p style="margin: 5px 0;"><strong>Sender:</strong> ${userData.fullName}</p>
-                    <p style="margin: 5px 0;"><strong>Amount:</strong> $${val.toFixed(2)}</p>
-                    <p style="margin: 5px 0; font-size: 11px; color: #666;"><strong>Transaction ID:</strong> ${txId}</p>
-                  </div>
-                  <p>The funds are now available in your StraWins wallet for immediate use or withdrawal.</p>
-                  <div style="margin-top: 30px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
-                    StraWins Global Liquidity Control
-                  </div>
-                </div>
-              `
-            })
-          });
-        } catch (e) { console.error("Recipient notification failed", e); }
-      }
-
-      setTransferRecord(logData);
+      // The server checks the balance and fee again, moves the money and emails the recipient.
+      const res = await authFetch("/api/wallet", { method: "POST", body: { action: "transfer", pin: recipientPin, amount: val } });
+      if (res.error) return alert(res.error);
+      setTransferRecord(res.record);
       setSuccess(true);
     } catch (e) {
       alert("Transfer failed: " + e.message);

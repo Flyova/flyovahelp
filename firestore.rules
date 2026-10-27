@@ -13,6 +13,27 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Money only moves through the server: the API routes (/api/wallet, /api/trades,
+    // /api/game/*, the cron engines) use the Admin SDK, which skips these rules, and
+    // check every movement. Players' apps can read their own balances and records
+    // but never write them.
+
+    // The two portal accounts get their role from their email (lib/adminAccess);
+    // nobody else can give themselves one.
+    function isPortalRole(role) {
+      return request.auth.token.email_verified == true && (
+        (role == 'support' && request.auth.token.email == 'flyovasocials@gmail.com')
+        || (role == 'staff' && request.auth.token.email == 'flyovahelpsocials@gmail.com'));
+    }
+
+    // Admin, staff and support accounts (the admin panel). A role can only be set by
+    // the server or an admin (see users below).
+    function isStaff() {
+      return request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') in ['admin', 'staff', 'support']
+        || isPortalRole('support') || isPortalRole('staff'));
+    }
+
     // --- DELETION REQUESTS ---
     match /deletion_requests/{userId} {
       allow create: if request.auth != null && request.auth.uid == userId;
@@ -34,29 +55,23 @@ service cloud.firestore {
       allow read: if request.auth != null;
     }
 
+    // Claimed through /api/wallet.
     match /jackpots/{id} {
       allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow update: if request.auth != null && resource.data.userId == request.auth.uid 
-                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'claimedAt']);
     }
  
     // --- USERS COLLECTION ---
-    // Account fields a player can never change: only the server (API routes use
-    // the Admin SDK, which skips these rules) or an admin does. So nobody can
-    // lift their own ban or restriction, mark their email verified, or change
-    // who referred them. `role` and `pin` have their own checks below.
+    // Account fields a player can never change: only the server or an admin does.
+    // So nobody can lift their own ban or restriction, mark their email verified,
+    // change who referred them, or touch a balance, bonus or plan (money moves
+    // through the server). `role` and `pin` have their own checks below.
     function lockedAccountFields() {
       return ['isban', 'banned', 'verified', 'otp', 'isAgent', 'chatMuted',
         'restrictDeposit', 'restrictWithdrawal', 'restrictTransfer',
-        'uid', 'email', 'emailLower', 'createdAt', 'referrerUid', 'referredBy', 'lastAdminLogin'];
-    }
-
-    // The two portal accounts get their role from their email (lib/adminAccess);
-    // nobody else can give themselves one.
-    function isPortalRole(role) {
-      return request.auth.token.email_verified == true && (
-        (role == 'support' && request.auth.token.email == 'flyovasocials@gmail.com')
-        || (role == 'staff' && request.auth.token.email == 'flyovahelpsocials@gmail.com'));
+        'uid', 'email', 'emailLower', 'createdAt', 'referrerUid', 'referredBy', 'lastAdminLogin',
+        'wallet', 'referralBonus', 'agent_balance', 'bonusClaimed', 'bonusDeducted',
+        'welcomeBonusClaimed', 'welcomeBonusPaid', 'welcomeBonusAmount', 'welcomeBonusStatus',
+        'welcomeBonusPaidAt', 'welcomeBonusRecoveredAt', 'subscription_expires', 'subscription_started_at'];
     }
 
     function ownAccountChange() {
@@ -78,20 +93,18 @@ service cloud.firestore {
       allow create: if request.auth != null && request.auth.uid == userId
         && request.resource.data.get('uid', userId) == userId
         && !request.resource.data.keys().hasAny(['isban', 'banned', 'isAgent', 'chatMuted', 'referralBonus',
+          'agent_balance', 'subscription_expires', 'subscription_started_at',
           'restrictDeposit', 'restrictWithdrawal', 'restrictTransfer'])
         && (!('role' in request.resource.data) || isPortalRole(request.resource.data.role))
         && (request.resource.data.get('verified', false) == false || isPortalRole(request.resource.data.get('role', '')))
         && request.resource.data.get('wallet', 0) in [0, 3];
-      // Another player's app may only move your balance (transfers, matches and
-      // trades still do that from the app).
-      allow update: if request.auth != null && (
-        request.auth.uid == userId
-          ? ownAccountChange()
-          : request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wallet', 'referralBonus']));
+      allow update: if request.auth != null && request.auth.uid == userId && ownAccountChange();
       allow delete: if false;
 
+      // Balance history: written by the server only.
       match /transactions/{transId} {
-        allow read, write: if request.auth != null;
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
       }
       
       match /support_chats/{userId} {
@@ -100,16 +113,16 @@ service cloud.firestore {
     }
 
     // --- DEPOSITS ---
+    // USDT deposits are started and their proof recorded through /api/wallet; admins
+    // approve them.
     match /deposits/{id} {
-       allow read, list: if request.auth != null;
-       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-       allow update: if request.auth != null; 
+       allow read: if request.auth != null && (resource.data.userId == request.auth.uid || isStaff());
     }
 
     // --- WITHDRAWALS & TESTIMONIALS ---
+    // Requested through /api/wallet; admins approve them.
     match /withdrawals/{id} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow read: if request.auth != null && (resource.data.userId == request.auth.uid || isStaff());
     }
 
     match /withdrawal_testimonials/{id} {
@@ -118,49 +131,89 @@ service cloud.firestore {
     }
 
     // --- AGENTS ---
+    // Anyone signed in can see agents (to trade with one). An agent edits their
+    // rates, bank details and availability; their balance and approval are changed
+    // by the server (/api/trades) or an admin.
     match /agents/{agentId} {
-      allow read, write: if request.auth != null;
-      allow create: if request.auth != null;
+      allow read: if request.auth != null;
+      // Applying (or applying again after a rejection).
+      allow create: if request.auth != null && request.auth.uid == agentId
+        && request.resource.data.application_status == 'pending'
+        && request.resource.data.get('banned', false) == false
+        && request.resource.data.get('agent_balance', 0) == 0;
+      allow update: if request.auth != null && request.auth.uid == agentId && (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deposit_rate', 'withdrawal_rate', 'exchange_rate',
+          'ratesUpdatedAt', 'bankName', 'accountName', 'accountNumber', 'phone_number', 'profileUpdatedAt', 'active'])
+        || (resource.data.get('application_status', '') != 'approved'
+          && resource.data.get('banned', false) == false
+          && request.resource.data.application_status == 'pending'
+          && request.resource.data.get('banned', false) == false
+          && request.resource.data.get('agent_balance', 0) == resource.data.get('agent_balance', 0)));
     }
 
     // --- TRADES & MESSAGES ---
+    // Created and moved along through /api/trades. The two sides (and staff) read a
+    // trade and chat in it.
+    function isTradeParty(trade) {
+      return request.auth.uid == trade.senderId || request.auth.uid == trade.agentId;
+    }
     match /trades/{tradeId} {
-      allow read, write: if request.auth != null;
-      allow list, create: if request.auth != null;
-      
+      allow read: if request.auth != null && (isTradeParty(resource.data) || isStaff());
+
       match /messages/{msgId} {
-        allow read, write: if request.auth != null;
+        allow read: if request.auth != null
+          && (isTradeParty(get(/databases/$(database)/documents/trades/$(tradeId)).data) || isStaff());
+        allow create: if request.auth != null
+          && request.resource.data.senderId == request.auth.uid
+          && (isTradeParty(get(/databases/$(database)/documents/trades/$(tradeId)).data) || isStaff());
       }
     }
 
     // --- CHALLENGES & GAMES ---
+    // A challenge names its stake per round (whole dollars); accepting it, which takes
+    // both stakes and opens the match, and paying out happen in /api/game/match.
     match /challenges/{challengeId} {
-      allow create: if request.auth != null;
-      allow read, update, delete: if request.auth != null && (request.auth.uid == resource.data.from || request.auth.uid == resource.data.to);
+      allow create: if request.auth != null
+        && request.resource.data.from == request.auth.uid
+        && request.resource.data.to is string && request.resource.data.to != request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.stakePerRound is int
+        && request.resource.data.stakePerRound >= 1 && request.resource.data.stakePerRound <= 10000;
+      allow read, delete: if request.auth != null && (request.auth.uid == resource.data.from || request.auth.uid == resource.data.to);
     }
 
+    // The players play their moves; what the match is worth stays as the server set it.
     match /games/{gameId} {
-      allow create: if request.auth != null;
-      allow read, update, delete: if request.auth != null && (request.auth.uid == resource.data.player1 || request.auth.uid == resource.data.player2);
-      match /messages/{messageId} { allow read, write: if request.auth != null; }
+      allow read: if request.auth != null && (request.auth.uid == resource.data.player1 || request.auth.uid == resource.data.player2);
+      allow update: if request.auth != null
+        && (request.auth.uid == resource.data.player1 || request.auth.uid == resource.data.player2)
+        && resource.data.status == 'active'
+        && request.resource.data.status in ['active', 'completed']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['gameState', 'turn', 'hiddenPick', 'turnStartedAt',
+          'picker', 'round', 'scores', 'roundsPlayed', 'numberPool', 'status', 'completedAt', 'wagerPool']);
+      match /messages/{messageId} {
+        allow read, create: if request.auth != null && request.auth.uid in [
+          get(/databases/$(database)/documents/games/$(gameId)).data.player1,
+          get(/databases/$(database)/documents/games/$(gameId)).data.player2];
+      }
     }
 
     // --- PREDICT AND FLYOVA ---
-    // CHANGED: players only ever create predict games; nobody edits them from an app.
-    // (Was: read, create, update for anyone, even signed out.)
+    // Predict & Win rounds are made by the server (/api/game/predict), which keeps each
+    // outcome on predict_secrets (no rules: server only) until the round ends.
     match /predict_games/{gameId} {
       allow read: if true;
-      allow create: if request.auth != null;
     }
-    // CHANGED: rounds are created and settled only by the server game engine, which
-    // is not subject to these rules. Was "create, update: if true", which let anyone,
-    // even signed out, rewrite a live round's winning numbers before it paid out.
+    // Rounds are created and settled only by the server game engine. A round's winning
+    // numbers stay on timed_game_secrets until it ends; staff see the live ones on the
+    // admin overview.
     match /timed_games/{gameId} { 
       allow read: if true; 
-      match /bets/{betId} { 
-        allow create: if request.auth != null && request.resource.data.userId == request.auth.uid; 
-        allow read: if request.auth != null && (resource == null || resource.data.userId == request.auth.uid); 
-      } 
+    }
+    match /timed_game_secrets/{gameId} {
+      allow read: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'staff'
+        || isPortalRole('staff'));
     }
 
     // --- BLOG ---

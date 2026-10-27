@@ -2,7 +2,8 @@
 import { useState, useEffect, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
-import { doc, updateDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
+import { authFetch } from "@/lib/authFetch";
 import {
   Timer, Copy, CheckCircle, AlertTriangle,
   Loader2, QrCode, ImageIcon, Hash, UploadCloud, X, Clock, XCircle
@@ -85,13 +86,11 @@ function DirectDepositContent() {
     if (cancelledRef.current) return;
     cancelledRef.current = true;
 
-    updateDoc(doc(db, "deposits", depositId), {
-      status: "cancelled",
-      cancelledAt: serverTimestamp(),
-      cancelReason: "expired",
-    }).catch((err) => {
-      console.error("Auto-cancel expired deposit failed:", err);
-      cancelledRef.current = false;
+    authFetch("/api/wallet", { method: "POST", body: { action: "depositCancel", id: depositId } }).then((res) => {
+      if (res.error) {
+        console.error("Auto-cancel expired deposit failed:", res.error);
+        cancelledRef.current = false;
+      }
     });
   }, [timeLeft, depositId, depositData, proofAlreadySubmitted]);
 
@@ -142,46 +141,12 @@ function DirectDepositContent() {
 
       const imageUrl = uploadData.secure_url;
 
-      // 2. UPDATE THE EXISTING FIRESTORE RECORD
-      await updateDoc(doc(db, "deposits", depositId), {
-        transactionHash: hashId.trim(),
-        proofImage: imageUrl,
-        submittedAt: serverTimestamp(),
-        status: "pending" 
+      // 2. The server records the proof on the deposit and emails the admins.
+      const saved = await authFetch("/api/wallet", {
+        method: "POST",
+        body: { action: "depositProof", id: depositId, hash: hashId.trim(), image: imageUrl },
       });
-
-      // --- ADMIN NOTIFICATION ---
-      try {
-        await fetch('/api/send-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: "arbie1877@gmail.com",
-            subject: "New Deposit Proof Submitted",
-            html: `
-              <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
-                <h2 style="color: #000; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">Deposit Verification Required</h2>
-                <p style="margin: 10px 0;"><strong>User ID:</strong> ${auth.currentUser.uid}</p>
-                <p style="margin: 10px 0;"><strong>Amount:</strong> $${amount} USDT</p>
-                <p style="margin: 10px 0;"><strong>Transaction Hash:</strong> <code style="background: #f4f4f5; padding: 3px 6px; border-radius: 4px;">${hashId.trim()}</code></p>
-                
-                <div style="margin-top: 30px;">
-                   <p><strong>Proof Attachment:</strong></p>
-                   <a href="${imageUrl}" target="_blank">
-                    <img src="${imageUrl}" style="width: 100%; max-width: 400px; border: 1px solid #ccc; border-radius: 4px;" />
-                   </a>
-                </div>
-                
-                <div style="margin-top: 30px; font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
-                  This is a system notification for the StraWins Admin Panel.
-                </div>
-              </div>
-            `
-          })
-        });
-      } catch (emailErr) {
-        console.error("Admin notification failed:", emailErr);
-      }
+      if (saved.error) throw new Error(saved.error);
 
       alert("Deposit Submitted! Please wait for admin confirmation.");
       router.push("/dashboard"); 

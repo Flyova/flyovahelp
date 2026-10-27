@@ -85,13 +85,16 @@ export default function AdminDashboard() {
     let unsubFly = null;
     if (accessRole !== "support") {
       const qF = query(collection(db, "timed_games"), where("status", "==", "active"), limit(1));
-      unsubFly = onSnapshot(qF, (snap) => {
+      unsubFly = onSnapshot(qF, async (snap) => {
         if (!snap.empty) {
-          const data = snap.docs[0].data();
+          const id = snap.docs[0].id;
+          // A live round's winners are only on its server-only secret until it ends.
+          const secret = await getDoc(doc(db, "timed_game_secrets", id)).catch(() => null);
+          const winners = secret?.data()?.winners || snap.docs[0].data().winners;
           setStraWinsResult({
-            n1: data.winners?.[0] ?? "--",
-            n2: data.winners?.[1] ?? "--",
-            gameId: shortGameId(snap.docs[0].id)
+            n1: winners?.[0] ?? "--",
+            n2: winners?.[1] ?? "--",
+            gameId: shortGameId(id)
           });
         }
       });
