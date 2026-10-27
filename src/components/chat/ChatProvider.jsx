@@ -8,8 +8,9 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
-import { playChatSound } from "@/lib/chatSound";
+import { playChatSound, preloadTones } from "@/lib/chatSound";
 import { PRESENCE_PING_MS, READS_SINCE_MS, TYPING_SHOW_MS, norm } from "@/lib/chat";
+import { defaultChatTones } from "@/lib/chatTones";
 import { CoinWalletSheet, SendCoinsSheet } from "@/components/chat/CoinSheets";
 import ChatDialog from "@/components/chat/ChatDialog";
 
@@ -86,6 +87,7 @@ const fallbackSettings = (state) => ({
     private: state.sounds.private !== false,
     groups: state.sounds.groups || {},
     people: state.sounds.people || {},
+    tones: defaultChatTones(),
   },
 });
 
@@ -98,6 +100,7 @@ const mergeSettings = (cur, patch) => ({
     ...(patch.sounds || {}),
     groups: { ...cur.sounds.groups, ...(patch.sounds?.groups || {}) },
     people: { ...cur.sounds.people, ...(patch.sounds?.people || {}) },
+    tones: { ...cur.sounds.tones, ...(patch.sounds?.tones || {}) },
   },
 });
 
@@ -338,19 +341,35 @@ export function ChatProvider({ children }) {
   // Each chat profile has its own sound settings: the Chatroom uses the username
   // you're posting as, a chat the username you're in it as (any of yours, not
   // just the one you're using).
+  // The chat profile a chat's sounds follow: the one you're using if it's in the
+  // chat, else your other username that is (the Chatroom: the one you post as).
+  const soundProfile = useCallback((convoId) => {
+    const parts = myConvos.find((c) => c.id === convoId)?.participants || [];
+    return parts.includes(active) ? active : parts.find((p) => myLowers.includes(p)) || active;
+  }, [myConvos, active, myLowers]);
   const soundOn = useCallback((kind, convoId) => {
     if (kind === "room") return settingsFor(active).sounds.room !== false;
     if (chatState.archived[convoId]) return false;
-    const convo = myConvos.find((c) => c.id === convoId);
-    const parts = convo?.participants || [];
-    const s = settingsFor(parts.includes(active) ? active : parts.find((p) => myLowers.includes(p)) || active).sounds;
+    const parts = myConvos.find((c) => c.id === convoId)?.participants || [];
+    const s = settingsFor(soundProfile(convoId)).sounds;
     if (kind === "private") {
       if (s.private === false) return false;
       const other = parts.find((p) => !myLowers.includes(p));
       return !other || s.people?.[other] !== false;
     }
     return s.groups?.[convoId] !== false;
-  }, [settingsFor, active, chatState.archived, myConvos, myLowers]);
+  }, [settingsFor, active, chatState.archived, myConvos, myLowers, soundProfile]);
+  // The sound a chat plays (Chat settings → Notifications → Sounds). kind: "private",
+  // "group", "room" or "coins".
+  const toneFor = useCallback((kind, convoId) => {
+    const tones = settingsFor(kind === "room" ? active : soundProfile(convoId)).sounds.tones;
+    return tones?.[kind === "group" ? "groups" : kind];
+  }, [settingsFor, active, soundProfile]);
+  // Fetched ahead, so the first sound isn't late.
+  const toneKey = [...new Set(identities.flatMap((i) => Object.values(settingsFor(i.usernameLower).sounds.tones || {})))].sort().join(",");
+  useEffect(() => {
+    if (uid) preloadTones(toneKey.split(","));
+  }, [uid, toneKey]);
 
 
   useEffect(() => {
@@ -361,12 +380,9 @@ export function ChatProvider({ children }) {
     const prev = prevUnread.current;
     prevUnread.current = unread;
     if (Date.now() - startedAt.current < QUIET_START_MS) return;
-    const ring = Object.entries(unread).some(([id, n]) => {
-      const c = myConvos.find((x) => x.id === id);
-      return c && n > (prev[id] || 0) && soundOn(c.type === "group" ? "group" : "private", id);
-    });
-    if (ring) playChatSound();
-  }, [unread, myConvos, soundOn]);
+    const ring = myConvos.find((c) => unread[c.id] > (prev[c.id] || 0) && soundOn(c.type === "group" ? "group" : "private", c.id));
+    if (ring) playChatSound(toneFor(ring.type === "group" ? "group" : "private", ring.id));
+  }, [unread, myConvos, soundOn, toneFor]);
 
   // Online status: while Chats is open and on screen, the username you're using
   // says it's here every minute (hidden if you've switched online status off).
@@ -602,10 +618,10 @@ export function ChatProvider({ children }) {
     err, setErr, notice, flashNotice,
     openProfile, messagePrivately, blockUser, unblockUser, reportUser,
     coins, coinsOf, openCoinWallet, sendCoins,
-    updateChatState, soundOn, presence, presenceNow,
+    updateChatState, soundOn, toneFor, presence, presenceNow,
     settingsFor, updateSettings, settingsLoaded, settingsName, setSettingsName: setSettingsChoice,
     archiveChat, deleteChat, removeChat, isDeletedForMe, ask, confirmAction, needUsername,
-  }), [uid, identities, identitiesLoaded, active, selectIdentity, myConvos, unreadByName, coinsOf, refreshIdentities, createUsername, usernamePrice, archiveChat, deleteChat, isDeletedForMe, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, notice, flashNotice, openProfile, messagePrivately, blockUser, unblockUser, reportUser, coins, openCoinWallet, sendCoins, updateChatState, soundOn, presence, presenceNow, settingsFor, updateSettings, settingsLoaded, settingsName, removeChat, ask, confirmAction, needUsername]);
+  }), [uid, identities, identitiesLoaded, active, selectIdentity, myConvos, unreadByName, coinsOf, refreshIdentities, createUsername, usernamePrice, archiveChat, deleteChat, isDeletedForMe, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, notice, flashNotice, openProfile, messagePrivately, blockUser, unblockUser, reportUser, coins, openCoinWallet, sendCoins, updateChatState, soundOn, toneFor, presence, presenceNow, settingsFor, updateSettings, settingsLoaded, settingsName, removeChat, ask, confirmAction, needUsername]);
 
   // Whose coins the open coin sheet uses: the wallet's username, or who you send as.
   const walletName = coinSheet?.name || active;

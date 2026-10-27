@@ -1,11 +1,17 @@
 "use client";
-import { MessageCircle, Radio } from "lucide-react";
+import { Coins, MessageCircle, Radio, Users } from "lucide-react";
 import { useChat } from "@/components/chat/ChatProvider";
 import Avatar from "@/components/Avatar";
 import { GroupAvatar } from "@/components/chat/GroupForm";
 import { SettingsIntro, SettingsLoading, SettingsPage, SettingsRow, SettingsSection, SettingsSwitch, useSaveSetting } from "@/components/chat/SettingsList";
+import { CHAT_TONE_KINDS, CHAT_TONE_TITLES, toneLabel } from "@/lib/chatTones";
 
-/** Message sounds for one chat profile: the Chatroom, private chats, each group, and players muted from their profile. */
+const TONE_ICONS = { private: MessageCircle, groups: Users, room: Radio, coins: Coins };
+
+/**
+ * Message sounds for one chat profile: which sound each kind plays, and whether the
+ * Chatroom, private chats, each group and players muted from their profile play one.
+ */
 export default function NotificationSettingsPage() {
   const { settingsName: name, settingsFor, myConvos, settingsLoaded } = useChat();
   const { busy, save } = useSaveSetting();
@@ -18,9 +24,14 @@ export default function NotificationSettingsPage() {
   return (
     <SettingsPage title="Notifications">
       <SettingsIntro>
-        Message sounds for @{name}. Sounds play while Chats is open; in the StraWins app, push notifications from chats you&apos;ve turned off arrive silently.
+        Message sounds for @{name}. Sounds play while Chats is open; in the StraWins app, push notifications play them too, and those from chats you&apos;ve turned off arrive silently.
       </SettingsIntro>
-      <SettingsSection title="Chats">
+      <SettingsSection title="Sounds">
+        {CHAT_TONE_KINDS.map((k) => (
+          <SettingsRow key={k} icon={TONE_ICONS[k]} title={CHAT_TONE_TITLES[k].title} value={toneLabel(sounds.tones?.[k])} href={`/chat/settings/sound/${k}`} />
+        ))}
+      </SettingsSection>
+      <SettingsSection title="Play sounds for">
         <SettingsSwitch icon={Radio} title="Chatroom" text="New messages in the Chatroom" on={sounds.room !== false} disabled={busy === "room"} onChange={(v) => save("room", { sounds: { room: v } })} />
         <SettingsSwitch icon={MessageCircle} title="Private chats" text="New private messages" on={sounds.private !== false} disabled={busy === "private"} onChange={(v) => save("private", { sounds: { private: v } })} />
       </SettingsSection>

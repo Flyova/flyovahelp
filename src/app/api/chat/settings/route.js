@@ -3,6 +3,7 @@ import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import { isValidUsername, norm, ownedUsername } from "@/lib/chat";
 import { CHAT_SETTING_DEFAULTS, GROUP_ADDS, chatSettingsFor } from "@/lib/chatSettings";
+import { CHAT_TONE_KINDS, isTone } from "@/lib/chatTones";
 
 // Settings for each chat profile (username): read receipts, online status, hidden
 // country, coins on show, who can add it to groups and message sounds. Stored in chat_settings/{username},
@@ -12,7 +13,8 @@ import { CHAT_SETTING_DEFAULTS, GROUP_ADDS, chatSettingsFor } from "@/lib/chatSe
 //   GET                              -> { items: { [username]: settings } }  every username you can chat as
 //   POST { username, settings }      -> { settings }  settings = any of { readReceipts, showOnline, hideCountry,
 //                                       showCoins, groupAdds: "everyone" | "ask" | "nobody",
-//                                       sounds: { room, private, groups: { id: bool }, people: { name: bool } } }
+//                                       sounds: { room, private, groups: { id: bool }, people: { name: bool },
+//                                                 tones: { private, groups, room, coins: tone id (lib/chatTones) } } }
 
 const fail = (error, status = 400) => NextResponse.json({ error }, { status });
 const MAX_KEYS = 50;
@@ -39,6 +41,8 @@ function clean(input = {}) {
     .filter(([name, v]) => isValidUsername(name) && typeof v === "boolean")
     .slice(0, MAX_KEYS);
   if (people.length) sounds.people = Object.fromEntries(people);
+  const tones = CHAT_TONE_KINDS.filter((k) => isTone(s.tones?.[k]));
+  if (tones.length) sounds.tones = Object.fromEntries(tones.map((k) => [k, s.tones[k]]));
   if (Object.keys(sounds).length) out.sounds = sounds;
   return out;
 }

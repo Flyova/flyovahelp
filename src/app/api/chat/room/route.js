@@ -4,6 +4,7 @@ import { getCaller } from "@/lib/apiAuth";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import { PRESENCE_ONLINE_MS, containsMediaMarker, mentionsIn, ownedUsername, usernameUids } from "@/lib/chat";
 import { sendPushToUsers } from "@/lib/push";
+import { chatSettingsFor } from "@/lib/chatSettings";
 
 // POST /api/chat/room — the public chatroom everyone can read (Firestore rules: read-only
 // for signed-in players). Posting goes through here so the server can rate-limit and
@@ -36,7 +37,8 @@ const fail = (error, status = 400) => NextResponse.json({ error }, { status });
 
 /**
  * Players @mentioned in a Chatroom message get a notification and a push (unless
- * they've blocked the sender). At most a few per message.
+ * they've blocked the sender), in the sound they picked for the Chatroom. At most
+ * a few per message.
  */
 async function notifyMentions(db, me, body, messageId) {
   const names = mentionsIn(body).filter((n) => n !== me.lower);
@@ -47,6 +49,8 @@ async function notifyMentions(db, me, body, messageId) {
   ]);
   const title = `@${me.lower} mentioned you in the Chatroom`;
   const preview = body.slice(0, 120);
+  const live = names.filter((n, i) => nameSnaps[i].exists && !nameSnaps[i].data().deleted);
+  const settings = await chatSettingsFor(db, live.map((n) => ({ name: n, uid: nameSnaps[names.indexOf(n)].data().uid }))).catch(() => new Map());
   const targets = [];
   const writes = [];
   names.forEach((n, i) => {
@@ -56,7 +60,8 @@ async function notifyMentions(db, me, body, messageId) {
       toUsername: n, fromUsername: me.lower, kind: "mention", title, body: preview, room: "public", messageId,
       read: false, createdAt: admin.firestore.FieldValue.serverTimestamp(),
     }).catch(() => null));
-    for (const uid of usernameUids(s.data())) targets.push({ uid, data: { url: "/chat/room" } });
+    const tone = settings.get(n)?.sounds.tones.room;
+    for (const uid of usernameUids(s.data())) targets.push({ uid, tone, data: { url: "/chat/room" } });
   });
   await Promise.all([...writes, sendPushToUsers(targets, { title, body: preview, data: { kind: "mention", room: "public" } }).catch(() => 0)]);
 }

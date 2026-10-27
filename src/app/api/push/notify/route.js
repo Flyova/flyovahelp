@@ -65,12 +65,13 @@ async function chatMessage(db, caller, { convoId, messageId }) {
     const mentioned = new Set(mentionsIn(msg.text, 20));
     states.forEach((snap, i) => {
       const t = targets[i];
+      const sounds = settings.get(t.name)?.sounds || {};
+      t.tone = sounds.tones?.[isGroup ? "groups" : "private"]; // the sound their chat profile picked
       if (mentioned.has(t.name)) {
         t.mentioned = true;
         return;
       }
       const archived = snap.exists && snap.data().archived?.[convoId] === true;
-      const sounds = settings.get(t.name)?.sounds || {};
       t.silent = archived || (isGroup
         ? sounds.groups?.[convoId] === false
         : sounds.private === false || sounds.people?.[sender] === false);

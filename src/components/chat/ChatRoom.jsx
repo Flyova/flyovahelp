@@ -23,7 +23,7 @@ const FRESH_MS = 800; // messages that arrived this recently animate in
  * `sound`: play the new-message sound when someone else posts.
  */
 export default function ChatRoom({ uid, active, blocked = [], sound = true, onMessagePrivately, onReport, onOpenProfile, onSendCoins, onBlock }) {
-  const { confirmAction } = useChat();
+  const { confirmAction, toneFor } = useChat();
   const [messages, setMessages] = useState([]);
   const [outbox, setOutbox] = useState([]); // your messages on their way: shown at once, with a clock
   const [searching, setSearching] = useState(false);
@@ -40,11 +40,13 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
   const [burst, setBurst] = useState(null); // coins-sent animation
   const clearBurst = useCallback(() => setBurst(null), []);
   const soundRef = useRef(sound);
+  const tonesRef = useRef({ message: "", coins: "" }); // the sounds picked in Chat settings
   const activeRef = useRef(active);
   useEffect(() => {
     soundRef.current = sound;
+    tonesRef.current = { message: toneFor("room"), coins: toneFor("coins") };
     activeRef.current = active;
-  }, [sound, active]);
+  }, [sound, toneFor, active]);
 
   useEffect(() => {
     if (!uid) return;
@@ -60,9 +62,9 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
         if (coinCard) {
           const d = coinCard.data();
           setBurst({ id: coinCard.id, coins: d.coins, to: d.to, forYou: d.to === activeRef.current });
-          if (soundRef.current) playCoinSound();
+          if (soundRef.current) playCoinSound(tonesRef.current.coins);
         } else if (soundRef.current && added.some((c) => c.doc.data().senderUid !== uid)) {
-          playChatSound();
+          playChatSound(tonesRef.current.message);
         }
         initial = false;
         setMessages(

@@ -1,3 +1,5 @@
+import { CHAT_TONE_KINDS, DEFAULT_TONES, isTone } from "@/lib/chatTones";
+
 // Per-chat-profile settings: chat_settings/{usernameLower}, written only by
 // /api/chat/settings (owner or an account logged in to the username). Anything a
 // profile hasn't set yet falls back to its owner account's chat_state, where these
@@ -23,6 +25,8 @@ export function effectiveChatSettings(own = {}, account = {}) {
     private: bool(o.private, a.private, true),
     groups: { ...(a.groups || {}), ...(o.groups || {}) },
     people: { ...(a.people || {}), ...(o.people || {}) },
+    // Which sound each kind plays (Chat settings → Notifications → Sounds).
+    tones: Object.fromEntries(CHAT_TONE_KINDS.map((k) => [k, isTone(o.tones?.[k]) ? o.tones[k] : DEFAULT_TONES[k]])),
   };
   return out;
 }

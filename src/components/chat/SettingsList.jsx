@@ -130,14 +130,21 @@ export function SettingsSwitch({ icon, title, text, on, onChange, disabled = fal
   );
 }
 
-/** One choice of several (wrap them in role="radiogroup"). Like SettingsSwitch, `disabled` only ignores taps. */
-export function SettingsRadio({ icon, title, text, on, onSelect, disabled = false }) {
+/**
+ * One choice of several (wrap them in role="radiogroup"). Like SettingsSwitch, `disabled` only ignores taps.
+ * `onTap` runs on every tap, even of the chosen one (the sound picker plays the sound).
+ */
+export function SettingsRadio({ icon, title, text, on, onSelect, onTap, disabled = false }) {
   return (
     <SettingsRow
       icon={icon}
       title={title}
       text={text}
-      onClick={() => !disabled && !on && onSelect()}
+      onClick={() => {
+        if (disabled) return;
+        onTap?.();
+        if (!on) onSelect();
+      }}
       chevron={false}
       role="radio"
       checked={on}

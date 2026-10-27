@@ -7,6 +7,7 @@ import {
   usernameUids, MAX_COINS_PER_ACTION,
 } from "@/lib/chat";
 import { activityRef, balanceOf, mainUsername, walletRef } from "@/lib/coinWallets";
+import { chatSettingsFor } from "@/lib/chatSettings";
 
 // Chat coins. Each username has its own wallet, username_wallets/{username}, and
 // each movement is logged in its activity (lib/coinWallets); both are server-only
@@ -159,7 +160,10 @@ async function send(db, caller, { as, to, coins, convoId }) {
   });
   if (out.error) return fail(out.error, out.status);
 
-  await sendPushToUsers([{ uid: other.uid, data: { url: convoId ? `/chat/${convoId}?as=${encodeURIComponent(other.lower)}` : "/chat" } }], {
+  // In the sound their chat profile picked for coins.
+  const settings = await chatSettingsFor(db, [{ name: other.lower, uid: other.uid }]).catch(() => new Map());
+  const tone = settings.get(other.lower)?.sounds.tones.coins;
+  await sendPushToUsers([{ uid: other.uid, tone, data: { url: convoId ? `/chat/${convoId}?as=${encodeURIComponent(other.lower)}` : "/chat" } }], {
     title: "You received coins",
     body: `@${me.lower} sent you ${formatCoins(coins)} coins`,
     data: { kind: "coins", convoId: convoId || null },

@@ -69,18 +69,20 @@ export default function ConversationThread({
   const [burst, setBurst] = useState(null); // coins-sent animation
   const clearBurst = useCallback(() => setBurst(null), []);
   const inputRef = useRef(null);
-  const { uid, chatState, typingIn, soundOn, settingsFor, presenceNow } = useChat();
+  const { uid, chatState, typingIn, soundOn, toneFor, settingsFor, presenceNow } = useChat();
   const [memberPresence, setMemberPresence] = useState({}); // group members' online status
   const [searching, setSearching] = useState(false);
   const [focus, setFocus] = useState(null); // { id } of a message to scroll to (from search)
 
   // Sound for messages from others arriving while this chat is open and on screen.
   const soundRef = useRef(false);
+  const tonesRef = useRef({ message: "", coins: "" }); // the sounds picked in Chat settings
   const meRef = useRef(me);
   useEffect(() => {
     soundRef.current = soundOn(isGroup ? "group" : "private", convoId);
+    tonesRef.current = { message: toneFor(isGroup ? "group" : "private", convoId), coins: toneFor("coins", convoId) };
     meRef.current = me;
-  }, [soundOn, isGroup, convoId, me]);
+  }, [soundOn, toneFor, isGroup, convoId, me]);
   // Where you'd read up to when the chat opened (decided once, when both your read
   // position and the messages are in): the first newer message from someone else
   // gets an "Unread messages" line, and the chat scrolls there.
@@ -111,9 +113,9 @@ export default function ConversationThread({
         if (coinCard) {
           const d = coinCard.data();
           setBurst({ id: coinCard.id, coins: d.coins, to: d.to, forYou: d.to === meRef.current });
-          if (soundRef.current && onScreen) playCoinSound();
+          if (soundRef.current && onScreen) playCoinSound(tonesRef.current.coins);
         } else if (soundRef.current && onScreen && added.some((c) => c.doc.data().sender !== meRef.current)) {
-          playChatSound();
+          playChatSound(tonesRef.current.message);
         }
         initial = false;
         setMsgs(s.docs.map((d) => ({

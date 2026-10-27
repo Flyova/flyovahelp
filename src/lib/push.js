@@ -1,10 +1,29 @@
 import { admin, getAdminDb } from "@/lib/firebaseAdmin";
+import { DEFAULT_TONES, isTone } from "@/lib/chatTones";
 
 // Expo Push Service — the mobile app registers an Expo push token on users/{uid}.expoPushToken.
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const CHUNK = 100; // Expo accepts at most 100 messages per request.
 
 const isExpoToken = (t) => typeof t === "string" && /^Expo(nent)?PushToken\[.+\]$/.test(t);
+
+// The sound a push plays. Apps from the sound picker on carry every tone (lib/chatTones)
+// and write expoPushSoundsToken = their token; those get the tone the player chose.
+// Older apps don't have the tones' Android channels, and Android drops a push sent
+// to a channel the phone doesn't have, so they keep the phone's default sound.
+function soundOf(t) {
+  if (t.silent) return { sound: null, channelId: "chat-silent" }; // that channel has no sound
+  if (!t.hasTones) return { sound: "default", channelId: "default" };
+  const tone = isTone(t.tone) ? t.tone : DEFAULT_TONES.alerts;
+  return { sound: `tone_${tone}.wav`, channelId: `tone-${tone}` };
+}
+
+// Device details from a users/{uid} doc: its push token (unless notifications are off),
+// whether that device's app has the tones, and the account's sound for other notifications.
+const deviceOf = (u = {}) => {
+  const token = u.notificationsEnabled === false ? null : u.expoPushToken;
+  return { token, hasTones: !!token && u.expoPushSoundsToken === token, alertTone: u.notificationTone };
+};
 
 async function postToExpo(messages) {
   const headers = { "Content-Type": "application/json", Accept: "application/json" };
@@ -20,7 +39,10 @@ async function postToExpo(messages) {
  * Sends one notification to every given user that has a device registered and has not
  * switched notifications off. Tokens Expo reports as dead are cleared so they are not retried.
  *
- * @param {Array<{ uid: string, token?: string, data?: object }>|string[]} targets
+ * A target's `tone` (a chat profile's sound for that kind of message) wins over the
+ * account's sound for other notifications; `silent` sends it without a sound.
+ *
+ * @param {Array<{ uid: string, token?: string, hasTones?: boolean, tone?: string, silent?: boolean, data?: object }>|string[]} targets
  * @param {{ title: string, body: string, data?: object }} message
  * @returns {Promise<number>} number of tickets Expo accepted
  */
@@ -34,8 +56,8 @@ export async function sendPushToUsers(targets, { title, body, data = {} }) {
   if (missing.length) {
     const snaps = await db.getAll(...missing.map((t) => db.collection("users").doc(t.uid)));
     snaps.forEach((snap, i) => {
-      const u = snap.exists ? snap.data() : {};
-      missing[i].token = u.notificationsEnabled === false ? null : u.expoPushToken;
+      const { token, hasTones, alertTone } = deviceOf(snap.exists ? snap.data() : {});
+      Object.assign(missing[i], { token, hasTones, tone: missing[i].tone || alertTone });
     });
   }
 
@@ -50,9 +72,7 @@ export async function sendPushToUsers(targets, { title, body, data = {} }) {
       title: t.title || title,
       body: String(body || "").slice(0, 180),
       data: { ...data, ...(t.data || {}) },
-      // Muted chats arrive silently (the app's "chat-silent" Android channel has no sound).
-      sound: t.silent ? null : "default",
-      channelId: t.silent ? "chat-silent" : "default",
+      ...soundOf(t),
       priority: "high",
     });
     owners.push(t.uid);
@@ -87,9 +107,13 @@ export async function sendPushToUsers(targets, { title, body, data = {} }) {
 /** Pushes to every user with a registered device — used for admin announcements. */
 export async function sendPushToAll(message) {
   const db = getAdminDb();
-  const snap = await db.collection("users").where("expoPushToken", ">", "").select("expoPushToken", "notificationsEnabled").get();
+  const snap = await db.collection("users").where("expoPushToken", ">", "")
+    .select("expoPushToken", "notificationsEnabled", "expoPushSoundsToken", "notificationTone").get();
   const targets = snap.docs
-    .filter((d) => d.get("notificationsEnabled") !== false)
-    .map((d) => ({ uid: d.id, token: d.get("expoPushToken") }));
+    .map((d) => {
+      const { token, hasTones, alertTone } = deviceOf(d.data());
+      return { uid: d.id, token, hasTones, tone: alertTone };
+    })
+    .filter((t) => t.token);
   return sendPushToUsers(targets, message);
 }
