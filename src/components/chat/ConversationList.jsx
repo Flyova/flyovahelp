@@ -1,10 +1,10 @@
 "use client";
 import { useState } from "react";
 import { Loader2, MessageCircle, MoreVertical } from "lucide-react";
-import Avatar from "@/components/Avatar";
+import Avatar, { DeletedAvatar } from "@/components/Avatar";
 import { GroupAvatar } from "@/components/chat/GroupForm";
 import MessageMenu from "@/components/chat/MessageMenu";
-import { typingLabel } from "@/lib/chat";
+import { departedFrom, typingLabel } from "@/lib/chat";
 
 const MENU_WIDTH = 228;
 
@@ -27,7 +27,8 @@ const memberLabel = (n) => `${n} member${n === 1 ? "" : "s"}`;
  * shown once `loading` is over. `typingIn` (id -> usernames) swaps a row's
  * preview for "typing…"; `unread` (id -> count) makes a row bold with a badge;
  * `online` (usernames) puts a green dot on private chats with someone online;
- * `blocked` (usernames) marks private chats with people you've blocked;
+ * `blocked` (usernames) marks private chats with people you've blocked; a
+ * closed private chat (the other player deleted their username) reads "Deleted account";
  * `rowMenu(convo)` gives the items for each row's ⋯ menu (archive, delete…).
  */
 export default function ConversationList({
@@ -62,7 +63,8 @@ export default function ConversationList({
           const group = c.type === "group";
           const selected = openId === c.id;
           const typing = typingLabel(typingIn[c.id], group);
-          const isBlocked = !group && blocked.has(others[0]);
+          const gone = !group && departedFrom(c, others[0]);
+          const isBlocked = !group && !gone && blocked.has(others[0]);
           const count = unread[c.id] || 0;
           return (
             <div key={c.id} className={`flex items-center rounded-xl transition-colors ${selected ? "bg-[#8B1E3F]/25" : "hover:bg-white/[0.04]"}`}>
@@ -73,6 +75,8 @@ export default function ConversationList({
               >
                 {group ? (
                   <GroupAvatar size={40} rounded="rounded-xl" groupId={c.id} version={c.photoVersion} />
+                ) : gone ? (
+                  <DeletedAvatar size={40} />
                 ) : (
                   <span className="relative shrink-0">
                     <Avatar username={others[0]} size={40} />
@@ -86,7 +90,7 @@ export default function ConversationList({
                   </span>
                   <span className="flex items-center justify-between gap-2">
                     <span className={`min-w-0 truncate text-xs ${isBlocked ? "text-red-300/80" : typing ? "text-[#E0708C]" : count ? "text-white/85 font-semibold" : "text-white/45"}`}>
-                      {isBlocked ? "Blocked" : typing || c.lastMessage || (group ? memberLabel((c.participants || []).length) : "No messages yet")}
+                      {gone ? "Deleted account" : isBlocked ? "Blocked" : typing || c.lastMessage || (group ? memberLabel((c.participants || []).length) : "No messages yet")}
                     </span>
                     {count > 0 && (
                       <span className="shrink-0 min-w-5 h-5 px-1.5 rounded-full bg-[#8B1E3F] text-[11px] font-black flex items-center justify-center" aria-label={`${count} unread`}>

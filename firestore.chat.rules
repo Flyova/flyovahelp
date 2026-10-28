@@ -119,6 +119,7 @@
           && ownsUsername(request.resource.data.sender)
           && !(request.resource.data.sender in chatConvo(convoId).get('blocked', []))
           && canPostIn(convoId, request.resource.data.sender)
+          && chatConvo(convoId).get('closed', false) != true // the other player deleted their username
           && request.resource.data.keys().hasOnly(['sender', 'text', 'createdAt', 'deletedForEveryone', 'replyTo'])
           && validReplyQuote(request.resource.data)
           && request.resource.data.text is string

@@ -74,7 +74,7 @@ export default function AccountPage() {
   };
 
   const remove = async () => {
-    if (!(await confirmAction({ title: `Delete @${name}?`, message: `This permanently removes the username. Its coins move to your main username. It can't be undone.`, confirmLabel: "Delete" }))) return;
+    if (!(await confirmAction({ title: `Delete @${name}?`, message: `@${name} leaves all its groups. People you chatted with privately keep those chats but can't reply. Its coins move to your main username, and anyone can then take the name. This can't be undone.`, confirmLabel: "Delete" }))) return;
     setBusy("delete");
     const r = await authFetch("/api/chat/usernames", { method: "DELETE", body: { username: name } }).catch((e) => ({ error: e.message }));
     setBusy("");

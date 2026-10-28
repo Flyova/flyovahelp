@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getAdminDb, admin } from "@/lib/firebaseAdmin";
 import { norm, isValidUsername, monthsSince, usernameCharge } from "@/lib/chat";
 import { getCaller } from "@/lib/apiAuth";
-import { moveAccountCoins, settleUsernameWallet } from "@/lib/coinWallets";
+import { moveAccountCoins } from "@/lib/coinWallets";
+import { releasedUsernameCount, releaseUsername } from "@/lib/chatRelease";
 
 const unauthorized = () => NextResponse.json({ error: "Sign in again to continue." }, { status: 401 });
 
@@ -36,10 +37,13 @@ export async function GET(req) {
     await moveAccountCoins(db, uid, items.find((i) => i.isDefault && !i.linked)?.id)
       .catch((e) => console.error("Moving account coins failed:", e));
     // What adding one more username costs, so the app can say "Add" (free) or "Buy $1".
-    const [userSnap, agentSnap] = await db.getAll(db.collection("users").doc(uid), db.collection("agents").doc(uid));
+    const [[userSnap, agentSnap], released] = await Promise.all([
+      db.getAll(db.collection("users").doc(uid), db.collection("agents").doc(uid)),
+      releasedUsernameCount(db, uid),
+    ]);
     const u = userSnap.exists ? userSnap.data() : {};
     const nextPrice = usernameCharge({
-      owned: owned.size, ageMonths: monthsSince(u.createdAt), isAgent: !!(u.isAgent || agentSnap.exists), freeUsernameUsed: u.freeUsernameUsed,
+      owned: owned.size + released, ageMonths: monthsSince(u.createdAt), isAgent: !!(u.isAgent || agentSnap.exists), freeUsernameUsed: u.freeUsernameUsed,
     });
     return NextResponse.json({ items, nextPrice });
   } catch (e) {
@@ -59,14 +63,18 @@ export async function POST(req) {
       return NextResponse.json({ error: "Valid username (3-30 chars, letters/numbers/._) required" }, { status: 400 });
     const lower = norm(username);
     const db = getAdminDb();
-    if ((await db.collection("usernames").doc(lower).get()).exists)
+    const existing = await db.collection("usernames").doc(lower).get();
+    if (existing.exists && !existing.data().deleted)
       return NextResponse.json({ error: "Username taken" }, { status: 409 });
+    // A deleted name not freed yet: free it now, then register it as new.
+    if (existing.exists) await releaseUsername(db, lower);
 
     const userRef = db.collection("users").doc(uid);
     const userSnap = await userRef.get();
     if (!userSnap.exists) return NextResponse.json({ error: "Account not found" }, { status: 404 });
     const u = userSnap.data();
-    const owned = (await db.collection("usernames").where("uid", "==", uid).get()).size;
+    const live = (await db.collection("usernames").where("uid", "==", uid).get()).size;
+    const owned = live + (await releasedUsernameCount(db, uid)); // deleted names still count toward the price
     const isAgent = !!(u.isAgent || (await db.collection("agents").doc(uid).get()).exists);
     const charge = usernameCharge({ owned, ageMonths: monthsSince(u.createdAt), isAgent, freeUsernameUsed: u.freeUsernameUsed });
     // One transaction: the name check, a fresh balance check, the charge and the
@@ -82,7 +90,7 @@ export async function POST(req) {
 
       tx.create(nameRef, {
         username: String(username).trim(), usernameLower: lower, uid,
-        isDefault: owned === 0, createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        isDefault: live === 0, createdAt: admin.firestore.FieldValue.serverTimestamp(),
         pricePaid: charge, deleted: false,
       });
       tx.set(db.collection("chat_profiles").doc(lower), {
@@ -111,8 +119,9 @@ export async function POST(req) {
   }
 }
 
-// DELETE /api/chat/usernames { username } — permanently delete identity; its coins
-// move to the main username
+// DELETE /api/chat/usernames { username } — permanently delete identity, then free the
+// name for anyone to register (lib/chatRelease: its coins move to the main username,
+// it leaves its groups, its private chats turn read-only for the other player)
 export async function DELETE(req) {
   try {
     const caller = await getCaller(req);
@@ -127,8 +136,8 @@ export async function DELETE(req) {
     if (snap.data().uid !== uid) return NextResponse.json({ error: "Not your username" }, { status: 403 });
     if (snap.data().isDefault) return NextResponse.json({ error: "Default username cannot be deleted" }, { status: 400 });
     await ref.update({ deleted: true, deletedAt: admin.firestore.FieldValue.serverTimestamp() });
-    // Each username has its own coin wallet, so its coins aren't left behind.
-    await settleUsernameWallet(db, lower).catch((e) => console.error(`Moving @${lower}'s coins failed:`, e));
+    // If this stops half way, the name stays deleted and the daily cleanup finishes freeing it.
+    await releaseUsername(db, lower).catch((e) => console.error(`Releasing @${lower} failed:`, e));
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });

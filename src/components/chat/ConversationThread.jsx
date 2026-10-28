@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FieldPath, addDoc, collection, deleteField, doc, documentId, limitToLast, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
 } from "firebase/firestore";
-import { ChevronLeft, LockKeyhole, MoreHorizontal, Search } from "lucide-react";
+import { ChevronLeft, LockKeyhole, MoreHorizontal, Search, UserX } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { TYPING_PING_MS, canPostInGroup, containsMediaMarker, formatCount, isValidText, presenceOf, typingLabel } from "@/lib/chat";
 import { notifyPush } from "@/lib/pushClient";
@@ -34,7 +34,8 @@ const lastWhere = (list, test) => {
  * `menuItems` fill the ⋯ menu. A group admin passes
  * `onModerate` to remove other people's messages; groups pass `onSendCoins`.
  * `blockedByMe` = { name, onUnblock } when you've blocked the other person in a
- * private chat: you can't write to them until you unblock.
+ * private chat: you can't write to them until you unblock. A closed private chat
+ * (the other player deleted their username) stays readable but takes no replies.
  *
  * While it's open and on screen it records how far you've read (privately for
  * unread counts, and on the conversation for read receipts if you share them)
@@ -140,7 +141,9 @@ export default function ConversationThread({
   const blockedHere = !!convo?.blocked?.includes(me);
   // A locked group takes messages only from its admins.
   const lockedOut = isGroup && !!convo && !canPostInGroup(convo, me);
-  const cantSend = !convo || blockedHere || lost || !!blockedByMe || lockedOut;
+  // A closed private chat: the other player deleted their username.
+  const closed = !isGroup && !!convo?.closed;
+  const cantSend = !convo || blockedHere || lost || !!blockedByMe || lockedOut || closed;
   // Read receipts are a setting of the chat profile you're in this chat as.
   const receipts = settingsFor(me).readReceipts;
 
@@ -382,7 +385,11 @@ export default function ConversationThread({
         focus={focus}
       />
 
-      {blockedByMe ? (
+      {closed ? (
+        <p className="px-4 py-3.5 border-t border-white/5 bg-[#142036] flex items-center justify-center gap-2 text-[13px] text-white/60">
+          <UserX size={14} className="shrink-0" /> This player deleted their account. You can&apos;t reply.
+        </p>
+      ) : blockedByMe ? (
         <div className="px-4 py-3 border-t border-white/5 bg-[#142036] flex items-center justify-between gap-3">
           <p className="text-[13px] text-white/60">You blocked @{blockedByMe.name}. They can&apos;t message you.</p>
           <button type="button" onClick={blockedByMe.onUnblock} className="shrink-0 h-9 px-4 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-black uppercase">

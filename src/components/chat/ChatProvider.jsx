@@ -9,7 +9,7 @@ import {
 import { auth, db } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
 import { playChatSound, preloadTones } from "@/lib/chatSound";
-import { PRESENCE_PING_MS, READS_SINCE_MS, TYPING_SHOW_MS, norm } from "@/lib/chat";
+import { PRESENCE_PING_MS, READS_SINCE_MS, TYPING_SHOW_MS, departedFrom, norm } from "@/lib/chat";
 import { defaultChatTones } from "@/lib/chatTones";
 import { CoinWalletSheet, SendCoinsSheet } from "@/components/chat/CoinSheets";
 import ChatDialog from "@/components/chat/ChatDialog";
@@ -406,7 +406,8 @@ export function ChatProvider({ children }) {
   // Your private-chat partners' online status, 30 names per listener.
   const partnerKey = useMemo(() => [...new Set(convos
     .filter((c) => c.type !== "group")
-    .flatMap((c) => (c.participants || []).filter((p) => !myLowers.includes(p))))].sort().join(","), [convos, myLowers]);
+    // Not players who deleted their username: the name may be someone else's now.
+    .flatMap((c) => (c.participants || []).filter((p) => !myLowers.includes(p) && !departedFrom(c, p))))].sort().join(","), [convos, myLowers]);
   useEffect(() => {
     if (!partnerKey) return;
     const names = partnerKey.split(",");
@@ -559,7 +560,7 @@ export function ChatProvider({ children }) {
         blocker: active, blocked: target, createdAt: serverTimestamp(),
       });
       // Recorded on your private chat with them too: the rules refuse new messages from anyone listed in `blocked`.
-      const c = convos.find((x) => x.type !== "group" && (x.participants || []).includes(target) && (x.participants || []).includes(active));
+      const c = convos.find((x) => x.type !== "group" && !x.closed && (x.participants || []).includes(target) && (x.participants || []).includes(active));
       if (c) await updateDoc(doc(db, "conversations", c.id), { blocked: arrayUnion(target) });
       flashNotice(`You blocked @${target}.`);
     } catch (e) {

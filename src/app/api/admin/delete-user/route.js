@@ -1,6 +1,7 @@
 import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { NextResponse } from "next/server";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
+import { releaseAccountUsernames } from "@/lib/chatRelease";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,13 +56,17 @@ export async function POST(req) {
       return NextResponse.json({ error: "You cannot delete your own account." }, { status: 400 });
     }
 
-    // 1. Delete the Authentication Record (The part the user couldn't do)
+    // 1. Free their chat usernames: they leave their groups, their private chats
+    //    are deleted, and the names can be registered again.
+    await releaseAccountUsernames(adminDb, uid);
+
+    // 2. Delete the Authentication Record (The part the user couldn't do)
     await admin.auth().deleteUser(uid);
 
-    // 2. Delete the Firestore User Document
+    // 3. Delete the Firestore User Document
     await adminDb.collection("users").doc(uid).delete();
 
-    // 3. Optional: Delete their transactions sub-collection
+    // 4. Optional: Delete their transactions sub-collection
     const txSnap = await adminDb.collection("users").doc(uid).collection("transactions").get();
     const batch = adminDb.batch();
     txSnap.forEach(doc => batch.delete(doc.ref));

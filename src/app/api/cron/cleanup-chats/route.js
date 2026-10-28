@@ -1,5 +1,6 @@
 import { getAdminDb } from "@/lib/firebaseAdmin";
 import { NextResponse } from "next/server";
+import { releasePendingUsernames } from "@/lib/chatRelease";
 
 export async function GET() {
   try {
@@ -32,9 +33,13 @@ export async function GET() {
       await batch.commit();
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      message: `Support cleanup successful. Deleted ${totalDeleted} stale chat documents.`,
+    // Deleted chat usernames not yet freed (a release that stopped half way, or
+    // names deleted before releasing existed): free them now.
+    const usernamesFreed = await releasePendingUsernames(adminDb);
+
+    return NextResponse.json({
+      success: true,
+      message: `Support cleanup successful. Deleted ${totalDeleted} stale chat documents. Freed ${usernamesFreed} deleted chat usernames.`,
       timestamp: new Date().toISOString()
     });
 

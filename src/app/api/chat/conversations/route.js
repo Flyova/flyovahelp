@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import {
-  dmIdFor, isValidUsername, norm, ownedUsername, participantUidsFor, usernameUids,
+  isValidUsername, liveDmRef, norm, ownedUsername, participantUidsFor, usernameUids,
   GROUP_DESCRIPTION_MAX, GROUP_NAME_MAX, MAX_GROUP_MEMBERS, groupByInvite, groupOwner, groupSearchKeys, isGroupAdmin,
 } from "@/lib/chat";
 import { chatSettingsFor } from "@/lib/chatSettings";
@@ -100,10 +100,9 @@ async function openDm(db, caller, { as, target }) {
   const blocked = await db.collection("chat_blocks").doc(`${other.lower}_${me.lower}`).get();
   if (blocked.exists) return fail("You are blocked by this user.", 403);
 
-  const id = dmIdFor(me.lower, other.lower);
-  const ref = db.collection("conversations").doc(id);
+  const { ref, snap } = await liveDmRef(db, me.lower, other.lower);
+  const id = ref.id;
   const participantUids = [...new Set([...usernameUids(me), ...other.uids])];
-  const snap = await ref.get();
   if (!snap.exists) {
     await ref.set({
       type: "dm",
@@ -396,8 +395,7 @@ async function unblock(db, caller, { as, target }) {
   const me = await ownedUsername(db, caller.uid, as);
   if (!me) return fail("You can only act as one of your own usernames.", 403);
   const other = norm(String(target || "").replace(/^@/, ""));
-  const ref = db.collection("conversations").doc(dmIdFor(me.lower, other));
-  const snap = await ref.get();
+  const { ref, snap } = await liveDmRef(db, me.lower, other);
   if (snap.exists && snap.data().type === "dm" && (snap.data().participants || []).includes(me.lower)) {
     await ref.update({ blocked: FV().arrayRemove(other) });
   }

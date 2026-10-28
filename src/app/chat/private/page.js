@@ -1,10 +1,10 @@
 "use client";
 import { useState } from "react";
 import { Archive, ArchiveRestore, Ban, ChevronDown, Flag, MessagesSquare, Trash2, UserRound } from "lucide-react";
-import { presenceOf } from "@/lib/chat";
+import { departedFrom, presenceOf } from "@/lib/chat";
 import { useChatStatusLine } from "@/lib/chatPhotos";
 import { useChat } from "@/components/chat/ChatProvider";
-import Avatar from "@/components/Avatar";
+import Avatar, { DeletedAvatar } from "@/components/Avatar";
 import ConversationList from "@/components/chat/ConversationList";
 import ConversationThread, { ThreadPlaceholder } from "@/components/chat/ConversationThread";
 import IdentityBar from "@/components/chat/IdentityBar";
@@ -27,6 +27,8 @@ export default function PrivateChatsPage() {
   const open = convos.find((c) => c.id === openId);
   const me = myNameIn(open);
   const other = open ? (open.participants || []).find((p) => p !== me) : null;
+  // They deleted their username: the chat is read-only, and the name may be someone else's now.
+  const gone = departedFrom(open, other);
   const chats = convos.filter((c) => c.type !== "group" && (c.lastMessage || c.id === openId) && !isDeletedForMe(c));
   const inbox = chats.filter((c) => !chatState.archived[c.id]);
   const archived = chats.filter((c) => chatState.archived[c.id]);
@@ -39,8 +41,8 @@ export default function PrivateChatsPage() {
   ];
   const openChat = (id) => setOpenId("private", id);
   const statusLine = useChatStatusLine(other); // their status, shown under their name
-  const status = other ? presenceOf(presence[other], presenceNow) : null;
-  const iBlocked = !!other && blockedNames.includes(other);
+  const status = other && !gone ? presenceOf(presence[other], presenceNow) : null;
+  const iBlocked = !!other && !gone && blockedNames.includes(other);
   const online = new Set(Object.keys(presence).filter((name) => presenceOf(presence[name], presenceNow)?.online));
   const listProps = {
     loading: convosLoading, typingIn, unread, online, blocked: new Set(blockedNames), myNameIn, openId, onOpen: openChat, rowMenu: chatMenu,
@@ -87,7 +89,11 @@ export default function PrivateChatsPage() {
             convo={open}
             me={me}
             isGroup={false}
-            header={{
+            header={gone ? {
+              avatar: <DeletedAvatar size={40} rounded="rounded-full" />,
+              title: `@${other}`,
+              subtitle: "Deleted account",
+            } : {
               avatar: other && <Avatar username={other} size={40} rounded="rounded-full" />,
               title: other ? `@${other}` : "Private chat",
               statusLine,
@@ -96,7 +102,7 @@ export default function PrivateChatsPage() {
               label: other ? `View @${other}'s profile` : undefined,
               onClick: other ? () => openProfile(other) : undefined,
             }}
-            menuItems={other ? [
+            menuItems={gone ? chatMenu(open) : other ? [
               { label: "View profile", icon: UserRound, run: () => openProfile(other) },
               iBlocked
                 ? { label: `Unblock @${other}`, icon: Ban, run: () => unblockUser(other) }
@@ -106,8 +112,8 @@ export default function PrivateChatsPage() {
             ] : []}
             onBack={() => openChat(null)}
             onError={setErr}
-            onReport={(m) => reportUser(m.sender)}
-            onOpenProfile={openProfile}
+            onReport={gone ? undefined : (m) => reportUser(m.sender)}
+            onOpenProfile={gone ? undefined : openProfile}
             blockedByMe={iBlocked ? { name: other, onUnblock: () => unblockUser(other) } : null}
           />
         ) : (

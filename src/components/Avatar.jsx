@@ -1,6 +1,16 @@
 "use client";
+import { UserX } from "lucide-react";
 import { avatarUrl } from "@/lib/avatar";
 import { useChatPhoto } from "@/lib/chatPhotos";
+
+/** Stands in for a player who deleted their username: the name may be someone else's now. */
+export function DeletedAvatar({ size = 40, rounded = "rounded-xl", className = "" }) {
+  return (
+    <span role="img" aria-label="Deleted account" style={{ width: size, height: size }} className={`shrink-0 flex items-center justify-center bg-white/10 text-white/45 ${rounded} ${className}`}>
+      <UserX size={Math.round(size / 2)} />
+    </span>
+  );
+}
 
 /**
  * A player's avatar: the profile photo they uploaded for this chat username, or

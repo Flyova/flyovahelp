@@ -34,6 +34,8 @@ async function chatMessage(db, caller, { convoId, messageId }) {
   const owner = await db.collection("usernames").doc(sender).get();
   if (!owner.exists || !usernameUids(owner.data()).includes(caller.uid)) return { error: "Not your message", status: 403 };
 
+  // A closed chat's other player deleted their username, which may be someone else's now.
+  if (convo.closed) return { sent: 0 };
   const others = (convo.participants || []).map(norm).filter((p) => p && p !== sender);
   if (!others.length) return { sent: 0 };
 

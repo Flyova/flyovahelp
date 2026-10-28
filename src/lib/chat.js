@@ -13,6 +13,20 @@ export const dmIdFor = (a, b) => {
   const [x, y] = [norm(a), norm(b)].sort();
   return `dm__${x}__${y}`;
 };
+// When a player deletes their username, their private chats are closed: kept,
+// read-only, for the other player, with the deleted names in `departed`.
+export const departedFrom = (convo, name) => !!name && (convo?.departed || []).includes(name);
+// Server helper: { ref, snap } for the open private chat between two usernames:
+// dm__a__b, or dm__a__b__2 and so on once earlier ones were closed (say, someone
+// took a deleted name and wrote to the same player).
+export async function liveDmRef(db, a, b) {
+  const base = dmIdFor(a, b);
+  for (let n = 1; ; n += 1) {
+    const ref = db.collection("conversations").doc(n === 1 ? base : `${base}__${n}`);
+    const snap = await ref.get();
+    if (!snap.exists || !snap.data().closed) return { ref, snap };
+  }
+}
 export const USERNAME_PRICE = 1;
 export const FREE_USERNAMES_OLD_ACCOUNT = 10;
 export const FREE_USERNAMES_AGENT = 3;
