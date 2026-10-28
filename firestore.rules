@@ -71,7 +71,8 @@ service cloud.firestore {
         'uid', 'email', 'emailLower', 'createdAt', 'referrerUid', 'referredBy', 'lastAdminLogin',
         'wallet', 'referralBonus', 'agent_balance', 'bonusClaimed', 'bonusDeducted',
         'welcomeBonusClaimed', 'welcomeBonusPaid', 'welcomeBonusAmount', 'welcomeBonusStatus',
-        'welcomeBonusPaidAt', 'welcomeBonusRecoveredAt', 'subscription_expires', 'subscription_started_at'];
+        'welcomeBonusPaidAt', 'welcomeBonusRecoveredAt', 'subscription_expires', 'subscription_started_at',
+        'inflowBonus', 'inflowEarned', 'inflowAccess', 'inflowAccessAt', 'freeWithdrawalMonth'];
     }
 
     function ownAccountChange() {
@@ -96,7 +97,10 @@ service cloud.firestore {
         && request.resource.data.get('uid', userId) == userId
         && !request.resource.data.keys().hasAny(['isban', 'banned', 'isAgent', 'chatMuted', 'referralBonus', 'otp',
           'agent_balance', 'subscription_expires', 'subscription_started_at',
-          'restrictDeposit', 'restrictWithdrawal', 'restrictTransfer'])
+          'restrictDeposit', 'restrictWithdrawal', 'restrictTransfer',
+          'inflowBonus', 'inflowEarned', 'inflowAccess', 'inflowAccessAt', 'freeWithdrawalMonth'])
+        // Account age unlocks free usernames, the inflow bonus and the 18-month perks, so it's the real sign-up time.
+        && request.resource.data.get('createdAt', request.time) == request.time
         && (!('role' in request.resource.data) || isPortalRole(request.resource.data.role))
         && (request.resource.data.get('verified', false) == false || isPortalRole(request.resource.data.get('role', '')))
         && request.resource.data.get('wallet', 0) in [0, 3];
@@ -106,6 +110,12 @@ service cloud.firestore {
       // Balance history: written by the server only.
       match /transactions/{transId} {
         allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
+
+      // Inflow bonus credits and payouts (lib/inflowBonus): written by the server only.
+      match /inflow_bonus/{recordId} {
+        allow read: if request.auth != null && (request.auth.uid == userId || isStaff());
         allow write: if false;
       }
       

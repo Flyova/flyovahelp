@@ -3,10 +3,12 @@ import { getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import {
   BONUS_REPAYMENT, DEPOSIT_WINDOW_MS, FV, MIN_DEPOSIT, MIN_QUALIFIED_REFERRALS, MIN_QUALIFYING_DEPOSIT, MIN_TRANSFER,
-  MIN_WITHDRAWAL, USDT_ADDRESS, USDT_NETWORK, cents, formatUsd, hasQualifyingDeposit, isBanned, isValidAccountName,
-  owesBonus, parseAmount, referralsOf, systemSettings, toDollars, transferFee, withdrawalFee,
+  MIN_WITHDRAWAL, USDT_ADDRESS, USDT_NETWORK, accountCreatedMs, cents, formatUsd, hasQualifyingDeposit, isBanned,
+  isValidAccountName, owesBonus, parseAmount, referralsOf, systemSettings, toDollars, transferFee, withdrawalFee,
 } from "@/lib/money";
 import { depositProofEmail, transferReceivedEmail, usdtWithdrawalEmails } from "@/lib/moneyEmails";
+import { creditInflowSafely } from "@/lib/inflowBonus";
+import { OLD_ACCOUNT_QUALIFIED_REFERRALS, inFreeWithdrawalWindow, isFreeWithdrawal, isOldAccount, monthKey } from "@/lib/accountPerks";
 
 // The main wallet, users/{uid}.wallet. Players' apps can only read it (Firestore
 // rules); every change is made here, inside one transaction that checks it.
@@ -14,7 +16,8 @@ import { depositProofEmail, transferReceivedEmail, usdtWithdrawalEmails } from "
 //   GET ?view=recipient&pin=                    -> { name }            who a PIN belongs to
 //   GET ?view=referrals                         -> { referrals, qualified, needed, bonus }
 //   POST { action: "transfer", pin, amount }    -> { record, balance } fee + any $3 bonus repayment on top
-//   POST { action: "withdraw", amount, address }-> { balance, id }     USDT; local-agent withdrawals are trades (/api/trades)
+//   POST { action: "withdraw", amount, address }-> { balance, id, fee } USDT; local-agent withdrawals are trades (/api/trades);
+//                                                                       free once a month for 18-month accounts (lib/accountPerks)
 //   POST { action: "referral", amount }         -> { balance }         referral bonus to the main wallet
 //   POST { action: "jackpot", id }              -> { balance, amount } claim a jackpot an admin gave you
 //   POST { action: "deposit", amount }          -> { id, amount, existing } start (or resume) a USDT deposit
@@ -70,12 +73,16 @@ async function transfer(db, caller, { pin, amount }) {
       receiverId: target.id, receiverName: them.fullName || them.username || "", receiverPin: them.pin || "",
       type: "p2p_transfer", status: "completed", txId: `TX-${Date.now()}`,
     };
-    tx.set(senderRef.collection("transactions").doc(), { ...record, amount: -value, direction: "out", timestamp: now });
+    const sent = senderRef.collection("transactions").doc();
+    tx.set(sent, { ...record, amount: -value, direction: "out", timestamp: now });
     tx.set(receiverRef.collection("transactions").doc(), { ...record, direction: "in", timestamp: now });
-    return { record: { ...record, timestamp: Date.now() }, email: them.email, balance: toDollars(cents(me.wallet) - totalC) };
+    return { record: { ...record, timestamp: Date.now() }, email: them.email, balance: toDollars(cents(me.wallet) - totalC), sentId: sent.id };
   });
   if (out.error) return fail(out.error, out.status);
-  await transferReceivedEmail({ to: out.email, name: out.record.receiverName, senderName: out.record.senderName, amount: value, txId: out.record.txId });
+  await Promise.all([
+    transferReceivedEmail({ to: out.email, name: out.record.receiverName, senderName: out.record.senderName, amount: value, txId: out.record.txId }),
+    creditInflowSafely(db, { uid: caller.uid, category: "transfer", base: value, sourceId: `transfer_${out.sentId}`, note: `To ${out.record.receiverName || "a player"}` }),
+  ]);
   return NextResponse.json({ record: out.record, balance: out.balance });
 }
 
@@ -85,10 +92,13 @@ async function withdraw(db, caller, { amount, address }) {
   const addr = String(address || "").trim();
   if (!TRC20_ADDRESS.test(addr)) return fail(`Enter a valid USDT (${USDT_NETWORK}) address. It starts with T and has 34 characters.`);
   if ((await systemSettings(db)).withdrawalEnabled === false) return fail("Withdrawals are paused right now. Please try again later.", 403);
-  const fee = withdrawalFee(value);
   const userRef = users(db).doc(caller.uid);
   const withdrawalRef = db.collection("withdrawals").doc();
   const userTxRef = userRef.collection("transactions").doc();
+  const today = new Date();
+  // Only look up the account's age when the withdrawal could be the free one.
+  const first = inFreeWithdrawalWindow(value, today) ? await userRef.get() : null;
+  const createdMs = first?.exists ? await accountCreatedMs(caller.uid, first.data()) : null;
 
   const out = await db.runTransaction(async (tx) => {
     const snap = await tx.get(userRef);
@@ -99,6 +109,8 @@ async function withdraw(db, caller, { amount, address }) {
     if (!isValidAccountName(me.fullName)) {
       return { error: "Your account name is incomplete or invalid for withdrawals. It needs a full first and last name (e.g. John Doe); single names or initials aren't accepted. Contact support to update it.", status: 403 };
     }
+    const free = isFreeWithdrawal({ createdMs, amount: value, usedMonth: me.freeWithdrawalMonth, now: today });
+    const fee = free ? 0 : withdrawalFee(value);
     const bonus = owesBonus(me) ? BONUS_REPAYMENT : 0;
     const totalC = cents(value) + cents(fee) + cents(bonus);
     if (cents(me.wallet) < totalC) return notEnough(totalC, cents(me.wallet), "including fees/bonus recovery");
@@ -106,6 +118,7 @@ async function withdraw(db, caller, { amount, address }) {
     tx.update(userRef, {
       wallet: FV().increment(-toDollars(totalC)),
       ...(bonus ? { bonusDeducted: true, welcomeBonusStatus: "recovered", welcomeBonusRecoveredAt: now } : {}),
+      ...(free ? { freeWithdrawalMonth: monthKey(today) } : {}),
     });
     if (bonus) {
       tx.set(userRef.collection("transactions").doc(), {
@@ -115,17 +128,17 @@ async function withdraw(db, caller, { amount, address }) {
     const request = {
       userId: caller.uid, amount: value, fee, bonusRecovered: bonus, totalDeducted: toDollars(totalC),
       type: "withdrawal", status: "pending", method: "usdt", details: { usdtAddress: addr }, timestamp: now,
-      withdrawalId: withdrawalRef.id, userTransactionId: userTxRef.id,
+      withdrawalId: withdrawalRef.id, userTransactionId: userTxRef.id, ...(free ? { freeWithdrawal: true } : {}),
     };
     tx.set(withdrawalRef, request);
     tx.set(userTxRef, { ...request, title: "Withdrawal Requested", amount: -value });
-    return { me, bonus, totalC };
+    return { me, bonus, fee, totalC };
   });
   if (out.error) return fail(out.error, out.status);
   await usdtWithdrawalEmails({
-    email: out.me.email, name: out.me.fullName, uid: caller.uid, amount: value, fee, bonus: out.bonus, total: toDollars(out.totalC), address: addr,
+    email: out.me.email, name: out.me.fullName, uid: caller.uid, amount: value, fee: out.fee, bonus: out.bonus, total: toDollars(out.totalC), address: addr,
   });
-  return NextResponse.json({ id: withdrawalRef.id, balance: toDollars(cents(out.me.wallet) - out.totalC) });
+  return NextResponse.json({ id: withdrawalRef.id, balance: toDollars(cents(out.me.wallet) - out.totalC), fee: out.fee });
 }
 
 /** How many of the account's referrals have made a qualifying deposit (stops counting at `enough`). */
@@ -138,15 +151,20 @@ async function qualifiedReferrals(db, uid, user, enough = Infinity) {
   return qualified;
 }
 
+/** Qualified referrals the account needs to withdraw its referral bonus: fewer once it's 18 months old. */
+const referralsNeeded = async (uid, user) =>
+  isOldAccount(await accountCreatedMs(uid, user)) ? OLD_ACCOUNT_QUALIFIED_REFERRALS : MIN_QUALIFIED_REFERRALS;
+
 async function referral(db, caller, { amount }) {
   const value = parseAmount(amount, { min: 1 });
   if (value === null) return fail("Minimum withdrawal is $1.00.");
   const userRef = users(db).doc(caller.uid);
   const first = await userRef.get();
   if (!first.exists) return fail("Account not found.", 404);
-  const qualified = await qualifiedReferrals(db, caller.uid, first.data(), MIN_QUALIFIED_REFERRALS);
-  if (qualified < MIN_QUALIFIED_REFERRALS) {
-    return fail(`You need at least ${MIN_QUALIFIED_REFERRALS} referrals who have each deposited a minimum of ${formatUsd(MIN_QUALIFYING_DEPOSIT)} before you can withdraw your referral bonus. Currently: ${qualified}/${MIN_QUALIFIED_REFERRALS}.`, 403);
+  const needed = await referralsNeeded(caller.uid, first.data());
+  const qualified = await qualifiedReferrals(db, caller.uid, first.data(), needed);
+  if (qualified < needed) {
+    return fail(`You need at least ${needed} referrals who have each deposited a minimum of ${formatUsd(MIN_QUALIFYING_DEPOSIT)} before you can withdraw your referral bonus. Currently: ${qualified}/${needed}.`, 403);
   }
   const out = await db.runTransaction(async (tx) => {
     const snap = await tx.get(userRef);
@@ -247,7 +265,7 @@ async function referralsView(db, caller) {
   const snap = await users(db).doc(caller.uid).get();
   if (!snap.exists) return fail("Account not found.", 404);
   const me = snap.data();
-  const found = await referralsOf(db, caller.uid, me);
+  const [found, needed] = await Promise.all([referralsOf(db, caller.uid, me), referralsNeeded(caller.uid, me)]);
   const referrals = await Promise.all([...found].map(async ([id, u]) => ({
     id,
     username: u.username || "",
@@ -260,7 +278,7 @@ async function referralsView(db, caller) {
   return NextResponse.json({
     referrals,
     qualified: referrals.filter((r) => r.hasDeposited).length,
-    needed: MIN_QUALIFIED_REFERRALS,
+    needed,
     bonus: Number(me.referralBonus || 0),
   });
 }

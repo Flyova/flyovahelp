@@ -171,6 +171,10 @@ export default function AdminDepositList() {
 
       await batch.commit();
       notifyPush({ event: "deposit_status", depositId: deposit.id });
+      // The player's inflow bonus on this deposit (the server checks it was approved, and counts it once).
+      if (newStatus === "completed") {
+        authFetch("/api/inflow", { method: "POST", body: { action: "settle", kind: "deposit", id: deposit.id } }).catch(() => null);
+      }
 
       // --- TRIGGER: NOTIFY USER OF ADMIN DECISION ---
       try {

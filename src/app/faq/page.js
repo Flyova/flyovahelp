@@ -30,7 +30,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "How much do I need to play StraWins games?",
-    a: "Deposit as low as 10.00 USD to start your journey on StraWins. Minimum stake starts from 1.00 USD.",
+    a: "Deposit as low as 1.00 USD with a local agent (10.00 USD with USDT) to start your journey on StraWins. Minimum stake starts from 1.00 USD.",
   },
   {
     q: "Is there free prediction days?",

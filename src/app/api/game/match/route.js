@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import { generateDistinctNumberPool } from "@/lib/gameNumbers";
-import { FV, cents, formatUsd, isBanned, toDollars } from "@/lib/money";
+import { FV, cents, formatUsd, isBanned, referrerOf, toDollars } from "@/lib/money";
+import { creditInflowSafely } from "@/lib/inflowBonus";
 import { HEAD_TO_HEAD_WIN_CAP, escrowRef, matchCost, settleMatch } from "@/lib/matches";
 
 // "Play with friends" money: a challenge (challenges/{id}, made by the challenger's
@@ -75,10 +76,22 @@ async function accept(db, caller, { challengeId }) {
       fee: cost.fee, createdAt: now,
     });
     tx.delete(challengeRef);
-    return { gameId, balance: toDollars(cents(me.data().wallet) - totalC) };
+    return {
+      gameId, balance: toDollars(cents(me.data().wallet) - totalC),
+      stake: cost.stakePerRound, players: [[c.from, challenger.data()], [caller.uid, me.data()]],
+    };
   });
   if (out.error) return fail(out.error, out.status);
-  return NextResponse.json(out);
+  // Inflow bonus (guess scores): each player's referrer earns on the stake.
+  await Promise.all(out.players.map(async ([uid, user]) => {
+    const referrer = await referrerOf(db, uid, user).catch(() => null);
+    if (referrer) {
+      await creditInflowSafely(db, {
+        uid: referrer, category: "guess_scores", base: out.stake, sourceId: `${out.gameId}_${uid}`, note: `@${user.username || "a referral"}'s friends game`,
+      });
+    }
+  }));
+  return NextResponse.json({ gameId: out.gameId, balance: out.balance });
 }
 
 async function settle(db, caller, { gameId }) {

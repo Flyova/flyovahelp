@@ -23,8 +23,8 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-const MIN_QUALIFIED_REFERRALS = 3;
-const MIN_QUALIFYING_DEPOSIT = 10;
+const MIN_QUALIFIED_REFERRALS = 10;
+const MIN_QUALIFYING_DEPOSIT = 25;
 
 export default function ReferralsPage() {
   const router = useRouter();
@@ -34,6 +34,7 @@ export default function ReferralsPage() {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [referralsChecked, setReferralsChecked] = useState(false);
+  const [needed, setNeeded] = useState(MIN_QUALIFIED_REFERRALS); // the server's number: fewer for 18-month accounts
 
   // Withdraw Modal States
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
@@ -52,6 +53,7 @@ export default function ReferralsPage() {
           const res = await authFetch("/api/wallet?view=referrals");
           if (res.error) throw new Error(res.error);
           setReferrals(res.referrals);
+          if (res.needed) setNeeded(res.needed);
         } catch (err) {
           console.error("Error fetching referrals:", err);
         } finally {
@@ -83,7 +85,7 @@ export default function ReferralsPage() {
   };
 
   const qualifiedReferralsCount = referrals.filter((r) => r.hasDeposited).length;
-  const canWithdrawBonus = qualifiedReferralsCount >= MIN_QUALIFIED_REFERRALS;
+  const canWithdrawBonus = qualifiedReferralsCount >= needed;
 
   const handleWithdrawBonus = async () => {
     const amount = parseFloat(withdrawAmount);
@@ -91,7 +93,7 @@ export default function ReferralsPage() {
 
     if (!canWithdrawBonus) {
       return alert(
-        `You need at least ${MIN_QUALIFIED_REFERRALS} referrals who have each deposited a minimum of $${MIN_QUALIFYING_DEPOSIT} before you can withdraw your referral bonus. Currently: ${qualifiedReferralsCount}/${MIN_QUALIFIED_REFERRALS}.`
+        `You need at least ${needed} referrals who have each deposited a minimum of $${MIN_QUALIFYING_DEPOSIT} before you can withdraw your referral bonus. Currently: ${qualifiedReferralsCount}/${needed}.`
       );
     }
     if (!amount || amount <= 0) return alert("Please enter a valid amount");
@@ -165,7 +167,7 @@ export default function ReferralsPage() {
                 <div className={`inline-flex items-center px-4 py-2 rounded-full border ${canWithdrawBonus ? "bg-emerald-500/20 border-emerald-400/30" : "bg-black/20 border-white/10"}`}>
                     {canWithdrawBonus ? <CheckCircle2 size={14} className="mr-2 text-emerald-400" /> : <Lock size={14} className="mr-2 text-white/40" />}
                     <span className="text-[10px] font-black uppercase tracking-widest">
-                        {qualifiedReferralsCount}/{MIN_QUALIFIED_REFERRALS} Deposited
+                        {qualifiedReferralsCount}/{needed} Deposited
                     </span>
                 </div>
             </div>
@@ -261,11 +263,11 @@ export default function ReferralsPage() {
                   <Lock size={32} className="mx-auto text-amber-400" />
                   <p className="text-sm font-black italic uppercase text-white">Withdrawal Locked</p>
                   <p className="text-[11px] font-bold text-gray-400 leading-relaxed">
-                    You need at least {MIN_QUALIFIED_REFERRALS} referrals who have each deposited a minimum of ${MIN_QUALIFYING_DEPOSIT} before you can move your referral bonus to your Main Wallet.
+                    You need at least {needed} referrals who have each deposited a minimum of ${MIN_QUALIFYING_DEPOSIT} before you can move your referral bonus to your Main Wallet.
                   </p>
                   <div className="bg-black/20 px-4 py-2 rounded-full border border-white/10 inline-flex items-center">
                     <span className="text-[10px] font-black uppercase tracking-widest text-white">
-                      {qualifiedReferralsCount}/{MIN_QUALIFIED_REFERRALS} Referrals Deposited
+                      {qualifiedReferralsCount}/{needed} Referrals Deposited
                     </span>
                   </div>
                 </div>

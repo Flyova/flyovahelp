@@ -11,7 +11,8 @@ import {
   Send,
   Copy,
   Check,
-  Users
+  Users,
+  TrendingUp
 } from "lucide-react";
 // FIREBASE IMPORTS
 import { auth, db } from "@/lib/firebase";
@@ -26,6 +27,7 @@ export default function Header({ hideOnMobile = false }) {
   const [userData, setUserData] = useState({
     wallet: "0.00",
     referralBonus: "0.00",
+    inflowBonus: "0.00",
     gameCredits: "0.00",
     agentBalance: "0.00",
     pin: "--------",
@@ -49,6 +51,7 @@ export default function Header({ hideOnMobile = false }) {
               ...prev,
               wallet: data.wallet?.toFixed(2) || "0.00",
               referralBonus: data.referralBonus?.toFixed(2) || "0.00",
+              inflowBonus: Number(data.inflowBonus || 0).toFixed(2),
               gameCredits: data.gameCredits?.toFixed(2) || "0.00",
               pin: data.pin || "--------",
               isAgent: data.isAgent || false
@@ -73,7 +76,7 @@ export default function Header({ hideOnMobile = false }) {
       } else {
         if (unsubscribeUser) unsubscribeUser();
         if (unsubscribeAgent) unsubscribeAgent();
-        setUserData({ wallet: "0.00", referralBonus: "0.00", gameCredits: "0.00", agentBalance: "0.00", pin: "--------", isAgent: false });
+        setUserData({ wallet: "0.00", referralBonus: "0.00", inflowBonus: "0.00", gameCredits: "0.00", agentBalance: "0.00", pin: "--------", isAgent: false });
       }
     });
 
@@ -127,6 +130,7 @@ export default function Header({ hideOnMobile = false }) {
   const handleTransferClick = () => { setShowBalances(false); router.push("/transfer"); };
   const handleAgentDashboardClick = () => { setShowBalances(false); router.push("/agent/dashboard"); };
   const handleReferralsClick = () => { setShowBalances(false); router.push("/referrals"); };
+  const handleInflowClick = () => { setShowBalances(false); router.push("/inflow"); };
 
   const handleLogout = async () => {
     try {
@@ -198,6 +202,7 @@ export default function Header({ hideOnMobile = false }) {
                   
                   <div className="px-1 space-y-3">
                       <BalanceItem label="Referral Bonus" amount={userData.referralBonus} color="text-green-400" />
+                      <BalanceItem label="Inflow Bonus" amount={userData.inflowBonus} color="text-green-400" />
                       
                       {userData.isAgent ? (
                         <BalanceItem label="Agent Balance" amount={userData.agentBalance} color="text-[#F5F3EE]" />
@@ -248,6 +253,14 @@ export default function Header({ hideOnMobile = false }) {
                     >
                       <Users size={14} className="text-green-400" />
                       <span>My Referrals</span>
+                    </button>
+
+                    <button 
+                      onClick={handleInflowClick}
+                      className="w-full bg-white/5 hover:bg-white/10 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center space-x-2 border border-white/5"
+                    >
+                      <TrendingUp size={14} className="text-green-400" />
+                      <span>Inflow Bonus</span>
                     </button>
 
                     <button 

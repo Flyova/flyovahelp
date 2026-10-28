@@ -5,6 +5,7 @@ import { db, auth } from "@/lib/firebase";
 import { doc, onSnapshot } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { authFetch } from "@/lib/authFetch";
+import { isFreeWithdrawal } from "@/lib/accountPerks";
 import { 
   ChevronLeft, 
   Landmark, 
@@ -63,7 +64,9 @@ export default function WithdrawalPage() {
               fullName: data.fullName || data.username || "User",
               bonusClaimed: data.bonusClaimed || false,
               bonusDeducted: data.bonusDeducted || false,
-              restrictWithdrawal: data.restrictWithdrawal || false
+              restrictWithdrawal: data.restrictWithdrawal || false,
+              createdMs: data.createdAt?.toMillis?.() || Date.parse(u.metadata?.creationTime || "") || 0,
+              freeWithdrawalMonth: data.freeWithdrawalMonth || ""
             });
           }
         });
@@ -107,8 +110,12 @@ export default function WithdrawalPage() {
     }
   };
 
+  // 18-month accounts: one USDT withdrawal of $100–$1,000 on the 15th is free (the server decides).
+  const isFree = (amt) =>
+    method === "usdt" && isFreeWithdrawal({ createdMs: userData.createdMs, amount: parseFloat(amt) || 0, usedMonth: userData.freeWithdrawalMonth });
+
   const calculateWithdrawalFee = (amt) => {
-    if (method !== "usdt") return 0.00;
+    if (method !== "usdt" || isFree(amt)) return 0.00;
     const a = parseFloat(amt);
     if (!a || a < 10) return 0;
     if (a >= 10001) return 300.00;
@@ -144,6 +151,7 @@ export default function WithdrawalPage() {
   const isEligibleForBonusDeduction = userData.bonusClaimed && !userData.bonusDeducted;
   const bonusDeduction = isEligibleForBonusDeduction ? 3.00 : 0.00;
   
+  const minWithdrawal = method === "usdt" ? 10 : 1; // a local agent pays out from $1
   const currentFee = calculateWithdrawalFee(amount);
   const totalDeductible = (parseFloat(amount) || 0) + currentFee + bonusDeduction;
 
@@ -157,7 +165,7 @@ const handleWithdraw = async () => {
     }
     if (!withdrawAmount || withdrawAmount <= 0) return alert("Enter a valid amount");
     if (totalDeduct > userData.main) return alert(`Insufficient balance. You need $${totalDeduct.toFixed(2)} total (including fees/bonus recovery).`);
-    if (withdrawAmount < 10) return alert("Minimum withdrawal is $10.00");
+    if (withdrawAmount < minWithdrawal) return alert(`Minimum withdrawal is $${minWithdrawal}.00`);
     if (method === "usdt" && !usdtAddress) return alert("Please enter USDT address");
     if (method === "bank" && !selectedAgent) return alert("Please select an agent");
 
@@ -291,7 +299,7 @@ const handleWithdraw = async () => {
             className="w-full bg-transparent font-black text-4xl text-white outline-none" />
         </div>
 
-        {parseFloat(amount) >= 10 && (method === "usdt" || isEligibleForBonusDeduction) && (
+        {parseFloat(amount) >= minWithdrawal && (method === "usdt" || isEligibleForBonusDeduction) && (
           <div className="bg-[#2457D6]/5 border border-[#2457D6]/20 p-5 rounded-3xl space-y-3 animate-in fade-in slide-in-from-top-2">
             <div className="flex items-center gap-2 mb-1">
                <Receipt size={14} className="text-[#2457D6]" />
@@ -301,7 +309,9 @@ const handleWithdraw = async () => {
             {method === "usdt" && (
               <div className="flex justify-between items-center">
                  <span className="text-[11px] font-bold text-gray-500">Service Fee</span>
-                 <span className="text-[11px] font-black text-rose-500">+ ${currentFee.toFixed(2)}</span>
+                 {isFree(amount)
+                   ? <span className="text-[11px] font-black text-emerald-400">Free · 18-month account</span>
+                   : <span className="text-[11px] font-black text-rose-500">+ ${currentFee.toFixed(2)}</span>}
               </div>
             )}
 

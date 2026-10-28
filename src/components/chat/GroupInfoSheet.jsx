@@ -14,9 +14,10 @@ import { useChat } from "@/components/chat/ChatProvider";
 const SITE = "https://strawins.com";
 
 /**
- * The group's invite link: anyone with it can join, even a private group. Every
- * member can copy or share it; admins create it, swap it for a new one (the old
- * one stops working) or delete it.
+ * The group's invite link: anyone with it can join, even a private group. In a
+ * public group every member can copy or share it; in a private one only admins
+ * see it. Admins create it, swap it for a new one (the old one stops working) or
+ * delete it.
  */
 function GroupLink({ convo, amAdmin, act }) {
   const { confirmAction } = useChat();
@@ -264,7 +265,7 @@ export default function GroupInfoSheet({ convo, me, act, onClose, onOpenProfile,
           </div>
         )}
 
-        <GroupLink convo={convo} amAdmin={amAdmin} act={act} />
+        {(amAdmin || convo.visibility === "public") && <GroupLink convo={convo} amAdmin={amAdmin} act={act} />}
 
         {amAdmin && (
           <PlayerSearch

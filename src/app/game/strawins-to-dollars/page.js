@@ -46,7 +46,7 @@ export default function StraWinsToDollars() {
   const [modalWinners, setModalWinners] = useState([]); // winning numbers shown inside the modal
 
   const WIN_MULTIPLIER = 1.3;
-  const PARTIAL_REFUND = 0.8;
+  const PARTIAL_REFUND = 0.92;
   const ROUND_DURATION = 120000;
   const BREAK_DURATION = 120000;
   const CLIENT_ENGINE_KICK_ENABLED = process.env.NEXT_PUBLIC_FLYOVA_CLIENT_ENGINE_KICK === "1";
@@ -561,7 +561,7 @@ export default function StraWinsToDollars() {
                       bet.result === 'partial' ? 'bg-amber-500/20 text-amber-400' :
                       'bg-red-500/20 text-red-400'
                     }`}>
-                      {bet.result === 'win' ? '2/2 · +30%' : bet.result === 'partial' ? '1/2 · 80% back' : '0/2 · Lost'}
+                      {bet.result === 'win' ? '2/2 · +30%' : bet.result === 'partial' ? '1/2 · 92% back' : '0/2 · Lost'}
                     </span>
                   </div>
                 </div>

@@ -3,10 +3,11 @@ import { getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import {
-  AGENT_FEE_RATE, BONUS_REPAYMENT, FV, MIN_DEPOSIT, MIN_WITHDRAWAL, REFERRAL_COMMISSION, TRADE_EXPIRY_MS, cents,
+  AGENT_FEE_RATE, BONUS_REPAYMENT, FV, MIN_AGENT_TRADE, REFERRAL_COMMISSION, TRADE_EXPIRY_MS, cents,
   formatUsd, isBanned, isTradingAgent, isValidAccountName, owesBonus, parseAmount, referrerOf, systemSettings, toDollars,
 } from "@/lib/money";
 import { tradeAcceptedEmail, tradeAssignedEmail, tradeCompletedEmail, tradeDeclinedEmail } from "@/lib/moneyEmails";
+import { creditInflowSafely } from "@/lib/inflowBonus";
 
 // Trades with local agents: a player deposits or withdraws by paying (or being paid
 // by) an agent outside the app, and balances move here. Players' and agents' apps
@@ -42,9 +43,8 @@ const historyEntry = (db, t, id) =>
 
 async function create(db, caller, { type, agentId, amount }) {
   if (!TYPES.includes(type)) return fail("Choose deposit or withdrawal.");
-  const min = type === "deposit" ? MIN_DEPOSIT : MIN_WITHDRAWAL;
-  const value = parseAmount(amount, { min });
-  if (value === null) return fail(`Minimum ${type} is ${formatUsd(min)}.`);
+  const value = parseAmount(amount, { min: MIN_AGENT_TRADE });
+  if (value === null) return fail(`Minimum ${type} is ${formatUsd(MIN_AGENT_TRADE)}.`);
   if (!agentId || typeof agentId !== "string" || agentId === caller.uid) return fail("Please select an agent.");
   const settings = await systemSettings(db);
   if (settings[type === "deposit" ? "depositEnabled" : "withdrawalEnabled"] === false) {
@@ -230,7 +230,14 @@ async function confirm(db, caller, { id }) {
     });
   });
   if (out.error) return fail(out.error, out.status);
-  await tradeCompletedEmail({ to: senderFirst.email, type: out.trade.type, amount: out.trade.amount });
+  const t = out.trade;
+  const sourceId = `trade_${id}`;
+  await Promise.all([
+    tradeCompletedEmail({ to: senderFirst.email, type: t.type, amount: t.amount }),
+    // Inflow bonus: the player's deposit or withdrawal, and the agent's deposit trade.
+    creditInflowSafely(db, { uid: t.senderId, category: t.type, base: Number(t.amount), sourceId, note: `With agent ${t.agentName || ""}`.trim() }),
+    t.type === "deposit" && creditInflowSafely(db, { uid: t.agentId, category: "agent_deposit", base: Number(t.amount), sourceId, note: `Deposit by ${t.senderName || "a player"}` }),
+  ]);
   return NextResponse.json({ ok: true });
 }
 

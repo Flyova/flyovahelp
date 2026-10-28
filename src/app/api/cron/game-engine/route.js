@@ -285,7 +285,7 @@ export async function runGameEngine({ includePendingSweep = false } = {}) {
     const rtdb = getRtdb();
     const now = Date.now();
     const WIN_MULTIPLIER = 1.3;
-    const REFUND_PERCENTAGE = 0.8;
+    const REFUND_PERCENTAGE = 0.92; // one number matched: 92% of the stake back
     const REFERRAL_COMMISSION_RATE = 0.05;
 
     const gameRef = rtdb.ref("active_game_flyova");

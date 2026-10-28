@@ -24,7 +24,7 @@ export default function HistoryPage() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const FLYOVA_WIN_MULTIPLIER = 1.3;
-  const FLYOVA_PARTIAL_REFUND_RATE = 0.8;
+  const FLYOVA_PARTIAL_REFUND_RATE = 0.8; // what legacy rows (no stakeAmount) were refunded at; now 92%
 
   const getDayKey = (date) => `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
   const isPredictRoundTx = (item) =>

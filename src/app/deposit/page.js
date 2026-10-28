@@ -151,7 +151,8 @@ export default function DepositPage() {
   const handleDeposit = async () => {
     const amountNum = parseFloat(depositAmount);
     if (!depositAmount || amountNum <= 0) return alert("Enter valid amount");
-    if (amountNum < 10) return alert("Minimum deposit is $10.00");
+    const min = method === "usdt" ? 10 : 1; // a local agent takes deposits from $1
+    if (amountNum < min) return alert(`Minimum deposit is $${min}.00`);
     
     setLoading(true);
     try {

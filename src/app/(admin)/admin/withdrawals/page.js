@@ -11,6 +11,7 @@ import {
   getDoc,
   getDocs,
   increment,
+  deleteField,
   writeBatch,
   serverTimestamp,
   where,
@@ -194,7 +195,9 @@ export default function AdminWithdrawalList() {
           ...(withdrawal.bonusRecovered > 0 && { 
             bonusDeducted: false,
             welcomeBonusStatus: "paid"
-          })
+          }),
+          // The month's free withdrawal (18-month accounts) can be used again.
+          ...(withdrawal.freeWithdrawal && { freeWithdrawalMonth: deleteField() })
         });
 
         const txRef = doc(collection(db, "users", withdrawal.userId, "transactions"));
@@ -210,6 +213,10 @@ export default function AdminWithdrawalList() {
 
       await batch.commit();
       notifyPush({ event: "withdrawal_status", withdrawalId: withdrawal.id });
+      // The player's inflow bonus on this withdrawal (the server checks it was approved, and counts it once).
+      if (newStatus === "approved") {
+        authFetch("/api/inflow", { method: "POST", body: { action: "settle", kind: "withdrawal", id: withdrawal.id } }).catch(() => null);
+      }
 
       // --- TRIGGER: NOTIFY USER OF WITHDRAWAL STATUS ---
       try {

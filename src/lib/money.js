@@ -4,8 +4,9 @@
 // tables are in the app (src/lib/wallet.ts) for showing fees before you confirm.
 import { admin } from "@/lib/firebaseAdmin";
 
-export const MIN_DEPOSIT = 10;
-export const MIN_WITHDRAWAL = 10;
+export const MIN_DEPOSIT = 10; // USDT
+export const MIN_WITHDRAWAL = 10; // USDT
+export const MIN_AGENT_TRADE = 1; // deposits and withdrawals with a local agent
 export const MIN_TRANSFER = 1;
 export const MAX_AMOUNT = 1000000;
 export const TRADE_EXPIRY_MS = 15 * 60 * 1000;
@@ -19,8 +20,8 @@ export const ADMIN_NOTIFY_EMAIL = "arbie1877@gmail.com";
 export const AGENT_FEE_RATE = { deposit: 0.03, withdrawal: 0.05 };
 /** Referrer's cut of a deposit: through an agent, or direct (USDT, approved by an admin). */
 export const REFERRAL_COMMISSION = { agent: 0.035, direct: 0.015 };
-export const MIN_QUALIFIED_REFERRALS = 3;
-export const MIN_QUALIFYING_DEPOSIT = 10;
+export const MIN_QUALIFIED_REFERRALS = 10;
+export const MIN_QUALIFYING_DEPOSIT = 25;
 
 // `[minimum amount, fee]`, descending: the first tier the amount clears wins.
 const WITHDRAWAL_FEE_TIERS = [
@@ -64,6 +65,20 @@ export const owesBonus = (u) => !!u?.bonusClaimed && !u?.bonusDeducted;
 export function isValidAccountName(name) {
   const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
   return parts.length >= 2 && parts.every((p) => p.replace(/\./g, "").length > 1);
+}
+
+const toMs = (ts) => (ts?.toMillis ? ts.toMillis() : ts?.toDate ? ts.toDate().getTime() : ts ? new Date(ts).getTime() : NaN);
+
+/** When the account was made (ms): its createdAt, or (older accounts without one) its sign-in record; null if unknown. */
+export async function accountCreatedMs(uid, user) {
+  const ms = toMs(user?.createdAt);
+  if (Number.isFinite(ms) && ms > 0) return ms;
+  try {
+    const made = Date.parse((await admin.auth().getUser(uid)).metadata.creationTime || "");
+    return Number.isFinite(made) ? made : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Global switches admins set in settings/global (depositEnabled, withdrawalEnabled). */

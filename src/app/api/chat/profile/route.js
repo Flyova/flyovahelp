@@ -4,14 +4,15 @@ import { inGroupAs, norm } from "@/lib/chat";
 import { getCaller } from "@/lib/apiAuth";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import { chatSettingsFor } from "@/lib/chatSettings";
+import { accountCreatedMs } from "@/lib/money";
 
 const MAX_GROUPS = 10;
 
 // GET /api/chat/profile?u=username&as=yours — the public profile shown when you tap a
 // player in chat: chat username, bio, status and gender, country (unless they hide it),
-// badges (verified, agent, StraWins staff), the public groups they're in, and
-// their chat coins only if they chose to show them off. Never their real name,
-// join date, email, phone, PIN or money balances.
+// when they joined StraWins, badges (verified, agent, StraWins staff), the public
+// groups they're in, and their chat coins only if they chose to show them off.
+// Never their real name, email, phone, PIN or money balances.
 export async function GET(req) {
   try {
     const caller = await getCaller(req);
@@ -38,6 +39,7 @@ export async function GET(req) {
     const u = userSnap.exists ? userSnap.data() : {};
     // This chat profile's own settings (Chat settings → Privacy).
     const { hideCountry, showCoins, groupAdds } = settings.get(lower);
+    const memberSince = (await accountCreatedMs(n.uid, u)) ?? n.createdAt?.toMillis?.() ?? null;
 
     // Public groups they're in (never private groups or chats).
     const convoSnap = await db.collection("conversations").where("participants", "array-contains", lower).limit(100).get();
@@ -58,6 +60,7 @@ export async function GET(req) {
       status: p.status || "",
       gender: ["male", "female"].includes(p.gender) ? p.gender : "", // "" when they'd rather not say
       country: hideCountry ? "" : u.country || "",
+      memberSince, // ms
       badges: [
         u.verified === true && "verified",
         u.isAgent === true && "agent",
