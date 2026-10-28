@@ -35,8 +35,8 @@ service cloud.firestore {
     }
 
     // --- DELETION REQUESTS ---
+    // Made through /api/account, which emails the player a link to confirm it.
     match /deletion_requests/{userId} {
-      allow create: if request.auth != null && request.auth.uid == userId;
       allow read: if request.auth != null && request.auth.uid == userId;
     }
 
@@ -62,9 +62,10 @@ service cloud.firestore {
  
     // --- USERS COLLECTION ---
     // Account fields a player can never change: only the server or an admin does.
-    // So nobody can lift their own ban or restriction, mark their email verified,
-    // change who referred them, or touch a balance, bonus or plan (money moves
-    // through the server). `role` and `pin` have their own checks below.
+    // So nobody can lift their own ban, restriction, flag or deposit lock, mark their
+    // email verified, change who referred them, set their bank account or PIN state
+    // around the checks in /api/wallet, or touch a balance, bonus or plan (money moves
+    // through the server). `role`, `pin` and `fullName` have their own checks below.
     function lockedAccountFields() {
       return ['isban', 'banned', 'verified', 'otp', 'isAgent', 'chatMuted',
         'restrictDeposit', 'restrictWithdrawal', 'restrictTransfer',
@@ -72,7 +73,11 @@ service cloud.firestore {
         'wallet', 'referralBonus', 'agent_balance', 'bonusClaimed', 'bonusDeducted',
         'welcomeBonusClaimed', 'welcomeBonusPaid', 'welcomeBonusAmount', 'welcomeBonusStatus',
         'welcomeBonusPaidAt', 'welcomeBonusRecoveredAt', 'subscription_expires', 'subscription_started_at',
-        'inflowBonus', 'inflowEarned', 'inflowAccess', 'inflowAccessAt', 'freeWithdrawalMonth'];
+        'inflowBonus', 'inflowEarned', 'inflowAccess', 'inflowAccessAt', 'freeWithdrawalMonth',
+        'hasTxPin', 'bank', 'bankUpdatedAt', 'depositLockedUntil', 'depositLockedAt', 'invalidDeposits',
+        'signupRewards', 'signupRewardsTotal', 'signupRewardPaidTo', 'referralCode', 'restrictGames',
+        'flagged', 'flagReason', 'flaggedAt', 'flagCount', 'deletionRequested', 'deletionRequestDate',
+        'hasApplied', 'agentStatus'];
     }
 
     function ownAccountChange() {
@@ -83,7 +88,9 @@ service cloud.firestore {
         && (!changed.hasAny(['pin']) || (
           resource.data.get('pin', '') in [null, '']
           && request.resource.data.pin is string
-          && request.resource.data.pin.matches('^[0-9]{8}$')));
+          && request.resource.data.pin.matches('^[0-9]{8}$')))
+        // The name a bank account is in: fixed once there is one (support changes it).
+        && (!changed.hasAny(['fullName']) || resource.data.get('bank', null) == null);
     }
 
     // An account (email, phone, date of birth, PIN, balance) is read only by its
@@ -98,7 +105,11 @@ service cloud.firestore {
         && !request.resource.data.keys().hasAny(['isban', 'banned', 'isAgent', 'chatMuted', 'referralBonus', 'otp',
           'agent_balance', 'subscription_expires', 'subscription_started_at',
           'restrictDeposit', 'restrictWithdrawal', 'restrictTransfer',
-          'inflowBonus', 'inflowEarned', 'inflowAccess', 'inflowAccessAt', 'freeWithdrawalMonth'])
+          'inflowBonus', 'inflowEarned', 'inflowAccess', 'inflowAccessAt', 'freeWithdrawalMonth',
+          'hasTxPin', 'bank', 'bankUpdatedAt', 'depositLockedUntil', 'depositLockedAt', 'invalidDeposits',
+        'signupRewards', 'signupRewardsTotal', 'signupRewardPaidTo', 'referralCode', 'restrictGames',
+        'flagged', 'flagReason', 'flaggedAt', 'flagCount', 'deletionRequested', 'deletionRequestDate',
+        'hasApplied', 'agentStatus'])
         // Account age unlocks free usernames, the inflow bonus and the 18-month perks, so it's the real sign-up time.
         && request.resource.data.get('createdAt', request.time) == request.time
         && (!('role' in request.resource.data) || isPortalRole(request.resource.data.role))
@@ -117,6 +128,15 @@ service cloud.firestore {
       match /inflow_bonus/{recordId} {
         allow read: if request.auth != null && (request.auth.uid == userId || isStaff());
         allow write: if false;
+      }
+
+      // The player's notifications (lib/notifications): written by the server; the
+      // player marks them read or clears them.
+      match /notifications/{notificationId} {
+        allow read, delete: if request.auth != null && request.auth.uid == userId;
+        allow update: if request.auth != null && request.auth.uid == userId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+          && request.resource.data.read is bool;
       }
       
       match /support_chats/{userId} {
@@ -145,23 +165,15 @@ service cloud.firestore {
     // --- AGENTS ---
     // An agent's record (ID photos, contact details, balance) is read only by the
     // agent and staff; players get agent lists and a trade's bank details from
-    // /api/trades. An agent edits their rates, bank details and availability; their
-    // balance and approval are changed by the server or an admin.
+    // /api/trades. Applying (which costs a fee) and approval go through /api/agent.
+    // An agent edits their bank details and availability here, and their rates here
+    // or (with rates for bigger amounts) through /api/agent.
     match /agents/{agentId} {
       allow read: if request.auth != null && (request.auth.uid == agentId || isStaff());
-      // Applying (or applying again after a rejection).
-      allow create: if request.auth != null && request.auth.uid == agentId
-        && request.resource.data.application_status == 'pending'
-        && request.resource.data.get('banned', false) == false
-        && request.resource.data.get('agent_balance', 0) == 0;
-      allow update: if request.auth != null && request.auth.uid == agentId && (
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deposit_rate', 'withdrawal_rate', 'exchange_rate',
-          'ratesUpdatedAt', 'bankName', 'accountName', 'accountNumber', 'phone_number', 'profileUpdatedAt', 'active'])
-        || (resource.data.get('application_status', '') != 'approved'
-          && resource.data.get('banned', false) == false
-          && request.resource.data.application_status == 'pending'
-          && request.resource.data.get('banned', false) == false
-          && request.resource.data.get('agent_balance', 0) == resource.data.get('agent_balance', 0)));
+      allow update: if request.auth != null && request.auth.uid == agentId
+        && resource.data.get('application_status', '') == 'approved'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deposit_rate', 'withdrawal_rate', 'exchange_rate',
+          'ratesUpdatedAt', 'bankName', 'accountName', 'accountNumber', 'phone_number', 'profileUpdatedAt', 'active']);
     }
 
     // --- TRADES & MESSAGES ---
@@ -188,6 +200,7 @@ service cloud.firestore {
     match /challenges/{challengeId} {
       allow create: if request.auth != null
         && request.resource.data.from == request.auth.uid
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('restrictGames', false) == false
         && request.resource.data.to is string && request.resource.data.to != request.auth.uid
         && request.resource.data.status == 'pending'
         && request.resource.data.stakePerRound is int

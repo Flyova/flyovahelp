@@ -79,7 +79,8 @@ function SectionLabel({ children }) {
 function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const referralCode = searchParams.get("ref");
+  // A referral code typed here, or the code (or older uid) from a ?ref= link.
+  const [referralCode, setReferralCode] = useState(searchParams.get("ref") || "");
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -118,34 +119,38 @@ function RegisterForm() {
   }, []);
 
   useEffect(() => {
-    if (!referralCode) {
-      setReferrerName("");
-      setResolvedReferrerUid(null);
-      return;
-    }
     const code = referralCode.trim();
-    fetch(`/api/referral/resolve?code=${encodeURIComponent(code)}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.valid) {
-          setReferrerName(data.name || "StraWins Member");
-          setResolvedReferrerUid(data.uid);
-          return;
-        }
-        if (data?.error) {
-          // Resolution failed (not a "code doesn't exist" result) - don't
-          // block registration or wrongly label a valid code as invalid.
-          setReferrerName("");
-          setResolvedReferrerUid(null);
-          return;
-        }
-        setReferrerName("Invalid referral code");
-        setResolvedReferrerUid(null);
-      })
-      .catch(() => {
+    // Looked up once typing stops.
+    const timer = setTimeout(() => {
+      if (!code) {
         setReferrerName("");
         setResolvedReferrerUid(null);
-      });
+        return;
+      }
+      fetch(`/api/referral/resolve?code=${encodeURIComponent(code)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.valid) {
+            setReferrerName(data.name || "StraWins Member");
+            setResolvedReferrerUid(data.uid);
+            return;
+          }
+          if (data?.error) {
+            // Resolution failed (not a "code doesn't exist" result) - don't
+            // block registration or wrongly label a valid code as invalid.
+            setReferrerName("");
+            setResolvedReferrerUid(null);
+            return;
+          }
+          setReferrerName("Invalid referral code");
+          setResolvedReferrerUid(null);
+        })
+        .catch(() => {
+          setReferrerName("");
+          setResolvedReferrerUid(null);
+        });
+    }, 400);
+    return () => clearTimeout(timer);
   }, [referralCode]);
 
   const handleCountryChange = (e) => {
@@ -257,7 +262,7 @@ function RegisterForm() {
 
       <div className="bg-[#142036] border border-white/5 rounded-3xl p-7 shadow-2xl shadow-black/50 space-y-6">
         {/* Referral banner */}
-        {referralCode && (
+        {referralCode.trim() && (
           <div className="flex items-center gap-3 bg-[#8B1E3F]/10 border border-[#8B1E3F]/20 rounded-2xl px-4 py-3">
             <UserCheck size={16} className="text-[#8B1E3F] shrink-0" />
             <span className="text-xs font-black text-[#8B1E3F] uppercase tracking-wide">
@@ -277,6 +282,19 @@ function RegisterForm() {
         )}
 
         <form onSubmit={handleRegister} className="space-y-5">
+          {/* Referral */}
+          <div className="space-y-3">
+            <SectionLabel>Referral Code (Optional)</SectionLabel>
+            <div className="relative">
+              <UserCheck size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+              <input
+                type="text" placeholder="e.g. K7Q2MZP" value={referralCode} autoCapitalize="characters"
+                onChange={(e) => setReferralCode(e.target.value.trim())}
+                className="w-full bg-[#0B1220] border border-white/5 focus:border-[#2457D6]/60 rounded-2xl pl-11 pr-4 py-3.5 text-sm font-bold text-white placeholder:text-gray-600 outline-none transition-colors uppercase"
+              />
+            </div>
+          </div>
+
           {/* Personal */}
           <div className="space-y-3">
             <SectionLabel>Personal Info</SectionLabel>

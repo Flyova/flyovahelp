@@ -5,6 +5,7 @@ import { db, auth } from "@/lib/firebase";
 import { doc, onSnapshot } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { authFetch } from "@/lib/authFetch";
+import PinPrompt from "@/components/PinPrompt";
 import {
   ChevronLeft,
   Send,
@@ -37,6 +38,7 @@ export default function TransferPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [transferRecord, setTransferRecord] = useState(null);
+  const [askPin, setAskPin] = useState(false);
 
   const calculateTransferFee = (amt) => {
     const a = parseFloat(amt);
@@ -114,16 +116,21 @@ export default function TransferPage() {
         : `Insufficient balance. You need $${totalDeduct.toFixed(2)} (Amount + Fee)`;
 
     if (totalDeduct > userData.wallet) return alert(balanceError);
+    setAskPin(true);
+  };
 
+  // With the sender's 4-digit PIN: the server checks it, the balance and fee again,
+  // moves the money and emails the recipient. Errors stay in the PIN prompt.
+  const sendWithPin = async (txPin) => {
     setLoading(true);
     try {
-      // The server checks the balance and fee again, moves the money and emails the recipient.
-      const res = await authFetch("/api/wallet", { method: "POST", body: { action: "transfer", pin: recipientPin, amount: val } });
-      if (res.error) return alert(res.error);
+      const res = await authFetch("/api/wallet", { method: "POST", body: { action: "transfer", pin: recipientPin, amount: parseFloat(amount), txPin } });
+      if (res.error) return res;
+      setAskPin(false);
       setTransferRecord(res.record);
       setSuccess(true);
     } catch (e) {
-      alert("Transfer failed: " + e.message);
+      return { error: "Transfer failed: " + e.message };
     } finally {
       setLoading(false);
     }
@@ -295,6 +302,13 @@ export default function TransferPage() {
           </button>
         </div>
       </div>
+      <PinPrompt
+        open={askPin}
+        title="Confirm Transfer"
+        subtitle={recipientData ? `Send $${(parseFloat(amount) || 0).toFixed(2)} to ${recipientData.name}. Enter your 4-digit PIN.` : undefined}
+        onClose={() => setAskPin(false)}
+        onSubmit={sendWithPin}
+      />
     </div>
   );
 }

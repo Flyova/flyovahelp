@@ -6,6 +6,7 @@ import {
   doc, onSnapshot, collection, addDoc, serverTimestamp, query, orderBy
 } from "firebase/firestore";
 import { authFetch } from "@/lib/authFetch";
+import { formatLocal } from "@/lib/currency";
 import { 
   Send, ShieldCheck, Landmark, AlertCircle, 
   CheckCircle2, Loader2, MessageSquare, Info, Paperclip, ImageIcon, Clock, XCircle, ArrowLeft, Receipt, Copy
@@ -22,6 +23,8 @@ export default function TradeRoom() {
   const [agentBank, setAgentBank] = useState(null);
   const [otherPartyName, setOtherPartyName] = useState("");
   const [timeLeft, setTimeLeft] = useState(null);
+  // A clock for the agent's "Player didn't pay" button (15 minutes after accepting).
+  const [nowMs, setNowMs] = useState(0);
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
   const expiryTimerRef = useRef(null);
@@ -112,6 +115,25 @@ export default function TradeRoom() {
     };
   }, [id, agentBank]);
 
+  useEffect(() => {
+    const tick = () => setNowMs(Date.now());
+    const first = setTimeout(tick, 0);
+    const timer = setInterval(tick, 30000);
+    return () => { clearTimeout(first); clearInterval(timer); };
+  }, []);
+
+  /** markPaid (agent sent a withdrawal) or notPaid (player never paid a deposit). */
+  const agentStep = async (action, question) => {
+    if (!window.confirm(question)) return;
+    setLoading(true);
+    try {
+      const res = await authFetch("/api/trades", { method: "POST", body: { action, id } });
+      if (res.error) alert(res.error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const sendMessage = async (imageUrl = null) => {
     if (!newMessage.trim() && !imageUrl) return;
     const textToSend = newMessage;
@@ -193,6 +215,9 @@ export default function TradeRoom() {
   // Update Display Fee for Agent Summary
   const currentFeePercent = trade.type === "deposit" ? 0.03 : 0.05;
   const calculatedFee = Number(trade.amount) * currentFeePercent;
+  const acceptedMs = trade.acceptedAt?.toMillis?.() || 0;
+  const unpaidWaitMin = acceptedMs && nowMs ? Math.max(0, Math.ceil((acceptedMs + 15 * 60 * 1000 - nowMs) / 60000)) : 15;
+  const bank = trade.senderBank;
 
   return (
     <div className="min-h-screen bg-[#0B1220] flex flex-col text-white pb-48"> 
@@ -245,8 +270,9 @@ export default function TradeRoom() {
                     <p className="text-xl font-black italic text-[#2457D6]">${Number(trade.amount).toLocaleString()}</p>
                 </div>
                 <div className="text-right">
-                    <p className="text-[9px] font-black uppercase opacity-40 mb-1">Total to Pay/Receive</p>
-                    <p className="text-xl font-black italic text-[#8B1E3F]">{(trade.rate * trade.amount).toLocaleString()}</p>
+                    <p className="text-[9px] font-black uppercase opacity-40 mb-1">Total to {trade.type === "deposit" ? (isAgent ? "Receive" : "Pay") : (isAgent ? "Pay" : "Receive")}</p>
+                    <p className="text-xl font-black italic text-[#8B1E3F]">{formatLocal(Number(trade.rate || 0) * Number(trade.amount || 0))}</p>
+                    <p className="text-[9px] font-bold opacity-40 mt-1">${Number(trade.amount).toLocaleString()} × {Number(trade.rate || 0).toLocaleString()} per $1</p>
                 </div>
             </div>
 
@@ -274,20 +300,40 @@ export default function TradeRoom() {
                     Waiting for agent to approve the trade. Bank details will appear here once approved.
                 </div>
             )}
+
+            {trade.type === "withdrawal" && trade.status === "acknowledged" && trade.agentPaidAt && (
+                <div className="p-5 bg-emerald-500/10 rounded-3xl border border-emerald-500/30 text-[11px] font-bold text-emerald-300 leading-relaxed">
+                    Your agent says they&apos;ve sent the money to {bank ? `${bank.bankName} ••••${String(bank.accountNumber).slice(-4)}` : "your bank"}. Check it and confirm below within 45 minutes; if it hasn&apos;t arrived, tell the agent here or contact support.
+                </div>
+            )}
         </div>
       )}
 
-      {/* Scenario 2: For Agent (Shows Summary ONLY) */}
+      {/* Scenario 2: For Agent (Summary + the player's bank account) */}
       {isAgent && (
         <div className="m-4 space-y-3">
+            {bank && (
+                <div className="p-5 bg-white text-slate-900 rounded-3xl shadow-2xl space-y-1 border-l-8 border-emerald-500">
+                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                      {trade.type === "withdrawal" ? "Pay the player to" : "The player pays from"}
+                    </p>
+                    <p className="text-[11px] font-black uppercase tracking-tighter text-slate-500">{bank.bankName}</p>
+                    <div className="flex items-center justify-between">
+                        <p className="text-2xl font-black tracking-widest text-[#0B1220]">{bank.accountNumber}</p>
+                        <button onClick={() => {navigator.clipboard.writeText(bank.accountNumber); alert("Copied!")}} className="p-2 bg-slate-100 rounded-lg active:scale-90"><Copy size={14}/></button>
+                    </div>
+                    <p className="text-xs font-bold text-slate-600 uppercase italic">{bank.accountName}</p>
+                </div>
+            )}
             <div className="p-5 bg-[#142036] rounded-3xl border border-white/5 flex justify-between items-center">
                 <div>
                     <p className="text-[9px] font-black uppercase opacity-40 mb-1">Trade Amount</p>
                     <p className="text-xl font-black italic text-[#2457D6]">${Number(trade.amount).toLocaleString()}</p>
                 </div>
                 <div className="text-right">
-                    <p className="text-[9px] font-black uppercase opacity-40 mb-1">Total to Pay/Receive</p>
-                    <p className="text-xl font-black italic text-[#8B1E3F]">{(trade.rate * trade.amount).toLocaleString()}</p>
+                    <p className="text-[9px] font-black uppercase opacity-40 mb-1">Total to {trade.type === "deposit" ? (isAgent ? "Receive" : "Pay") : (isAgent ? "Pay" : "Receive")}</p>
+                    <p className="text-xl font-black italic text-[#8B1E3F]">{formatLocal(Number(trade.rate || 0) * Number(trade.amount || 0))}</p>
+                    <p className="text-[9px] font-bold opacity-40 mt-1">${Number(trade.amount).toLocaleString()} × {Number(trade.rate || 0).toLocaleString()} per $1</p>
                 </div>
             </div>
         </div>
@@ -344,6 +390,26 @@ export default function TradeRoom() {
                 <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} placeholder="Type a message..." className="flex-1 bg-[#142036] border border-white/10 p-4 rounded-2xl outline-none focus:border-[#2457D6] text-sm font-bold text-white placeholder:text-slate-500 shadow-inner" />
                 <button onClick={() => sendMessage()} className="bg-[#2457D6] p-4 rounded-2xl shadow-lg active:scale-95 transition-all"><Send size={20} /></button>
              </div>
+        )}
+
+        {trade.status === 'acknowledged' && isAgent && trade.type === "withdrawal" && (
+             trade.agentPaidAt ? (
+               <p className="max-w-md mx-auto w-full mb-4 text-center text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                 You said it&apos;s paid. Waiting for the player to confirm.
+               </p>
+             ) : (
+               <button onClick={() => agentStep("markPaid", `Have you sent ${formatLocal(Number(trade.rate || 0) * Number(trade.amount || 0))} to the player's bank?`)} disabled={loading}
+                 className="max-w-md mx-auto w-full mb-4 bg-emerald-600 py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all">
+                 {loading ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />} I&apos;VE SENT THE MONEY
+               </button>
+             )
+        )}
+
+        {trade.status === 'acknowledged' && isAgent && trade.type === "deposit" && (
+             <button onClick={() => agentStep("notPaid", "Cancel this deposit because the player didn't pay? Your balance comes back, and it counts against the player.")} disabled={loading || unpaidWaitMin > 0}
+               className="max-w-md mx-auto w-full mb-3 bg-rose-500/10 text-rose-400 border border-rose-500/20 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 disabled:opacity-40">
+               <XCircle size={14} /> {unpaidWaitMin > 0 ? `Player didn't pay (in ${unpaidWaitMin} min)` : "Player didn't pay"}
+             </button>
         )}
 
         {trade.status === 'acknowledged' && canConfirm && (

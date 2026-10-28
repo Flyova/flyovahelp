@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebase"; 
-import { doc, setDoc, onSnapshot, serverTimestamp } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { Loader2, ShieldCheck, Upload, ArrowRight, User, Mail, Phone, AlertCircle } from "lucide-react";
 import Header from "@/components/Header";
@@ -15,6 +15,7 @@ export default function AgentApply() {
   const [user, setUser] = useState(null);
   const [applicationStatus, setApplicationStatus] = useState(null);
   const [rejectedAt, setRejectedAt] = useState(null);
+  const [wallet, setWallet] = useState(null);
 
   const [formData, setFormData] = useState({
     fullName: "",
@@ -38,6 +39,7 @@ export default function AgentApply() {
         router.push("/login");
       } else {
         setUser(currentUser);
+        const unsubWallet = onSnapshot(doc(db, "users", currentUser.uid), (snap) => setWallet(Number(snap.data()?.wallet || 0)));
         const unsubDoc = onSnapshot(doc(db, "agents", currentUser.uid), (snap) => {
           if (snap.exists()) {
             const data = snap.data();
@@ -46,7 +48,7 @@ export default function AgentApply() {
           }
           setLoading(false);
         });
-        return () => unsubDoc();
+        return () => { unsubDoc(); unsubWallet(); };
       }
     });
     return () => unsubscribe();
@@ -72,58 +74,20 @@ export default function AgentApply() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!files.passport || !files.identity) return alert("Please upload both photos");
+    if (wallet !== null && wallet < 50) return alert(`Registration costs $50 from your wallet. You have $${wallet.toFixed(2)}: deposit first.`);
 
     setSubmitting(true);
     try {
       const passUrl = await uploadToCloudinary(files.passport);
       const idUrl = await uploadToCloudinary(files.identity);
 
-      await setDoc(doc(db, "agents", user.uid), {
-        user_id: user.uid,
-        full_name: formData.fullName,
-        email: formData.email,
-        phone_number: formData.phone,
-        country: formData.country,
-        age: formData.age,
-        passport_photo: passUrl,
-        identity_card: idUrl,
-        application_status: "pending",
-        applied_at: serverTimestamp(),
-        banned: false,
-        withdrawal_rate: 0,
-        exchange_rate: 0
-      });
-
-      // Mark user profile
-      await setDoc(doc(db, "users", user.uid), { hasApplied: true }, { merge: true });
-
-      // --- ADMIN NOTIFICATION ---
-      try {
-        await authFetch("/api/send-email", {
-          method: "POST",
-          body: {
-            to: "arbie1877@gmail.com",
-            subject: "New Agent Application Submitted",
-            html: `
-              <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
-                <h2 style="color: #000; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">New Agent Application</h2>
-                <p style="margin: 10px 0;"><strong>Name:</strong> ${formData.fullName}</p>
-                <p style="margin: 10px 0;"><strong>Email:</strong> ${formData.email}</p>
-                <p style="margin: 10px 0;"><strong>Phone:</strong> ${formData.phone}</p>
-                <p style="margin: 10px 0;"><strong>Country:</strong> ${formData.country}</p>
-                <p style="margin: 10px 0;"><strong>Age:</strong> ${formData.age}</p>
-                <p style="margin: 10px 0;"><strong>User ID:</strong> ${user.uid}</p>
-                <div style="margin-top: 30px; font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
-                  Please review this application in the StraWins Admin Panel.
-                </div>
-              </div>
-            `
-          }
-        });
-      } catch (emailErr) {
-        console.error("Admin notification failed:", emailErr);
-      }
-
+      // The server takes the $50 fee from your wallet (refunded if you're not approved),
+      // saves the application and tells the admins.
+      const res = await authFetch("/api/agent", { method: "POST", body: {
+        action: "apply", fullName: formData.fullName, email: formData.email, phone: formData.phone,
+        country: formData.country, age: formData.age, passportPhoto: passUrl, identityCard: idUrl,
+      } });
+      if (res.error) alert(res.error);
     } catch (err) {
       console.error(err);
       alert("Submission Error: Check your internet or Cloudinary preset name.");
@@ -186,6 +150,11 @@ export default function AgentApply() {
             </div>
           )}
 
+          <div className="bg-[#2457D6]/10 border border-[#2457D6]/20 p-4 rounded-2xl text-[11px] font-bold text-white/70 leading-relaxed">
+            Registration costs <span className="text-white font-black">$50</span>, taken from your wallet when you apply and refunded in full if you&apos;re not approved.
+            {wallet !== null && <> Your wallet: <span className={wallet >= 50 ? "text-green-400" : "text-rose-400"}>${wallet.toFixed(2)}</span>.</>}
+          </div>
+
           <div className="space-y-2">
             <label className="text-[10px] font-black uppercase text-gray-500 ml-2">Full Legal Name</label>
             <div className="relative">
@@ -232,7 +201,7 @@ export default function AgentApply() {
           </div>
 
           <button type="submit" disabled={submitting} className="w-full bg-[#8B1E3F] py-5 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-[#8B1E3F]/20 active:scale-95 transition-all flex items-center justify-center gap-3">
-            {submitting ? <><Loader2 className="animate-spin" size={18} /><span>Processing...</span></> : <><span>Submit Application</span><ArrowRight size={18} /></>}
+            {submitting ? <><Loader2 className="animate-spin" size={18} /><span>Processing...</span></> : <><span>Pay $50 &amp; Apply</span><ArrowRight size={18} /></>}
           </button>
         </form>
       </main>

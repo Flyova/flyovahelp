@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ADMIN_ROLES = new Set(["admin", "staff"]);
-const VALID_TYPES = new Set(["info", "warning", "success"]);
+const VALID_TYPES = new Set(["info", "warning", "success", "game"]);
 
 const parseBearerToken = (headerValue) => {
   const raw = String(headerValue || "").trim();
@@ -117,7 +117,7 @@ export async function POST(request) {
     // Push to every registered device after the response is sent.
     after(() =>
       sendPushToAll({
-        title: type === "warning" ? "Important notice" : "StraWins",
+        title: type === "warning" ? "Important notice" : type === "game" ? "Game update" : "StraWins",
         body: message,
         data: { kind: "announcement", id: announcementRef.id, url: "/dashboard" },
       }).catch((e) => console.error("Announcement push failed:", e))

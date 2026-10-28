@@ -19,7 +19,9 @@ import {
   Wallet,
   Send,
   FileText,
-  CheckCircle2
+  CheckCircle2,
+  Bell,
+  Flag
 } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -28,7 +30,9 @@ export default function AdminDashboard() {
     totalUsers: 0,
     pendingWithdrawals: 0,
     pendingDeposits: 0,
-    activeAgents: 0
+    activeAgents: 0,
+    flaggedUsers: 0,
+    unreadAlerts: 0
   });
   const [strawinsResult, setStraWinsResult] = useState({ n1: "--", n2: "--", gameId: "NO ACTIVE" });
 
@@ -64,8 +68,14 @@ export default function AdminDashboard() {
     if (!accessRole) return;
 
     const unsubUsers = onSnapshot(collection(db, "users"), (s) =>
-      setStats((prev) => ({ ...prev, totalUsers: s.size }))
+      setStats((prev) => ({ ...prev, totalUsers: s.size, flaggedUsers: s.docs.filter((d) => d.data().flagged).length }))
     );
+
+    // Alerts are admins' only (lib/notifications).
+    const unsubAlerts = accessRole === "admin"
+      ? onSnapshot(query(collection(db, "admin_notifications"), where("read", "==", false)), (s) =>
+        setStats((prev) => ({ ...prev, unreadAlerts: s.size })), () => {})
+      : null;
 
     const qW = query(collection(db, "withdrawals"), where("status", "==", "pending"));
     const unsubW = onSnapshot(qW, (s) => {
@@ -107,6 +117,7 @@ export default function AdminDashboard() {
       unsubW();
       unsubD();
       unsubA();
+      if (unsubAlerts) unsubAlerts();
       if (unsubFly) unsubFly();
     };
   }, [accessRole]);
@@ -203,6 +214,13 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {accessRole === "admin" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <AlertCard href="/admin/alerts" label="Unread Alerts" value={stats.unreadAlerts} icon={Bell} hint="Flags, agent trades, applications, deletions" />
+          <AlertCard href="/admin/users?flagged=1" label="Flagged Accounts" value={stats.flaggedUsers} icon={Flag} hint="Manual credits, unconfirmed withdrawals" />
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Registered Users" value={stats.totalUsers} icon={Users} color="bg-[#2457D6]" />
         <StatCard label="Pending Payouts" value={stats.pendingWithdrawals} icon={ArrowUpCircle} color="bg-rose-500" isCurrency />
@@ -271,6 +289,25 @@ function QuickAction({ href, label, icon: Icon }) {
         <Icon size={18} />
       </div>
       <span className="text-[11px] font-black uppercase tracking-wider text-white">{label}</span>
+    </Link>
+  );
+}
+
+function AlertCard({ href, label, value, icon: Icon, hint }) {
+  const hot = value > 0;
+  return (
+    <Link
+      href={href}
+      className={`p-6 rounded-[2.5rem] border flex items-center gap-5 transition-transform hover:scale-[1.02] ${hot ? "bg-rose-500/10 border-rose-500/40" : "bg-[#0B1220] border-white/10"}`}
+    >
+      <div className={`${hot ? "bg-rose-500" : "bg-slate-600"} p-4 rounded-2xl text-white`}>
+        <Icon size={24} />
+      </div>
+      <div>
+        <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-1">{label}</p>
+        <p className="text-2xl font-black italic text-white">{value.toLocaleString()}</p>
+        <p className="text-[9px] font-bold uppercase text-slate-500 tracking-wider mt-1">{hint}</p>
+      </div>
     </Link>
   );
 }

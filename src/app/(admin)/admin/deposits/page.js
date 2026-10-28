@@ -175,6 +175,10 @@ export default function AdminDepositList() {
       if (newStatus === "completed") {
         authFetch("/api/inflow", { method: "POST", body: { action: "settle", kind: "deposit", id: deposit.id } }).catch(() => null);
       }
+      // A rejected deposit counts toward the player's unpaid-deposit lock (3 in 24 hours lock deposits for 48).
+      if (newStatus === "rejected") {
+        authFetch("/api/admin/alerts", { method: "POST", body: { action: "depositRejected", depositId: deposit.id } }).catch(() => null);
+      }
 
       // --- TRIGGER: NOTIFY USER OF ADMIN DECISION ---
       try {

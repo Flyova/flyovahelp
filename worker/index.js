@@ -4,8 +4,9 @@ import app from "vinext/server/fetch-handler";
 // existing /api/cron/* routes in-process (same auth header an external
 // scheduler would send). Schedules are declared in cloudflare.config.ts.
 export const CRON_JOBS = {
-  // Keeps StraWins to Dollars rounds rolling even when no game page is open.
-  "* * * * *": ["/api/cron/game-engine?r=cron"],
+  // Keeps StraWins to Dollars rounds rolling even when no game page is open; flags
+  // unconfirmed agent withdrawals and expires unpaid USDT deposits.
+  "* * * * *": ["/api/cron/game-engine?r=cron", "/api/cron/watch"],
   // Daily support-chat cleanup (was a Vercel cron).
   "0 3 * * *": ["/api/cron/cleanup-chats"],
 };

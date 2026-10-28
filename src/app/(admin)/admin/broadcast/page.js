@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   Info,
   CheckCircle2,
+  Gamepad2,
   Loader2
 } from "lucide-react";
 
@@ -27,7 +28,7 @@ const getAdminToken = async () => {
 
 export default function AdminBroadcast() {
   const [message, setMessage] = useState("");
-  const [type, setType] = useState("info"); // info, warning, success
+  const [type, setType] = useState("info"); // info, warning, success, game (a game update)
   const [sending, setSending] = useState(false);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -159,7 +160,7 @@ export default function AdminBroadcast() {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <button 
               type="button"
               onClick={() => setType("info")}
@@ -180,6 +181,13 @@ export default function AdminBroadcast() {
               className={`flex items-center justify-center gap-2 p-4 rounded-2xl border font-black uppercase text-[10px] transition-all ${type === 'success' ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200' : 'bg-[#0B1220] border-white/10 text-slate-300'}`}
             >
               <CheckCircle2 size={16} /> Success
+            </button>
+            <button 
+              type="button"
+              onClick={() => setType("game")}
+              className={`flex items-center justify-center gap-2 p-4 rounded-2xl border font-black uppercase text-[10px] transition-all ${type === 'game' ? 'bg-violet-500/20 border-violet-400 text-violet-200' : 'bg-[#0B1220] border-white/10 text-slate-300'}`}
+            >
+              <Gamepad2 size={16} /> Game Update
             </button>
           </div>
 
@@ -221,7 +229,8 @@ export default function AdminBroadcast() {
               <div className="flex items-start gap-4">
                 <div className={`p-3 rounded-xl shrink-0 mt-1 ${
                   post.type === 'warning' ? 'bg-amber-100 text-amber-600' : 
-                  post.type === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-[#D7E2FF] text-[#1D4FC4]'
+                  post.type === 'success' ? 'bg-emerald-100 text-emerald-600' :
+                  post.type === 'game' ? 'bg-violet-100 text-violet-600' : 'bg-[#D7E2FF] text-[#1D4FC4]'
                 }`}>
                   <Megaphone size={18} />
                 </div>
@@ -234,8 +243,9 @@ export default function AdminBroadcast() {
                     </span>
                     <span className={`px-2 py-0.5 rounded-md font-bold ${
                       post.type === 'warning' ? 'bg-amber-50 text-amber-500' : 
-                      post.type === 'success' ? 'bg-emerald-50 text-emerald-500' : 'bg-[#D7E2FF] text-[#2457D6]'
-                    }`}>{post.type}</span>
+                      post.type === 'success' ? 'bg-emerald-50 text-emerald-500' :
+                      post.type === 'game' ? 'bg-violet-50 text-violet-500' : 'bg-[#D7E2FF] text-[#2457D6]'
+                    }`}>{post.type === 'game' ? 'game update' : post.type}</span>
                   </div>
                 </div>
               </div>

@@ -1,6 +1,8 @@
 import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { NextResponse } from "next/server";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
+import { cents, formatUsd, toDollars } from "@/lib/money";
+import { flagAccount } from "@/lib/notifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -102,6 +104,8 @@ export async function POST(req) {
     const userRef = adminDb.collection("users").doc(uid);
     const userSnap = await userRef.get();
     const oldPin = userSnap.exists ? String(userSnap.data()?.pin || "") : "";
+    const oldWallet = userSnap.exists ? Number(userSnap.data()?.wallet || 0) : 0;
+    const newWallet = Number.isFinite(walletValue) ? walletValue : 0;
 
     // Track pin ownership metadata to make admin pin operations auditable.
     await adminDb.collection("pin_registry").doc(normalizedPin).set(
@@ -124,7 +128,7 @@ export async function POST(req) {
       username: normalizedUsername,
       fullName,
       role,
-      wallet: Number.isFinite(walletValue) ? walletValue : 0,
+      wallet: newWallet,
       status,
       phone: normalizedPhone,
       dob: dob || "",
@@ -132,6 +136,23 @@ export async function POST(req) {
       pin: normalizedPin,
       isban: Boolean(isban)
     });
+
+    // Money added by hand (not a deposit, transfer or jackpot): recorded, and the
+    // account flagged for the admins.
+    const addedC = cents(newWallet) - cents(oldWallet);
+    if (addedC !== 0) {
+      await userRef.collection("transactions").add({
+        title: "Manual Adjustment", amount: toDollars(addedC), type: "adjustment", status: "completed",
+        details: `Set by an admin (${requester.email || requester.uid})`, timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+    if (addedC > 0) {
+      await flagAccount(adminDb, uid, {
+        reason: "manual_credit",
+        title: "Money added manually",
+        body: `${requester.email || "An admin"} raised ${username || fullName || "a player"}'s wallet from ${formatUsd(oldWallet)} to ${formatUsd(newWallet)} (+${formatUsd(toDollars(addedC))}) without a deposit, transfer or jackpot.`,
+      });
+    }
 
     return NextResponse.json({ message: "User updated successfully in Auth and Firestore" });
   } catch (error) {

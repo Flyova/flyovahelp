@@ -386,7 +386,7 @@ function StraWinsDemo({ onBack, onRegister }) {
                 { n: "1", text: "Every 120 seconds, the game draws 2 random winning numbers." },
                 { n: "2", text: "Before the draw closes, you pick any 2 numbers you think will come up." },
                 { n: "3", text: "You stake an amount from your wallet on your picks." },
-                { n: "4", text: "If either of your picks matches a winning number, you win 1.3× your stake instantly." },
+                { n: "4", text: "If both your picks match the winning numbers, you win 1.3× your stake. If one matches, you get 92% of your stake back." },
               ].map(item => (
                 <li key={item.n} className="flex gap-3">
                   <span className="w-5 h-5 rounded-full bg-[#8B1E3F]/20 text-[#8B1E3F] text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">{item.n}</span>
@@ -414,7 +414,7 @@ function StraWinsDemo({ onBack, onRegister }) {
       {phase === "numbers" && (
         <div className="space-y-4">
           <TutorialTip step={1} total={3} accent="#8B1E3F">
-            Pick any 2 numbers from the grid below. The game will draw 2 winning numbers at random — if either of your picks matches, you win. There's no correct answer; it's your lucky guess.
+            Pick any 2 numbers from the grid below. The game will draw 2 winning numbers at random — match both to win 1.3×, or match one to get 92% back. There's no correct answer; it's your lucky guess.
           </TutorialTip>
           <div className="grid grid-cols-4 gap-2">
             {DEMO_NUMBERS.map(n => (

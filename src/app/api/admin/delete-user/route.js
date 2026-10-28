@@ -56,6 +56,15 @@ export async function POST(req) {
       return NextResponse.json({ error: "You cannot delete your own account." }, { status: 400 });
     }
 
+    // Only a deletion the player asked for and confirmed from their email (/api/account).
+    const request = await adminDb.collection("deletion_requests").doc(uid).get();
+    if (!request.exists || !request.data().emailConfirmedAt) {
+      return NextResponse.json(
+        { error: "This player hasn't confirmed the deletion from their email yet." },
+        { status: 409 }
+      );
+    }
+
     // 1. Free their chat usernames: they leave their groups, their private chats
     //    are deleted, and the names can be registered again.
     await releaseAccountUsernames(adminDb, uid);
@@ -66,11 +75,16 @@ export async function POST(req) {
     // 3. Delete the Firestore User Document
     await adminDb.collection("users").doc(uid).delete();
 
-    // 4. Optional: Delete their transactions sub-collection
-    const txSnap = await adminDb.collection("users").doc(uid).collection("transactions").get();
+    // 4. Their history, notifications and inflow records, transaction PIN and referral code.
     const batch = adminDb.batch();
-    txSnap.forEach(doc => batch.delete(doc.ref));
+    for (const sub of ["transactions", "notifications", "inflow_bonus", "inflow_months"]) {
+      const snap = await adminDb.collection("users").doc(uid).collection(sub).get();
+      snap.forEach((doc) => batch.delete(doc.ref));
+    }
+    (await adminDb.collection("referral_codes").where("uid", "==", uid).get()).forEach((doc) => batch.delete(doc.ref));
+    batch.delete(adminDb.collection("tx_pins").doc(uid));
     await batch.commit();
+    await request.ref.update({ status: "completed", completedAt: admin.firestore.FieldValue.serverTimestamp() });
 
     return NextResponse.json({ message: "User deleted successfully from all systems" });
   } catch (error) {

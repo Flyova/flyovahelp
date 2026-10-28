@@ -22,6 +22,22 @@ export const AGENT_FEE_RATE = { deposit: 0.03, withdrawal: 0.05 };
 export const REFERRAL_COMMISSION = { agent: 0.035, direct: 0.015 };
 export const MIN_QUALIFIED_REFERRALS = 10;
 export const MIN_QUALIFYING_DEPOSIT = 25;
+/** Paid from the main wallet when applying to be an agent; refunded if the application is declined. */
+export const AGENT_APPLICATION_FEE = 50;
+/**
+ * What a referrer earns when someone they referred verifies their email. It's
+ * below a cent, so it's counted (users/{uid}.signupRewards, how many unpaid) and
+ * moved to the wallet a whole cent at a time.
+ */
+export const SIGNUP_REWARD = 0.0001;
+/** Deposit requests left unpaid this many times within the window lock deposits. */
+export const INVALID_DEPOSIT_LIMIT = 3;
+export const INVALID_DEPOSIT_WINDOW_MS = 24 * 60 * 60 * 1000;
+export const DEPOSIT_LOCK_MS = 48 * 60 * 60 * 1000;
+/** After an agent accepts a deposit, how long the player has to pay before the agent can call it unpaid. */
+export const UNPAID_DEPOSIT_MS = 15 * 60 * 1000;
+/** After an agent says they've paid a withdrawal, how long the player has to confirm it before they're flagged. */
+export const WITHDRAWAL_CONFIRM_MS = 45 * 60 * 1000;
 
 // `[minimum amount, fee]`, descending: the first tier the amount clears wins.
 const WITHDRAWAL_FEE_TIERS = [
@@ -57,6 +73,9 @@ export function parseAmount(value, { min = 0.01, max = MAX_AMOUNT } = {}) {
 }
 
 export const isBanned = (u) => !!(u?.isban || u?.banned);
+/** An admin can bar a player from games only (users/{uid}.restrictGames). */
+export const isGameRestricted = (u) => !!u?.restrictGames;
+export const GAMES_RESTRICTED = "Games have been restricted on your account. Please contact support.";
 
 /** The $3 sign-up bonus is taken back on the first withdrawal or transfer. */
 export const owesBonus = (u) => !!u?.bonusClaimed && !u?.bonusDeducted;
@@ -89,6 +108,47 @@ export async function systemSettings(db) {
 
 /** An agent players can trade with: approved and not banned. */
 export const isTradingAgent = (a) => !!a && a.application_status === "approved" && a.banned !== true;
+
+export const MAX_RATE_TIERS = 5;
+/**
+ * An agent's rates for bigger trades: up to MAX_RATE_TIERS of { min, rate }, each
+ * used from `min` dollars up (until the next one). Below the first, the agent's
+ * plain rate applies. Returns them cleaned and sorted, or { error }.
+ */
+export function cleanRateTiers(tiers) {
+  if (tiers == null) return [];
+  if (!Array.isArray(tiers) || tiers.length > MAX_RATE_TIERS) return { error: `You can add up to ${MAX_RATE_TIERS} amount ranges.` };
+  const out = [];
+  for (const t of tiers) {
+    const min = parseAmount(t?.min, { min: MIN_AGENT_TRADE });
+    const rate = Number(t?.rate);
+    if (min === null || !(rate > 0) || rate > 1e9) return { error: "Each range needs a starting amount of at least $1 and a rate above 0." };
+    if (out.some((o) => o.min === min)) return { error: `Two ranges start at ${formatUsd(min)}.` };
+    out.push({ min, rate });
+  }
+  return out.sort((a, b) => a.min - b.min);
+}
+
+/** The agent's buy (deposit) or sell (withdrawal) rate for this amount, local currency per $1. */
+export function rateFor(agent, type, amount) {
+  const base = Number(agent?.[type === "deposit" ? "deposit_rate" : "withdrawal_rate"]) || 0;
+  const tiers = cleanRateTiers(agent?.[type === "deposit" ? "deposit_tiers" : "withdrawal_tiers"]);
+  if (tiers.error) return base;
+  let rate = base;
+  for (const t of tiers) if (Number(amount) >= t.min) rate = t.rate;
+  return rate;
+}
+
+/** A player's bank account, users/{uid}.bank, if they've added one. */
+export const bankOf = (u) => (u?.bank?.accountNumber ? u.bank : null);
+
+/** Why the account can't start a deposit right now (unpaid requests), or null. */
+export function depositLockError(u) {
+  const until = Number(u?.depositLockedUntil?.toMillis?.() || u?.depositLockedUntil || 0);
+  if (!(until > Date.now())) return null;
+  const hours = Math.ceil((until - Date.now()) / 3600000);
+  return `Deposits are locked for ${hours} more hour${hours === 1 ? "" : "s"}: ${INVALID_DEPOSIT_LIMIT} deposit requests in 24 hours weren't paid.`;
+}
 
 /**
  * The user who referred `user` (uid), or null. referrerUid is the current way;

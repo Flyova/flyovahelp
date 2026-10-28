@@ -20,6 +20,7 @@ export default function GamePage() {
   const [user, setUser] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [myWallet, setMyWallet] = useState(0);
+  const [gamesRestricted, setGamesRestricted] = useState(false);
 
   const [activeGame, setActiveGame] = useState(null);
   const [numbers, setNumbers] = useState([]);
@@ -141,7 +142,10 @@ export default function GamePage() {
       } else {
         setUser(u);
         const unsubWallet = onSnapshot(doc(db, "users", u.uid), (snap) => {
-          if (snap.exists()) setMyWallet(snap.data().wallet || 0);
+          if (snap.exists()) {
+            setMyWallet(snap.data().wallet || 0);
+            setGamesRestricted(!!snap.data().restrictGames);
+          }
         });
         setLoadingAuth(false);
         return () => unsubWallet();
@@ -414,6 +418,9 @@ export default function GamePage() {
       const calculatedFee = stakeAmount * MATCH_ADMIN_FEE_RATE;
       const totalCost = totalWager + calculatedFee;
 
+      if (gamesRestricted) {
+        return showNotification("warning", "Games Restricted", "Games have been restricted on your account. Please contact support.");
+      }
       if (myWallet < totalCost) {
         return showNotification(
           "warning",
@@ -444,10 +451,12 @@ export default function GamePage() {
         return;
       }
 
-      await addDoc(collection(db, "challenges"), {
+      const made = await addDoc(collection(db, "challenges"), {
         from: user.uid, fromName: user.displayName || "Player", to: showStakeModal.id, toName: showStakeModal.username, status: "pending",
         stakePerRound: stakeAmount, totalWager, fee: calculatedFee, timestamp: Date.now()
       });
+      // Their notifications and phone hear about it (best effort).
+      authFetch("/api/push/notify", { method: "POST", body: { event: "challenge", challengeId: made.id } }).catch(() => {});
       setShowStakeModal(null);
     } catch (e) {
       console.error("Send challenge error:", e);

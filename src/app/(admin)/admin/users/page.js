@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { auth, db } from "@/lib/firebase";
-import { collection, doc, getDocs, onSnapshot, orderBy, query, updateDoc, where } from "firebase/firestore";
-import { Activity, Ban, CheckCircle, Edit2, Gift, Loader2, Save, Search, ShieldAlert, Users, X } from "lucide-react";
+import { collection, doc, getDocs, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
+import { Activity, Ban, CheckCircle, Edit2, Flag, Gift, Loader2, Save, Search, ShieldAlert, Trophy, Users, X } from "lucide-react";
 import Link from "next/link";
+import { depositLocked, flagReasonLabel, groupJackpots, toDate } from "@/components/admin/accountFlags";
 
 const formatJoinedDate = (timestamp) => {
   if (!timestamp?.toDate) return "N/A";
@@ -17,6 +18,7 @@ const RESTRICTION_FIELDS = [
   { key: "restrictDeposit", label: "Deposits" },
   { key: "restrictWithdrawal", label: "Withdrawals" },
   { key: "restrictTransfer", label: "Transfers" },
+  { key: "restrictGames", label: "Games" },
 ];
 
 const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
@@ -65,6 +67,12 @@ export default function UserManagement() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [editForm, setEditForm] = useState({});
+  const [jackpots, setJackpots] = useState({});
+  // Alerts link here with ?flagged=1. (Nothing below renders until the users load, so
+  // reading the URL on the first render doesn't change what the server rendered.)
+  const [onlyFlagged, setOnlyFlagged] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("flagged") === "1"
+  );
 
   useEffect(() => {
     const q = query(collection(db, "users"), orderBy("username", "asc"));
@@ -74,6 +82,21 @@ export default function UserManagement() {
     });
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    getDocs(collection(db, "jackpots"))
+      .then((snap) => setJackpots(groupJackpots(snap.docs)))
+      .catch((err) => console.error("Jackpots load failed:", err));
+  }, []);
+
+  const handleClearFlag = async (user) => {
+    if (!window.confirm(`Clear the flag on ${user.username}? (${flagReasonLabel(user.flagReason)})`)) return;
+    try {
+      await updateDoc(doc(db, "users", user.id), { flagged: false, flagClearedAt: serverTimestamp() });
+    } catch (err) {
+      alert("Failed to clear the flag: " + err.message);
+    }
+  };
 
   const openEditModal = (user) => {
     setSelectedUser(user);
@@ -188,9 +211,12 @@ export default function UserManagement() {
 
   const search = searchTerm.toLowerCase().trim();
 
+  const flaggedCount = useMemo(() => users.filter((u) => u.flagged).length, [users]);
+
   const filteredUsers = useMemo(
     () =>
       users.filter((u) => {
+        if (onlyFlagged && !u.flagged) return false;
         if (!search) return true;
         return (
           u.username?.toLowerCase().includes(search) ||
@@ -199,7 +225,7 @@ export default function UserManagement() {
           u.pin?.toLowerCase().includes(search)
         );
       }),
-    [users, search]
+    [users, search, onlyFlagged]
   );
 
   const bonusClaimants = useMemo(
@@ -279,6 +305,13 @@ export default function UserManagement() {
               </p>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={() => setOnlyFlagged((v) => !v)}
+            className={`px-5 py-4 rounded-2xl text-[10px] font-black uppercase inline-flex items-center gap-2 border transition-all ${onlyFlagged ? "bg-red-600 border-red-600 text-white" : "bg-red-50 border-red-100 text-red-600 hover:bg-red-100"}`}
+          >
+            <Flag size={14} /> {onlyFlagged ? "Showing flagged" : "Flagged only"} ({flaggedCount})
+          </button>
           <div className="relative w-full md:w-96">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
             <input
@@ -308,8 +341,9 @@ export default function UserManagement() {
               <tbody className="divide-y divide-slate-50">
                 {filteredUsers.map((u) => {
                   const bonusMeta = getWelcomeBonusMeta(u);
+                  const jp = jackpots[u.id];
                   return (
-                    <tr key={u.id} className={`hover:bg-slate-50/30 transition-colors ${u.isban ? "bg-red-50/50" : ""}`}>
+                    <tr key={u.id} className={`hover:bg-slate-50/30 transition-colors ${u.isban || u.flagged ? "bg-red-50/50" : ""}`}>
                       <td className="p-6 flex items-center gap-4">
                         <div className={`w-10 h-10 ${u.isban ? "bg-red-500" : "bg-slate-900"} text-white rounded-xl flex items-center justify-center font-black italic`}>
                           {u.username?.charAt(0)}
@@ -322,15 +356,41 @@ export default function UserManagement() {
                                 BANNED
                               </span>
                             )}
+                            {u.flagged && (
+                              <span
+                                title={`${flagReasonLabel(u.flagReason)}${toDate(u.flaggedAt) ? ` · ${toDate(u.flaggedAt).toLocaleString()}` : ""}${u.flagCount > 1 ? ` · flagged ${u.flagCount} times` : ""}`}
+                                className="text-[8px] bg-red-600 text-white px-2 py-0.5 rounded-full not-italic inline-flex items-center gap-1 cursor-help"
+                              >
+                                <Flag size={9} /> FLAGGED
+                              </span>
+                            )}
                           </p>
                           <p className="text-[10px] font-bold text-slate-400">{u.email}</p>
-                          {RESTRICTION_FIELDS.some((f) => u[f.key]) && (
+                          {u.flagged && (
+                            <p className="text-[9px] font-black uppercase text-red-600 mt-0.5">
+                              {flagReasonLabel(u.flagReason)}{toDate(u.flaggedAt) ? ` · ${toDate(u.flaggedAt).toLocaleDateString()}` : ""}
+                            </p>
+                          )}
+                          {(RESTRICTION_FIELDS.some((f) => u[f.key]) || jp || depositLocked(u)) && (
                             <div className="flex flex-wrap gap-1 mt-1">
                               {RESTRICTION_FIELDS.filter((f) => u[f.key]).map((f) => (
                                 <span key={f.key} className="text-[8px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-black uppercase">
                                   {f.label} Restricted
                                 </span>
                               ))}
+                              {depositLocked(u) && (
+                                <span className="text-[8px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-black uppercase">
+                                  Deposits locked (unpaid requests)
+                                </span>
+                              )}
+                              {jp && (jp.claimed > 0 || jp.pending > 0) && (
+                                <span
+                                  title={`${jp.claimed} jackpot${jp.claimed === 1 ? "" : "s"} credited (${formatMoney(jp.total)})${jp.pending ? `, ${jp.pending} not claimed yet` : ""}`}
+                                  className="text-[8px] bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full font-black uppercase inline-flex items-center gap-1"
+                                >
+                                  <Trophy size={9} /> Jackpot ×{jp.claimed}{jp.pending ? ` (+${jp.pending} pending)` : ""}
+                                </span>
+                              )}
                             </div>
                           )}
                         </div>
@@ -354,6 +414,14 @@ export default function UserManagement() {
                         >
                           <Activity size={14} /> Activity
                         </Link>
+                        {u.flagged && (
+                          <button
+                            onClick={() => handleClearFlag(u)}
+                            className="px-4 py-3 rounded-xl transition-all font-black uppercase text-[10px] inline-flex items-center gap-2 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white"
+                          >
+                            <Flag size={14} /> Clear flag
+                          </button>
+                        )}
                         <button
                           onClick={() => handleToggleBan(u)}
                           className={`px-4 py-3 rounded-xl transition-all font-black uppercase text-[10px] inline-flex items-center gap-2 ${u.isban ? "bg-emerald-100 text-emerald-600 hover:bg-emerald-600 hover:text-white" : "bg-red-100 text-red-600 hover:bg-red-600 hover:text-white"}`}
@@ -507,6 +575,9 @@ export default function UserManagement() {
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-slate-400">Wallet Balance</label>
                   <input type="number" value={editForm.wallet} onChange={(e) => setEditForm({ ...editForm, wallet: e.target.value })} className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl text-sm font-black text-emerald-600 outline-none focus:border-[#2457D6]" />
+                  <p className="text-[9px] font-black uppercase text-slate-400">
+                    Raising it by hand is recorded and flags the account for review.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-slate-400">Ban Status</label>
@@ -527,7 +598,7 @@ export default function UserManagement() {
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <label className="text-[10px] font-black uppercase text-slate-400">Account Restrictions</label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {RESTRICTION_FIELDS.map((f) => {
                       const restricted = Boolean(liveSelectedUser?.[f.key]);
                       return (

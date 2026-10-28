@@ -12,11 +12,13 @@ import {
   Copy,
   Check,
   Users,
-  TrendingUp
+  TrendingUp,
+  Bell,
+  Gift
 } from "lucide-react";
 // FIREBASE IMPORTS
 import { auth, db } from "@/lib/firebase";
-import { doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { collection, doc, limit, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 
 /** `hideOnMobile`: hidden below md but still mounted, so the idle sign-out below keeps running. */
@@ -31,16 +33,25 @@ export default function Header({ hideOnMobile = false }) {
     gameCredits: "0.00",
     agentBalance: "0.00",
     pin: "--------",
-    isAgent: false 
+    isAgent: false,
+    signupRewards: "0.0000",
   });
+  const [unread, setUnread] = useState(0);
 
   useEffect(() => {
     let unsubscribeUser = null;
     let unsubscribeAgent = null;
+    let unsubscribeUnread = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
         const userDocRef = doc(db, "users", user.uid);
+        // The bell: unread notifications (lib/notifications on the server).
+        unsubscribeUnread = onSnapshot(
+          query(collection(db, "users", user.uid, "notifications"), where("read", "==", false), limit(99)),
+          (snap) => setUnread(snap.size),
+          () => setUnread(0)
+        );
         
         // 1. Listen to User Document
         unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
@@ -54,7 +65,8 @@ export default function Header({ hideOnMobile = false }) {
               inflowBonus: Number(data.inflowBonus || 0).toFixed(2),
               gameCredits: data.gameCredits?.toFixed(2) || "0.00",
               pin: data.pin || "--------",
-              isAgent: data.isAgent || false
+              isAgent: data.isAgent || false,
+              signupRewards: (Number(data.signupRewards || 0) * 0.0001).toFixed(4),
             }));
 
             // Handle Agent Specific Balance
@@ -76,7 +88,9 @@ export default function Header({ hideOnMobile = false }) {
       } else {
         if (unsubscribeUser) unsubscribeUser();
         if (unsubscribeAgent) unsubscribeAgent();
-        setUserData({ wallet: "0.00", referralBonus: "0.00", inflowBonus: "0.00", gameCredits: "0.00", agentBalance: "0.00", pin: "--------", isAgent: false });
+        if (unsubscribeUnread) unsubscribeUnread();
+        setUnread(0);
+        setUserData({ wallet: "0.00", referralBonus: "0.00", inflowBonus: "0.00", gameCredits: "0.00", agentBalance: "0.00", pin: "--------", isAgent: false, signupRewards: "0.0000" });
       }
     });
 
@@ -84,6 +98,7 @@ export default function Header({ hideOnMobile = false }) {
       unsubscribeAuth();
       if (unsubscribeUser) unsubscribeUser();
       if (unsubscribeAgent) unsubscribeAgent();
+      if (unsubscribeUnread) unsubscribeUnread();
     };
   }, []);
 
@@ -168,6 +183,18 @@ export default function Header({ hideOnMobile = false }) {
         </div>
 
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => router.push("/notifications")}
+            aria-label={unread ? `${unread} unread notifications` : "Notifications"}
+            className="relative p-2 rounded-full bg-black/20 hover:bg-black/30 border border-white/10 active:scale-95"
+          >
+            <Bell size={16} />
+            {unread > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#8B1E3F] text-[9px] font-black flex items-center justify-center">
+                {unread > 9 ? "9+" : unread}
+              </span>
+            )}
+          </button>
           {/* WALLET SECTION */}
           <div className="relative">
             <button 
@@ -203,6 +230,13 @@ export default function Header({ hideOnMobile = false }) {
                   <div className="px-1 space-y-3">
                       <BalanceItem label="Referral Bonus" amount={userData.referralBonus} color="text-green-400" />
                       <BalanceItem label="Inflow Bonus" amount={userData.inflowBonus} color="text-green-400" />
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] uppercase font-black text-[#F5F3EE]/50 tracking-wider">Sign-up Rewards</span>
+                        <button onClick={() => { setShowBalances(false); router.push("/referrals"); }}
+                          className="flex items-center gap-1 font-bold text-green-400 hover:underline">
+                          <Gift size={11} /> ${userData.signupRewards}
+                        </button>
+                      </div>
                       
                       {userData.isAgent ? (
                         <BalanceItem label="Agent Balance" amount={userData.agentBalance} color="text-[#F5F3EE]" />

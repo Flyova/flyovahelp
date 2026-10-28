@@ -380,6 +380,11 @@ export default function AgentTransactions() {
                           <p className="text-sm font-bold text-slate-600">{trade.senderName || userProfiles[trade.senderId]?.name || "User"}</p>
                           <p className="text-[9px] font-mono text-slate-400">PIN: {userProfiles[trade.senderId]?.pin || "--------"}</p>
                           <p className="text-[9px] text-slate-400">{userProfiles[trade.senderId]?.email || "-"}</p>
+                          {trade.senderBank?.accountNumber && (
+                            <p className="text-[9px] font-bold text-slate-500 mt-1" title="The player's bank account (beneficiary is their account name)">
+                              Bank: {trade.senderBank.bankName} · {trade.senderBank.accountNumber} · {trade.senderBank.accountName}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -396,6 +401,23 @@ export default function AgentTransactions() {
                        <p className="text-[10px] font-bold text-slate-400 mt-2 flex items-center gap-1 uppercase">
                          <Calendar size={10} /> {trade.createdAt?.toDate ? trade.createdAt.toDate().toLocaleDateString() : '---'}
                        </p>
+                       <div className="flex flex-col items-start gap-1 mt-2">
+                         {trade.agentPaidAt && (
+                           <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-sky-100 text-sky-700">
+                             Agent says paid · {trade.agentPaidAt?.toDate ? trade.agentPaidAt.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+                           </span>
+                         )}
+                         {trade.overdueFlaggedAt && (
+                           <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-red-100 text-red-700">
+                             Not confirmed in 45 min · player flagged
+                           </span>
+                         )}
+                         {trade.declineReason === "Player didn't pay" && (
+                           <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-rose-100 text-rose-700">
+                             Player didn&apos;t pay (agent cancelled)
+                           </span>
+                         )}
+                       </div>
                     </td>
                     <td className="p-6">
                         <div className="flex items-center justify-end gap-2">

@@ -4,12 +4,12 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from "firebase/firestore";
+import { collection, doc, getDoc, onSnapshot, query, setDoc, serverTimestamp, updateDoc, where } from "firebase/firestore";
 import { canAccessAdminPath, resolvePrivilegedRole } from "@/lib/adminAccess";
 import {
   LayoutDashboard, ArrowDownCircle, UserCheck, Wallet,
   ArrowUpCircle, Send, Delete, Users, History, Trophy,
-  MessageCircle, X, LogOut, Menu, Loader2, FileText, CheckCircle2, Phone
+  MessageCircle, X, LogOut, Menu, Loader2, FileText, CheckCircle2, Phone, Bell
 } from "lucide-react";
 
 export default function AdminLayout({ children }) {
@@ -17,8 +17,19 @@ export default function AdminLayout({ children }) {
   const [accessRole, setAccessRole] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [unreadAlerts, setUnreadAlerts] = useState(0);
   const router = useRouter();
   const pathname = usePathname();
+
+  // Unread admin alerts (lib/notifications), for the nav badge. Admins only can read them.
+  useEffect(() => {
+    if (accessRole !== "admin") return;
+    return onSnapshot(
+      query(collection(db, "admin_notifications"), where("read", "==", false)),
+      (snap) => setUnreadAlerts(snap.size),
+      () => setUnreadAlerts(0)
+    );
+  }, [accessRole]);
 
   useEffect(() => {
     if (pathname === "/admin/login") {
@@ -125,6 +136,7 @@ export default function AdminLayout({ children }) {
   const navByRole = {
     admin: [
       { name: "Dashboard", icon: LayoutDashboard, path: "/admin" },
+      { name: "Alerts", icon: Bell, path: "/admin/alerts", badge: unreadAlerts },
       { name: "Deposit Approvals", icon: ArrowDownCircle, path: "/admin/deposits" },
       { name: "Agent List", icon: UserCheck, path: "/admin/agents" },
       { name: "Agent Transactions", icon: Wallet, path: "/admin/agent-tx" },
@@ -196,6 +208,11 @@ export default function AdminLayout({ children }) {
                 className={`w-full flex items-center gap-3 px-5 py-3.5 text-[11px] font-black uppercase tracking-wider rounded-2xl transition-all mb-1 ${isActive ? "bg-[#2457D6] text-white shadow-xl shadow-[#2457D6]/30" : "text-slate-400 hover:bg-white/5 hover:text-white"}`}
               >
                 <item.icon size={18} /> {item.name}
+                {item.badge > 0 && (
+                  <span className="ml-auto min-w-5 h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center">
+                    {item.badge > 99 ? "99+" : item.badge}
+                  </span>
+                )}
               </Link>
             );
           })}

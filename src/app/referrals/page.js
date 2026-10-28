@@ -19,7 +19,8 @@ import {
   Loader2,
   CheckCircle2,
   Lock,
-  Clock
+  Clock,
+  Gift
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -35,6 +36,11 @@ export default function ReferralsPage() {
   const [copied, setCopied] = useState(false);
   const [referralsChecked, setReferralsChecked] = useState(false);
   const [needed, setNeeded] = useState(MIN_QUALIFIED_REFERRALS); // the server's number: fewer for 18-month accounts
+  const [code, setCode] = useState("");
+  const [link, setLink] = useState("");
+  const [codeCopied, setCodeCopied] = useState(false);
+  const [signup, setSignup] = useState({ reward: 0.0001, count: 0, total: 0 });
+  const [claiming, setClaiming] = useState(false);
 
   // Withdraw Modal States
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
@@ -54,6 +60,9 @@ export default function ReferralsPage() {
           if (res.error) throw new Error(res.error);
           setReferrals(res.referrals);
           if (res.needed) setNeeded(res.needed);
+          setCode(res.code || "");
+          setLink(res.link || "");
+          setSignup({ reward: res.signupReward || 0.0001, count: res.signupRewards || 0, total: res.signupRewardsTotal || 0 });
         } catch (err) {
           console.error("Error fetching referrals:", err);
         } finally {
@@ -77,11 +86,31 @@ export default function ReferralsPage() {
     return () => unsubAuth();
   }, [router]);
 
+  const shareLink = link || `https://strawins.com/register?ref=${user?.uid}`;
   const handleCopyLink = () => {
-    const link = `https://strawins.com/register?ref=${user.uid}`;
-    navigator.clipboard.writeText(link);
+    navigator.clipboard.writeText(shareLink);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(code);
+    setCodeCopied(true);
+    setTimeout(() => setCodeCopied(false), 2000);
+  };
+
+  // Sign-up rewards are their own balance: $0.0001 per verified sign-up, moved to the
+  // main wallet a whole cent at a time (the rest stays).
+  const signupCount = userData?.signupRewards ?? signup.count;
+  const signupValue = signupCount * signup.reward;
+  const handleClaimSignup = async () => {
+    setClaiming(true);
+    try {
+      const res = await authFetch("/api/wallet", { method: "POST", body: { action: "signupClaim" } });
+      if (res.error) return alert(res.error);
+      alert(`$${res.moved.toFixed(2)} moved to your main wallet.`);
+    } finally {
+      setClaiming(false);
+    }
   };
 
   const qualifiedReferralsCount = referrals.filter((r) => r.hasDeposited).length;
@@ -173,16 +202,48 @@ export default function ReferralsPage() {
             </div>
         </div>
 
+        <p className="text-[11px] font-bold text-white/50 leading-relaxed px-2">
+          Your referral balance unlocks once {needed} of your referrals have each deposited at least ${MIN_QUALIFYING_DEPOSIT}
+          {needed < MIN_QUALIFIED_REFERRALS ? " (fewer for accounts over 18 months old)" : ""}.
+        </p>
+
+        {/* SIGN-UP REWARDS: their own balance and button */}
+        <div className="bg-[#142036] rounded-[2rem] p-6 border border-white/5 shadow-xl">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Gift size={18} className="text-[#8B1E3F]" />
+              <h3 className="font-black italic uppercase text-sm">Sign-up Rewards</h3>
+            </div>
+            <p className="text-2xl font-black italic">${signupValue.toFixed(4)}</p>
+          </div>
+          <p className="text-[10px] text-white/50 my-3 font-bold leading-relaxed">
+            You get ${signup.reward} for everyone who signs up with your link or code and verifies their email.
+            {" "}{signupCount} unclaimed · {userData?.signupRewardsTotal ?? signup.total} all time. Moves to your wallet from $0.01.
+          </p>
+          <button onClick={handleClaimSignup} disabled={claiming || signupValue < 0.01}
+            className="w-full bg-[#2457D6] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 disabled:opacity-30">
+            {claiming ? <Loader2 size={14} className="animate-spin" /> : <ArrowRightLeft size={14} />} Move to Wallet
+          </button>
+        </div>
+
         {/* REFERRAL CODE SECTION */}
         <div className="bg-[#142036] rounded-[2rem] p-6 border border-white/5 shadow-xl">
           <div className="flex items-center space-x-2 mb-4">
             <Hash size={18} className="text-[#8B1E3F]" />
-            <h3 className="font-black italic uppercase text-sm">Your Referral Link</h3>
+            <h3 className="font-black italic uppercase text-sm">Your Referral Code &amp; Link</h3>
           </div>
+          {code && (
+            <div className="flex items-center justify-between bg-black/40 p-3 pl-5 rounded-2xl border border-white/10 gap-2 mb-3">
+              <p className="font-mono text-xl font-black tracking-[0.3em]">{code}</p>
+              <button onClick={handleCopyCode} className={`px-4 py-3 rounded-xl transition-all shrink-0 ${codeCopied ? 'bg-green-500' : 'bg-[#2457D6]'} text-white shadow-lg`}>
+                {codeCopied ? <Check size={16} /> : <Copy size={16} />}
+              </button>
+            </div>
+          )}
           <div className="flex items-center bg-black/40 p-3 rounded-2xl border border-white/10 gap-2">
             <div className="bg-[#0B1220] px-3 py-2 rounded-xl flex-1 border border-white/5 overflow-hidden">
                 <p className="text-[10px] font-mono text-white/40 truncate">
-                    strawins.com/register?ref={user?.uid}
+                    {shareLink.replace(/^https:\/\//, "")}
                 </p>
             </div>
             <button 

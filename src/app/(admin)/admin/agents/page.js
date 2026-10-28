@@ -7,9 +7,7 @@ import {
   where, 
   onSnapshot, 
   doc, 
-  updateDoc, 
-  getDoc,
-  serverTimestamp 
+  updateDoc
 } from "firebase/firestore";
 import { 
   ChevronRight, 
@@ -38,6 +36,7 @@ export default function AdminAgentManagement() {
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [deciding, setDeciding] = useState(false);
 
   const formatJoinedDate = (agent) => {
     const candidates = [agent?.createdAt, agent?.joinedAt, agent?.approvedAt, agent?.reviewed_at];
@@ -76,62 +75,22 @@ export default function AdminAgentManagement() {
     setFilteredAgents(results);
   }, [searchTerm, agents]);
 
- const updateStatus = async (agentId, newStatus) => {
-    if (!confirm(`Are you sure you want to ${newStatus} this application?`)) return;
+  // Approving takes the $50 application fee if the application didn't pay it (applied
+  // before the fee); rejecting refunds it. The server (/api/agent decide) does both and
+  // emails the applicant.
+  const updateStatus = async (agentId, newStatus) => {
+    if (!confirm(`Are you sure you want to ${newStatus === "approved" ? "approve" : "reject"} this application?`)) return;
 
+    setDeciding(true);
     try {
-      const agentRef = doc(db, "agents", agentId);
-      const userRef = doc(db, "users", agentId);
-
-      const approvalData = newStatus === "approved" ? {
-        application_status: "approved",
-        reviewed_at: serverTimestamp(),
-        active: true,
-        agent_balance: 0,
-        deposit_rate: 0,
-        withdrawal_rate: 0,
-        total_trades: 0
-      } : {
-        application_status: newStatus,
-        reviewed_at: serverTimestamp(),
-        rejected_at: newStatus === "rejected" ? serverTimestamp() : null,
-        active: false
-      };
-
-      await updateDoc(agentRef, approvalData);
-      await updateDoc(userRef, {
-        isAgent: newStatus === "approved",
-        agentStatus: newStatus,
-        agentBalance: newStatus === "approved" ? 0 : null
-      });
-
-      // --- TRIGGER: AGENT NOTIFICATION ---
-      try {
-        await authFetch("/api/send-email", {
-          method: "POST",
-          body: {
-            to: selectedAgent.email,
-            subject: `Agent Application ${newStatus === "approved" ? "Approved" : "Declined"}`,
-            html: `
-              <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 8px;">
-                <h2 style="color: #000; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">Application Status Update</h2>
-                <p>Hello ${selectedAgent.full_name},</p>
-                <p>${newStatus === "approved" 
-                  ? "Your application to join the StraWins Agent Network has been approved. You may now log in to access your agent dashboard." 
-                  : "We regret to inform you that your application to join the StraWins Agent Network has been declined at this time."
-                }</p>
-                <div style="margin-top: 30px; font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
-                  StraWins Global Liquidity Control
-                </div>
-              </div>
-            `
-          }
-        });
-      } catch (e) { console.error("Email failed", e); }
-
+      const res = await authFetch("/api/agent", { method: "POST", body: { action: "decide", agentId, decision: newStatus } });
+      if (res?.error) throw new Error(res.error);
+      if (newStatus === "rejected" && res?.refunded > 0) alert(`Application rejected. $${Number(res.refunded).toFixed(2)} fee refunded to the applicant's wallet.`);
       setSelectedAgent(null);
     } catch (error) {
       alert("Error: " + error.message);
+    } finally {
+      setDeciding(false);
     }
   };
 
@@ -215,8 +174,8 @@ export default function AdminAgentManagement() {
                         <div className="flex gap-3 w-full md:w-auto">
                             {activeTab === "pending" ? (
                                 <>
-                                    <button onClick={() => updateStatus(selectedAgent.id, "rejected")} className="flex-1 bg-slate-100 px-6 py-4 rounded-2xl font-black uppercase text-[11px]">Reject</button>
-                                    <button onClick={() => updateStatus(selectedAgent.id, "approved")} className="flex-1 bg-[#2457D6] text-white px-8 py-4 rounded-2xl font-black uppercase text-[11px] shadow-lg">Approve Agent</button>
+                                    <button disabled={deciding} onClick={() => updateStatus(selectedAgent.id, "rejected")} className="flex-1 bg-slate-100 px-6 py-4 rounded-2xl font-black uppercase text-[11px] disabled:opacity-50">Reject</button>
+                                    <button disabled={deciding} onClick={() => updateStatus(selectedAgent.id, "approved")} className="flex-1 bg-[#2457D6] text-white px-8 py-4 rounded-2xl font-black uppercase text-[11px] shadow-lg disabled:opacity-50">{deciding ? "Working..." : "Approve Agent"}</button>
                                 </>
                             ) : (
                                 <button onClick={() => toggleBan(selectedAgent.id, selectedAgent.banned)} className={`flex-1 px-8 py-4 rounded-2xl font-black uppercase text-[11px] flex items-center justify-center gap-2 transition-all shadow-lg ${selectedAgent.banned ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
@@ -234,6 +193,13 @@ export default function AdminAgentManagement() {
                           <StatBox label="Withdraw Rate" value={`${selectedAgent.withdrawal_rate || 0}`} sub="per 1 USD" />
                           <StatBox label="Status" value={selectedAgent.banned ? 'Banned' : 'Active'} color={selectedAgent.banned ? 'text-rose-500' : 'text-emerald-500'} />
                       </div>
+                      <FeeBox agent={selectedAgent} />
+                      {(selectedAgent.deposit_tiers?.length > 0 || selectedAgent.withdrawal_tiers?.length > 0) && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              <StatBox label="Deposit rates by amount" value={tiersText(selectedAgent.deposit_tiers)} />
+                              <StatBox label="Withdrawal rates by amount" value={tiersText(selectedAgent.withdrawal_tiers)} />
+                          </div>
+                      )}
                       <div className="space-y-4">
                           <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Landmark size={14} className="text-[#2457D6]" /> Bank Details</p>
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -258,6 +224,26 @@ export default function AdminAgentManagement() {
       </div>
     </div>
   );
+}
+
+const tiersText = (tiers) =>
+  Array.isArray(tiers) && tiers.length ? tiers.map((t) => `From $${t.min}: ${t.rate}`).join(" · ") : "Same rate for all amounts";
+
+/** The $50 agent application fee (/api/agent): paid, refunded, or (older applications) due on approval. */
+function FeeBox({ agent }) {
+    const fee = Number(agent.applicationFee || 50).toFixed(2);
+    const paidAt = agent.applicationFeePaidAt?.toDate ? agent.applicationFeePaidAt.toDate().toLocaleString() : null;
+    const [label, color] = agent.applicationFeeRefunded
+        ? [`$${fee} refunded`, "text-amber-600"]
+        : paidAt
+            ? [`$${fee} paid`, "text-emerald-600"]
+            : ["Not paid", "text-rose-500"];
+    const sub = agent.applicationFeeRefunded
+        ? "Returned when the application was declined"
+        : paidAt
+            ? `Paid ${paidAt}`
+            : "Applied before the fee: approving takes $50 from their wallet";
+    return <StatBox label="Application Fee" value={label} sub={sub} color={color} />;
 }
 
 function TabButton({ active, onClick, icon: Icon, label, count }) {

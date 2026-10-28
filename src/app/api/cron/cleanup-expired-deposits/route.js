@@ -1,55 +1,13 @@
-import { getAdminDb, admin } from "@/lib/firebaseAdmin";
+import { getAdminDb } from "@/lib/firebaseAdmin";
 import { NextResponse } from "next/server";
+import { expireUnpaidDeposits } from "@/lib/depositLock";
 
-// Mirrors the 30-minute payment window enforced client-side in
-// src/app/deposit/direct/page.js. That page cancels an expired, unpaid
-// deposit itself while the user is sitting on it, but a user who abandons
-// the tab before submitting proof never triggers that write, leaving the
-// deposit stuck on "pending" forever in both their history and the admin
-// queue. This sweep catches those.
-const PAYMENT_WINDOW_MS = 30 * 60 * 1000;
-
+// The deposit page's occasional sweep of USDT deposits whose 30-minute payment window
+// ran out unpaid (the every-minute /api/cron/watch does the same). Each one counts
+// toward the unpaid-deposit lock.
 export async function GET() {
   try {
-    const adminDb = getAdminDb();
-    const cutoff = admin.firestore.Timestamp.fromMillis(Date.now() - PAYMENT_WINDOW_MS);
-
-    const staleSnap = await adminDb
-      .collection("deposits")
-      .where("status", "==", "pending")
-      .where("createdAt", "<=", cutoff)
-      .get();
-
-    let cancelled = 0;
-    const BATCH_LIMIT = 400;
-    let batch = adminDb.batch();
-    let opsInBatch = 0;
-
-    for (const depositDoc of staleSnap.docs) {
-      const data = depositDoc.data() || {};
-      // Proof already sent — this one is legitimately awaiting admin review,
-      // not abandoned. Leave it alone.
-      if (data.submittedAt || data.transactionHash) continue;
-
-      batch.update(depositDoc.ref, {
-        status: "cancelled",
-        cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
-        cancelReason: "expired",
-      });
-      opsInBatch++;
-      cancelled++;
-
-      if (opsInBatch >= BATCH_LIMIT) {
-        await batch.commit();
-        batch = adminDb.batch();
-        opsInBatch = 0;
-      }
-    }
-
-    if (opsInBatch > 0) {
-      await batch.commit();
-    }
-
+    const cancelled = await expireUnpaidDeposits(getAdminDb());
     return NextResponse.json({
       success: true,
       message: `Deposit cleanup successful. Cancelled ${cancelled} expired deposit(s).`,

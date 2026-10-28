@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
-import { FV, MAX_AMOUNT, cents, formatUsd, isBanned, toDollars } from "@/lib/money";
+import { FV, GAMES_RESTRICTED, MAX_AMOUNT, cents, formatUsd, isBanned, isGameRestricted, toDollars } from "@/lib/money";
 
 // StraWins (the 2-minute rounds in timed_games, run by /api/cron/game-engine). A
 // round shows 4 numbers; 2 of them win, and stay on the server-only
@@ -32,6 +32,7 @@ async function stake(db, caller, { gameId, picks, amount }) {
     if (!picks.every((p) => numbers.includes(p))) return { error: "Pick 2 of this round's numbers.", status: 400 };
     if (!u.exists) return { error: "Account not found.", status: 404 };
     if (isBanned(u.data())) return { error: "Your account can't play.", status: 403 };
+    if (isGameRestricted(u.data())) return { error: GAMES_RESTRICTED, status: 403 };
     if (cents(u.data().wallet) < cents(value)) {
       return { error: `Insufficient balance: ${formatUsd(value)} needed, ${formatUsd(u.data().wallet)} available.`, status: 402 };
     }

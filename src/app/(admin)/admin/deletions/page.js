@@ -4,7 +4,11 @@ import { auth, db } from "@/lib/firebase";
 import { 
   collection, onSnapshot, doc, deleteDoc, updateDoc 
 } from "firebase/firestore";
-import { Trash2, ShieldAlert, Loader2, CheckCircle, XCircle } from "lucide-react";
+import { Trash2, ShieldAlert, Loader2, CheckCircle, XCircle, MailCheck, MailWarning } from "lucide-react";
+
+// A player asks through /api/account, which emails them a link; the request can only
+// be carried out (/api/admin/delete-user) once they've clicked it (emailConfirmedAt).
+const confirmedAt = (req) => (req.emailConfirmedAt?.toDate ? req.emailConfirmedAt.toDate() : null);
 
 export default function AdminDeletions() {
   const [requests, setRequests] = useState([]);
@@ -13,12 +17,18 @@ export default function AdminDeletions() {
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "deletion_requests"), (snap) => {
-      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const docs = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(r => r.status !== "completed")
+        // Confirmed ones first: those are the ones an admin can act on.
+        .sort((a, b) => Number(!!b.emailConfirmedAt) - Number(!!a.emailConfirmedAt));
       setRequests(docs);
       setLoading(false);
     });
     return () => unsub();
   }, []);
+
+  const confirmedCount = requests.filter(confirmedAt).length;
 
   const handleFinalDelete = async (requestId, uid) => {
     if (!confirm("CRITICAL: This action cannot be undone. The user's login and all data will be permanently deleted. Continue?")) return;
@@ -88,7 +98,7 @@ export default function AdminDeletions() {
           </div>
           <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-full text-[10px] font-black uppercase text-slate-500">
             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-            {requests.length} Pending Requests
+            {confirmedCount} Confirmed · {requests.length - confirmedCount} Awaiting Email
           </div>
         </div>
 
@@ -103,7 +113,9 @@ export default function AdminDeletions() {
               <p className="text-slate-400 text-xs font-bold uppercase mt-2">No users are currently requesting deletion</p>
             </div>
           ) : (
-            requests.map((req) => (
+            requests.map((req) => {
+              const confirmed = confirmedAt(req);
+              return (
               <div 
                 key={req.id} 
                 className="group bg-white p-8 rounded-[2.5rem] border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-8 hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-300"
@@ -126,6 +138,19 @@ export default function AdminDeletions() {
                           ID: {req.uid?.substring(0, 8)}...
                         </span>
                       </div>
+                      {confirmed ? (
+                        <span className="mt-2 inline-flex items-center gap-1.5 self-start text-[10px] font-black uppercase bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full border border-emerald-100">
+                          <MailCheck size={12} /> Email confirmed · {confirmed.toLocaleString()}
+                        </span>
+                      ) : (
+                        <span className="mt-2 inline-flex items-center gap-1.5 self-start text-[10px] font-black uppercase bg-amber-50 text-amber-700 px-3 py-1 rounded-full border border-amber-100">
+                          <MailWarning size={12} />
+                          {req.status === "unconfirmed" ? "Waiting for email confirmation" : "Not confirmed by email (old request)"}
+                        </span>
+                      )}
+                      {req.reason && (
+                        <p className="text-[11px] text-slate-500 font-bold mt-1">Reason: {req.reason}</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -139,7 +164,8 @@ export default function AdminDeletions() {
                   </button>
                   <button 
                     onClick={() => handleFinalDelete(req.id, req.uid)}
-                    disabled={processingId === req.id}
+                    disabled={processingId === req.id || !confirmed}
+                    title={confirmed ? "" : "The player hasn't confirmed this from their email yet"}
                     className="flex-1 md:flex-none px-8 py-4 bg-red-600 text-white rounded-2xl text-[11px] font-black uppercase flex items-center justify-center gap-3 shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95 disabled:opacity-50"
                   >
                     {processingId === req.id ? (
@@ -152,7 +178,8 @@ export default function AdminDeletions() {
                   </button>
                 </div>
               </div>
-            ))
+              );
+            })
           )}
         </div>
 

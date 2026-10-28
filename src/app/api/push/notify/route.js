@@ -4,6 +4,7 @@ import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import { mentionsIn, norm, usernameUids } from "@/lib/chat";
 import { sendPushToUsers } from "@/lib/push";
 import { chatSettingsFor } from "@/lib/chatSettings";
+import { notifyUser } from "@/lib/notifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -82,12 +83,30 @@ async function chatMessage(db, caller, { convoId, messageId }) {
   // Mentioned players get "@ade mentioned you in <group>"; everyone else the usual title.
   const mentionTitle = isGroup ? `@${msg.sender} mentioned you in ${convo.groupName || "a group"}` : `@${msg.sender} mentioned you`;
   for (const t of targets) if (t.mentioned) t.title = mentionTitle;
-  const sent = await sendPushToUsers(targets, {
-    title: isGroup ? convo.groupName || "New group message" : `@${msg.sender}`,
-    body: isGroup ? `@${msg.sender}: ${msg.text || ""}` : msg.text || "New message",
-    data: { kind: "chat", convoId },
-  });
+  const title = isGroup ? convo.groupName || "New group message" : `@${msg.sender}`;
+  const body = isGroup ? `@${msg.sender}: ${msg.text || ""}` : msg.text || "New message";
+  const sent = await sendPushToUsers(targets, { title, body, data: { kind: "chat", convoId } });
+  // Notifications page: each chat's latest message, one entry per conversation.
+  await Promise.all([...new Map(targets.map((t) => [t.uid, t])).values()].map((t) => notifyUser(db, t.uid, {
+    type: isGroup ? "group" : "message", title: t.title || title, body: body || "New message", url: t.data.url, key: `chat_${convoId}`, push: false,
+  })));
   return { sent };
+}
+
+/** A friends-game challenge the caller just made: its player hears about it. */
+async function challenge(db, caller, { challengeId }) {
+  if (!challengeId) return { error: "challengeId required", status: 400 };
+  const snap = await db.collection("challenges").doc(String(challengeId)).get();
+  if (!snap.exists) return { error: "Not found", status: 404 };
+  const c = snap.data();
+  if (c.from !== caller.uid) return { error: "Not your challenge", status: 403 };
+  if (c.status !== "pending" || !c.to) return { sent: 0 };
+  const from = (await db.collection("users").doc(caller.uid).get()).data() || {};
+  await notifyUser(db, c.to, {
+    type: "game", title: "New challenge",
+    body: `@${from.username || "A friend"} challenged you to a match at ${money(c.stakePerRound)} a round.`, url: "/game/1",
+  });
+  return { sent: 1 };
 }
 
 async function requireAdmin(db, caller) {
@@ -114,12 +133,8 @@ async function moneyStatus(db, caller, kind, id) {
       ? `Your ${money(d.amount)} deposit could not be verified. Contact support if this is a mistake.`
       : `Your ${money(d.amount)} withdrawal was declined and refunded to your wallet.`;
 
-  const sent = await sendPushToUsers([d.userId], {
-    title: `${label} ${ok ? "approved" : "declined"}`,
-    body,
-    data: { kind, id: snap.id, url: "/history" },
-  });
-  return { sent };
+  await notifyUser(db, d.userId, { type: ok ? "success" : "warning", title: `${label} ${ok ? "approved" : "declined"}`, body, url: "/history" });
+  return { sent: 1 };
 }
 
 export async function POST(req) {
@@ -141,6 +156,9 @@ export async function POST(req) {
     switch (payload.event) {
       case "chat_message":
         result = await chatMessage(db, caller, payload);
+        break;
+      case "challenge":
+        result = await challenge(db, caller, payload);
         break;
       case "deposit_status":
         result = await moneyStatus(db, caller, "deposit", payload.depositId);

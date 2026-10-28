@@ -1,9 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { db, auth } from "@/lib/firebase";
-import { 
-  doc, onSnapshot, updateDoc, setDoc, serverTimestamp 
-} from "firebase/firestore";
+import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { onAuthStateChanged, updatePassword } from "firebase/auth";
 import { 
   User, 
@@ -25,6 +23,10 @@ import {
   Clock
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { authFetch } from "@/lib/authFetch";
+import TxPinCard from "@/components/settings/TxPinCard";
+import BankAccountCard from "@/components/settings/BankAccountCard";
 
 export default function Settings() {
   const router = useRouter();
@@ -43,6 +45,9 @@ export default function Settings() {
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  // deletion_requests/{uid}: "unconfirmed" until the emailed link is clicked, then "pending".
+  const [deletion, setDeletion] = useState(null);
+  const [deleteSentTo, setDeleteSentTo] = useState("");
 
   const [copied, setCopied] = useState(false);
   const [pinCopied, setPinCopied] = useState(false);
@@ -62,7 +67,10 @@ export default function Settings() {
         }
         setLoading(false);
       });
-      return () => unsubUser();
+      const unsubDeletion = onSnapshot(doc(db, "deletion_requests", u.uid), (snap) => {
+        setDeletion(snap.exists() && snap.data().status !== "completed" ? snap.data() : null);
+      }, () => setDeletion(null));
+      return () => { unsubUser(); unsubDeletion(); };
     });
     return () => unsub();
   }, [router]);
@@ -123,31 +131,21 @@ export default function Settings() {
     setTimeout(() => setPassMessage({ type: "", msg: "" }), 5000);
   };
 
+  // The request reaches the admins only once the player clicks the link we email (/api/account).
   const requestAccountDeletion = async () => {
     setDeleteLoading(true);
-    try {
-      // 1. Create a request in the deletion_requests collection for Admin visibility
-      await setDoc(doc(db, "deletion_requests", user.uid), {
-        uid: user.uid,
-        username: userData.username,
-        email: userData.email,
-        walletBalance: userData.wallet || 0,
-        requestDate: serverTimestamp(),
-        status: "pending"
-      });
-
-      // 2. Mark the user profile as pending deletion
-      await updateDoc(doc(db, "users", user.uid), {
-        deletionRequested: true,
-        deletionRequestDate: serverTimestamp()
-      });
-
-      setShowDeleteModal(false);
-      alert("Your deletion request has been submitted. An administrator will review and process it within 24-48 hours.");
-    } catch (err) {
-      alert("Error submitting request: " + err.message);
-    }
+    const res = await authFetch("/api/account", { method: "POST", body: { action: "deleteRequest" } });
     setDeleteLoading(false);
+    if (res.error) return alert(res.error);
+    setDeleteSentTo(res.sentTo);
+    setShowDeleteModal(false);
+  };
+
+  const cancelAccountDeletion = async () => {
+    if (!confirm("Cancel your account deletion request?")) return;
+    const res = await authFetch("/api/account", { method: "POST", body: { action: "deleteCancel" } });
+    if (res.error) alert(res.error);
+    setDeleteSentTo("");
   };
 
   const copyPin = () => {
@@ -158,9 +156,10 @@ export default function Settings() {
     setTimeout(() => setPinCopied(false), 2000);
   };
 
+  const referralRef = userData?.referralCode || user?.uid;
   const copyReferral = () => {
-    if (!user?.uid) return;
-    const link = `https://strawins.com/register?ref=${user.uid}`;
+    if (!referralRef) return;
+    const link = `https://strawins.com/register?ref=${referralRef}`;
     navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -188,15 +187,29 @@ export default function Settings() {
      
       <div className="p-6 space-y-6 max-w-md mx-auto w-full">
 
-        {/* Pending Deletion Warning */}
-        {userData?.deletionRequested && (
-          <div className="bg-amber-500/10 border border-amber-500/30 p-5 rounded-[2rem] flex items-start gap-4 animate-pulse">
+        {/* Deletion request: waiting for the emailed link, then for an admin */}
+        {deletion && (
+          <div className="bg-amber-500/10 border border-amber-500/30 p-5 rounded-[2rem] flex items-start gap-4">
             <Clock className="text-amber-500 shrink-0" size={20} />
-            <div>
-              <p className="text-[11px] font-black uppercase italic text-amber-500 leading-tight">Account Deletion Pending</p>
-              <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase tracking-tighter">
-                An administrator is reviewing your request. Access may be restricted soon.
+            <div className="flex-1">
+              <p className="text-[11px] font-black uppercase italic text-amber-500 leading-tight">
+                {deletion.emailConfirmedAt ? "Account Deletion Pending" : "Confirm From Your Email"}
               </p>
+              <p className="text-[10px] font-bold text-gray-400 mt-1 leading-snug">
+                {deletion.emailConfirmedAt
+                  ? "You confirmed it. An administrator will process your request soon."
+                  : `We emailed a link to ${deleteSentTo || "your email"}. Click it to confirm; until then nothing is deleted.`}
+              </p>
+              <div className="flex gap-2 mt-3">
+                {!deletion.emailConfirmedAt && (
+                  <button onClick={requestAccountDeletion} disabled={deleteLoading} className="px-3 py-2 rounded-xl bg-amber-500/20 text-amber-400 text-[9px] font-black uppercase">
+                    {deleteLoading ? "Sending…" : "Resend Link"}
+                  </button>
+                )}
+                <button onClick={cancelAccountDeletion} className="px-3 py-2 rounded-xl bg-white/5 text-white/60 text-[9px] font-black uppercase">
+                  Cancel Request
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -337,10 +350,15 @@ export default function Settings() {
             <Share2 size={18} className="text-[#8B1E3F]" />
             <h3 className="font-black italic uppercase text-sm">Referral CODE</h3>
           </div>
-          <p className="text-[10px] text-white/50 mb-4 font-bold">Share your unique link and build your network.</p>
+          <p className="text-[10px] text-white/50 mb-4 font-bold">
+            Share your unique link and build your network. Your code and sign-up rewards are on the <Link href="/referrals" className="text-[#2457D6]">Referrals page</Link>.
+          </p>
+          {userData?.referralCode && (
+            <p className="mb-3 font-mono text-lg font-black tracking-[0.3em] text-white">{userData.referralCode}</p>
+          )}
           <div className="flex items-center bg-black/40 p-3 rounded-2xl border border-white/10 gap-2">
             <div className="bg-[#0B1220] px-3 py-2 rounded-xl flex-1 border border-white/5 overflow-hidden">
-                <p className="text-[10px] font-mono text-white/40 truncate">strawins.com/register?ref={user?.uid}</p>
+                <p className="text-[10px] font-mono text-white/40 truncate">strawins.com/register?ref={referralRef}</p>
             </div>
             <button onClick={copyReferral} className={`px-4 py-3 rounded-xl font-black text-[10px] transition-all shrink-0 ${copied ? 'bg-green-500' : 'bg-[#2457D6]'} text-white`}>
               {copied ? <CheckCircle size={14} /> : <Copy size={14} />}
@@ -348,10 +366,14 @@ export default function Settings() {
           </div>
         </div>
 
+        <TxPinCard hasTxPin={!!userData?.hasTxPin} />
+
+        <BankAccountCard bank={userData?.bank?.accountNumber ? userData.bank : null} fullName={userData?.fullName} hasTxPin={!!userData?.hasTxPin} />
+
         <div className="bg-[#142036] rounded-[2rem] p-6 border border-white/5 shadow-xl">
           <div className="flex items-center space-x-2 mb-4">
             <Lock size={18} className="text-[#8B1E3F]" />
-            <h3 className="font-black italic uppercase text-sm">Security</h3>
+            <h3 className="font-black italic uppercase text-sm">Password</h3>
           </div>
           <form onSubmit={handlePasswordUpdate} className="space-y-4">
             <input 
@@ -370,11 +392,11 @@ export default function Settings() {
             Log Out of Session
           </button>
           <button 
-            disabled={userData?.deletionRequested}
+            disabled={!!deletion}
             onClick={() => setShowDeleteModal(true)} 
             className="w-full py-5 rounded-2xl border-2 border-red-500/10 text-red-500 font-black uppercase text-xs flex items-center justify-center gap-2 hover:bg-red-500/5 transition-all disabled:opacity-30 disabled:grayscale"
           >
-            <Trash2 size={14} /> {userData?.deletionRequested ? "Deletion Request Submitted" : "Delete Account Permanently"}
+            <Trash2 size={14} /> {deletion ? "Deletion Request Submitted" : "Delete Account Permanently"}
           </button>
         </div>
       </div>
@@ -388,12 +410,12 @@ export default function Settings() {
               <div className="text-center">
                 <h2 className="text-xl font-black uppercase italic tracking-tighter mb-2">Request Deletion?</h2>
                 <p className="text-sm text-gray-400 font-bold leading-relaxed">
-                  This sends a request to our admin team. Once approved, your wallet, history, and profile will be erased forever.
+                  We&apos;ll email you a link to confirm. Once you confirm and an admin approves it, your wallet, history, and profile will be erased forever.
                 </p>
               </div>
               <div className="space-y-3">
                 <button onClick={requestAccountDeletion} disabled={deleteLoading} className="w-full bg-red-500 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2">
-                   {deleteLoading ? "Submitting..." : "CONFIRM DELETION REQUEST"}
+                   {deleteLoading ? "Sending..." : "EMAIL ME THE CONFIRMATION LINK"}
                 </button>
                 <button onClick={() => setShowDeleteModal(false)} className="w-full py-4 rounded-2xl bg-white/5 font-black uppercase text-[10px] tracking-widest">
                    Cancel Request

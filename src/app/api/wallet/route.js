@@ -3,26 +3,40 @@ import { getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import {
   BONUS_REPAYMENT, DEPOSIT_WINDOW_MS, FV, MIN_DEPOSIT, MIN_QUALIFIED_REFERRALS, MIN_QUALIFYING_DEPOSIT, MIN_TRANSFER,
-  MIN_WITHDRAWAL, USDT_ADDRESS, USDT_NETWORK, accountCreatedMs, cents, formatUsd, hasQualifyingDeposit, isBanned,
-  isValidAccountName, owesBonus, parseAmount, referralsOf, systemSettings, toDollars, transferFee, withdrawalFee,
+  MIN_WITHDRAWAL, SIGNUP_REWARD, USDT_ADDRESS, USDT_NETWORK, accountCreatedMs, cents, depositLockError, formatUsd,
+  hasQualifyingDeposit, isBanned, isValidAccountName, owesBonus, parseAmount, referralsOf, systemSettings, toDollars,
+  transferFee, withdrawalFee,
 } from "@/lib/money";
 import { depositProofEmail, transferReceivedEmail, usdtWithdrawalEmails } from "@/lib/moneyEmails";
 import { creditInflowSafely } from "@/lib/inflowBonus";
 import { OLD_ACCOUNT_QUALIFIED_REFERRALS, inFreeWithdrawalWindow, isFreeWithdrawal, isOldAccount, monthKey } from "@/lib/accountPerks";
+import { checkTxPin, sendPinResetCode, setTxPin } from "@/lib/txPin";
+import { recordInvalidDeposit } from "@/lib/depositLock";
+import { notifyUser } from "@/lib/notifications";
+import { ensureReferralCode } from "@/lib/referralCode";
 
 // The main wallet, users/{uid}.wallet. Players' apps can only read it (Firestore
 // rules); every change is made here, inside one transaction that checks it.
 //
 //   GET ?view=recipient&pin=                    -> { name }            who a PIN belongs to
-//   GET ?view=referrals                         -> { referrals, qualified, needed, bonus }
-//   POST { action: "transfer", pin, amount }    -> { record, balance } fee + any $3 bonus repayment on top
-//   POST { action: "withdraw", amount, address }-> { balance, id, fee } USDT; local-agent withdrawals are trades (/api/trades);
+//   GET ?view=referrals                         -> { referrals, qualified, needed, bonus, code, link, signupRewards, signupRewardsTotal }
+//   POST { action: "transfer", pin, amount, txPin } -> { record, balance } fee + any $3 bonus repayment on top
+//   POST { action: "withdraw", amount, address, txPin } -> { balance, id, fee } USDT; local-agent withdrawals are trades (/api/trades);
 //                                                                       free once a month for 18-month accounts (lib/accountPerks)
+//        `pin` is the recipient's 8-digit account PIN; `txPin` is the sender's own 4-digit transaction PIN (lib/txPin).
 //   POST { action: "referral", amount }         -> { balance }         referral bonus to the main wallet
+//   POST { action: "signupClaim" }              -> { moved, balance, signupRewards } sign-up rewards ($0.0001 each) to the
+//                                                                       main wallet, a whole cent at a time
+//   POST { action: "pinSet", pin, currentPin?, code? } -> { ok }       set the 4-digit PIN; changing it needs the current
+//                                                                       one or a code from pinReset
+//   POST { action: "pinReset" }                 -> { sentTo }          email a code for a forgotten PIN
+//   POST { action: "bankSet", bankName, accountNumber, txPin? } -> { bank } the bank account for trades with agents; its
+//                                                                       beneficiary is the account's full name
 //   POST { action: "jackpot", id }              -> { balance, amount } claim a jackpot an admin gave you
 //   POST { action: "deposit", amount }          -> { id, amount, existing } start (or resume) a USDT deposit
 //   POST { action: "depositProof", id, hash, image }  -> { ok }        payment hash + screenshot for the admins
 //   POST { action: "depositCancel", id }        -> { ok }              an unpaid USDT deposit whose window ran out
+//                                                                       (counts toward the unpaid-deposit lock, lib/depositLock)
 
 const fail = (error, status = 400) => NextResponse.json({ error }, { status });
 const users = (db) => db.collection("users");
@@ -39,12 +53,14 @@ async function accountByPin(db, pin) {
   return snap.empty ? null : snap.docs[0];
 }
 
-async function transfer(db, caller, { pin, amount }) {
+async function transfer(db, caller, { pin, amount, txPin }) {
   const value = parseAmount(amount, { min: MIN_TRANSFER });
   if (value === null) return fail(`Minimum transfer is ${formatUsd(MIN_TRANSFER)}.`);
   const target = await accountByPin(db, pin);
   if (!target) return fail("Please enter a valid recipient PIN.", 404);
   if (target.id === caller.uid) return fail("You can't send money to yourself.");
+  const badPin = await checkTxPin(db, caller.uid, txPin);
+  if (badPin) return fail(badPin.error, badPin.status);
   const fee = transferFee(value);
   const senderRef = users(db).doc(caller.uid);
   const receiverRef = users(db).doc(target.id);
@@ -82,16 +98,21 @@ async function transfer(db, caller, { pin, amount }) {
   await Promise.all([
     transferReceivedEmail({ to: out.email, name: out.record.receiverName, senderName: out.record.senderName, amount: value, txId: out.record.txId }),
     creditInflowSafely(db, { uid: caller.uid, category: "transfer", base: value, sourceId: `transfer_${out.sentId}`, note: `To ${out.record.receiverName || "a player"}` }),
+    notifyUser(db, target.id, {
+      type: "success", title: "Money received", body: `${out.record.senderName || "A player"} sent you ${formatUsd(value)}.`, url: "/history",
+    }),
   ]);
   return NextResponse.json({ record: out.record, balance: out.balance });
 }
 
-async function withdraw(db, caller, { amount, address }) {
+async function withdraw(db, caller, { amount, address, txPin }) {
   const value = parseAmount(amount, { min: MIN_WITHDRAWAL });
   if (value === null) return fail(`Minimum withdrawal is ${formatUsd(MIN_WITHDRAWAL)}.`);
   const addr = String(address || "").trim();
   if (!TRC20_ADDRESS.test(addr)) return fail(`Enter a valid USDT (${USDT_NETWORK}) address. It starts with T and has 34 characters.`);
   if ((await systemSettings(db)).withdrawalEnabled === false) return fail("Withdrawals are paused right now. Please try again later.", 403);
+  const badPin = await checkTxPin(db, caller.uid, txPin);
+  if (badPin) return fail(badPin.error, badPin.status);
   const userRef = users(db).doc(caller.uid);
   const withdrawalRef = db.collection("withdrawals").doc();
   const userTxRef = userRef.collection("transactions").doc();
@@ -195,6 +216,9 @@ async function jackpot(db, caller, { id }) {
     if (amount === null) return { error: "This jackpot has no amount.", status: 409 };
     tx.update(jackpotRef, { status: "claimed", claimedAt: FV().serverTimestamp() });
     tx.update(userRef, { wallet: FV().increment(amount) });
+    tx.set(userRef.collection("transactions").doc(), {
+      title: "Jackpot", amount, type: "jackpot", status: "completed", jackpotId: id, timestamp: FV().serverTimestamp(),
+    });
     return { amount, balance: toDollars(cents(u.data().wallet) + cents(amount)) };
   });
   if (out.error) return fail(out.error, out.status);
@@ -209,6 +233,8 @@ async function deposit(db, caller, { amount }) {
   if (!me) return fail("Account not found.", 404);
   if (isBanned(me)) return fail("Your account can't deposit.", 403);
   if (me.restrictDeposit) return fail("Deposits have been restricted on your account. Please contact support.", 403);
+  const locked = depositLockError(me);
+  if (locked) return fail(locked, 423);
   // One USDT deposit at a time: a pending one from the last 30 minutes is resumed.
   const last = await db.collection("deposits").where("userId", "==", caller.uid).where("status", "==", "pending")
     .orderBy("createdAt", "desc").limit(1).get();
@@ -252,6 +278,7 @@ async function depositCancel(db, caller, { id }) {
   const startedMs = d.data.createdAt?.toMillis?.() || 0;
   if (Date.now() - startedMs < DEPOSIT_WINDOW_MS) return fail("This deposit is still open.", 409);
   await d.ref.update({ status: "cancelled", cancelledAt: FV().serverTimestamp(), cancelReason: "expired" });
+  await recordInvalidDeposit(db, caller.uid, { sourceId: `deposit_${id}`, what: `a ${formatUsd(d.data.amount)} USDT deposit left unpaid` });
   return NextResponse.json({ ok: true });
 }
 
@@ -265,7 +292,9 @@ async function referralsView(db, caller) {
   const snap = await users(db).doc(caller.uid).get();
   if (!snap.exists) return fail("Account not found.", 404);
   const me = snap.data();
-  const [found, needed] = await Promise.all([referralsOf(db, caller.uid, me), referralsNeeded(caller.uid, me)]);
+  const [found, needed, code] = await Promise.all([
+    referralsOf(db, caller.uid, me), referralsNeeded(caller.uid, me), ensureReferralCode(db, caller.uid, me),
+  ]);
   const referrals = await Promise.all([...found].map(async ([id, u]) => ({
     id,
     username: u.username || "",
@@ -280,11 +309,85 @@ async function referralsView(db, caller) {
     qualified: referrals.filter((r) => r.hasDeposited).length,
     needed,
     bonus: Number(me.referralBonus || 0),
+    code,
+    link: `https://strawins.com/register?ref=${code}`,
+    signupReward: SIGNUP_REWARD,
+    signupRewards: Number(me.signupRewards || 0),
+    signupRewardsTotal: Number(me.signupRewardsTotal || 0),
   });
 }
 
+/** Sign-up rewards to the main wallet: as many whole cents as they add up to; the rest stays. */
+async function signupClaim(db, caller) {
+  const perCent = Math.round(0.01 / SIGNUP_REWARD);
+  const userRef = users(db).doc(caller.uid);
+  const out = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef);
+    if (!snap.exists) return { error: "Account not found.", status: 404 };
+    const me = snap.data();
+    if (isBanned(me)) return { error: "Your account can't move money.", status: 403 };
+    const count = Math.max(0, Math.floor(Number(me.signupRewards || 0)));
+    const movedC = Math.floor(count / perCent);
+    if (movedC < 1) {
+      return { error: `Sign-up rewards move to your wallet from $0.01 (${perCent} sign-ups). You have ${count} ($${(count * SIGNUP_REWARD).toFixed(4)}).`, status: 409 };
+    }
+    const moved = toDollars(movedC);
+    tx.update(userRef, { signupRewards: FV().increment(-movedC * perCent), wallet: FV().increment(moved) });
+    tx.set(userRef.collection("transactions").doc(), {
+      title: "Sign-up Rewards", amount: moved, type: "signup_reward", status: "completed", timestamp: FV().serverTimestamp(),
+      description: `${movedC * perCent} sign-ups with your referral link`,
+    });
+    return { moved, balance: toDollars(cents(me.wallet) + movedC), signupRewards: count - movedC * perCent };
+  });
+  if (out.error) return fail(out.error, out.status);
+  return NextResponse.json(out);
+}
+
+async function pinSet(db, caller, { pin, currentPin, code }) {
+  const bad = await setTxPin(db, caller.uid, { pin, currentPin, code });
+  if (bad) return fail(bad.error, bad.status);
+  await notifyUser(db, caller.uid, {
+    type: "account", title: "Transaction PIN set", body: "Your 4-digit PIN is now needed for transfers and withdrawals. If this wasn't you, contact support.", url: "/settings",
+  });
+  return NextResponse.json({ ok: true });
+}
+
+async function pinReset(db, caller) {
+  const out = await sendPinResetCode(db, caller.uid, caller.email);
+  if (out.error) return fail(out.error, out.status);
+  return NextResponse.json(out);
+}
+
+const BANK_TEXT = /^[\p{L}\p{N} .,'&()-]{2,60}$/u;
+
+/** The player's bank account for trades with agents. The beneficiary is always their account's full name. */
+async function bankSet(db, caller, { bankName, accountNumber, txPin }) {
+  const name = String(bankName || "").trim().replace(/\s+/g, " ");
+  const number = String(accountNumber || "").replace(/[\s-]/g, "");
+  if (!BANK_TEXT.test(name)) return fail("Enter your bank's name.");
+  if (!/^[0-9A-Za-z]{6,34}$/.test(number)) return fail("Enter a valid account number (6 to 34 letters or digits).");
+  const userRef = users(db).doc(caller.uid);
+  const me = (await userRef.get()).data();
+  if (!me) return fail("Account not found.", 404);
+  if (!isValidAccountName(me.fullName)) {
+    return fail("Your account name needs a full first and last name (e.g. John Doe) before you add a bank account. It's the name the account must be in. Contact support to update it.", 403);
+  }
+  // Changing where withdrawals are paid needs the PIN, once there is one.
+  if (me.hasTxPin) {
+    const badPin = await checkTxPin(db, caller.uid, txPin);
+    if (badPin) return fail(badPin.error, badPin.status);
+  }
+  const bank = { bankName: name, accountNumber: number, accountName: String(me.fullName).trim().replace(/\s+/g, " ") };
+  await userRef.update({ bank, bankUpdatedAt: FV().serverTimestamp() });
+  await notifyUser(db, caller.uid, {
+    type: "account", title: me.bank ? "Bank account changed" : "Bank account added",
+    body: `${name} ••••${number.slice(-4)} in the name ${bank.accountName}. If this wasn't you, contact support.`, url: "/settings",
+  });
+  return NextResponse.json({ bank });
+}
+
 const VIEWS = { recipient: recipientView, referrals: referralsView };
-const ACTIONS = { transfer, withdraw, referral, jackpot, deposit, depositProof, depositCancel };
+const ACTIONS = { transfer, withdraw, referral, signupClaim, jackpot, deposit, depositProof, depositCancel, pinSet, pinReset, bankSet };
 
 export async function GET(req) {
   try {

@@ -6,6 +6,7 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { authFetch } from "@/lib/authFetch";
 import { isFreeWithdrawal } from "@/lib/accountPerks";
+import PinPrompt from "@/components/PinPrompt";
 import { 
   ChevronLeft, 
   Landmark, 
@@ -31,6 +32,7 @@ export default function WithdrawalPage() {
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false); // Added for success animation
   const [resultingBalance, setResultingBalance] = useState(null);
+  const [askPin, setAskPin] = useState(false);
   const [agentsLoading, setAgentsLoading] = useState(false);
   
   // NEW: Global System States
@@ -66,7 +68,8 @@ export default function WithdrawalPage() {
               bonusDeducted: data.bonusDeducted || false,
               restrictWithdrawal: data.restrictWithdrawal || false,
               createdMs: data.createdAt?.toMillis?.() || Date.parse(u.metadata?.creationTime || "") || 0,
-              freeWithdrawalMonth: data.freeWithdrawalMonth || ""
+              freeWithdrawalMonth: data.freeWithdrawalMonth || "",
+              hasBank: !!data.bank?.accountNumber,
             });
           }
         });
@@ -168,27 +171,31 @@ const handleWithdraw = async () => {
     if (withdrawAmount < minWithdrawal) return alert(`Minimum withdrawal is $${minWithdrawal}.00`);
     if (method === "usdt" && !usdtAddress) return alert("Please enter USDT address");
     if (method === "bank" && !selectedAgent) return alert("Please select an agent");
+    if (method === "bank" && !userData.hasBank) {
+      if (confirm("Add your bank account in Settings before withdrawing with an agent. It must be in your account's name. Go to Settings now?")) router.push("/settings");
+      return;
+    }
+    setAskPin(true);
+  };
 
+  // With the 4-digit PIN: the server checks it and the balance, fee and bonus recovery
+  // again, moves the money and sends the emails. Errors stay in the PIN prompt.
+  const withdrawWithPin = async (txPin) => {
+    const withdrawAmount = parseFloat(amount);
     setLoading(true);
-
     try {
-      // The server checks the balance, fee and bonus recovery again, moves the money
-      // and sends the emails.
       const res = method === "usdt"
-        ? await authFetch("/api/wallet", { method: "POST", body: { action: "withdraw", amount: withdrawAmount, address: usdtAddress } })
-        : await authFetch("/api/trades", { method: "POST", body: { action: "create", type: "withdrawal", agentId: selectedAgent.id, amount: withdrawAmount } });
-      if (res.error) {
-        alert(res.error);
-        setLoading(false);
-        return;
-      }
-      setLoading(false);
-      setResultingBalance(res.balance ?? Number(userData.main || 0) - totalDeduct);
+        ? await authFetch("/api/wallet", { method: "POST", body: { action: "withdraw", amount: withdrawAmount, address: usdtAddress, txPin } })
+        : await authFetch("/api/trades", { method: "POST", body: { action: "create", type: "withdrawal", agentId: selectedAgent.id, amount: withdrawAmount, txPin } });
+      if (res.error) return res;
+      setAskPin(false);
+      setResultingBalance(res.balance ?? Number(userData.main || 0) - totalDeductible);
       setShowSuccess(true);
       setTimeout(() => router.push(method === "usdt" ? "/dashboard" : `/trade/${res.id}`), 3000);
     } catch (err) {
       console.error(err);
-      alert("Transaction failed.");
+      return { error: "Transaction failed." };
+    } finally {
       setLoading(false);
     }
   };
@@ -398,6 +405,13 @@ const handleWithdraw = async () => {
           100% { transform: scale(1); opacity: 1; }
         }
       `}</style>
+      <PinPrompt
+        open={askPin}
+        title="Confirm Withdrawal"
+        subtitle={`Withdraw $${(parseFloat(amount) || 0).toFixed(2)}${method === "bank" && selectedAgent ? ` with ${selectedAgent.full_name}` : " to your USDT address"}. Enter your 4-digit PIN.`}
+        onClose={() => setAskPin(false)}
+        onSubmit={withdrawWithPin}
+      />
     </div>
   );
 }

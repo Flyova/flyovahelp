@@ -27,7 +27,9 @@ import {
   orderBy
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import Link from "next/link";
 import { authFetch } from "@/lib/authFetch";
+import { formatLocal } from "@/lib/currency";
 
 const DEPOSIT_CLEANUP_STORAGE_KEY = "deposit_cleanup_last_run";
 const DEPOSIT_CLEANUP_INTERVAL_MS = 15 * 60 * 1000;
@@ -84,7 +86,10 @@ export default function DepositPage() {
               country: data.country || "",
               uid: user.uid,
               fullName: data.fullName || data.username || "User",
-              restrictDeposit: data.restrictDeposit || false
+              restrictDeposit: data.restrictDeposit || false,
+              hasBank: !!data.bank?.accountNumber,
+              // Hours left on an unpaid-deposit lock (lib/depositLock), 0 when there's none.
+              depositLockHours: Math.max(0, Math.ceil((Number(data.depositLockedUntil || 0) - Date.now()) / 3600000)),
             });
           }
         });
@@ -138,7 +143,8 @@ export default function DepositPage() {
         // your country whose balance covers this deposit and its fee.
         const res = await authFetch(`/api/trades?view=agents&type=deposit&amount=${encodeURIComponent(amount || 0)}`);
         if (res.error) throw new Error(res.error);
-        const validAgents = res.agents.map((a) => ({ id: a.id, full_name: a.full_name, exchange_rate: a.deposit_rate }));
+        // `rate` is the agent's buy rate for this amount (agents can set higher ones for bigger deposits).
+        const validAgents = res.agents.map((a) => ({ id: a.id, full_name: a.full_name, exchange_rate: a.rate ?? a.deposit_rate, country: a.country || userData.country }));
 
         setAgents(validAgents);
     } catch (e) {
@@ -147,6 +153,8 @@ export default function DepositPage() {
         setAgentsLoading(false);
     }
   };
+
+  const depositLocked = userData.depositLockHours > 0;
 
   const handleDeposit = async () => {
     const amountNum = parseFloat(depositAmount);
@@ -327,7 +335,7 @@ export default function DepositPage() {
                             </div>
                             <div>
                                 <p className="text-sm font-black uppercase italic tracking-tight">{agent.full_name}</p>
-                                <p className="text-[9px] font-bold text-green-500 uppercase tracking-tighter">Buy Rate: {agent.exchange_rate} / $</p>
+                                <p className="text-[9px] font-bold text-green-500 uppercase tracking-tighter">Buy Rate: {Number(agent.exchange_rate).toLocaleString()} / $</p>
                             </div>
                         </div>
                         <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selectedAgent?.id === agent.id ? 'border-[#2457D6] bg-[#2457D6]' : 'border-white/10'}`}>
@@ -345,9 +353,20 @@ export default function DepositPage() {
           </div>
         )}
 
+        {depositLocked && (
+          <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-3xl text-[11px] font-bold text-amber-400 leading-relaxed">
+            Deposits are locked for {userData.depositLockHours} more hour(s): 3 deposit requests in 24 hours weren&apos;t paid. Only start a deposit when you&apos;re ready to pay.
+          </div>
+        )}
+        {method === "agent" && !userData.hasBank && (
+          <div className="bg-[#2457D6]/10 border border-[#2457D6]/30 p-4 rounded-3xl text-[11px] font-bold text-white/70 leading-relaxed">
+            Add your bank account in <Link href="/settings" className="text-[#2457D6] underline">Settings</Link> before depositing with an agent. It must be in your account&apos;s name.
+          </div>
+        )}
+
         <button
           onClick={() => setShowConfirmModal(true)}
-          disabled={loading || !depositAmount || (method === 'agent' && !selectedAgent) || (activeUsdtSession && method === "usdt")}
+          disabled={loading || depositLocked || !depositAmount || (method === 'agent' && (!selectedAgent || !userData.hasBank)) || (activeUsdtSession && method === "usdt")}
           className="w-full bg-[#2457D6] py-5 rounded-4xl font-black uppercase italic text-sm shadow-2xl flex items-center justify-center gap-3 disabled:opacity-30 active:scale-95 transition-all"
         >
           {loading ? <Loader2 className="animate-spin" /> : <>PROCEED TO TRADE <ArrowRight size={20}/></>}
@@ -367,6 +386,18 @@ export default function DepositPage() {
                 You are about to deposit <span className="text-[#8B1E3F]">${depositAmount}</span>. Do not proceed if you&apos;re not ready to deposit.
               </p>
             </div>
+            {method === "agent" && selectedAgent && (
+              <div className="bg-black/30 rounded-2xl p-4 border border-white/5 text-left space-y-2">
+                <p className="text-[9px] font-black uppercase text-white/40 tracking-widest">You pay {selectedAgent.full_name}</p>
+                <p className="text-[11px] font-bold text-white/60">
+                  ${Number(depositAmount || 0).toFixed(2)} × {Number(selectedAgent.exchange_rate).toLocaleString()} (their rate)
+                </p>
+                <p className="text-lg font-black text-white">
+                  = {formatLocal(Number(depositAmount || 0) * Number(selectedAgent.exchange_rate || 0), selectedAgent.country)}
+                </p>
+                <p className="text-[9px] font-bold text-white/40">Unpaid requests can lock deposits for 48 hours.</p>
+              </div>
+            )}
             <div className="space-y-3">
               <button
                 onClick={() => {

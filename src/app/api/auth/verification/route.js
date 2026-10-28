@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { sendEmail } from "@/lib/resend";
+import { creditSignupReward } from "@/lib/referralCode";
 
 export const runtime = "nodejs";
 
@@ -166,6 +167,7 @@ async function verifySubmittedCode(emailInput, otpInput) {
     emailLower: profile.email,
     verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+  await creditSignupReward(getAdminDb(), profile.uid);
 
   return NextResponse.json({ ok: true });
 }

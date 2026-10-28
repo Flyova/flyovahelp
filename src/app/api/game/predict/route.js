@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
-import { FV, cents, formatUsd, isBanned, toDollars } from "@/lib/money";
+import { FV, GAMES_RESTRICTED, cents, formatUsd, isBanned, isGameRestricted, toDollars } from "@/lib/money";
 import { predictPlanEmail } from "@/lib/moneyEmails";
 
 // Predict & Win. Players with an active plan predict each 60-second round's outcome
@@ -75,6 +75,7 @@ async function plan(db, caller, { plan: planId }) {
     if (!u.exists) return { error: "Account not found.", status: 404 };
     const me = u.data();
     if (isBanned(me)) return { error: "Your account can't play.", status: 403 };
+    if (isGameRestricted(me)) return { error: GAMES_RESTRICTED, status: 403 };
     if (expiresMs(me) > Date.now()) return { error: "You already have an active plan.", status: 409 };
     if (cents(me.wallet) < cents(p.price)) {
       return { error: `Insufficient balance. Plan: ${formatUsd(p.price)} | Available: ${formatUsd(me.wallet)}`, status: 402 };
@@ -105,6 +106,7 @@ async function predict(db, caller, { gameId, choice }) {
     const [u, round, entry] = await tx.getAll(userRef, roundRef, entryRef);
     if (!u.exists) return { error: "Account not found.", status: 404 };
     if (isBanned(u.data())) return { error: "Your account can't play.", status: 403 };
+    if (isGameRestricted(u.data())) return { error: GAMES_RESTRICTED, status: 403 };
     if (expiresMs(u.data()) <= Date.now()) return { error: "Your plan has expired. Choose a plan to keep playing.", status: 402 };
     if (!round.exists || Number(round.data().endTime) - Date.now() < PREDICT_CUTOFF_MS) {
       return { error: "This round has ended. Wait for the next one.", status: 409 };

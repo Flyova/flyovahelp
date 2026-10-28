@@ -22,7 +22,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "How do I transfer money to another user?",
-    a: "Instantly transfer using the recipient's 8-digit account pin. No admin approval needed.",
+    a: "Instantly transfer using the recipient's 8-digit account pin and your own 4-digit transaction PIN (set it in Settings). No admin approval needed.",
   },
   {
     q: "Can I stake on my own?",
@@ -42,7 +42,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "What do I need to apply as a StraWins Agent?",
-    a: "Just a verified StraWins account, age qualification and trustworthiness.",
+    a: "A verified StraWins account, age qualification (18+), your ID photos and trustworthiness. Registration costs $50 from your wallet, refunded in full if your application isn't approved.",
   },
   {
     q: "What are the withdrawal days?",
@@ -51,6 +51,26 @@ const FAQ_ITEMS = [
   {
     q: "How do I earn jackpot?",
     a: "Participate on StraWins activities including referral programs, advertising, deposits, stakes, etc to earn.",
+  },
+  {
+    q: "Why do I need a 4-digit PIN?",
+    a: "Every transfer and withdrawal asks for your transaction PIN, so nobody else can move your money even if they get into your account. Set or reset it in Settings.",
+  },
+  {
+    q: "Do I need a bank account to use an agent?",
+    a: "Yes. Add your bank account in Settings before depositing or withdrawing with an agent. It must be in your own name — the name on your StraWins account.",
+  },
+  {
+    q: "What happens if I start a deposit and don't pay?",
+    a: "Only start a deposit when you're ready to pay. If 3 deposit requests in 24 hours go unpaid, deposits are locked for 48 hours.",
+  },
+  {
+    q: "How do referral rewards work?",
+    a: "You earn $0.0001 for every player who signs up with your link or referral code (they're kept separately as sign-up rewards), plus a commission on your referrals' deposits. Your referral balance unlocks once 10 of your referrals have each deposited at least $25.",
+  },
+  {
+    q: "What happens in StraWins to Dollars if only one of my numbers comes up?",
+    a: "Match both numbers to win 1.3× your stake. Match one and you get 92% of your stake back.",
   },
   {
     q: "Is my money safe?",

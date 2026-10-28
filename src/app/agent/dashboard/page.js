@@ -7,12 +7,12 @@ import {
   where, 
   onSnapshot, 
   doc, 
-  updateDoc,
   orderBy,
   limit
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { authFetch } from "@/lib/authFetch";
+import RateTiers, { rowsToTiers, tiersToRows } from "@/components/agent/RateTiers";
 import { useRouter } from "next/navigation";
 import { 
   Check, 
@@ -46,7 +46,7 @@ export default function AgentDashboard() {
   const [isTopupModalOpen, setIsTopupModalOpen] = useState(false);
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   
-  const [rates, setRates] = useState({ deposit: "", withdrawal: "" });
+  const [rates, setRates] = useState({ deposit: "", withdrawal: "", depositTiers: [], withdrawalTiers: [] });
   const [topupAmount, setTopupAmount] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
   
@@ -68,7 +68,9 @@ export default function AgentDashboard() {
         setAgent(data);
         setRates({ 
           deposit: data.deposit_rate || "", 
-          withdrawal: data.withdrawal_rate || "" 
+          withdrawal: data.withdrawal_rate || "",
+          depositTiers: tiersToRows(data.deposit_tiers),
+          withdrawalTiers: tiersToRows(data.withdrawal_tiers),
         });
       });
 
@@ -157,11 +159,15 @@ export default function AgentDashboard() {
     if (!rates.deposit || !rates.withdrawal) return alert("Enter valid rates");
     setUpdating(true);
     try {
-      const agentRef = doc(db, "agents", auth.currentUser.uid);
-      await updateDoc(agentRef, { 
+      // The server checks the amount ranges (lib/money cleanRateTiers).
+      const res = await authFetch("/api/agent", { method: "POST", body: {
+        action: "rates",
         deposit_rate: Number(rates.deposit),
-        withdrawal_rate: Number(rates.withdrawal)
-      });
+        withdrawal_rate: Number(rates.withdrawal),
+        deposit_tiers: rowsToTiers(rates.depositTiers),
+        withdrawal_tiers: rowsToTiers(rates.withdrawalTiers),
+      } });
+      if (res.error) return alert(res.error);
       setIsRateModalOpen(false);
     } catch (e) {
       alert("Error updating rates");
@@ -497,7 +503,7 @@ export default function AgentDashboard() {
       {/* RATE MODAL */}
       {isRateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#0B1220]/95 backdrop-blur-md">
-            <div className="bg-[#142036] w-full max-w-sm rounded-[3rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in duration-200">
+            <div className="bg-[#142036] w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-[3rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in duration-200">
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="font-black uppercase italic text-sm tracking-wider">Set Market Pricing</h3>
                     <button onClick={() => setIsRateModalOpen(false)} className="p-2 bg-white/5 rounded-xl hover:bg-white/10 transition-colors"><X size={18} /></button>
@@ -524,6 +530,11 @@ export default function AgentDashboard() {
                             placeholder="0.00" 
                         />
                     </div>
+                    <p className="text-[10px] font-bold text-white/40 leading-relaxed px-1">
+                        Optional: a different rate from a bigger amount up. Players see the rate for the amount they enter.
+                    </p>
+                    <RateTiers label="Deposit" color="text-green-500" tiers={rates.depositTiers} onChange={(t) => setRates({ ...rates, depositTiers: t })} />
+                    <RateTiers label="Withdrawal" color="text-[#2457D6]" tiers={rates.withdrawalTiers} onChange={(t) => setRates({ ...rates, withdrawalTiers: t })} />
                 </div>
 
                 <button 

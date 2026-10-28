@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import { generateDistinctNumberPool } from "@/lib/gameNumbers";
-import { FV, cents, formatUsd, isBanned, referrerOf, toDollars } from "@/lib/money";
+import { FV, GAMES_RESTRICTED, cents, formatUsd, isBanned, isGameRestricted, referrerOf, toDollars } from "@/lib/money";
 import { creditInflowSafely } from "@/lib/inflowBonus";
 import { HEAD_TO_HEAD_WIN_CAP, escrowRef, matchCost, settleMatch } from "@/lib/matches";
+import { notifyUser } from "@/lib/notifications";
 
 // "Play with friends" money: a challenge (challenges/{id}, made by the challenger's
 // app with its stake per round) is accepted here, which takes both stakes and opens
@@ -48,11 +49,12 @@ async function accept(db, caller, { challengeId }) {
     }
     if (!me.exists || !challenger.exists) return { error: "Account not found.", status: 404 };
     if (isBanned(me.data())) return { error: "Your account can't play.", status: 403 };
+    if (isGameRestricted(me.data())) return { error: GAMES_RESTRICTED, status: 403 };
     const totalC = cents(cost.totalCost);
     if (cents(me.data().wallet) < totalC) {
       return { error: `Insufficient balance to accept challenge. Required: ${formatUsd(cost.totalCost)} | Available: ${formatUsd(me.data().wallet)}`, status: 402 };
     }
-    if (isBanned(challenger.data()) || cents(challenger.data().wallet) < totalC) {
+    if (isBanned(challenger.data()) || isGameRestricted(challenger.data()) || cents(challenger.data().wallet) < totalC) {
       tx.delete(challengeRef);
       return { error: "The challenger can't cover this match any more.", status: 409 };
     }
@@ -82,6 +84,10 @@ async function accept(db, caller, { challengeId }) {
     };
   });
   if (out.error) return fail(out.error, out.status);
+  const [[challengerId], [, me]] = out.players;
+  await notifyUser(db, challengerId, {
+    type: "game", title: "Challenge accepted", body: `@${me.username || "Your friend"} accepted your challenge. Your match has started.`, url: "/game/1",
+  });
   // Inflow bonus (guess scores): each player's referrer earns on the stake.
   await Promise.all(out.players.map(async ([uid, user]) => {
     const referrer = await referrerOf(db, uid, user).catch(() => null);
@@ -103,6 +109,14 @@ async function settle(db, caller, { gameId }) {
     if (g.status !== "completed") return fail("This match isn't over yet.", 409);
   }
   const paid = await settleMatch(db, gameId);
+  if (paid && snap.exists) {
+    const g = snap.data();
+    await Promise.all([[g.player1, paid.p1, g.player2Name], [g.player2, paid.p2, g.player1Name]].map(([uid, amount, other]) => notifyUser(db, uid, {
+      type: "game", title: "Match finished",
+      body: amount > 0 ? `Your match with @${other || "your friend"} is over: ${formatUsd(amount)} was paid to your wallet.` : `Your match with @${other || "your friend"} is over. Better luck next time!`,
+      url: "/game/1",
+    })));
+  }
   return NextResponse.json({ p1: paid?.p1 ?? null, p2: paid?.p2 ?? null });
 }
 
