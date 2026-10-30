@@ -85,7 +85,7 @@ async function chatMessage(db, caller, { convoId, messageId }) {
   for (const t of targets) if (t.mentioned) t.title = mentionTitle;
   const title = isGroup ? convo.groupName || "New group message" : `@${msg.sender}`;
   const body = isGroup ? `@${msg.sender}: ${msg.text || ""}` : msg.text || "New message";
-  const sent = await sendPushToUsers(targets, { title, body, data: { kind: "chat", convoId } });
+  const sent = await sendPushToUsers(targets, { title, body, data: { kind: "chat", convoId }, pref: isGroup ? "group" : "message" });
   // Notifications page: each chat's latest message, one entry per conversation.
   await Promise.all([...new Map(targets.map((t) => [t.uid, t])).values()].map((t) => notifyUser(db, t.uid, {
     type: isGroup ? "group" : "message", title: t.title || title, body: body || "New message", url: t.data.url, key: `chat_${convoId}`, push: false,

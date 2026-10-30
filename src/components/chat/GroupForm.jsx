@@ -71,7 +71,7 @@ export default function GroupForm({ initial = {}, submitLabel, onSubmit, onCance
           autoFocus
           value={name}
           onChange={(e) => setName(e.target.value.slice(0, GROUP_NAME_MAX))}
-          placeholder="e.g. Lagos Strategy Club"
+          placeholder="e.g. Mars Strategy Club"
           className="w-full bg-transparent font-bold text-base md:text-sm outline-none text-white placeholder:text-white/25"
         />
       </label>

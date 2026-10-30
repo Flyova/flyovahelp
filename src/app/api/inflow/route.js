@@ -5,7 +5,7 @@ import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import { FV, cents, formatUsd, isBanned, toDollars } from "@/lib/money";
 import {
   INFLOW_ACCESS_PRICE, INFLOW_CATEGORIES, INFLOW_MIN_AGE_MONTHS, INFLOW_PAYOUT_DAY,
-  creditInflowSafely, inflowEligibility, inflowRecords, isPayoutDay, nextPayoutMs,
+  creditInflowSafely, inflowEligibility, inflowLedger, inflowRecords, isPayoutDay, nextPayoutMs,
 } from "@/lib/inflowBonus";
 
 // The inflow bonus (lib/inflowBonus): what the account has earned, whether it can
@@ -13,6 +13,7 @@ import {
 //
 //   GET                                    -> { eligible, purchased, eligibleAt, minAgeMonths, accessPrice, balance,
 //                                               earned, payoutDay, payoutToday, nextPayoutAt, categories, history }
+//                                               categories: [{ key, label, rate, text, earned, count }], what each has paid so far
 //   POST { action: "buyAccess" }           -> { balance }   $250 from the main wallet unlocks it before 8 months
 //   POST { action: "withdraw" }            -> { amount, balance }   the whole bonus to the main wallet, on the 15th (UTC)
 //   POST { action: "settle", kind, id }    -> { credited }  admin/staff, after approving a USDT deposit or withdrawal
@@ -26,10 +27,18 @@ async function view(db, caller) {
   const snap = await users(db).doc(caller.uid).get();
   if (!snap.exists) return fail("Account not found.", 404);
   const me = snap.data();
-  const [status, records] = await Promise.all([
+  const [status, records, all] = await Promise.all([
     inflowEligibility(caller.uid, me),
     inflowRecords(db, caller.uid).orderBy("createdAt", "desc").limit(HISTORY).get(),
+    inflowRecords(db, caller.uid).select("category", "amount").get(),
   ]);
+  // Totals per category over the whole history, not just the latest records shown.
+  const totals = new Map();
+  for (const d of all.docs) {
+    const { category, amount } = d.data();
+    const t = totals.get(category) || { earnedC: 0, count: 0 };
+    totals.set(category, { earnedC: t.earnedC + cents(amount), count: t.count + 1 });
+  }
   const history = records.docs.map((d) => {
     const r = d.data();
     return { id: d.id, category: r.category, amount: Number(r.amount || 0), base: Number(r.base || 0), rate: r.rate ?? null, note: r.note || "", createdAt: ms(r.createdAt) };
@@ -43,7 +52,10 @@ async function view(db, caller) {
     payoutDay: INFLOW_PAYOUT_DAY,
     payoutToday: isPayoutDay(),
     nextPayoutAt: nextPayoutMs(),
-    categories: Object.entries(INFLOW_CATEGORIES).map(([key, c]) => ({ key, label: c.label, rate: c.rate, text: c.text })),
+    categories: Object.entries(INFLOW_CATEGORIES).map(([key, c]) => ({
+      key, label: c.label, rate: c.rate, text: c.text,
+      earned: toDollars(totals.get(key)?.earnedC || 0), count: totals.get(key)?.count || 0,
+    })),
     history,
   });
 }
@@ -66,6 +78,9 @@ async function buyAccess(db, caller) {
     tx.set(userRef.collection("transactions").doc(), {
       title: "Inflow Bonus Access", amount: -INFLOW_ACCESS_PRICE, type: "inflow_access", category: "finance", status: "completed",
       description: `Unlocked the inflow bonus for ${formatUsd(INFLOW_ACCESS_PRICE)}`, timestamp: now,
+    });
+    tx.set(inflowLedger(db).doc(), {
+      kind: "access", userId: caller.uid, username: me.username || "", fullName: me.fullName || "", amount: INFLOW_ACCESS_PRICE, createdAt: now,
     });
     return { balance: toDollars(cents(me.wallet) - priceC) };
   });
@@ -92,6 +107,9 @@ async function withdraw(db, caller) {
     tx.set(userRef.collection("transactions").doc(), {
       title: "Inflow Bonus Withdrawal", amount, type: "inflow_withdrawal", status: "completed",
       description: `Moved ${formatUsd(amount)} inflow bonus to main wallet`, timestamp: now,
+    });
+    tx.set(inflowLedger(db).doc(), {
+      kind: "payout", userId: caller.uid, username: me.username || "", fullName: me.fullName || "", amount, createdAt: now,
     });
     return { amount, balance: toDollars(cents(me.wallet) + bonusC) };
   });

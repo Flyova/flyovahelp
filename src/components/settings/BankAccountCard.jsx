@@ -54,7 +54,7 @@ export default function BankAccountCard({ bank, fullName, hasTxPin }) {
         <form onSubmit={save} className="space-y-3">
           <label className="block">
             <span className="text-[9px] font-black uppercase text-white/40">Bank name</span>
-            <input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="e.g. Access Bank" className={field} />
+            <input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="e.g. Chase Bank" className={field} />
           </label>
           <label className="block">
             <span className="text-[9px] font-black uppercase text-white/40">Account number</span>

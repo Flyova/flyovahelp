@@ -220,10 +220,16 @@ export default function ReferralsPage() {
             You get ${signup.reward} for everyone who signs up with your link or code and verifies their email.
             {" "}{signupCount} unclaimed · {userData?.signupRewardsTotal ?? signup.total} all time. Moves to your wallet from $0.01.
           </p>
-          <button onClick={handleClaimSignup} disabled={claiming || signupValue < 0.01}
-            className="w-full bg-[#2457D6] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 disabled:opacity-30">
-            {claiming ? <Loader2 size={14} className="animate-spin" /> : <ArrowRightLeft size={14} />} Move to Wallet
-          </button>
+          <div className="grid grid-cols-2 gap-3">
+            <button onClick={() => router.push("/referrals/signups")}
+              className="bg-white/5 border border-white/10 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2">
+              <Users size={14} /> Who Signed Up
+            </button>
+            <button onClick={handleClaimSignup} disabled={claiming || signupValue < 0.01}
+              className="bg-[#2457D6] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 disabled:opacity-30">
+              {claiming ? <Loader2 size={14} className="animate-spin" /> : <ArrowRightLeft size={14} />} Move to Wallet
+            </button>
+          </div>
         </div>
 
         {/* REFERRAL CODE SECTION */}

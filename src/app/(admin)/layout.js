@@ -9,7 +9,8 @@ import { canAccessAdminPath, resolvePrivilegedRole } from "@/lib/adminAccess";
 import {
   LayoutDashboard, ArrowDownCircle, UserCheck, Wallet,
   ArrowUpCircle, Send, Delete, Users, History, Trophy,
-  MessageCircle, X, LogOut, Menu, Loader2, FileText, CheckCircle2, Phone, Bell
+  MessageCircle, X, LogOut, Menu, Loader2, FileText, CheckCircle2, Phone, Bell,
+  TrendingUp, MessagesSquare, Coins, Activity
 } from "lucide-react";
 
 export default function AdminLayout({ children }) {
@@ -142,6 +143,7 @@ export default function AdminLayout({ children }) {
       { name: "Agent Transactions", icon: Wallet, path: "/admin/agent-tx" },
       { name: "Transfers", icon: Send, path: "/admin/transfers" },
       { name: "Withdrawals", icon: ArrowUpCircle, path: "/admin/withdrawals" },
+      { name: "Inflow Bonus", icon: TrendingUp, path: "/admin/inflow" },
       { name: "Announcements", icon: Send, path: "/admin/broadcast" },
       { name: "User Directory", icon: Users, path: "/admin/users" },
       { name: "Contact List", icon: Phone, path: "/admin/contacts" },
@@ -151,6 +153,9 @@ export default function AdminLayout({ children }) {
       { name: "Settings", icon: UserCheck, path: "/admin/settings" },
       { name: "Blog Posts", icon: FileText, path: "/admin/blog" },
       { name: "Support", icon: MessageCircle, path: "/admin/support" },
+      { name: "Chat Room", icon: MessagesSquare, path: "/admin/chat-room" },
+      { name: "Chat Coins", icon: Coins, path: "/admin/chat-coins" },
+      { name: "Chat Activity", icon: Activity, path: "/admin/chat-activity" },
       { name: "Testimonials", icon: CheckCircle2, path: "/admin/testimonials" },
       { name: "Send Jackpot", icon: Trophy, path: "/admin/jackpot" },
       { name: "Account Deletion", icon: Delete, path: "/admin/deletions" },

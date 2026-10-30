@@ -27,6 +27,8 @@ import Link from "next/link";
 import { authFetch } from "@/lib/authFetch";
 import TxPinCard from "@/components/settings/TxPinCard";
 import BankAccountCard from "@/components/settings/BankAccountCard";
+import NotificationPrefsCard from "@/components/settings/NotificationPrefsCard";
+import ProfileChangeForm from "@/components/settings/ProfileChangeForm";
 
 export default function Settings() {
   const router = useRouter();
@@ -82,22 +84,21 @@ export default function Settings() {
     setPassMessage({ type: "", msg: "" });
 
     try {
-      const updates = {};
-      
+      // A new username costs $1 from the wallet (the server checks it's free and charges it).
       if (newUsername !== userData.username) {
-        const res = await fetch(`/api/auth/available?username=${encodeURIComponent(newUsername)}`).then((r) => r.json());
-        if (res.error) throw new Error(res.error);
-        if (res.usernameTaken) {
-          throw new Error("Username already taken.");
+        if (!window.confirm(`Change your username to @${newUsername.trim()}? It costs $1 from your wallet.`)) {
+          setUpdateLoading(false);
+          return;
         }
-        updates.username = newUsername;
+        const res = await authFetch("/api/wallet", { method: "POST", body: { action: "usernameChange", username: newUsername } });
+        if (res.error) throw new Error(res.error);
       }
 
+      const updates = {};
       if (!userData.phone && newPhone) updates.phone = newPhone;
       if (!userData.dob && newDob) updates.dob = newDob;
-
-      if (Object.keys(updates).length > 0) {
-        await updateDoc(doc(db, "users", user.uid), updates);
+      if (Object.keys(updates).length > 0) await updateDoc(doc(db, "users", user.uid), updates);
+      if (newUsername !== userData.username || Object.keys(updates).length > 0) {
         setPassMessage({ type: "success", msg: "Profile updated successfully!" });
       }
     } catch (err) {
@@ -265,7 +266,7 @@ export default function Settings() {
             </div>
 
             <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
-              <p className="text-[9px] font-black uppercase text-white/40 mb-2">Unique Username</p>
+              <p className="text-[9px] font-black uppercase text-white/40 mb-2">Unique Username · $1 to change</p>
               <div className="flex items-center gap-2">
                 <UserPen size={16} className="text-[#2457D6]" />
                 <input 
@@ -287,6 +288,8 @@ export default function Settings() {
                 />
               </div>
             </div>
+
+            <ProfileChangeForm fullName={userData?.fullName} email={userData?.email || user?.email} />
 
              <div className="bg-black/20 p-4 rounded-2xl border border-white/5 opacity-60">
               <p className="text-[9px] font-black uppercase text-white/40 mb-2">Registered Country</p>
@@ -330,7 +333,7 @@ export default function Settings() {
 
             {hasChanges && (
                <button type="submit" disabled={updateLoading} className="w-full bg-[#2457D6] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-[#2457D6]/20 transition-all active:scale-95">
-                {updateLoading ? "Saving Changes..." : "Confirm Profile Updates"}
+                {updateLoading ? "Saving Changes..." : newUsername !== userData?.username ? "Change Username ($1)" : "Confirm Profile Updates"}
                </button>
             )}
           </form>
@@ -369,6 +372,8 @@ export default function Settings() {
         <TxPinCard hasTxPin={!!userData?.hasTxPin} />
 
         <BankAccountCard bank={userData?.bank?.accountNumber ? userData.bank : null} fullName={userData?.fullName} hasTxPin={!!userData?.hasTxPin} />
+
+        <NotificationPrefsCard uid={user.uid} prefs={userData?.notificationPrefs} />
 
         <div className="bg-[#142036] rounded-[2rem] p-6 border border-white/5 shadow-xl">
           <div className="flex items-center space-x-2 mb-4">

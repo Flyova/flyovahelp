@@ -16,14 +16,14 @@ export const INFLOW_PAYOUT_DAY = 15;
 /**
  * What earns the bonus: `rate` of the amount, once it's more than `above` or at least `from`,
  * and at most `monthlyCap` dollars a UTC month (tallied in users/{uid}/inflow_months/{YYYY-MM}).
- * Transfers are capped: above about $2,500 the 1% is more than the transfer fee, so two
+ * Transfers are capped: above about $6,000 the 0.5% is more than the transfer fee, so two
  * accounts could otherwise send money back and forth for the bonus.
  */
 export const INFLOW_CATEGORIES = {
   agent_deposit: { label: "Agent deposit trades", rate: 0.02, above: 99, text: "Agents earn 2% of every deposit they complete above $99." },
   deposit: { label: "Deposits", rate: 0.015, above: 99, text: "1.5% of every deposit you make above $99." },
   guess_scores: { label: "Guess scores", rate: 0.041, from: 4, text: "4.1% of every friends-game stake of $4 or more your referrals play." },
-  transfer: { label: "Transfers", rate: 0.01, monthlyCap: 25, text: "1% of every transfer you send, up to $25 a month." },
+  transfer: { label: "Transfers", rate: 0.005, monthlyCap: 25, text: "0.5% of every transfer you send, up to $25 a month." },
   withdrawal: { label: "Withdrawals", rate: 0.001, text: "0.1% of every withdrawal you make." },
 };
 
@@ -48,6 +48,12 @@ export function nextPayoutMs(now = new Date()) {
 }
 
 export const inflowRecords = (db, uid) => db.collection("users").doc(uid).collection("inflow_bonus");
+
+/**
+ * The admins' record of inflow money leaving or entering through the bonus itself:
+ * payouts to the main wallet and $250 access purchases (inflow_ledger, Admin → Inflow).
+ */
+export const inflowLedger = (db) => db.collection("inflow_ledger");
 
 /**
  * Credits `uid` the inflow bonus on `base` dollars of `category` activity, once per

@@ -1,17 +1,24 @@
 import { NextResponse } from "next/server";
-import { getAdminDb } from "@/lib/firebaseAdmin";
+import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
-import { FV } from "@/lib/money";
+import { FV, isValidAccountName } from "@/lib/money";
 import { sendEmail } from "@/lib/resend";
-import { alertAdmins } from "@/lib/notifications";
+import { alertAdmins, notifyUser } from "@/lib/notifications";
 
-// Deleting your account. A request (deletion_requests/{uid}) only reaches the admins
-// once the player confirms it from a link emailed to the account, so a stolen session
-// can't delete it; /api/admin/delete-user refuses until then.
+// Changes to the account that need the owner's email: deleting it, and changing its
+// full name or email address. Each is confirmed from a link emailed to the account's
+// current address, so a stolen session can't do them.
+//
+// A deletion request (deletion_requests/{uid}) only reaches the admins once confirmed;
+// /api/admin/delete-user refuses until then. A name or email change (profile_changes/
+// {uid}, server only) is made when its link is opened; a bank account's beneficiary
+// name follows the new name.
 //
 //   POST { action: "deleteRequest", reason? }  -> { sentTo }   signed in; emails the link (again)
 //   POST { action: "deleteConfirm", uid, token } -> { ok }     the emailed link (/confirm-deletion), not signed in
 //   POST { action: "deleteCancel" }             -> { ok }      signed in
+//   POST { action: "profileChangeRequest", fullName?, email? } -> { sentTo }   signed in
+//   POST { action: "profileChangeConfirm", uid, token } -> { ok, fullName, email }   the emailed link (/confirm-change)
 
 const fail = (error, status = 400) => NextResponse.json({ error }, { status });
 const LINK_TTL_MS = 24 * 60 * 60 * 1000;
@@ -87,14 +94,90 @@ async function deleteCancel(db, caller) {
   return NextResponse.json({ ok: true });
 }
 
-const ACTIONS = { deleteRequest, deleteConfirm, deleteCancel };
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const changeRef = (db, uid) => db.collection("profile_changes").doc(uid);
+
+async function profileChangeRequest(db, caller, { fullName, email }, origin) {
+  if (!caller) return fail("Sign in again to continue.", 401);
+  const me = (await db.collection("users").doc(caller.uid).get()).data();
+  if (!me) return fail("Account not found.", 404);
+  const current = me.email || caller.email;
+  if (!current) return fail("Your account has no email to confirm with. Contact support.", 409);
+  const name = fullName == null ? null : String(fullName).trim().replace(/\s+/g, " ");
+  const mail = email == null ? null : String(email).trim().toLowerCase();
+  const change = {};
+  if (name && name !== me.fullName) {
+    if (!isValidAccountName(name) || name.length > 80) return fail("Enter your full first and last name (e.g. John Doe); single names or initials aren't accepted.");
+    change.fullName = name;
+  }
+  if (mail && mail !== String(current).toLowerCase()) {
+    if (!EMAIL.test(mail) || mail.length > 120) return fail("Enter a valid email address.");
+    const taken = await db.collection("users").where("emailLower", "==", mail).limit(1).get();
+    if (!taken.empty || (await admin.auth().getUserByEmail(mail).catch(() => null))) return fail("That email is already used by another account.", 409);
+    change.email = mail;
+  }
+  if (!Object.keys(change).length) return fail("Nothing to change.");
+  const old = (await changeRef(db, caller.uid).get()).data();
+  if (old && Date.now() - ms(old.emailSentAt) < RESEND_MS) return fail("We just sent a link. Wait a minute before asking for another.", 429);
+
+  const token = toB64(crypto.getRandomValues(new Uint8Array(24)));
+  await changeRef(db, caller.uid).set({ ...change, tokenHash: await sha256(token), tokenExpires: Date.now() + LINK_TTL_MS, emailSentAt: Date.now() });
+  const link = `${origin}/confirm-change?u=${encodeURIComponent(caller.uid)}&t=${token}`;
+  const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const lines = [
+    change.fullName && `Account name: <strong>${esc(me.fullName || "")}</strong> → <strong>${esc(change.fullName)}</strong>`,
+    change.email && `Email: <strong>${esc(current)}</strong> → <strong>${esc(change.email)}</strong>`,
+  ].filter(Boolean);
+  const res = await sendEmail(current, "Confirm your StraWins account change", `
+    <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+      <h2 style="margin: 0 0 12px;">Confirm the change to your account</h2>
+      <p>${lines.join("<br/>")}</p>
+      ${change.fullName && me.bank?.accountNumber ? "<p>Your bank account for agent trades must be in this name too.</p>" : ""}
+      <p><a href="${link}" style="display: inline-block; background: #2457D6; color: #fff; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-weight: bold;">Yes, make this change</a></p>
+      <p style="color: #777; font-size: 12px;">The link works for 24 hours. If you didn't ask for this, ignore this email and change your password.</p>
+    </div>`);
+  if (!res?.success) return fail("We couldn't send the confirmation email. Please try again.", 502);
+  return NextResponse.json({ sentTo: maskEmail(current) });
+}
+
+async function profileChangeConfirm(db, _caller, { uid, token }) {
+  if (!uid || typeof uid !== "string" || !token || typeof token !== "string") return fail("This link isn't valid.", 400);
+  const ref = changeRef(db, uid);
+  const c = (await ref.get()).data();
+  if (!c || c.tokenHash !== (await sha256(token))) return fail("This link isn't valid or was already used. Ask for a new one in Settings.", 404);
+  if (Date.now() > Number(c.tokenExpires || 0)) return fail("This link has expired. Ask for a new one in Settings.", 410);
+  const userRef = db.collection("users").doc(uid);
+  const me = (await userRef.get()).data();
+  if (!me) return fail("Account not found.", 404);
+  if (c.email) {
+    try {
+      await admin.auth().updateUser(uid, { email: c.email });
+    } catch {
+      return fail("That email is already used by another account.", 409);
+    }
+  }
+  await userRef.update({
+    ...(c.fullName ? { fullName: c.fullName, ...(me.bank?.accountNumber ? { "bank.accountName": c.fullName } : {}) } : {}),
+    ...(c.email ? { email: c.email, emailLower: c.email } : {}),
+    profileChangedAt: FV().serverTimestamp(),
+  });
+  await ref.delete();
+  await notifyUser(db, uid, {
+    type: "account", title: "Account details changed",
+    body: [c.fullName && `Name: ${c.fullName}`, c.email && `Email: ${c.email}`].filter(Boolean).join(" · "), url: "/settings",
+  });
+  return NextResponse.json({ ok: true, fullName: c.fullName || me.fullName || "", email: c.email || me.email || "" });
+}
+
+const ACTIONS = { deleteRequest, deleteConfirm, deleteCancel, profileChangeRequest, profileChangeConfirm };
+const SIGNED_OUT = new Set(["deleteConfirm", "profileChangeConfirm"]);
 
 export async function POST(req) {
   try {
     const body = await req.json().catch(() => ({}));
     const run = Object.hasOwn(ACTIONS, body.action) ? ACTIONS[body.action] : null;
     if (!run) return fail("Unknown action.");
-    const caller = body.action === "deleteConfirm" ? null : await getCaller(req);
+    const caller = SIGNED_OUT.has(body.action) ? null : await getCaller(req);
     const url = new URL(req.url);
     const origin = /^https?:$/.test(url.protocol) && url.hostname !== "cron.internal" ? url.origin : "https://strawins.com";
     return await run(getAdminDb(), caller, body, origin);

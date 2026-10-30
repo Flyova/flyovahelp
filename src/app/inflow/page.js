@@ -22,6 +22,7 @@ export default function InflowBonusPage() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
+  const [only, setOnly] = useState(""); // a category to show the history of, or "" for all
 
   const load = useCallback(async () => {
     const res = await authFetch("/api/inflow");
@@ -51,6 +52,7 @@ export default function InflowBonusPage() {
 
   const label = (key) => data.categories.find((c) => c.key === key)?.label || (key === "payout" ? "Moved to main wallet" : key);
   const canWithdraw = data.eligible && data.payoutToday && data.balance > 0;
+  const shown = only ? data.history.filter((r) => r.category === only) : data.history;
 
   return (
     <div className="min-h-screen bg-[#0B1220] text-white flex flex-col pb-12">
@@ -118,33 +120,41 @@ export default function InflowBonusPage() {
           )}
         </div>
 
-        {/* WHAT EARNS IT */}
+        {/* THE CATEGORIES: what each pays and has paid so far; tap one for its history */}
         <div className="space-y-3">
-          <h3 className="font-black italic uppercase text-xs text-white/40 tracking-widest px-2">What earns it</h3>
+          <h3 className="font-black italic uppercase text-xs text-white/40 tracking-widest px-2">Inflow categories</h3>
           {data.categories.map((c) => {
             const Icon = ICONS[c.key] || TrendingUp;
+            const active = only === c.key;
             return (
-              <div key={c.key} className="bg-[#142036] rounded-3xl p-4 border border-white/5 flex items-center gap-4">
+              <button key={c.key} onClick={() => setOnly(active ? "" : c.key)}
+                className={`w-full text-left bg-[#142036] rounded-3xl p-4 border flex items-center gap-4 transition-all ${active ? "border-[#2457D6]" : "border-white/5"}`}>
                 <div className="w-11 h-11 rounded-2xl bg-[#2457D6]/15 flex items-center justify-center shrink-0"><Icon size={18} className="text-[#7A9BEE]" /></div>
                 <div className="min-w-0 flex-1">
                   <p className="font-black italic uppercase text-[13px]">{c.label}</p>
                   <p className="text-[11px] font-bold text-gray-400 leading-snug">{c.text}</p>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-white/50 mt-1">
+                    Earned {usd(c.earned)} · {c.count || 0} time{c.count === 1 ? "" : "s"}
+                  </p>
                 </div>
                 <span className="text-sm font-black italic text-green-400 shrink-0">{+(c.rate * 100).toFixed(2)}%</span>
-              </div>
+              </button>
             );
           })}
         </div>
 
         {/* HISTORY */}
         <div className="space-y-3">
-          <h3 className="font-black italic uppercase text-xs text-white/40 tracking-widest px-2">History</h3>
-          {data.history.length === 0 ? (
+          <div className="flex items-center justify-between px-2">
+            <h3 className="font-black italic uppercase text-xs text-white/40 tracking-widest">History{only ? ` · ${label(only)}` : ""}</h3>
+            {only && <button onClick={() => setOnly("")} className="text-[10px] font-black uppercase tracking-widest text-[#7A9BEE]">Show all</button>}
+          </div>
+          {shown.length === 0 ? (
             <div className="bg-[#142036] rounded-[2rem] p-10 border border-dashed border-white/10 text-center">
               <TrendingUp size={40} className="mx-auto mb-3 text-white/5" />
               <p className="text-[10px] font-black uppercase text-white/20 tracking-widest">No inflow bonus yet</p>
             </div>
-          ) : data.history.map((r) => {
+          ) : shown.map((r) => {
             const Icon = ICONS[r.category] || TrendingUp;
             const payout = r.amount < 0;
             return (

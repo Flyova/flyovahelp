@@ -5,7 +5,8 @@ import { db, auth } from "@/lib/firebase";
 import { doc, onSnapshot } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { authFetch } from "@/lib/authFetch";
-import { isFreeWithdrawal } from "@/lib/accountPerks";
+import { freeWithdrawalPerk, freeWithdrawalPerksFor, perkDays, usedFreeWithdrawals } from "@/lib/accountPerks";
+import { formatLocal } from "@/lib/currency";
 import PinPrompt from "@/components/PinPrompt";
 import { 
   ChevronLeft, 
@@ -68,7 +69,8 @@ export default function WithdrawalPage() {
               bonusDeducted: data.bonusDeducted || false,
               restrictWithdrawal: data.restrictWithdrawal || false,
               createdMs: data.createdAt?.toMillis?.() || Date.parse(u.metadata?.creationTime || "") || 0,
-              freeWithdrawalMonth: data.freeWithdrawalMonth || "",
+              usedFree: usedFreeWithdrawals(data),
+              isAgent: data.isAgent === true,
               hasBank: !!data.bank?.accountNumber,
             });
           }
@@ -86,25 +88,25 @@ export default function WithdrawalPage() {
   useEffect(() => {
     if (method === "bank" && userData.country) {
       const timer = setTimeout(() => {
-        fetchAgents();
+        fetchAgents(parseFloat(amount) || 0);
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [method, userData.country]);
+  }, [method, userData.country, amount]);
 
-  const fetchAgents = async () => {
+  const fetchAgents = async (amt) => {
     setAgentsLoading(true);
     try {
-      // Agents' records aren't readable by players: the server lists the ones in your country.
-      const res = await authFetch("/api/trades?view=agents&type=withdrawal");
+      // Agents' records aren't readable by players: the server lists the ones in your country,
+      // each with their sell rate for this amount (agents can set others for bigger amounts).
+      const res = await authFetch(`/api/trades?view=agents&type=withdrawal&amount=${encodeURIComponent(amt || 0)}`);
       if (res.error) throw new Error(res.error);
-      const validAgents = res.agents.map((a) => ({ id: a.id, full_name: a.full_name, exchange_rate: a.withdrawal_rate }));
+      const validAgents = res.agents.map((a) => ({ id: a.id, full_name: a.full_name, exchange_rate: a.rate ?? a.withdrawal_rate, country: a.country || userData.country }));
 
       setAgents(validAgents);
 
-      if (selectedAgent && !validAgents.find(a => a.id === selectedAgent.id)) {
-        setSelectedAgent(null);
-      }
+      const still = selectedAgent && validAgents.find(a => a.id === selectedAgent.id);
+      setSelectedAgent(still || null);
 
     } catch (e) {
       console.error("Agent Fetch Error:", e);
@@ -113,9 +115,12 @@ export default function WithdrawalPage() {
     }
   };
 
-  // 18-month accounts: one USDT withdrawal of $100–$1,000 on the 15th is free (the server decides).
-  const isFree = (amt) =>
-    method === "usdt" && isFreeWithdrawal({ createdMs: userData.createdMs, amount: parseFloat(amt) || 0, usedMonth: userData.freeWithdrawalMonth });
+  // Free USDT withdrawals on certain days, by account age, agent status and country
+  // (lib/accountPerks; the server decides).
+  const perkArgs = { createdMs: userData.createdMs, isAgent: userData.isAgent, country: userData.country, used: userData.usedFree || {} };
+  const freePerk = (amt) => (method === "usdt" ? freeWithdrawalPerk({ ...perkArgs, amount: parseFloat(amt) || 0 }) : null);
+  const isFree = (amt) => !!freePerk(amt);
+  const myPerks = freeWithdrawalPerksFor(perkArgs);
 
   const calculateWithdrawalFee = (amt) => {
     if (method !== "usdt" || isFree(amt)) return 0.00;
@@ -306,6 +311,29 @@ const handleWithdraw = async () => {
             className="w-full bg-transparent font-black text-4xl text-white outline-none" />
         </div>
 
+        {method === "usdt" && myPerks.length > 0 && (
+          <div className="bg-emerald-500/5 border border-emerald-500/20 p-4 rounded-3xl space-y-1">
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Your free withdrawals</p>
+            {myPerks.map((p) => (
+              <p key={p.id} className={`text-[11px] font-bold ${p.usedThisMonth ? "text-white/30 line-through" : "text-white/70"}`}>
+                {p.min === p.max ? `$${p.min}` : `$${p.min}–$${p.max}`} on {perkDays(p)} of each month, no fee{p.usedThisMonth ? " (used this month)" : ""}
+              </p>
+            ))}
+          </div>
+        )}
+
+        {method === "bank" && selectedAgent && parseFloat(amount) >= minWithdrawal && (
+          <div className="bg-[#2457D6]/5 border border-[#2457D6]/20 p-5 rounded-3xl space-y-2">
+            <p className="text-[9px] font-black uppercase text-white/40 tracking-widest">You receive from {selectedAgent.full_name}</p>
+            <p className="text-[11px] font-bold text-white/60">
+              ${Number(amount || 0).toFixed(2)} × {Number(selectedAgent.exchange_rate).toLocaleString()} (their rate)
+            </p>
+            <p className="text-lg font-black text-white">
+              = {formatLocal(Number(amount || 0) * Number(selectedAgent.exchange_rate || 0), selectedAgent.country)}
+            </p>
+          </div>
+        )}
+
         {parseFloat(amount) >= minWithdrawal && (method === "usdt" || isEligibleForBonusDeduction) && (
           <div className="bg-[#2457D6]/5 border border-[#2457D6]/20 p-5 rounded-3xl space-y-3 animate-in fade-in slide-in-from-top-2">
             <div className="flex items-center gap-2 mb-1">
@@ -317,7 +345,7 @@ const handleWithdraw = async () => {
               <div className="flex justify-between items-center">
                  <span className="text-[11px] font-bold text-gray-500">Service Fee</span>
                  {isFree(amount)
-                   ? <span className="text-[11px] font-black text-emerald-400">Free · 18-month account</span>
+                   ? <span className="text-[11px] font-black text-emerald-400">Free · {freePerk(amount).label}</span>
                    : <span className="text-[11px] font-black text-rose-500">+ ${currentFee.toFixed(2)}</span>}
               </div>
             )}

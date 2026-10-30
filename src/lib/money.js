@@ -19,7 +19,9 @@ export const ADMIN_NOTIFY_EMAIL = "arbie1877@gmail.com";
 /** Agent commission on a trade, taken from the agent's own balance. */
 export const AGENT_FEE_RATE = { deposit: 0.03, withdrawal: 0.05 };
 /** Referrer's cut of a deposit: through an agent, or direct (USDT, approved by an admin). */
-export const REFERRAL_COMMISSION = { agent: 0.035, direct: 0.015 };
+export const REFERRAL_COMMISSION = { agent: 0.025, direct: 0.005 };
+/** Changing the account's username (the main account's, like a chat username). */
+export const USERNAME_CHANGE_PRICE = 1;
 export const MIN_QUALIFIED_REFERRALS = 10;
 export const MIN_QUALIFYING_DEPOSIT = 25;
 /** Paid from the main wallet when applying to be an agent; refunded if the application is declined. */

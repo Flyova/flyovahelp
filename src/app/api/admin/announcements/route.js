@@ -120,6 +120,7 @@ export async function POST(request) {
         title: type === "warning" ? "Important notice" : type === "game" ? "Game update" : "StraWins",
         body: message,
         data: { kind: "announcement", id: announcementRef.id, url: "/dashboard" },
+        pref: type,
       }).catch((e) => console.error("Announcement push failed:", e))
     );
 

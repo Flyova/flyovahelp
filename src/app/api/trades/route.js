@@ -19,7 +19,8 @@ import { alertAdmins, notifyUser } from "@/lib/notifications";
 // (trades/{id}/messages) is still written directly.
 //
 //   deposit:    player creates -> agent accepts (agent balance pays amount + 3%) ->
-//               player pays the agent -> agent confirms (player's wallet gets the amount).
+//               player pays the agent and says so (markPaid) -> agent confirms (player's
+//               wallet gets the amount).
 //               Unpaid UNPAID_DEPOSIT_MS after accepting, the agent can call it unpaid
 //               (notPaid): their balance comes back and it counts toward the player's
 //               unpaid-deposit lock (lib/depositLock).
@@ -35,10 +36,13 @@ import { alertAdmins, notifyUser } from "@/lib/notifications";
 //   GET ?view=agents&type=deposit|withdrawal&amount= -> { agents: [{ id, full_name, deposit_rate, withdrawal_rate,
 //        deposit_tiers, withdrawal_tiers, rate }] } approved agents in your country (for a deposit, ones whose
 //        balance covers amount + fee); `rate` is the one this amount gets (lib/money rateFor)
-//   GET ?view=agent&id=   -> { name, bank? }   a trade's agent; the bank details only for the
+//   GET ?view=agent&id=   -> { name, country, bank? }   a trade's agent; the bank details only for the
 //        depositor, once the agent has accepted (agents' records aren't readable by players)
 //   POST { action: "create", type, agentId, amount, txPin? } -> { id, balance? }   txPin for a withdrawal
 //   POST { action: "accept" | "decline" | "confirm" | "expire" | "markPaid" | "notPaid", id } -> { ok }
+//        markPaid: whoever sends the money says they have (the player on a deposit, the agent on
+//        a withdrawal); the apps only offer Confirm after it. A trade keeps the agent's `country`
+//        for showing its local-currency total.
 //   POST { action: "agentTopup" | "agentWithdraw", amount } -> { wallet, agentBalance }
 //                                                    an agent moving money between their two balances
 //   POST { action: "staffCancel" | "staffRefund", id } -> { ok, refunded? }   admin/staff/support (Agent TX page):
@@ -91,7 +95,7 @@ async function create(db, caller, { type, agentId, amount, txPin }) {
       // The agent's buy rate for a deposit, sell rate for a withdrawal (local currency per $), for this amount.
       senderId: caller.uid, agentId, amount: value, rate: rateFor(agent, type, value),
       type, status: "pending",
-      createdAt: now, senderName: me.fullName || "User", agentName: agent.full_name || "Agent",
+      createdAt: now, senderName: me.fullName || "User", agentName: agent.full_name || "Agent", country: agent.country || me.country || "",
       senderBank: { bankName: bank.bankName || "", accountNumber: bank.accountNumber || "", accountName: bank.accountName || "" },
     };
     if (type === "deposit") {
@@ -257,7 +261,7 @@ async function confirm(db, caller, { id }) {
         tx.update(referrerRef, { referralBonus: FV().increment(reward) });
         tx.set(referrerRef.collection("transactions").doc(), {
           amount: reward, type: "referral_reward", status: "completed",
-          description: `3.5% commission from @${senderFirst.username || ""}'s deposit`,
+          description: `${REFERRAL_COMMISSION.agent * 100}% commission from @${senderFirst.username || ""}'s deposit`,
           createdAt: now, fromUser: senderFirst.username || "", tradeId: id,
         });
       }
@@ -289,21 +293,34 @@ async function confirm(db, caller, { id }) {
   return NextResponse.json({ ok: true });
 }
 
-/** The agent has sent a withdrawal's money: the player now has WITHDRAWAL_CONFIRM_MS to confirm it. */
+/**
+ * The money has been sent: by the agent on a withdrawal (the player then has
+ * WITHDRAWAL_CONFIRM_MS to confirm it), or by the player on a deposit.
+ */
 async function markPaid(db, caller, { id }) {
   const out = await onTrade(db, id, async (tx, t, tradeRef) => {
-    if (t.agentId !== caller.uid) return { error: "Only this trade's agent can say it's paid.", status: 403 };
-    if (t.type !== "withdrawal") return { error: "Only a withdrawal is paid by the agent.", status: 409 };
-    if (t.status !== "acknowledged" || t.refunded) return { error: "Accept this trade first.", status: 409 };
-    if (t.agentPaidAt) return { error: "You've already said this one is paid.", status: 409 };
-    tx.update(tradeRef, { agentPaidAt: FV().serverTimestamp() });
+    const payer = t.type === "deposit" ? t.senderId : t.agentId;
+    if (payer !== caller.uid) {
+      return { error: t.type === "deposit" ? "Only the player pays a deposit." : "Only this trade's agent pays a withdrawal.", status: 403 };
+    }
+    if (t.status !== "acknowledged" || t.refunded) return { error: "Wait for the agent to accept this trade.", status: 409 };
+    const field = t.type === "deposit" ? "playerPaidAt" : "agentPaidAt";
+    if (t[field]) return { error: "You've already said this one is paid.", status: 409 };
+    tx.update(tradeRef, { [field]: FV().serverTimestamp() });
   });
   if (out.error) return fail(out.error, out.status);
-  await notifyUser(db, out.trade.senderId, {
-    type: "merchant", title: "Your agent says they've paid you",
-    body: `${out.trade.agentName || "Your agent"} sent ${formatUsd(out.trade.amount)}. Check your bank and confirm within ${WITHDRAWAL_CONFIRM_MS / 60000} minutes.`,
-    url: `/trade/${id}`,
-  });
+  const t = out.trade;
+  await (t.type === "deposit"
+    ? notifyUser(db, t.agentId, {
+      type: "merchant", title: "The player says they've paid you",
+      body: `${t.senderName || "The player"} sent their ${formatUsd(t.amount)} deposit. Check your bank and confirm it.`,
+      url: `/trade/${id}`,
+    })
+    : notifyUser(db, t.senderId, {
+      type: "merchant", title: "Your agent says they've paid you",
+      body: `${t.agentName || "Your agent"} sent ${formatUsd(t.amount)}. Check your bank and confirm within ${WITHDRAWAL_CONFIRM_MS / 60000} minutes.`,
+      url: `/trade/${id}`,
+    }));
   return NextResponse.json({ ok: true });
 }
 
@@ -337,7 +354,11 @@ async function notPaid(db, caller, { id }) {
       body: `${t.agentName || "The agent"} didn't receive your ${formatUsd(t.amount)}. Unpaid requests can lock deposits for 48 hours.`,
       url: `/trade/${id}`,
     }),
-    alertAdmins(db, { type: "trade", title: "Agent deposit unpaid", body: `${t.agentName || "Agent"} says ${t.senderName || "a player"} didn't pay ${formatUsd(t.amount)}.`, uid: t.senderId, url: "/admin/agent-tx" }),
+    alertAdmins(db, {
+      type: "trade", title: t.playerPaidAt ? "Disputed agent deposit" : "Agent deposit unpaid", uid: t.senderId, url: "/admin/agent-tx",
+      body: `${t.agentName || "Agent"} says ${t.senderName || "a player"} didn't pay ${formatUsd(t.amount)}${t.playerPaidAt ? ", but the player said they had" : ""}.`,
+      email: !!t.playerPaidAt,
+    }),
   ]);
   return NextResponse.json({ ok: true });
 }
@@ -448,7 +469,7 @@ async function agentView(db, caller, params) {
   const a = (await db.collection("agents").doc(t.agentId).get()).data() || {};
   const showBank = t.senderId === caller.uid && t.type === "deposit" && ["acknowledged", "completed"].includes(t.status);
   return NextResponse.json({
-    name: a.full_name || t.agentName || "Agent",
+    name: a.full_name || t.agentName || "Agent", country: t.country || a.country || "",
     ...(showBank ? { bank: { bankName: a.bankName || "", accountName: a.accountName || "", accountNumber: a.accountNumber || "" } } : {}),
   });
 }

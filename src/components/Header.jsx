@@ -228,15 +228,10 @@ export default function Header({ hideOnMobile = false }) {
                   </div>
                   
                   <div className="px-1 space-y-3">
-                      <BalanceItem label="Referral Bonus" amount={userData.referralBonus} color="text-green-400" />
-                      <BalanceItem label="Inflow Bonus" amount={userData.inflowBonus} color="text-green-400" />
-                      <div className="flex justify-between items-center">
-                        <span className="text-[9px] uppercase font-black text-[#F5F3EE]/50 tracking-wider">Sign-up Rewards</span>
-                        <button onClick={() => { setShowBalances(false); router.push("/referrals"); }}
-                          className="flex items-center gap-1 font-bold text-green-400 hover:underline">
-                          <Gift size={11} /> ${userData.signupRewards}
-                        </button>
-                      </div>
+                      <BalanceItem label="Referral Bonus" amount={userData.referralBonus} color="text-green-400" onClick={() => { setShowBalances(false); router.push("/referrals"); }} />
+                      <BalanceItem label="Inflow Bonus" amount={userData.inflowBonus} color="text-green-400" onClick={() => { setShowBalances(false); router.push("/inflow"); }} />
+                      <BalanceItem label="Sign-up Rewards" amount={userData.signupRewards} color="text-green-400" icon={<Gift size={11} />}
+                        onClick={() => { setShowBalances(false); router.push("/referrals/signups"); }} />
                       
                       {userData.isAgent ? (
                         <BalanceItem label="Agent Balance" amount={userData.agentBalance} color="text-[#F5F3EE]" />
@@ -316,11 +311,13 @@ export default function Header({ hideOnMobile = false }) {
   );
 }
 
-function BalanceItem({ label, amount, color }) {
+/** A balance line; with `onClick` it opens that balance's page. */
+function BalanceItem({ label, amount, color, icon, onClick }) {
+  const Row = onClick ? "button" : "div";
   return (
-    <div className="flex justify-between items-center last:border-0">
+    <Row onClick={onClick} className={`w-full flex justify-between items-center last:border-0 ${onClick ? "hover:opacity-80" : ""}`}>
       <span className="text-[9px] uppercase font-black text-[#F5F3EE]/50 tracking-wider">{label}</span>
-      <span className={`font-bold ${color}`}>${amount}</span>
-    </div>
+      <span className={`font-bold flex items-center gap-1 ${color}`}>{icon}${amount}</span>
+    </Row>
   );
 }

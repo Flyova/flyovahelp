@@ -3,13 +3,15 @@ import { getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import {
   BONUS_REPAYMENT, DEPOSIT_WINDOW_MS, FV, MIN_DEPOSIT, MIN_QUALIFIED_REFERRALS, MIN_QUALIFYING_DEPOSIT, MIN_TRANSFER,
-  MIN_WITHDRAWAL, SIGNUP_REWARD, USDT_ADDRESS, USDT_NETWORK, accountCreatedMs, cents, depositLockError, formatUsd,
+  MIN_WITHDRAWAL, SIGNUP_REWARD, USDT_ADDRESS, USDT_NETWORK, USERNAME_CHANGE_PRICE, accountCreatedMs, cents, depositLockError, formatUsd,
   hasQualifyingDeposit, isBanned, isValidAccountName, owesBonus, parseAmount, referralsOf, systemSettings, toDollars,
   transferFee, withdrawalFee,
 } from "@/lib/money";
 import { depositProofEmail, transferReceivedEmail, usdtWithdrawalEmails } from "@/lib/moneyEmails";
 import { creditInflowSafely } from "@/lib/inflowBonus";
-import { OLD_ACCOUNT_QUALIFIED_REFERRALS, inFreeWithdrawalWindow, isFreeWithdrawal, isOldAccount, monthKey } from "@/lib/accountPerks";
+import {
+  OLD_ACCOUNT_QUALIFIED_REFERRALS, freeWithdrawalCouldApply, freeWithdrawalPerk, isOldAccount, monthKey, usedFreeWithdrawals,
+} from "@/lib/accountPerks";
 import { checkTxPin, sendPinResetCode, setTxPin } from "@/lib/txPin";
 import { recordInvalidDeposit } from "@/lib/depositLock";
 import { notifyUser } from "@/lib/notifications";
@@ -20,9 +22,11 @@ import { ensureReferralCode } from "@/lib/referralCode";
 //
 //   GET ?view=recipient&pin=                    -> { name }            who a PIN belongs to
 //   GET ?view=referrals                         -> { referrals, qualified, needed, bonus, code, link, signupRewards, signupRewardsTotal }
+//   GET ?view=signups                           -> { total, verified, rewarded, byCountry, people } who registered with
+//                                                                       your link or code (username, country, when, verified)
 //   POST { action: "transfer", pin, amount, txPin } -> { record, balance } fee + any $3 bonus repayment on top
 //   POST { action: "withdraw", amount, address, txPin } -> { balance, id, fee } USDT; local-agent withdrawals are trades (/api/trades);
-//                                                                       free once a month for 18-month accounts (lib/accountPerks)
+//                                                                       free on the perk days in lib/accountPerks
 //        `pin` is the recipient's 8-digit account PIN; `txPin` is the sender's own 4-digit transaction PIN (lib/txPin).
 //   POST { action: "referral", amount }         -> { balance }         referral bonus to the main wallet
 //   POST { action: "signupClaim" }              -> { moved, balance, signupRewards } sign-up rewards ($0.0001 each) to the
@@ -32,6 +36,7 @@ import { ensureReferralCode } from "@/lib/referralCode";
 //   POST { action: "pinReset" }                 -> { sentTo }          email a code for a forgotten PIN
 //   POST { action: "bankSet", bankName, accountNumber, txPin? } -> { bank } the bank account for trades with agents; its
 //                                                                       beneficiary is the account's full name
+//   POST { action: "usernameChange", username }  -> { username, balance } the account's username, for USERNAME_CHANGE_PRICE
 //   POST { action: "jackpot", id }              -> { balance, amount } claim a jackpot an admin gave you
 //   POST { action: "deposit", amount }          -> { id, amount, existing } start (or resume) a USDT deposit
 //   POST { action: "depositProof", id, hash, image }  -> { ok }        payment hash + screenshot for the admins
@@ -117,8 +122,8 @@ async function withdraw(db, caller, { amount, address, txPin }) {
   const withdrawalRef = db.collection("withdrawals").doc();
   const userTxRef = userRef.collection("transactions").doc();
   const today = new Date();
-  // Only look up the account's age when the withdrawal could be the free one.
-  const first = inFreeWithdrawalWindow(value, today) ? await userRef.get() : null;
+  // Only look up the account's age when the withdrawal could be a free one.
+  const first = freeWithdrawalCouldApply(value, today) ? await userRef.get() : null;
   const createdMs = first?.exists ? await accountCreatedMs(caller.uid, first.data()) : null;
 
   const out = await db.runTransaction(async (tx) => {
@@ -130,7 +135,9 @@ async function withdraw(db, caller, { amount, address, txPin }) {
     if (!isValidAccountName(me.fullName)) {
       return { error: "Your account name is incomplete or invalid for withdrawals. It needs a full first and last name (e.g. John Doe); single names or initials aren't accepted. Contact support to update it.", status: 403 };
     }
-    const free = isFreeWithdrawal({ createdMs, amount: value, usedMonth: me.freeWithdrawalMonth, now: today });
+    const free = first ? freeWithdrawalPerk({
+      createdMs, isAgent: me.isAgent === true, country: me.country, used: usedFreeWithdrawals(me), amount: value, now: today,
+    }) : null;
     const fee = free ? 0 : withdrawalFee(value);
     const bonus = owesBonus(me) ? BONUS_REPAYMENT : 0;
     const totalC = cents(value) + cents(fee) + cents(bonus);
@@ -139,7 +146,7 @@ async function withdraw(db, caller, { amount, address, txPin }) {
     tx.update(userRef, {
       wallet: FV().increment(-toDollars(totalC)),
       ...(bonus ? { bonusDeducted: true, welcomeBonusStatus: "recovered", welcomeBonusRecoveredAt: now } : {}),
-      ...(free ? { freeWithdrawalMonth: monthKey(today) } : {}),
+      ...(free ? { [`freeWithdrawals.${free.id}`]: monthKey(today) } : {}),
     });
     if (bonus) {
       tx.set(userRef.collection("transactions").doc(), {
@@ -149,7 +156,7 @@ async function withdraw(db, caller, { amount, address, txPin }) {
     const request = {
       userId: caller.uid, amount: value, fee, bonusRecovered: bonus, totalDeducted: toDollars(totalC),
       type: "withdrawal", status: "pending", method: "usdt", details: { usdtAddress: addr }, timestamp: now,
-      withdrawalId: withdrawalRef.id, userTransactionId: userTxRef.id, ...(free ? { freeWithdrawal: true } : {}),
+      withdrawalId: withdrawalRef.id, userTransactionId: userTxRef.id, ...(free ? { freeWithdrawal: true, freeWithdrawalPerk: free.id } : {}),
     };
     tx.set(withdrawalRef, request);
     tx.set(userTxRef, { ...request, title: "Withdrawal Requested", amount: -value });
@@ -386,8 +393,69 @@ async function bankSet(db, caller, { bankName, accountNumber, txPin }) {
   return NextResponse.json({ bank });
 }
 
-const VIEWS = { recipient: recipientView, referrals: referralsView };
-const ACTIONS = { transfer, withdraw, referral, signupClaim, jackpot, deposit, depositProof, depositCancel, pinSet, pinReset, bankSet };
+/** Everyone who registered with the account's link or code: when, from where, and whether they verified. */
+async function signupsView(db, caller) {
+  const snap = await users(db).doc(caller.uid).get();
+  if (!snap.exists) return fail("Account not found.", 404);
+  const found = await referralsOf(db, caller.uid, snap.data());
+  const people = [...found].map(([id, u]) => ({
+    id,
+    username: u.username || "",
+    country: u.country || "",
+    joinedAt: u.createdAt?.toMillis?.() || null,
+    verified: u.verified === true,
+    rewarded: u.signupRewardPaidTo === caller.uid,
+  })).sort((a, b) => (b.joinedAt || 0) - (a.joinedAt || 0));
+  const counts = new Map();
+  for (const p of people) counts.set(p.country || "Unknown", (counts.get(p.country || "Unknown") || 0) + 1);
+  return NextResponse.json({
+    total: people.length,
+    verified: people.filter((p) => p.verified).length,
+    rewarded: people.filter((p) => p.rewarded).length,
+    reward: SIGNUP_REWARD,
+    byCountry: [...counts].map(([country, count]) => ({ country, count })).sort((a, b) => b.count - a.count),
+    people,
+  });
+}
+
+const USERNAME = /^[A-Za-z0-9_.]{3,30}$/;
+
+/** A new username for the account, for USERNAME_CHANGE_PRICE from the main wallet. */
+async function usernameChange(db, caller, { username }) {
+  const name = String(username || "").trim();
+  if (!USERNAME.test(name)) return fail("Usernames are 3 to 30 letters, numbers, dots or underscores.");
+  const userRef = users(db).doc(caller.uid);
+  const taken = await users(db).where("username", "==", name).limit(1).get();
+  if (!taken.empty && taken.docs[0].id !== caller.uid) return fail("This username is already taken.", 409);
+  const out = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef);
+    if (!snap.exists) return { error: "Account not found.", status: 404 };
+    const me = snap.data();
+    if (isBanned(me)) return { error: "Your account can't do that.", status: 403 };
+    if (me.username === name) return { error: "That's already your username.", status: 409 };
+    const priceC = cents(USERNAME_CHANGE_PRICE);
+    if (cents(me.wallet) < priceC) {
+      return { error: `Changing your username costs ${formatUsd(USERNAME_CHANGE_PRICE)} from your wallet; you have ${formatUsd(me.wallet)}.`, status: 402 };
+    }
+    const now = FV().serverTimestamp();
+    tx.update(userRef, { username: name, wallet: FV().increment(-USERNAME_CHANGE_PRICE), usernameChangedAt: now });
+    tx.set(userRef.collection("transactions").doc(), {
+      title: "Username Change", amount: -USERNAME_CHANGE_PRICE, type: "username_change", status: "completed", timestamp: now,
+      description: `@${me.username || ""} → @${name}`,
+    });
+    return { username: name, balance: toDollars(cents(me.wallet) - priceC), old: me.username || "" };
+  });
+  if (out.error) return fail(out.error, out.status);
+  await notifyUser(db, caller.uid, {
+    type: "account", title: "Username changed", body: `Your username is now @${out.username} (${formatUsd(USERNAME_CHANGE_PRICE)}). If this wasn't you, contact support.`, url: "/settings",
+  });
+  return NextResponse.json({ username: out.username, balance: out.balance });
+}
+
+const VIEWS = { recipient: recipientView, referrals: referralsView, signups: signupsView };
+const ACTIONS = {
+  transfer, withdraw, referral, signupClaim, jackpot, deposit, depositProof, depositCancel, pinSet, pinReset, bankSet, usernameChange,
+};
 
 export async function GET(req) {
   try {

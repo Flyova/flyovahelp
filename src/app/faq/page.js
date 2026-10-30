@@ -69,6 +69,10 @@ const FAQ_ITEMS = [
     a: "You earn $0.0001 for every player who signs up with your link or referral code (they're kept separately as sign-up rewards), plus a commission on your referrals' deposits. Your referral balance unlocks once 10 of your referrals have each deposited at least $25.",
   },
   {
+    q: "Are there free withdrawals?",
+    a: "Yes, one a month on each of these (USDT withdrawals, no fee): agents, $50–$100 on the 15th; accounts 18+ months old, $100–$200 on the 15th; accounts 11+ months old in the US, UK, Canada, Australia, Finland, China, Japan, Singapore, Russia and South Africa, $100 between the 5th and 10th; accounts 12+ months old in New Zealand, Switzerland and the Netherlands, $250–$500 between the 5th and 8th.",
+  },
+  {
     q: "What happens in StraWins to Dollars if only one of my numbers comes up?",
     a: "Match both numbers to win 1.3× your stake. Match one and you get 92% of your stake back.",
   },

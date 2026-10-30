@@ -17,7 +17,9 @@ const FV = () => admin.firestore.FieldValue;
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
 /**
- * Stores a notification for `uid` and pushes it to their phone. Never throws: a
+ * Stores a notification for `uid` and pushes it to their phone, unless they switched
+ * that type off (users/{uid}.notificationPrefs[type] === false: it's still listed on
+ * their notifications page). Never throws: a
  * notification must not undo the money movement it reports. `key` replaces that
  * notification instead of adding one (a chat shows only its latest message).
  */
@@ -30,7 +32,7 @@ export async function notifyUser(db, uid, { type = "info", title, body = "", url
       type: kind, title: String(title).slice(0, 120), body: String(body).slice(0, 400), url, read: false,
       createdAt: FV().serverTimestamp(),
     });
-    if (push) await sendPushToUsers([uid], { title, body, data: { kind, url } });
+    if (push) await sendPushToUsers([uid], { title, body, data: { kind, url }, pref: kind });
   } catch (e) {
     console.error("Notification failed:", e?.message || e);
   }

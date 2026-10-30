@@ -18,10 +18,12 @@ function soundOf(t) {
   return { sound: `tone_${tone}.wav`, channelId: `tone-${tone}` };
 }
 
-// Device details from a users/{uid} doc: its push token (unless notifications are off),
+// Device details from a users/{uid} doc: its push token (unless notifications are off,
+// all of them or, with `pref`, that kind: users/{uid}.notificationPrefs[pref] === false),
 // whether that device's app has the tones, and the account's sound for other notifications.
-const deviceOf = (u = {}) => {
-  const token = u.notificationsEnabled === false ? null : u.expoPushToken;
+const deviceOf = (u = {}, pref) => {
+  const off = u.notificationsEnabled === false || (pref && u.notificationPrefs?.[pref] === false);
+  const token = off ? null : u.expoPushToken;
   return { token, hasTones: !!token && u.expoPushSoundsToken === token, alertTone: u.notificationTone };
 };
 
@@ -43,10 +45,13 @@ async function postToExpo(messages) {
  * account's sound for other notifications; `silent` sends it without a sound.
  *
  * @param {Array<{ uid: string, token?: string, hasTones?: boolean, tone?: string, silent?: boolean, data?: object }>|string[]} targets
- * @param {{ title: string, body: string, data?: object }} message
+ * `pref` is the kind of notification (lib/notifications NOTIFICATION_TYPES): players who
+ * switched that kind off don't get it.
+ *
+ * @param {{ title: string, body: string, data?: object, pref?: string }} message
  * @returns {Promise<number>} number of tickets Expo accepted
  */
-export async function sendPushToUsers(targets, { title, body, data = {} }) {
+export async function sendPushToUsers(targets, { title, body, data = {}, pref }) {
   const db = getAdminDb();
   const list = targets.map((t) => (typeof t === "string" ? { uid: t } : t)).filter((t) => t?.uid);
   if (!list.length) return 0;
@@ -56,7 +61,7 @@ export async function sendPushToUsers(targets, { title, body, data = {} }) {
   if (missing.length) {
     const snaps = await db.getAll(...missing.map((t) => db.collection("users").doc(t.uid)));
     snaps.forEach((snap, i) => {
-      const { token, hasTones, alertTone } = deviceOf(snap.exists ? snap.data() : {});
+      const { token, hasTones, alertTone } = deviceOf(snap.exists ? snap.data() : {}, pref);
       Object.assign(missing[i], { token, hasTones, tone: missing[i].tone || alertTone });
     });
   }
@@ -108,10 +113,10 @@ export async function sendPushToUsers(targets, { title, body, data = {} }) {
 export async function sendPushToAll(message) {
   const db = getAdminDb();
   const snap = await db.collection("users").where("expoPushToken", ">", "")
-    .select("expoPushToken", "notificationsEnabled", "expoPushSoundsToken", "notificationTone").get();
+    .select("expoPushToken", "notificationsEnabled", "expoPushSoundsToken", "notificationTone", "notificationPrefs").get();
   const targets = snap.docs
     .map((d) => {
-      const { token, hasTones, alertTone } = deviceOf(d.data());
+      const { token, hasTones, alertTone } = deviceOf(d.data(), message.pref);
       return { uid: d.id, token, hasTones, tone: alertTone };
     })
     .filter((t) => t.token);

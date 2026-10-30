@@ -113,7 +113,8 @@ export default function AdminDepositList() {
         const depositUserSnap = await getDoc(userRef);
         if (depositUserSnap.exists()) {
           const depositUserData = depositUserSnap.data();
-          const rewardAmount = Number(deposit.amount) * 0.015;
+          // The referrer's 0.5% of a USDT deposit (lib/money REFERRAL_COMMISSION.direct), to the cent.
+          const rewardAmount = Math.round(Number(deposit.amount) * 0.5) / 100;
 
           let referrerDocId = null;
 
@@ -155,7 +156,7 @@ export default function AdminDepositList() {
               amount: rewardAmount,
               type: "referral_reward",
               status: "completed",
-              description: `1.5% commission from @${depositUserData.username}'s USDT deposit`,
+              description: `0.5% commission from @${depositUserData.username}'s USDT deposit`,
               createdAt: serverTimestamp(),
               fromUser: depositUserData.username,
               depositId: deposit.id

@@ -65,7 +65,9 @@ service cloud.firestore {
     // So nobody can lift their own ban, restriction, flag or deposit lock, mark their
     // email verified, change who referred them, set their bank account or PIN state
     // around the checks in /api/wallet, or touch a balance, bonus or plan (money moves
-    // through the server). `role`, `pin` and `fullName` have their own checks below.
+    // through the server). The account name and username change through the server too:
+    // the name from a link emailed to the account, the username for $1. `role` and
+    // `pin` have their own checks below.
     function lockedAccountFields() {
       return ['isban', 'banned', 'verified', 'otp', 'isAgent', 'chatMuted',
         'restrictDeposit', 'restrictWithdrawal', 'restrictTransfer',
@@ -77,7 +79,8 @@ service cloud.firestore {
         'hasTxPin', 'bank', 'bankUpdatedAt', 'depositLockedUntil', 'depositLockedAt', 'invalidDeposits',
         'signupRewards', 'signupRewardsTotal', 'signupRewardPaidTo', 'referralCode', 'restrictGames',
         'flagged', 'flagReason', 'flaggedAt', 'flagCount', 'deletionRequested', 'deletionRequestDate',
-        'hasApplied', 'agentStatus'];
+        'hasApplied', 'agentStatus',
+        'fullName', 'username', 'freeWithdrawals', 'usernameChangedAt', 'profileChangedAt'];
     }
 
     function ownAccountChange() {
@@ -88,9 +91,7 @@ service cloud.firestore {
         && (!changed.hasAny(['pin']) || (
           resource.data.get('pin', '') in [null, '']
           && request.resource.data.pin is string
-          && request.resource.data.pin.matches('^[0-9]{8}$')))
-        // The name a bank account is in: fixed once there is one (support changes it).
-        && (!changed.hasAny(['fullName']) || resource.data.get('bank', null) == null);
+          && request.resource.data.pin.matches('^[0-9]{8}$')));
     }
 
     // An account (email, phone, date of birth, PIN, balance) is read only by its
@@ -105,7 +106,7 @@ service cloud.firestore {
         && !request.resource.data.keys().hasAny(['isban', 'banned', 'isAgent', 'chatMuted', 'referralBonus', 'otp',
           'agent_balance', 'subscription_expires', 'subscription_started_at',
           'restrictDeposit', 'restrictWithdrawal', 'restrictTransfer',
-          'inflowBonus', 'inflowEarned', 'inflowAccess', 'inflowAccessAt', 'freeWithdrawalMonth',
+          'inflowBonus', 'inflowEarned', 'inflowAccess', 'inflowAccessAt', 'freeWithdrawalMonth', 'freeWithdrawals',
           'hasTxPin', 'bank', 'bankUpdatedAt', 'depositLockedUntil', 'depositLockedAt', 'invalidDeposits',
         'signupRewards', 'signupRewardsTotal', 'signupRewardPaidTo', 'referralCode', 'restrictGames',
         'flagged', 'flagReason', 'flaggedAt', 'flagCount', 'deletionRequested', 'deletionRequestDate',

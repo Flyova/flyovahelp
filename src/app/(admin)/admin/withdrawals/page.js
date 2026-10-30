@@ -196,8 +196,10 @@ export default function AdminWithdrawalList() {
             bonusDeducted: false,
             welcomeBonusStatus: "paid"
           }),
-          // The month's free withdrawal (18-month accounts) can be used again.
-          ...(withdrawal.freeWithdrawal && { freeWithdrawalMonth: deleteField() })
+          // The month's free withdrawal (lib/accountPerks) can be used again.
+          ...(withdrawal.freeWithdrawal && (withdrawal.freeWithdrawalPerk
+            ? { [`freeWithdrawals.${withdrawal.freeWithdrawalPerk}`]: deleteField() }
+            : { freeWithdrawalMonth: deleteField() }))
         });
 
         const txRef = doc(collection(db, "users", withdrawal.userId, "transactions"));
