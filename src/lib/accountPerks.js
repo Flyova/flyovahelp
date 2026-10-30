@@ -2,10 +2,11 @@
 // applies (the app keeps a copy in src/lib/wallet.ts).
 //
 // Free USDT withdrawals: each perk below waives the withdrawal fee once a month (UTC),
-// on its days, for an amount in its range. users/{uid}.freeWithdrawals = { [perk id]:
-// "YYYY-MM" } records the month each was used (older accounts: freeWithdrawalMonth for
-// the 18-month one). The referral bonus unlocks with 2 qualified referrals instead of
-// 10 once an account is 18 months old.
+// on its days, for an amount in its range. Perks on the same days share that one use, so
+// an 18-month agent gets one free withdrawal on the 15th, not two. users/{uid}.freeWithdrawals
+// = { [perk id]: "YYYY-MM" } records the month each was used (older accounts:
+// freeWithdrawalMonth for the 18-month one). The referral bonus unlocks with 2 qualified
+// referrals instead of 10 once an account is 18 months old.
 
 export const OLD_ACCOUNT_MONTHS = 18;
 export const OLD_ACCOUNT_QUALIFIED_REFERRALS = 2;
@@ -72,6 +73,10 @@ export function qualifiesFor(perk, { createdMs, isAgent, country: where, now = n
   return !perk.who.countries || perk.who.countries.some((c) => countryKey(c) === countryKey(where));
 }
 
+/** Whether `perk`, or another perk on any of the same days, was used in `now`'s month. */
+const usedThisMonth = (perk, used, now) => FREE_WITHDRAWAL_PERKS.some((p) =>
+  used[p.id] === monthKey(now) && p.days[0] <= perk.days[1] && perk.days[0] <= p.days[1]);
+
 /**
  * The perk that makes a USDT withdrawal of `amount` free right now, or null: one the
  * account qualifies for, on its days, in its range, not used yet this month.
@@ -79,13 +84,13 @@ export function qualifiesFor(perk, { createdMs, isAgent, country: where, now = n
 export function freeWithdrawalPerk({ createdMs, isAgent, country: where, used = {}, amount, now = new Date() }) {
   const day = now.getUTCDate();
   return FREE_WITHDRAWAL_PERKS.find((p) => day >= p.days[0] && day <= p.days[1] && amount >= p.min && amount <= p.max
-    && used[p.id] !== monthKey(now) && qualifiesFor(p, { createdMs, isAgent, country: where, now })) || null;
+    && !usedThisMonth(p, used, now) && qualifiesFor(p, { createdMs, isAgent, country: where, now })) || null;
 }
 
 /** The perks an account qualifies for (for showing them), with whether each is used this month. */
 export const freeWithdrawalPerksFor = ({ createdMs, isAgent, country: where, used = {}, now = new Date() }) =>
   FREE_WITHDRAWAL_PERKS.filter((p) => qualifiesFor(p, { createdMs, isAgent, country: where, now }))
-    .map((p) => ({ ...p, usedThisMonth: used[p.id] === monthKey(now) }));
+    .map((p) => ({ ...p, usedThisMonth: usedThisMonth(p, used, now) }));
 
 /** "the 15th", "the 5th–10th". */
 export const perkDays = (p) => {

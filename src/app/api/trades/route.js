@@ -41,7 +41,7 @@ import { alertAdmins, notifyUser } from "@/lib/notifications";
 //   POST { action: "create", type, agentId, amount, txPin? } -> { id, balance? }   txPin for a withdrawal
 //   POST { action: "accept" | "decline" | "confirm" | "expire" | "markPaid" | "notPaid", id } -> { ok }
 //        markPaid: whoever sends the money says they have (the player on a deposit, the agent on
-//        a withdrawal); the apps only offer Confirm after it. A trade keeps the agent's `country`
+//        a withdrawal); Confirm is refused until then. A trade keeps the agent's `country`
 //        for showing its local-currency total.
 //   POST { action: "agentTopup" | "agentWithdraw", amount } -> { wallet, agentBalance }
 //                                                    an agent moving money between their two balances
@@ -249,6 +249,12 @@ async function confirm(db, caller, { id }) {
       return { error: t.type === "deposit" ? "Only the agent confirms a deposit." : "Only the player confirms a withdrawal.", status: 403 };
     }
     if (t.status !== "acknowledged" || t.refunded) return { error: "This trade can't be confirmed now.", status: 409 };
+    if (!(t.type === "deposit" ? t.playerPaidAt : t.agentPaidAt)) {
+      return {
+        error: t.type === "deposit" ? "The player hasn't said they've sent the money yet." : "Your agent hasn't said they've sent the money yet.",
+        status: 409,
+      };
+    }
     const amount = Number(t.amount);
     const feeC = Math.round(cents(amount) * AGENT_FEE_RATE[t.type]);
     const now = FV().serverTimestamp();

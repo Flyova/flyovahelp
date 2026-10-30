@@ -6,8 +6,8 @@
 //
 // Credits run in their own transaction after the money has moved, so a problem
 // here never holds up a deposit, trade or transfer.
-import { addMonths, monthKey } from "@/lib/accountPerks";
-import { FV, accountCreatedMs, cents, toDollars } from "@/lib/money";
+import { addMonths } from "@/lib/accountPerks";
+import { FV, accountCreatedMs, cents, toDollars, transferFee } from "@/lib/money";
 
 export const INFLOW_MIN_AGE_MONTHS = 8;
 export const INFLOW_ACCESS_PRICE = 250;
@@ -15,15 +15,15 @@ export const INFLOW_PAYOUT_DAY = 15;
 
 /**
  * What earns the bonus: `rate` of the amount, once it's more than `above` or at least `from`,
- * and at most `monthlyCap` dollars a UTC month (tallied in users/{uid}/inflow_months/{YYYY-MM}).
- * Transfers are capped: above about $6,000 the 0.5% is more than the transfer fee, so two
- * accounts could otherwise send money back and forth for the bonus.
+ * and never more than `max(amount)` dollars. Transfers are capped at their fee: above $6,000
+ * the 0.5% is more than the fee, so two accounts could otherwise profit from sending money
+ * back and forth.
  */
 export const INFLOW_CATEGORIES = {
   agent_deposit: { label: "Agent deposit trades", rate: 0.02, above: 99, text: "Agents earn 2% of every deposit they complete above $99." },
   deposit: { label: "Deposits", rate: 0.015, above: 99, text: "1.5% of every deposit you make above $99." },
   guess_scores: { label: "Guess scores", rate: 0.041, from: 4, text: "4.1% of every friends-game stake of $4 or more your referrals play." },
-  transfer: { label: "Transfers", rate: 0.005, monthlyCap: 25, text: "0.5% of every transfer you send, up to $25 a month." },
+  transfer: { label: "Transfers", rate: 0.005, max: transferFee, text: "0.5% of every transfer you send. Above $6,000 it's the transfer's fee instead." },
   withdrawal: { label: "Withdrawals", rate: 0.001, text: "0.1% of every withdrawal you make." },
 };
 
@@ -63,24 +63,20 @@ export async function creditInflow(db, { uid, category, base, sourceId, note = "
   const c = INFLOW_CATEGORIES[category];
   const amount = Number(base);
   if (!uid || !c || !sourceId || !qualifies(c, amount)) return 0;
-  const bonusC = Math.round(cents(amount) * c.rate);
-  if (bonusC <= 0) return 0;
+  const fullC = Math.round(cents(amount) * c.rate);
+  const creditC = c.max ? Math.min(fullC, cents(c.max(amount))) : fullC;
+  if (creditC <= 0) return 0;
   const userRef = db.collection("users").doc(uid);
   const recordRef = inflowRecords(db, uid).doc(`${category}_${sourceId}`);
-  const month = monthKey();
-  const monthRef = c.monthlyCap ? userRef.collection("inflow_months").doc(month) : null;
   return db.runTransaction(async (tx) => {
-    const [user, record, tally] = await tx.getAll(userRef, recordRef, ...(monthRef ? [monthRef] : []));
+    const [user, record] = await tx.getAll(userRef, recordRef);
     if (!user.exists || record.exists) return 0;
     if (!(await inflowEligibility(uid, user.data())).eligible) return 0;
-    const creditC = monthRef ? Math.min(bonusC, cents(c.monthlyCap) - cents(tally.data()?.[category])) : bonusC;
-    if (creditC <= 0) return 0;
     const credit = toDollars(creditC);
     const now = FV().serverTimestamp();
     tx.update(userRef, { inflowBonus: FV().increment(credit), inflowEarned: FV().increment(credit) });
-    const capped = creditC < bonusC ? `capped at $${c.monthlyCap} a month` : "";
+    const capped = creditC < fullC ? "capped at the transfer's fee" : "";
     tx.set(recordRef, { category, rate: c.rate, base: amount, amount: credit, sourceId, note: [note, capped].filter(Boolean).join(" · "), createdAt: now });
-    if (monthRef) tx.set(monthRef, { month, [category]: FV().increment(credit) }, { merge: true });
     return credit;
   });
 }
