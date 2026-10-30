@@ -7,9 +7,13 @@ import { alertAdmins, notifyUser } from "@/lib/notifications";
 // (users/{uid}.depositLockedUntil, checked by /api/wallet and /api/trades).
 // users/{uid}.invalidDeposits keeps the recent ones as { id, at } so each counts once.
 
-/** Counts one unpaid deposit request. Returns true if it locked deposits. Never throws. */
-export async function recordInvalidDeposit(db, uid, { sourceId, what }) {
-  if (!uid || !sourceId) return false;
+/**
+ * Counts one unpaid deposit request, as of `at` (ms; when it went unpaid, default
+ * now): one that ran out more than 24 hours ago, like an old abandoned deposit
+ * swept up late, doesn't count. Returns true if it locked deposits. Never throws.
+ */
+export async function recordInvalidDeposit(db, uid, { sourceId, what, at = Date.now() }) {
+  if (!uid || !sourceId || Date.now() - at >= INVALID_DEPOSIT_WINDOW_MS) return false;
   const userRef = db.collection("users").doc(uid);
   try {
     const locked = await db.runTransaction(async (tx) => {
@@ -19,7 +23,7 @@ export async function recordInvalidDeposit(db, uid, { sourceId, what }) {
       const recent = (Array.isArray(snap.data().invalidDeposits) ? snap.data().invalidDeposits : [])
         .filter((d) => d && now - Number(d.at) < INVALID_DEPOSIT_WINDOW_MS);
       if (recent.some((d) => d.id === sourceId)) return false;
-      recent.push({ id: sourceId, at: now });
+      recent.push({ id: sourceId, at });
       if (recent.length >= INVALID_DEPOSIT_LIMIT) {
         tx.update(userRef, { invalidDeposits: [], depositLockedUntil: now + DEPOSIT_LOCK_MS, depositLockedAt: FV().serverTimestamp() });
         return true;
@@ -68,7 +72,9 @@ export async function expireUnpaidDeposits(db, docs) {
     });
     if (!done) continue;
     cancelled += 1;
-    await recordInvalidDeposit(db, d.userId, { sourceId: `deposit_${doc.id}`, what: `a ${formatUsd(d.amount)} USDT deposit left unpaid` });
+    await recordInvalidDeposit(db, d.userId, {
+      sourceId: `deposit_${doc.id}`, what: `a ${formatUsd(d.amount)} USDT deposit left unpaid`, at: ms(d.createdAt) + DEPOSIT_WINDOW_MS,
+    });
   }
   return cancelled;
 }

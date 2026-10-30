@@ -93,6 +93,15 @@ export default function UserActivityPage() {
       alert("Failed to clear the flag: " + err.message);
     }
   };
+  // Ends an unpaid-deposit lock early and forgets the unpaid requests counted so far.
+  const liftDepositLock = async () => {
+    if (!window.confirm("Lift this player's deposit lock now?")) return;
+    try {
+      await updateDoc(doc(db, "users", id), { depositLockedUntil: 0, invalidDeposits: [] });
+    } catch (err) {
+      alert("Failed to lift the lock: " + err.message);
+    }
+  };
   const referrerUid = user?.referrerUid;
   const referrerPin = !referrerUid
     ? "N/A"
@@ -139,6 +148,11 @@ export default function UserActivityPage() {
               <span className="text-[10px] bg-rose-100 text-rose-700 px-2 py-1 rounded-full font-black uppercase">
                 Deposits locked until {toDate(user.depositLockedUntil)?.toLocaleString()} (unpaid requests)
               </span>
+            )}
+            {depositLocked(user) && (
+              <button onClick={liftDepositLock} className="text-[10px] bg-slate-900 text-white px-3 py-1 rounded-full font-black uppercase">
+                Lift lock
+              </button>
             )}
           </div>
         </div>
