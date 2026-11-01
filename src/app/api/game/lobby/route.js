@@ -40,7 +40,7 @@ export async function GET(req) {
     }
     for (const d of stay.docs) {
       const u = d.data();
-      if (isBanned(u) || isGameRestricted(u)) continue;
+      if (isBanned(u) || isGameRestricted(u, "friends")) continue;
       const onPage = players.get(d.id);
       players.set(d.id, {
         id: d.id,
