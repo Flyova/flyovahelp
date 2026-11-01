@@ -1,9 +1,12 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { doc, getDoc } from "firebase/firestore";
 import { Globe, Lock, Users } from "lucide-react";
-import { GROUP_DESCRIPTION_MAX, GROUP_NAME_MAX } from "@/lib/chat";
+import { db } from "@/lib/firebase";
+import { AGENT_GROUP_CREATE_PRICE, GROUP_CREATE_PRICE, GROUP_DESCRIPTION_MAX, GROUP_NAME_MAX, groupCreatePrice } from "@/lib/chat";
 import { groupPhotoUrl } from "@/lib/groupPhotos";
 import ChatSheet from "@/components/chat/ChatSheet";
+import { useChat } from "@/components/chat/ChatProvider";
 
 const VISIBILITY = [
   { key: "public", icon: Globe, title: "Public", text: "Anyone can find it in search and join." },
@@ -119,8 +122,19 @@ export default function GroupForm({ initial = {}, submitLabel, onSubmit, onCance
   );
 }
 
-/** "New group" popup. `onCreate(values)` resolves to an error message, or "" on success. */
+/**
+ * "New group" popup. `onCreate(values)` resolves to an error message, or "" on success.
+ * Shows what the group costs from the main wallet (agents pay less); the server charges it.
+ */
 export function CreateGroupSheet({ onCreate, onClose }) {
+  const { uid } = useChat();
+  const [price, setPrice] = useState(null);
+  useEffect(() => {
+    if (!uid) return;
+    getDoc(doc(db, "users", uid))
+      .then((s) => setPrice(groupCreatePrice(s.data()?.isAgent)))
+      .catch(() => setPrice(GROUP_CREATE_PRICE));
+  }, [uid]);
   return (
     <ChatSheet label="New group" onClose={onClose}>
       <div className="p-5 pt-6">
@@ -131,7 +145,10 @@ export function CreateGroupSheet({ onCreate, onClose }) {
             <p className="text-xs text-white/50">You&apos;ll own it and can make others admins.</p>
           </div>
         </div>
-        <GroupForm submitLabel="Create group" onSubmit={onCreate} />
+        <p className="mb-3 px-3.5 py-2.5 rounded-2xl bg-amber-400/10 text-[12px] font-bold text-amber-200">
+          Creating a group costs {price === null ? `$${GROUP_CREATE_PRICE} ($${AGENT_GROUP_CREATE_PRICE} for agents)` : `$${price}`} from your main wallet.
+        </p>
+        <GroupForm submitLabel={price === null ? "Create group" : `Create group · $${price}`} onSubmit={onCreate} />
       </div>
     </ChatSheet>
   );

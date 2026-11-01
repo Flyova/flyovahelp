@@ -5,13 +5,14 @@ import {
 } from "firebase/firestore";
 import { ChevronLeft, LockKeyhole, MoreHorizontal, Search, UserX } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { TYPING_PING_MS, canPostInGroup, containsMediaMarker, formatCount, isValidText, presenceOf, typingLabel } from "@/lib/chat";
+import { TYPING_PING_MS, canPostInGroup, containsMediaMarker, formatCount, groupOwner, isValidText, presenceOf, typingLabel } from "@/lib/chat";
 import { notifyPush } from "@/lib/pushClient";
 import { playChatSound, playCoinSound } from "@/lib/chatSound";
 import { useChat } from "@/components/chat/ChatProvider";
 import ChatMessages from "@/components/chat/ChatMessages";
 import { messageMillis } from "@/components/chat/MessageBubble";
 import ChatComposer from "@/components/chat/ChatComposer";
+import PinnedBar from "@/components/chat/PinnedBar";
 import MessageMenu from "@/components/chat/MessageMenu";
 import ChatSearchSheet from "@/components/chat/ChatSearchSheet";
 
@@ -32,7 +33,9 @@ const lastWhere = (list, test) => {
  * statusLine, subtitle, online, label, onClick }: a private chat's statusLine (the
  * other player's status) sits under the name, where a group shows its description.
  * `menuItems` fill the ⋯ menu. A group admin passes
- * `onModerate` to remove other people's messages; groups pass `onSendCoins`.
+ * `onModerate` to remove other people's messages and `onPin(message, on)` to pin
+ * or unpin one; groups pass `onSendCoins`. A group's pinned messages show in a bar
+ * under the header, and its owner and admins get a badge by their name.
  * `blockedByMe` = { name, onUnblock } when you've blocked the other person in a
  * private chat: you can't write to them until you unblock. A closed private chat
  * (the other player deleted their username) stays readable but takes no replies.
@@ -52,6 +55,7 @@ export default function ConversationThread({
   onBack,
   onError,
   onModerate,
+  onPin,
   onMessagePrivately,
   onReport,
   onOpenProfile,
@@ -301,6 +305,15 @@ export default function ConversationThread({
     setMenuAt({ x: r.right - MENU_WIDTH, y: r.bottom + 6 });
   };
 
+  // Pinned messages, with their live text (or gone, once deleted) when they're loaded.
+  const pins = useMemo(() => (isGroup ? convo?.pinnedMessages || [] : []).flatMap((p) => {
+    const live = shown.find((m) => m.id === p.id);
+    return live?.deletedForEveryone ? [] : [{ ...p, text: live?.text ?? p.text }];
+  }), [isGroup, convo, shown]);
+  const pinnedIds = useMemo(() => new Set(pins.map((p) => p.id)), [pins]);
+  const owner = isGroup ? groupOwner(convo) : "";
+  const badgeFor = isGroup ? (name) => (name === owner ? "owner" : (convo?.admins || []).includes(name) ? "admin" : null) : undefined;
+
   const typingNow = typingLabel(typers, isGroup);
   const groupLine = isGroup && convo
     ? `${formatCount(members.length)} member${members.length === 1 ? "" : "s"} · ${formatCount(onlineCount)} online · ${convo.visibility === "public" ? "public" : "private"}${convo.locked ? " · locked" : ""}`
@@ -359,6 +372,8 @@ export default function ConversationThread({
         )}
       </div>
 
+      <PinnedBar key={convoId} pins={pins} onJump={(id) => setFocus({ id })} onUnpin={onPin && ((p) => onPin(p, false))} />
+
       <ChatMessages
         messages={shown}
         isMine={(m) => m.sender === me}
@@ -376,6 +391,9 @@ export default function ConversationThread({
         onOpenProfile={onOpenProfile}
         onSendCoins={lockedOut ? undefined : onSendCoins}
         onBlock={onBlock}
+        onPin={onPin && !lost ? (m) => onPin(m, !pinnedIds.has(m.id)) : undefined}
+        isPinned={(m) => pinnedIds.has(m.id)}
+        badgeFor={badgeFor}
         seenBy={seenBy}
         sentId={sentId}
         typing={lost ? [] : typers}

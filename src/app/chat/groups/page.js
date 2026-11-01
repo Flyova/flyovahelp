@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
-import { Archive, ArchiveRestore, ChevronDown, Info, LogOut, Plus, Trash2, Users } from "lucide-react";
+import { Archive, ArchiveRestore, ChevronDown, Info, LogOut, Pin, PinOff, Plus, Trash2, Users } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
-import { groupOwner, isGroupAdmin } from "@/lib/chat";
+import { groupOwner, isGroupAdmin, pinnedFirst } from "@/lib/chat";
 import { useChat } from "@/components/chat/ChatProvider";
 import ConversationList from "@/components/chat/ConversationList";
 import ConversationThread, { ThreadPlaceholder } from "@/components/chat/ConversationThread";
@@ -23,7 +23,7 @@ export default function GroupsPage() {
   const {
     identities, active, selectIdentity,
     convos, convosLoading, myNameIn, openIds, setOpenId, setErr, typingIn, unread,
-    messagePrivately, openProfile, reportUser, sendCoins, blockUser, chatState, archiveChat, confirmAction,
+    messagePrivately, openProfile, reportUser, sendCoins, blockUser, chatState, archiveChat, pinChat, confirmAction,
   } = useChat();
   const [showArchived, setShowArchived] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -33,12 +33,15 @@ export default function GroupsPage() {
 
   const openId = openIds.groups;
   const groups = convos.filter((c) => c.type === "group");
-  const inbox = groups.filter((g) => !chatState.archived[g.id]);
+  const inbox = pinnedFirst(groups.filter((g) => !chatState.archived[g.id]), chatState.pinned);
   const archived = groups.filter((g) => chatState.archived[g.id]);
   const archivedUnread = archived.filter((g) => unread[g.id]).length;
   const archiveItem = (g) => (chatState.archived[g.id]
     ? { label: "Unarchive", icon: ArchiveRestore, run: () => archiveChat(g.id, false) }
     : { label: "Archive", icon: Archive, run: () => archiveChat(g.id, true) });
+  const pinItem = (g) => (chatState.pinned[g.id]
+    ? { label: "Unpin", icon: PinOff, run: () => pinChat(g, false) }
+    : { label: "Pin to top", icon: Pin, run: () => pinChat(g, true) });
   const memberOf = new Set(groups.map((g) => g.id));
   const open = groups.find((c) => c.id === openId);
   const me = myNameIn(open);
@@ -98,6 +101,11 @@ export default function GroupsPage() {
     if (problem) setErr(problem);
   };
 
+  const pinMessage = async (m, on) => {
+    const problem = await act("pinMessage", { messageId: m.id, pin: on });
+    if (problem) setErr(problem);
+  };
+
   const memberCount = (open?.participants || []).length;
 
   return (
@@ -145,7 +153,8 @@ export default function GroupsPage() {
           myNameIn={myNameIn}
           openId={openId}
           onOpen={openGroup}
-          rowMenu={(g) => [archiveItem(g)]}
+          rowMenu={(g) => [pinItem(g), archiveItem(g)]}
+          pinned={chatState.pinned}
           title="Your groups"
           action={(
             <button
@@ -185,6 +194,7 @@ export default function GroupsPage() {
             onBack={() => openGroup(null)}
             onError={setErr}
             onModerate={isGroupAdmin(open, me) ? removeMessage : undefined}
+            onPin={isGroupAdmin(open, me) ? pinMessage : undefined}
             onMessagePrivately={messagePrivately}
             onReport={(m) => reportUser(m.sender)}
             onOpenProfile={(u) => openProfile(u, { convoId: openId })}

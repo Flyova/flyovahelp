@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
-import { Camera, Copy, Crown, Loader2, Globe, Link2, Lock, LockKeyhole, LogOut, MoreHorizontal, Pencil, RefreshCw, Share2, Shield, ShieldOff, Trash2, UserMinus } from "lucide-react";
+import { Ban, Camera, Copy, Crown, Loader2, Globe, Link2, Lock, LockKeyhole, LogOut, MoreHorizontal, Pencil, RefreshCw, Share2, Shield, ShieldOff, Trash2, UserMinus } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import ChatSheet from "@/components/chat/ChatSheet";
 import GroupForm, { GroupAvatar } from "@/components/chat/GroupForm";
@@ -326,6 +326,16 @@ export default function GroupInfoSheet({ convo, me, act, onClose, onOpenProfile,
                           <UserMinus size={13} /> Remove from group
                         </button>
                       )}
+                      {canRemove(p) && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={async () => (await confirmAction({ title: `Block @${p} from the group?`, message: `@${p} is removed and can't rejoin, be added or accept an invite until an admin unblocks them.`, confirmLabel: "Block" })) && run("blockMember", { username: p }, `@${p} is blocked from the group.`)}
+                          className="h-8 px-3 rounded-lg bg-white/[0.06] hover:bg-white/10 flex items-center gap-1.5 text-[11px] font-bold text-[#FF8A9B] disabled:opacity-50"
+                        >
+                          <Ban size={13} /> Block from group
+                        </button>
+                      )}
                     </div>
                   )}
                 </li>
@@ -333,6 +343,30 @@ export default function GroupInfoSheet({ convo, me, act, onClose, onOpenProfile,
             })}
           </ul>
         </div>
+
+        {amAdmin && (convo.groupBlocked || []).length > 0 && (
+          <div className="mt-4">
+            <p className="text-[10px] font-black uppercase text-white/40 mb-1.5 px-1">Blocked from this group</p>
+            <ul className="rounded-2xl bg-black/20 divide-y divide-white/5">
+              {convo.groupBlocked.map((p) => (
+                <li key={p} className="px-2 flex items-center gap-2">
+                  <span className="min-w-0 flex-1 flex items-center gap-2.5 py-2">
+                    <Avatar username={p} size={30} rounded="rounded-full" />
+                    <span className="min-w-0 truncate text-[13px] font-bold">@{p}</span>
+                  </span>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => run("unblockMember", { username: p }, `@${p} is unblocked and can join again.`)}
+                    className="shrink-0 h-8 px-3 rounded-lg bg-white/[0.06] hover:bg-white/10 text-[11px] font-bold disabled:opacity-50"
+                  >
+                    Unblock
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <button type="button" disabled={busy} onClick={onLeave} className="mt-4 w-full h-11 rounded-xl bg-white/[0.05] hover:bg-white/10 flex items-center justify-center gap-2 text-xs font-black uppercase text-[#FF8A9B] disabled:opacity-50">
           {amOwner ? <Trash2 size={15} /> : <LogOut size={15} />} {amOwner ? "Delete group" : "Leave group"}

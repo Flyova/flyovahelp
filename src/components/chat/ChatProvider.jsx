@@ -9,7 +9,7 @@ import {
 import { auth, db } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
 import { playChatSound, preloadTones } from "@/lib/chatSound";
-import { PRESENCE_PING_MS, READS_SINCE_MS, TYPING_SHOW_MS, departedFrom, norm } from "@/lib/chat";
+import { MAX_PINNED_CHATS, PRESENCE_PING_MS, READS_SINCE_MS, TYPING_SHOW_MS, departedFrom, norm } from "@/lib/chat";
 import { defaultChatTones } from "@/lib/chatTones";
 import { CoinWalletSheet, SendCoinsSheet } from "@/components/chat/CoinSheets";
 import ChatDialog from "@/components/chat/ChatDialog";
@@ -72,6 +72,7 @@ const readChatState = (d = {}, loaded = false) => ({
   showCoins: d.showCoins === true,
   sounds: d.sounds || {}, // { room, private, groups: { <id>: bool }, people: { <name>: bool } } — all on unless false
   archived: d.archived || {}, // conversation id -> true while archived
+  pinned: d.pinned || {}, // conversation id -> when it was pinned on top of its list (ms; 0 = not pinned)
   cleared: d.cleared || {}, // conversation id -> when you deleted the chat (messages before it are gone for you)
 });
 
@@ -512,9 +513,20 @@ export function ChatProvider({ children }) {
 
   // Archive / delete a chat for you only (the other members keep theirs). A deleted
   // chat comes back, with only new messages, when someone writes in it again.
-  const archiveChat = useCallback((id, on) => updateChatState({ archived: { [id]: on } })
+  const archiveChat = useCallback((id, on) => updateChatState({ archived: { [id]: on }, ...(on && { pinned: { [id]: 0 } }) })
     .then(() => flashNotice(on ? "Chat archived." : "Chat moved back to your chats."))
     .catch((e) => setErr(`Could not save: ${e.message}`)), [updateChatState, flashNotice]);
+  // Pin a chat on top of its list (Private or Groups), up to MAX_PINNED_CHATS each.
+  const pinChat = useCallback((convo, on) => {
+    const isGroup = convo.type === "group";
+    const pinnedHere = myConvos.filter((c) => (c.type === "group") === isGroup && chatState.pinned[c.id] && !chatState.archived[c.id]);
+    if (on && pinnedHere.length >= MAX_PINNED_CHATS) {
+      return setErr(`You can pin up to ${MAX_PINNED_CHATS} ${isGroup ? "groups" : "chats"}. Unpin one first.`);
+    }
+    return updateChatState({ pinned: { [convo.id]: on ? Date.now() : 0 } })
+      .then(() => flashNotice(on ? "Pinned to the top." : "Unpinned."))
+      .catch((e) => setErr(`Could not save: ${e.message}`));
+  }, [myConvos, chatState.pinned, chatState.archived, updateChatState, flashNotice]);
   const deleteChat = useCallback((id) => updateChatState({ cleared: { [id]: serverTimestamp() }, archived: { [id]: false } })
     .then(() => {
       setOpenIds((p) => ({ private: p.private === id ? null : p.private, groups: p.groups === id ? null : p.groups }));
@@ -621,8 +633,8 @@ export function ChatProvider({ children }) {
     coins, coinsOf, openCoinWallet, sendCoins,
     updateChatState, soundOn, toneFor, presence, presenceNow,
     settingsFor, updateSettings, settingsLoaded, settingsName, setSettingsName: setSettingsChoice,
-    archiveChat, deleteChat, removeChat, isDeletedForMe, ask, confirmAction, needUsername,
-  }), [uid, identities, identitiesLoaded, active, selectIdentity, myConvos, unreadByName, coinsOf, refreshIdentities, createUsername, usernamePrice, archiveChat, deleteChat, isDeletedForMe, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, notice, flashNotice, openProfile, messagePrivately, blockUser, unblockUser, reportUser, coins, openCoinWallet, sendCoins, updateChatState, soundOn, toneFor, presence, presenceNow, settingsFor, updateSettings, settingsLoaded, settingsName, removeChat, ask, confirmAction, needUsername]);
+    archiveChat, pinChat, deleteChat, removeChat, isDeletedForMe, ask, confirmAction, needUsername,
+  }), [uid, identities, identitiesLoaded, active, selectIdentity, myConvos, unreadByName, coinsOf, refreshIdentities, createUsername, usernamePrice, archiveChat, pinChat, deleteChat, isDeletedForMe, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, notice, flashNotice, openProfile, messagePrivately, blockUser, unblockUser, reportUser, coins, openCoinWallet, sendCoins, updateChatState, soundOn, toneFor, presence, presenceNow, settingsFor, updateSettings, settingsLoaded, settingsName, removeChat, ask, confirmAction, needUsername]);
 
   // Whose coins the open coin sheet uses: the wallet's username, or who you send as.
   const walletName = coinSheet?.name || active;

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Loader2, MessageCircle, MoreVertical } from "lucide-react";
+import { Loader2, MessageCircle, MoreVertical, Pin } from "lucide-react";
 import Avatar, { DeletedAvatar } from "@/components/Avatar";
 import { GroupAvatar } from "@/components/chat/GroupForm";
 import MessageMenu from "@/components/chat/MessageMenu";
@@ -29,7 +29,8 @@ const memberLabel = (n) => `${n} member${n === 1 ? "" : "s"}`;
  * `online` (usernames) puts a green dot on private chats with someone online;
  * `blocked` (usernames) marks private chats with people you've blocked; a
  * closed private chat (the other player deleted their username) reads "Deleted account";
- * `rowMenu(convo)` gives the items for each row's ⋯ menu (archive, delete…).
+ * `rowMenu(convo)` gives the items for each row's ⋯ menu (archive, delete…);
+ * `pinned` (id -> when pinned) puts a pin on rows kept on top.
  */
 export default function ConversationList({
   convos,
@@ -46,6 +47,7 @@ export default function ConversationList({
   online = new Set(),
   blocked = new Set(),
   rowMenu = null,
+  pinned = {},
   className = "",
 }) {
   const [menu, setMenu] = useState(null); // { convo, at }
@@ -86,7 +88,10 @@ export default function ConversationList({
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline justify-between gap-2">
                     <span className={`text-[13px] truncate ${count ? "font-black text-white" : "font-bold"}`}>{group ? c.groupName : others.map((p) => `@${p}`).join(", ")}</span>
-                    <span className={`shrink-0 text-[10px] ${count ? "text-[#E0708C] font-bold" : "text-white/35"}`}>{when(c.lastMessageAt)}</span>
+                    <span className={`shrink-0 flex items-center gap-1 text-[10px] ${count ? "text-[#E0708C] font-bold" : "text-white/35"}`}>
+                      {pinned[c.id] ? <Pin size={11} className="text-white/45 rotate-45" aria-label="pinned" /> : null}
+                      {when(c.lastMessageAt)}
+                    </span>
                   </span>
                   <span className="flex items-center justify-between gap-2">
                     <span className={`min-w-0 truncate text-xs ${isBlocked ? "text-red-300/80" : typing ? "text-[#E0708C]" : count ? "text-white/85 font-semibold" : "text-white/45"}`}>
