@@ -18,8 +18,9 @@ import {
 } from "lucide-react";
 // FIREBASE IMPORTS
 import { auth, db } from "@/lib/firebase";
-import { collection, doc, limit, onSnapshot, query, updateDoc, where } from "firebase/firestore";
+import { collection, doc, limit, onSnapshot, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
+import { AGENT_HEARTBEAT_MS } from "@/lib/agentPresence";
 
 /** `hideOnMobile`: hidden below md but still mounted, so the idle sign-out below keeps running. */
 export default function Header({ hideOnMobile = false }) {
@@ -69,8 +70,8 @@ export default function Header({ hideOnMobile = false }) {
               signupRewards: (Number(data.signupRewards || 0) * 0.0001).toFixed(4),
             }));
 
-            // Handle Agent Specific Balance
-            if (data.isAgent) {
+            // Handle Agent Specific Balance (one listener, however often the account changes)
+            if (data.isAgent && !unsubscribeAgent) {
               const agentDocRef = doc(db, "agents", user.uid);
               unsubscribeAgent = onSnapshot(agentDocRef, (agentSnap) => {
                 if (agentSnap.exists()) {
@@ -88,6 +89,7 @@ export default function Header({ hideOnMobile = false }) {
       } else {
         if (unsubscribeUser) unsubscribeUser();
         if (unsubscribeAgent) unsubscribeAgent();
+        unsubscribeAgent = null;
         if (unsubscribeUnread) unsubscribeUnread();
         setUnread(0);
         setUserData({ wallet: "0.00", referralBonus: "0.00", inflowBonus: "0.00", gameCredits: "0.00", agentBalance: "0.00", pin: "--------", isAgent: false, signupRewards: "0.0000" });
@@ -101,6 +103,24 @@ export default function Header({ hideOnMobile = false }) {
       if (unsubscribeUnread) unsubscribeUnread();
     };
   }, []);
+
+  // Agents: players see them online while this tab is open and in view (lib/agentPresence).
+  useEffect(() => {
+    if (!userData.isAgent) return;
+    const stamp = () => {
+      const current = auth.currentUser;
+      if (current && document.visibilityState === "visible") {
+        updateDoc(doc(db, "users", current.uid), { activeAt: serverTimestamp() }).catch(() => {});
+      }
+    };
+    stamp();
+    const timer = setInterval(stamp, AGENT_HEARTBEAT_MS);
+    document.addEventListener("visibilitychange", stamp);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", stamp);
+    };
+  }, [userData.isAgent]);
 
   useEffect(() => {
     let hiddenAt = null;

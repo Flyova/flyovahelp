@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
+import { PERIODS, PERIOD_LABELS, myTz } from "@/lib/periods";
 import {
   ArrowDownToLine, ArrowRightLeft, ArrowUpRight, CalendarClock, CheckCircle2, ChevronLeft,
   Handshake, Loader2, Lock, Target, TrendingUp, Wallet,
@@ -25,7 +26,7 @@ export default function InflowBonusPage() {
   const [only, setOnly] = useState(""); // a category to show the history of, or "" for all
 
   const load = useCallback(async () => {
-    const res = await authFetch("/api/inflow");
+    const res = await authFetch(`/api/inflow?tz=${myTz()}`);
     if (res.error) setError(res.error);
     else { setData(res); setError(""); }
   }, []);
@@ -94,6 +95,21 @@ export default function InflowBonusPage() {
             </p>
           )}
         </div>
+
+        {/* EARNED TODAY, THIS WEEK, MONTH AND YEAR */}
+        {data.periods && (
+          <div className="space-y-3">
+            <h3 className="font-black italic uppercase text-xs text-white/40 tracking-widest px-2">Your earnings</h3>
+            <div className="grid grid-cols-2 gap-3">
+              {PERIODS.map((p) => (
+                <div key={p} className="bg-[#142036] rounded-3xl p-4 border border-white/5">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-white/40">{PERIOD_LABELS[p]}</p>
+                  <p className="text-xl font-black italic text-emerald-400">{usd(data.periods[p])}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ELIGIBILITY */}
         <div className="bg-[#142036] rounded-[2rem] p-6 border border-white/5 shadow-xl space-y-4">

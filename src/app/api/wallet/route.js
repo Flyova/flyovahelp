@@ -16,6 +16,8 @@ import { checkTxPin, sendPinResetCode, setTxPin } from "@/lib/txPin";
 import { recordInvalidDeposit } from "@/lib/depositLock";
 import { notifyUser } from "@/lib/notifications";
 import { ensureReferralCode } from "@/lib/referralCode";
+import { playerActivity } from "@/lib/activity";
+import { periodStarts, tzOffset } from "@/lib/periods";
 
 // The main wallet, users/{uid}.wallet. Players' apps can only read it (Firestore
 // rules); every change is made here, inside one transaction that checks it.
@@ -24,6 +26,8 @@ import { ensureReferralCode } from "@/lib/referralCode";
 //   GET ?view=referrals                         -> { referrals, qualified, needed, bonus, code, link, signupRewards, signupRewardsTotal }
 //   GET ?view=signups                           -> { total, verified, rewarded, byCountry, people } who registered with
 //                                                                       your link or code (username, country, when, verified)
+//   GET ?view=activity&tz=                      -> { periods: { day|week|month|year: { games, transfers, chat, withdrawals,
+//                                                                       deposits } }, partial } your money in each (lib/activity)
 //   POST { action: "transfer", pin, amount, txPin } -> { record, balance } fee + any $3 bonus repayment on top
 //   POST { action: "withdraw", amount, address, txPin } -> { balance, id, fee } USDT; local-agent withdrawals are trades (/api/trades);
 //                                                                       free on the perk days in lib/accountPerks
@@ -452,7 +456,9 @@ async function usernameChange(db, caller, { username }) {
   return NextResponse.json({ username: out.username, balance: out.balance });
 }
 
-const VIEWS = { recipient: recipientView, referrals: referralsView, signups: signupsView };
+const activityView = async (db, caller, params) => NextResponse.json(await playerActivity(db, caller.uid, periodStarts(tzOffset(params))));
+
+const VIEWS = { recipient: recipientView, referrals: referralsView, signups: signupsView, activity: activityView };
 const ACTIONS = {
   transfer, withdraw, referral, signupClaim, jackpot, deposit, depositProof, depositCancel, pinSet, pinReset, bankSet, usernameChange,
 };

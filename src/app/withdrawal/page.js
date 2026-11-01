@@ -7,6 +7,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { authFetch } from "@/lib/authFetch";
 import { freeWithdrawalPerk, freeWithdrawalPerksFor, perkDays, usedFreeWithdrawals } from "@/lib/accountPerks";
 import { formatLocal } from "@/lib/currency";
+import { AgentPresence, AgentRating, OnlineDot } from "@/components/AgentStatus";
 import PinPrompt from "@/components/PinPrompt";
 import { 
   ChevronLeft, 
@@ -101,7 +102,10 @@ export default function WithdrawalPage() {
       // each with their sell rate for this amount (agents can set others for bigger amounts).
       const res = await authFetch(`/api/trades?view=agents&type=withdrawal&amount=${encodeURIComponent(amt || 0)}`);
       if (res.error) throw new Error(res.error);
-      const validAgents = res.agents.map((a) => ({ id: a.id, full_name: a.full_name, exchange_rate: a.rate ?? a.withdrawal_rate, country: a.country || userData.country }));
+      const validAgents = res.agents.map((a) => ({
+        id: a.id, full_name: a.full_name, exchange_rate: a.rate ?? a.withdrawal_rate, country: a.country || userData.country,
+        online: !!a.online, lastSeenAt: a.lastSeenAt || null, rating: a.rating,
+      }));
 
       setAgents(validAgents);
 
@@ -388,10 +392,17 @@ const handleWithdraw = async () => {
                   <div key={agent.id} onClick={() => setSelectedAgent(agent)}
                     className={`p-5 rounded-3xl border-2 transition-all cursor-pointer flex justify-between items-center ${selectedAgent?.id === agent.id ? "border-[#2457D6] bg-[#2457D6]/10 shadow-lg" : "border-white/5 bg-[#142036]"}`}>
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-[#2457D6] rounded-2xl flex items-center justify-center font-black italic text-white shadow-lg uppercase">{agent.full_name.charAt(0)}</div>
+                      <div className="relative w-12 h-12 bg-[#2457D6] rounded-2xl flex items-center justify-center font-black italic text-white shadow-lg uppercase">
+                        {agent.full_name.charAt(0)}
+                        <OnlineDot online={agent.online} />
+                      </div>
                       <div>
                         <p className="font-black uppercase text-sm italic tracking-tight">{agent.full_name}</p>
                         <p className="text-[9px] font-bold text-[#7A9BEE] uppercase tracking-tighter">Sell Rate: {agent.exchange_rate} / $</p>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
+                          <AgentRating rating={agent.rating} />
+                          <AgentPresence online={agent.online} lastSeenAt={agent.lastSeenAt} />
+                        </div>
                       </div>
                     </div>
                     <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selectedAgent?.id === agent.id ? 'border-[#2457D6] bg-[#2457D6]' : 'border-white/10'}`}>

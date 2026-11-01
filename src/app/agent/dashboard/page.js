@@ -13,6 +13,8 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { authFetch } from "@/lib/authFetch";
 import RateTiers, { rowsToTiers, tiersToRows } from "@/components/agent/RateTiers";
+import AgentTradeTotals from "@/components/agent/AgentTradeTotals";
+import { AgentRating } from "@/components/AgentStatus";
 import { useRouter } from "next/navigation";
 import { 
   Check, 
@@ -246,6 +248,11 @@ export default function AgentDashboard() {
                 <div>
                     <h1 className="text-2xl font-black italic uppercase tracking-tighter">Agent Console</h1>
                     <p className="text-white/60 text-[10px] font-black uppercase tracking-widest">Live Trading Dashboard</p>
+                    {/* What players rate you (they see it when choosing an agent). */}
+                    <AgentRating className="mt-1 !text-white" rating={{
+                      count: Number(agent?.ratingCount) || 0,
+                      average: Number(agent?.ratingCount) ? Math.round((Number(agent.ratingTotal) || 0) / Number(agent.ratingCount) * 10) / 10 : 0,
+                    }} />
                 </div>
                 <div className="flex items-center gap-3">
                   <button 
@@ -315,6 +322,8 @@ export default function AgentDashboard() {
       </div>
 
       <div className="p-6 space-y-10">
+        <AgentTradeTotals refreshKey={tradeHistory.map((t) => `${t.id}:${t.status}`).join(",")} />
+
         <section className="space-y-6">
             <div className="flex justify-between items-center px-2">
             <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-500">Active Market Orders</h2>
