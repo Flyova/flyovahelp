@@ -27,6 +27,12 @@ export default function TradeRoom() {
   const [nowMs, setNowMs] = useState(0);
   // The agent's country, for older trades that don't carry it (their total's currency).
   const [agentCountry, setAgentCountry] = useState("");
+  // Set once our "I've sent the money" goes through, so it can't be tapped again while
+  // the trade's own update is still on its way.
+  const [sentByMe, setSentByMe] = useState(false);
+  // The fixed bottom bar's height: the page leaves that much room so it never covers the last message.
+  const barRef = useRef(null);
+  const [barHeight, setBarHeight] = useState(0);
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
   const expiryTimerRef = useRef(null);
@@ -128,13 +134,24 @@ export default function TradeRoom() {
     return () => { clearTimeout(first); clearInterval(timer); };
   }, []);
 
+  const hasTrade = !!trade;
+  useEffect(() => {
+    const bar = barRef.current;
+    if (!bar) return;
+    const observer = new ResizeObserver(() => setBarHeight(bar.offsetHeight));
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, [hasTrade]);
+
   /** markPaid (the money's been sent: the agent's on a withdrawal, the player's on a deposit) or notPaid (agent: never paid). */
   const tradeStep = async (action, question) => {
     if (!window.confirm(question)) return;
     setLoading(true);
     try {
       const res = await authFetch("/api/trades", { method: "POST", body: { action, id } });
-      if (res.error) alert(res.error);
+      // Already marked (another tap or device got there first) counts as sent too.
+      if (action === "markPaid" && (!res.error || /already said/.test(res.error))) setSentByMe(true);
+      else if (res.error) alert(res.error);
     } finally {
       setLoading(false);
     }
@@ -229,12 +246,12 @@ export default function TradeRoom() {
   const paidMs = trade.agentPaidAt?.toMillis?.() || 0;
   const confirmLeft = paidMs && nowMs ? Math.max(0, paidMs + 45 * 60 * 1000 - nowMs) : null;
   const mmss = (msLeft) => `${Math.floor(msLeft / 60000)}:${String(Math.floor((msLeft % 60000) / 1000)).padStart(2, "0")}`;
-  // Confirm only once the side sending the money says it has.
-  const moneySent = trade.type === "deposit" ? !!trade.playerPaidAt : !!trade.agentPaidAt;
+  // Confirm only once the side sending the money says it has (sentByMe: we're that side and just did).
+  const moneySent = !!(trade.type === "deposit" ? trade.playerPaidAt : trade.agentPaidAt) || sentByMe;
 
   return (
-    <div className="min-h-screen bg-[#0B1220] flex flex-col text-white pb-48"> 
-      <div className="bg-[#142036] p-6 pt-12 border-b border-white/5 flex items-center justify-between sticky top-0 z-50">
+    <div className="min-h-screen bg-[#0B1220] flex flex-col text-white" style={{ paddingBottom: barHeight ? barHeight + 16 : 192 }}>
+      <div className="bg-[#142036] px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] border-b border-white/5 flex items-center justify-between gap-3 sticky top-0 md:top-14 z-50">
         <div className="flex items-center gap-4">
           <button onClick={() => router.back()} className="p-2 hover:bg-white/5 rounded-full"><ArrowLeft size={20}/></button>
           <div>
@@ -326,7 +343,7 @@ export default function TradeRoom() {
             )}
 
             {trade.type === "deposit" && trade.status === "acknowledged" && (
-                trade.playerPaidAt ? (
+                moneySent ? (
                   <div className="p-4 bg-emerald-500/10 rounded-3xl border border-emerald-500/30 text-center text-[11px] font-bold text-emerald-300">
                     You said you&apos;ve sent {total}. The agent will confirm once it arrives.
                   </div>
@@ -381,16 +398,16 @@ export default function TradeRoom() {
           </div>
       )}
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 px-4 py-4 space-y-3">
         {messages.map((msg) => (
            <MessageBubble key={msg.id} msg={msg} isMe={msg.senderId === auth.currentUser.uid} />
         ))}
         <div ref={scrollRef} />
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-6 bg-[#0B1220]/95 backdrop-blur-md border-t border-white/5 z-50 pb-20">
+      <div ref={barRef} className="fixed bottom-0 left-0 right-0 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-[#0B1220]/95 backdrop-blur-md border-t border-white/5 z-50 flex flex-col gap-2">
         {trade.status === 'pending' && isAgent && (
-          <div className="flex gap-3 mb-4 max-w-md mx-auto">
+          <div className="flex gap-3 max-w-md mx-auto w-full">
             <button 
               onClick={async () => {
                 if(window.confirm("Decline this trade?")) {
@@ -418,40 +435,48 @@ export default function TradeRoom() {
         )}
 
         {trade.status !== 'completed' && trade.status !== 'cancelled' && (
-             <div className="flex gap-2 max-w-md mx-auto w-full mb-4 items-center">
+             <div className="flex gap-2 max-w-md mx-auto w-full items-center">
                 <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="image/*" />
-                <button onClick={() => fileInputRef.current.click()} disabled={uploading} className="bg-[#142036] p-4 rounded-2xl text-[#2457D6] shadow-inner">
+                <button onClick={() => fileInputRef.current.click()} disabled={uploading} className="bg-[#142036] p-3.5 rounded-2xl text-[#2457D6] shadow-inner">
                   {uploading ? <Loader2 className="animate-spin" size={20} /> : <ImageIcon size={20} />}
                 </button>
-                <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} placeholder="Type a message..." className="flex-1 bg-[#142036] border border-white/10 p-4 rounded-2xl outline-none focus:border-[#2457D6] text-sm font-bold text-white placeholder:text-slate-500 shadow-inner" />
-                <button onClick={() => sendMessage()} className="bg-[#2457D6] p-4 rounded-2xl shadow-lg active:scale-95 transition-all"><Send size={20} /></button>
+                <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} placeholder="Type a message..." className="flex-1 min-w-0 bg-[#142036] border border-white/10 p-3.5 rounded-2xl outline-none focus:border-[#2457D6] text-sm font-bold text-white placeholder:text-slate-500 shadow-inner" />
+                <button onClick={() => sendMessage()} className="bg-[#2457D6] p-3.5 rounded-2xl shadow-lg active:scale-95 transition-all"><Send size={20} /></button>
              </div>
         )}
 
         {trade.status === 'acknowledged' && isAgent && trade.type === "withdrawal" && (
-             trade.agentPaidAt ? (
-               <p className="max-w-md mx-auto w-full mb-4 text-center text-[10px] font-black uppercase tracking-widest text-emerald-400">
+             moneySent ? (
+               <p className="max-w-md mx-auto w-full py-1 text-center text-[10px] font-black uppercase tracking-widest text-emerald-400">
                  You said it&apos;s paid. Waiting for the player to confirm.
                </p>
              ) : (
                <button onClick={() => tradeStep("markPaid", `Have you sent ${total} to the player's bank?`)} disabled={loading}
-                 className="max-w-md mx-auto w-full mb-4 bg-emerald-600 py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all">
+                 className="max-w-md mx-auto w-full bg-emerald-600 py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all">
                  {loading ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />} I&apos;VE SENT THE MONEY
                </button>
              )
         )}
 
+        {/* The agent's two deposit buttons share a row, so the chat keeps its room. */}
         {trade.status === 'acknowledged' && isAgent && trade.type === "deposit" && (
-             <button onClick={() => tradeStep("notPaid", "Cancel this deposit because the player didn't pay? Your balance comes back, and it counts against the player.")} disabled={loading || unpaidWaitMin > 0}
-               className="max-w-md mx-auto w-full mb-3 bg-rose-500/10 text-rose-400 border border-rose-500/20 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 disabled:opacity-40">
-               <XCircle size={14} /> {unpaidWaitMin > 0 ? `Player didn't pay (in ${unpaidWaitMin} min)` : "Player didn't pay"}
-             </button>
+             <div className="flex gap-2 max-w-md mx-auto w-full">
+               <button onClick={() => tradeStep("notPaid", "Cancel this deposit because the player didn't pay? Your balance comes back, and it counts against the player.")} disabled={loading || unpaidWaitMin > 0}
+                 className="flex-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 py-3.5 rounded-2xl font-black uppercase text-[9px] tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-40">
+                 <XCircle size={13} className="shrink-0" /> {unpaidWaitMin > 0 ? `Didn't pay (${unpaidWaitMin} min)` : "Didn't pay"}
+               </button>
+               <button onClick={handleFinalConfirm} disabled={loading || !moneySent}
+                 className="flex-[1.4] bg-green-600 py-3.5 rounded-2xl font-black uppercase text-[10px] tracking-wider flex items-center justify-center gap-1.5 shadow-xl active:scale-95 transition-all disabled:opacity-40 disabled:active:scale-100">
+                 {loading ? <Loader2 className="animate-spin shrink-0" size={15} /> : <CheckCircle2 size={15} className="shrink-0" />}
+                 {moneySent ? "Confirm received" : "Waiting for player"}
+               </button>
+             </div>
         )}
 
-        {trade.status === 'acknowledged' && canConfirm && (
-             <button onClick={handleFinalConfirm} disabled={loading || !moneySent} className="max-w-md mx-auto w-full bg-green-600 py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all disabled:opacity-40 disabled:active:scale-100">
+        {trade.status === 'acknowledged' && canConfirm && !isAgent && (
+             <button onClick={handleFinalConfirm} disabled={loading || !moneySent} className="max-w-md mx-auto w-full bg-green-600 py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all disabled:opacity-40 disabled:active:scale-100">
                 {loading ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
-                {moneySent ? "CONFIRM PAYMENT RECEIVED" : trade.type === "deposit" ? "WAITING FOR THE PLAYER TO PAY" : "WAITING FOR THE AGENT TO PAY"}
+                {moneySent ? "CONFIRM PAYMENT RECEIVED" : "WAITING FOR THE AGENT TO PAY"}
              </button>
         )}
       </div>
