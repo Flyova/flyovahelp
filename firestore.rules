@@ -66,8 +66,9 @@ service cloud.firestore {
     // email verified, change who referred them, set their bank account or PIN state
     // around the checks in /api/wallet, or touch a balance, bonus or plan (money moves
     // through the server). The account name and username change through the server too:
-    // the name from a link emailed to the account, the username for $1. `role` and
-    // `pin` have their own checks below.
+    // the name from a link emailed to the account, the username for $1; profileChanges
+    // counts those emailed changes for the admins. `role`, `pin`, `phone` and `dob`
+    // have their own checks below.
     function lockedAccountFields() {
       return ['isban', 'banned', 'verified', 'otp', 'isAgent', 'chatMuted',
         'restrictDeposit', 'restrictWithdrawal', 'restrictTransfer',
@@ -80,7 +81,7 @@ service cloud.firestore {
         'signupRewards', 'signupRewardsTotal', 'signupRewardPaidTo', 'referralCode', 'restrictGames',
         'flagged', 'flagReason', 'flaggedAt', 'flagCount', 'deletionRequested', 'deletionRequestDate',
         'hasApplied', 'agentStatus',
-        'fullName', 'username', 'freeWithdrawals', 'usernameChangedAt', 'profileChangedAt'];
+        'fullName', 'username', 'freeWithdrawals', 'usernameChangedAt', 'profileChangedAt', 'profileChanges'];
     }
 
     function ownAccountChange() {
@@ -91,7 +92,11 @@ service cloud.firestore {
         && (!changed.hasAny(['pin']) || (
           resource.data.get('pin', '') in [null, '']
           && request.resource.data.pin is string
-          && request.resource.data.pin.matches('^[0-9]{8}$')));
+          && request.resource.data.pin.matches('^[0-9]{8}$')))
+        // A missing phone number or date of birth can be filled in; after that they
+        // change from a link emailed to the account (/api/account).
+        && (!changed.hasAny(['phone']) || (resource.data.get('phone', '') in [null, ''] && request.resource.data.phone is string))
+        && (!changed.hasAny(['dob']) || (resource.data.get('dob', '') in [null, ''] && request.resource.data.dob is string));
     }
 
     // An account (email, phone, date of birth, PIN, balance) is read only by its
@@ -110,7 +115,7 @@ service cloud.firestore {
           'hasTxPin', 'bank', 'bankUpdatedAt', 'depositLockedUntil', 'depositLockedAt', 'invalidDeposits',
         'signupRewards', 'signupRewardsTotal', 'signupRewardPaidTo', 'referralCode', 'restrictGames',
         'flagged', 'flagReason', 'flaggedAt', 'flagCount', 'deletionRequested', 'deletionRequestDate',
-        'hasApplied', 'agentStatus'])
+        'hasApplied', 'agentStatus', 'profileChanges'])
         // Account age unlocks free usernames, the inflow bonus and the 18-month perks, so it's the real sign-up time.
         && request.resource.data.get('createdAt', request.time) == request.time
         && (!('role' in request.resource.data) || isPortalRole(request.resource.data.role))

@@ -6,19 +6,21 @@ import { sendEmail } from "@/lib/resend";
 import { alertAdmins, notifyUser } from "@/lib/notifications";
 
 // Changes to the account that need the owner's email: deleting it, and changing its
-// full name or email address. Each is confirmed from a link emailed to the account's
-// current address, so a stolen session can't do them.
+// full name, email address, phone number or date of birth. Each is confirmed from a
+// link emailed to the account's current address, so a stolen session can't do them.
 //
 // A deletion request (deletion_requests/{uid}) only reaches the admins once confirmed;
-// /api/admin/delete-user refuses until then. A name or email change (profile_changes/
-// {uid}, server only) is made when its link is opened; a bank account's beneficiary
-// name follows the new name.
+// /api/admin/delete-user refuses until then. A profile change (profile_changes/{uid},
+// server only) is made when its link is opened; a bank account's beneficiary name
+// follows the new name. users/{uid}.profileChanges counts how many times each of
+// fullName, email, phone and dob was changed this way (the admins see it).
 //
 //   POST { action: "deleteRequest", reason? }  -> { sentTo }   signed in; emails the link (again)
 //   POST { action: "deleteConfirm", uid, token } -> { ok }     the emailed link (/confirm-deletion), not signed in
 //   POST { action: "deleteCancel" }             -> { ok }      signed in
-//   POST { action: "profileChangeRequest", fullName?, email? } -> { sentTo }   signed in
-//   POST { action: "profileChangeConfirm", uid, token } -> { ok, fullName, email }   the emailed link (/confirm-change)
+//   POST { action: "profileChangeRequest", fullName?, email?, phone?, dob? } -> { sentTo }   signed in;
+//        phone with its country code (+447700900123), dob as YYYY-MM-DD (18 or older)
+//   POST { action: "profileChangeConfirm", uid, token } -> { ok, fullName, email, phone, dob }   the emailed link (/confirm-change)
 
 const fail = (error, status = 400) => NextResponse.json({ error }, { status });
 const LINK_TTL_MS = 24 * 60 * 60 * 1000;
@@ -96,8 +98,36 @@ async function deleteCancel(db, caller) {
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const changeRef = (db, uid) => db.collection("profile_changes").doc(uid);
+// What each changeable field is called in emails and notifications.
+const FIELD_LABELS = { fullName: "Account name", email: "Email", phone: "Phone", dob: "Date of birth" };
 
-async function profileChangeRequest(db, caller, { fullName, email }, origin) {
+/** "+447700900123" from "+44 7700 900123", or null: a country code and 7–15 digits in all. */
+const normalizePhone = (v) => {
+  const raw = String(v || "").trim();
+  const digits = raw.replace(/\D/g, "");
+  return raw.startsWith("+") && digits.length >= 7 && digits.length <= 15 ? `+${digits}` : null;
+};
+
+/** Whether `dob` (YYYY-MM-DD) is a real date that makes the player 18 or older (and not over 120). */
+function adultDob(dob) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dob || ""));
+  if (!m) return false;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const born = new Date(Date.UTC(y, mo - 1, d));
+  if (born.getUTCFullYear() !== y || born.getUTCMonth() !== mo - 1 || born.getUTCDate() !== d) return false;
+  const now = new Date();
+  const age = now.getUTCFullYear() - y - (now.getUTCMonth() + 1 < mo || (now.getUTCMonth() + 1 === mo && now.getUTCDate() < d) ? 1 : 0);
+  return age >= 18 && age <= 120;
+}
+
+/** Whether another account already has this phone (stored as typed at sign-up, or normalized). */
+async function phoneTaken(db, uid, phone, typed) {
+  const forms = [...new Set([phone, String(typed || "").trim()].filter(Boolean))];
+  const hits = await Promise.all(forms.map((f) => db.collection("users").where("phone", "==", f).limit(2).get()));
+  return hits.some((snap) => snap.docs.some((d) => d.id !== uid));
+}
+
+async function profileChangeRequest(db, caller, { fullName, email, phone, dob }, origin) {
   if (!caller) return fail("Sign in again to continue.", 401);
   const me = (await db.collection("users").doc(caller.uid).get()).data();
   if (!me) return fail("Account not found.", 404);
@@ -116,6 +146,18 @@ async function profileChangeRequest(db, caller, { fullName, email }, origin) {
     if (!taken.empty || (await admin.auth().getUserByEmail(mail).catch(() => null))) return fail("That email is already used by another account.", 409);
     change.email = mail;
   }
+  if (phone != null && String(phone).trim() && String(phone).trim() !== me.phone) {
+    const tel = normalizePhone(phone);
+    if (!tel) return fail("Enter your phone number with its country code, e.g. +44 7700 900123.");
+    if (tel !== normalizePhone(me.phone)) {
+      if (await phoneTaken(db, caller.uid, tel, phone)) return fail("That phone number is already linked to another account.", 409);
+      change.phone = tel;
+    }
+  }
+  if (dob != null && String(dob).trim() && String(dob).trim() !== me.dob) {
+    if (!adultDob(String(dob).trim())) return fail("Enter a real date of birth (YYYY-MM-DD). You must be 18 or older.");
+    change.dob = String(dob).trim();
+  }
   if (!Object.keys(change).length) return fail("Nothing to change.");
   const old = (await changeRef(db, caller.uid).get()).data();
   if (old && Date.now() - ms(old.emailSentAt) < RESEND_MS) return fail("We just sent a link. Wait a minute before asking for another.", 429);
@@ -124,10 +166,9 @@ async function profileChangeRequest(db, caller, { fullName, email }, origin) {
   await changeRef(db, caller.uid).set({ ...change, tokenHash: await sha256(token), tokenExpires: Date.now() + LINK_TTL_MS, emailSentAt: Date.now() });
   const link = `${origin}/confirm-change?u=${encodeURIComponent(caller.uid)}&t=${token}`;
   const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  const lines = [
-    change.fullName && `Account name: <strong>${esc(me.fullName || "")}</strong> → <strong>${esc(change.fullName)}</strong>`,
-    change.email && `Email: <strong>${esc(current)}</strong> → <strong>${esc(change.email)}</strong>`,
-  ].filter(Boolean);
+  const before = { ...me, email: current };
+  const lines = Object.keys(FIELD_LABELS).filter((f) => change[f])
+    .map((f) => `${FIELD_LABELS[f]}: <strong>${esc(before[f] || "not set")}</strong> → <strong>${esc(change[f])}</strong>`);
   const res = await sendEmail(current, "Confirm your StraWins account change", `
     <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
       <h2 style="margin: 0 0 12px;">Confirm the change to your account</h2>
@@ -149,6 +190,7 @@ async function profileChangeConfirm(db, _caller, { uid, token }) {
   const userRef = db.collection("users").doc(uid);
   const me = (await userRef.get()).data();
   if (!me) return fail("Account not found.", 404);
+  if (c.phone && (await phoneTaken(db, uid, c.phone))) return fail("That phone number is now linked to another account.", 409);
   if (c.email) {
     try {
       await admin.auth().updateUser(uid, { email: c.email });
@@ -156,17 +198,23 @@ async function profileChangeConfirm(db, _caller, { uid, token }) {
       return fail("That email is already used by another account.", 409);
     }
   }
+  const changed = Object.keys(FIELD_LABELS).filter((f) => c[f]);
   await userRef.update({
     ...(c.fullName ? { fullName: c.fullName, ...(me.bank?.accountNumber ? { "bank.accountName": c.fullName } : {}) } : {}),
     ...(c.email ? { email: c.email, emailLower: c.email } : {}),
+    ...(c.phone ? { phone: c.phone } : {}),
+    ...(c.dob ? { dob: c.dob } : {}),
+    ...Object.fromEntries(changed.map((f) => [`profileChanges.${f}`, FV().increment(1)])),
     profileChangedAt: FV().serverTimestamp(),
   });
   await ref.delete();
   await notifyUser(db, uid, {
     type: "account", title: "Account details changed",
-    body: [c.fullName && `Name: ${c.fullName}`, c.email && `Email: ${c.email}`].filter(Boolean).join(" · "), url: "/settings",
+    body: changed.map((f) => `${FIELD_LABELS[f]}: ${c[f]}`).join(" · "), url: "/settings",
   });
-  return NextResponse.json({ ok: true, fullName: c.fullName || me.fullName || "", email: c.email || me.email || "" });
+  return NextResponse.json({
+    ok: true, fullName: c.fullName || me.fullName || "", email: c.email || me.email || "", phone: c.phone || me.phone || "", dob: c.dob || me.dob || "",
+  });
 }
 
 const ACTIONS = { deleteRequest, deleteConfirm, deleteCancel, profileChangeRequest, profileChangeConfirm };

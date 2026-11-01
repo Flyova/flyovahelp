@@ -31,7 +31,12 @@ function Confirm() {
           <CheckCircle2 size={40} className="mx-auto text-green-500" />
           <h1 className="text-xl font-black uppercase italic tracking-tighter">Account Updated</h1>
           <p className="text-sm text-gray-400 font-bold leading-relaxed">
-            {[state.res?.fullName && `Name: ${state.res.fullName}`, state.res?.email && `Email: ${state.res.email}`].filter(Boolean).join(" · ")}. Sign in with your email from now on.
+            {[
+              state.res?.fullName && `Name: ${state.res.fullName}`,
+              state.res?.email && `Email: ${state.res.email}`,
+              state.res?.phone && `Phone: ${state.res.phone}`,
+              state.res?.dob && `Date of birth: ${state.res.dob}`,
+            ].filter(Boolean).join(" · ")}. Sign in with your email from now on.
           </p>
         </>
       ) : (

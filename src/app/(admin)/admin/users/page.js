@@ -4,7 +4,7 @@ import { auth, db } from "@/lib/firebase";
 import { collection, doc, getDocs, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
 import { Activity, Ban, CheckCircle, Edit2, Flag, Gift, Loader2, Save, Search, ShieldAlert, Trophy, Users, X } from "lucide-react";
 import Link from "next/link";
-import { depositLocked, flagReasonLabel, groupJackpots, toDate } from "@/components/admin/accountFlags";
+import { changedBeforeCounts, depositLocked, flagReasonLabel, groupJackpots, profileChangeCounts, toDate } from "@/components/admin/accountFlags";
 
 const formatJoinedDate = (timestamp) => {
   if (!timestamp?.toDate) return "N/A";
@@ -371,7 +371,7 @@ export default function UserManagement() {
                               {flagReasonLabel(u.flagReason)}{toDate(u.flaggedAt) ? ` · ${toDate(u.flaggedAt).toLocaleDateString()}` : ""}
                             </p>
                           )}
-                          {(RESTRICTION_FIELDS.some((f) => u[f.key]) || jp || depositLocked(u)) && (
+                          {(RESTRICTION_FIELDS.some((f) => u[f.key]) || jp || depositLocked(u) || profileChangeCounts(u).length > 0 || changedBeforeCounts(u)) && (
                             <div className="flex flex-wrap gap-1 mt-1">
                               {RESTRICTION_FIELDS.filter((f) => u[f.key]).map((f) => (
                                 <span key={f.key} className="text-[8px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-black uppercase">
@@ -389,6 +389,20 @@ export default function UserManagement() {
                                   className="text-[8px] bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full font-black uppercase inline-flex items-center gap-1"
                                 >
                                   <Trophy size={9} /> Jackpot ×{jp.claimed}{jp.pending ? ` (+${jp.pending} pending)` : ""}
+                                </span>
+                              )}
+                              {profileChangeCounts(u).map((c) => (
+                                <span
+                                  key={c.key}
+                                  title={toDate(u.profileChangedAt) ? `Last change ${toDate(u.profileChangedAt).toLocaleString()}` : undefined}
+                                  className="text-[8px] bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full font-black uppercase"
+                                >
+                                  {c.label} changed ×{c.count}
+                                </span>
+                              ))}
+                              {changedBeforeCounts(u) && (
+                                <span className="text-[8px] bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full font-black uppercase">
+                                  Details changed (before counts)
                                 </span>
                               )}
                             </div>
