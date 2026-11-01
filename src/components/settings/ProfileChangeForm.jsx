@@ -4,13 +4,15 @@ import { Loader2, MailCheck } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 
 /**
- * Changing the account name or email: a link is emailed to the current address and
- * the change is made when it's opened (/api/account profileChangeRequest).
+ * Changing the account name, email, phone or date of birth: a link is emailed to the
+ * current address and the change is made when it's opened (/api/account profileChangeRequest).
  */
-export default function ProfileChangeForm({ fullName, email }) {
+export default function ProfileChangeForm({ fullName, email, phone, dob }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(fullName || "");
   const [mail, setMail] = useState(email || "");
+  const [tel, setTel] = useState(phone || "");
+  const [birth, setBirth] = useState(dob || "");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
 
@@ -18,7 +20,7 @@ export default function ProfileChangeForm({ fullName, email }) {
   const send = async () => {
     setBusy(true);
     setMsg(null);
-    const res = await authFetch("/api/account", { method: "POST", body: { action: "profileChangeRequest", fullName: name, email: mail } });
+    const res = await authFetch("/api/account", { method: "POST", body: { action: "profileChangeRequest", fullName: name, email: mail, phone: tel, dob: birth } });
     setBusy(false);
     if (res.error) return setMsg({ ok: false, text: res.error });
     setOpen(false);
@@ -46,6 +48,14 @@ export default function ProfileChangeForm({ fullName, email }) {
             <span className="text-[9px] font-black uppercase text-white/40">Email</span>
             <input type="email" value={mail} onChange={(e) => setMail(e.target.value)} onKeyDown={onKey} className={`mt-1 ${field}`} />
           </label>
+          <label className="block">
+            <span className="text-[9px] font-black uppercase text-white/40">Phone, with country code</span>
+            <input type="tel" value={tel} placeholder="+44 7700 900123" onChange={(e) => setTel(e.target.value)} onKeyDown={onKey} className={`mt-1 ${field} placeholder:text-white/20`} />
+          </label>
+          <label className="block">
+            <span className="text-[9px] font-black uppercase text-white/40">Date of birth</span>
+            <input type="date" value={birth} onChange={(e) => setBirth(e.target.value)} onKeyDown={onKey} className={`mt-1 ${field} [color-scheme:dark]`} />
+          </label>
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={() => setOpen(false)} className="py-3 rounded-2xl bg-white/5 font-black uppercase text-[10px] tracking-widest text-white/50">Cancel</button>
             <button type="button" onClick={send} disabled={busy} className="py-3 rounded-2xl bg-[#2457D6] font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 disabled:opacity-40">
@@ -54,9 +64,9 @@ export default function ProfileChangeForm({ fullName, email }) {
           </div>
         </div>
       ) : (
-        <button type="button" onClick={() => { setMsg(null); setName(fullName || ""); setMail(email || ""); setOpen(true); }}
+        <button type="button" onClick={() => { setMsg(null); setName(fullName || ""); setMail(email || ""); setTel(phone || ""); setBirth(dob || ""); setOpen(true); }}
           className="w-full py-3 rounded-2xl bg-white/5 border border-white/5 font-black uppercase text-[10px] tracking-widest text-white/70">
-          Change Name or Email
+          Change Name, Email, Phone or Birth Date
         </button>
       )}
       {msg && <p className={`text-[11px] font-bold ${msg.ok ? "text-green-500" : "text-red-400"}`}>{msg.text}</p>}

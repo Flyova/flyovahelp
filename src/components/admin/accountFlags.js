@@ -1,5 +1,6 @@
 // Shared by the admin pages: why lib/notifications flagged an account
-// (users/{uid}.flagReason) and how many jackpots each player was credited.
+// (users/{uid}.flagReason), how many jackpots each player was credited, and which
+// account details they changed from an emailed link (users/{uid}.profileChanges).
 
 const FLAG_REASONS = {
   manual_credit: "Money added manually",
@@ -30,3 +31,12 @@ export function groupJackpots(docs) {
   }
   return byUser;
 }
+
+const PROFILE_FIELDS = [["fullName", "Name"], ["email", "Email"], ["phone", "Phone"], ["dob", "Date of birth"]];
+
+/** [{ key, label, count }] for each detail the player has changed (name, email, phone, date of birth). */
+export const profileChangeCounts = (u) =>
+  PROFILE_FIELDS.map(([key, label]) => ({ key, label, count: Number(u?.profileChanges?.[key] || 0) })).filter((c) => c.count > 0);
+
+/** Changed details before the counts were kept: only users/{uid}.profileChangedAt says so. */
+export const changedBeforeCounts = (u) => !!u?.profileChangedAt && profileChangeCounts(u).length === 0;

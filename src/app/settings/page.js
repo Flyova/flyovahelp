@@ -28,6 +28,7 @@ import { authFetch } from "@/lib/authFetch";
 import TxPinCard from "@/components/settings/TxPinCard";
 import BankAccountCard from "@/components/settings/BankAccountCard";
 import NotificationPrefsCard from "@/components/settings/NotificationPrefsCard";
+import FriendsOnlineCard from "@/components/settings/FriendsOnlineCard";
 import ProfileChangeForm from "@/components/settings/ProfileChangeForm";
 
 export default function Settings() {
@@ -289,7 +290,7 @@ export default function Settings() {
               </div>
             </div>
 
-            <ProfileChangeForm fullName={userData?.fullName} email={userData?.email || user?.email} />
+            <ProfileChangeForm fullName={userData?.fullName} email={userData?.email || user?.email} phone={userData?.phone} dob={userData?.dob} />
 
              <div className="bg-black/20 p-4 rounded-2xl border border-white/5 opacity-60">
               <p className="text-[9px] font-black uppercase text-white/40 mb-2">Registered Country</p>
@@ -374,6 +375,8 @@ export default function Settings() {
         <BankAccountCard bank={userData?.bank?.accountNumber ? userData.bank : null} fullName={userData?.fullName} hasTxPin={!!userData?.hasTxPin} />
 
         <NotificationPrefsCard uid={user.uid} prefs={userData?.notificationPrefs} />
+
+        <FriendsOnlineCard uid={user.uid} on={userData?.friendsStayOnline === true} />
 
         <div className="bg-[#142036] rounded-[2rem] p-6 border border-white/5 shadow-xl">
           <div className="flex items-center space-x-2 mb-4">

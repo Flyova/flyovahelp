@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import { db } from "@/lib/firebase";
 import { collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
 import { Flag, Loader2, Trophy } from "lucide-react";
-import { depositLocked, flagReasonLabel, toDate } from "@/components/admin/accountFlags";
+import { changedBeforeCounts, depositLocked, flagReasonLabel, profileChangeCounts, toDate } from "@/components/admin/accountFlags";
 
 const RESTRICTIONS = [
   ["restrictDeposit", "Deposits"], ["restrictWithdrawal", "Withdrawals"], ["restrictTransfer", "Transfers"],
@@ -140,6 +140,16 @@ export default function UserActivityPage() {
               ? `${user.bank.bankName} · ${user.bank.accountNumber} · ${user.bank.accountName}`
               : "Not added"}
             {" · "}Transaction PIN: {user?.hasTxPin ? "Set" : "Not set"}
+          </div>
+          <div className="md:col-span-3">
+            Phone: {user?.phone || "Not added"} · Date of birth: {user?.dob || "Not added"}
+          </div>
+          <div className="md:col-span-3">
+            Details changed by the player:{" "}
+            {profileChangeCounts(user).length
+              ? profileChangeCounts(user).map((c) => `${c.label} ×${c.count}`).join(" · ")
+              : changedBeforeCounts(user) ? "yes, before counts were kept" : "never"}
+            {toDate(user?.profileChangedAt) ? ` (last ${toDate(user.profileChangedAt).toLocaleString()})` : ""}
           </div>
           <div className="md:col-span-3 flex flex-wrap gap-2">
             {RESTRICTIONS.filter(([key]) => user?.[key]).map(([key, label]) => (
