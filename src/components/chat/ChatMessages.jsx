@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Ban, ChevronDown, Coins, Copy, CornerUpLeft, Flag, MessageCircle, Pencil, Trash2, UserRound } from "lucide-react";
+import { Ban, ChevronDown, Coins, Copy, CornerUpLeft, Flag, MessageCircle, Pencil, Pin, PinOff, Trash2, UserRound } from "lucide-react";
 import MessageBubble, { SeenBy, TypingBubble, isCoinCard, isDeleted, messageMillis, startsRun } from "@/components/chat/MessageBubble";
 import MessageMenu from "@/components/chat/MessageMenu";
 import CoinBurst from "@/components/chat/CoinBurst";
@@ -69,6 +69,9 @@ export default function ChatMessages({
   onOpenProfile,
   onSendCoins,
   onBlock,
+  onPin, // group admins: pin or unpin a message (`isPinned` says which it is)
+  isPinned = () => false,
+  badgeFor, // name -> "owner" | "admin" | null: the badge by a sender's name in a group
   seenBy = {},
   sentId = null,
   typing = [],
@@ -156,6 +159,7 @@ export default function ChatMessages({
     const mine = isMine(m);
     return [
       onReply && { label: "Reply", icon: CornerUpLeft, run: () => onReply(m) },
+      onPin && !isCoinCard(m) && (isPinned(m) ? { label: "Unpin", icon: PinOff, run: () => onPin(m) } : { label: "Pin", icon: Pin, run: () => onPin(m) }),
       { label: "Copy text", icon: Copy, run: () => navigator.clipboard?.writeText(m.text).catch(() => {}) },
       mine && onEdit && !isCoinCard(m) && { label: "Edit", icon: Pencil, run: () => onEdit(m) },
       !mine && onOpenProfile && { label: "View profile", icon: UserRound, run: () => onOpenProfile(m.sender) },
@@ -227,6 +231,7 @@ export default function ChatMessages({
                     last={!next || startsRun(m, next)}
                     showAvatar={showAvatars}
                     showName={showNames}
+                    badge={badgeFor?.(m.sender) ?? null}
                     selected={menu?.message.id === m.id}
                     onMenu={isDeleted(m) ? undefined : (msg, at) => setMenu({ message: msg, at })}
                     onReply={onReply}

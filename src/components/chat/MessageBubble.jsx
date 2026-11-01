@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { Ban, Clock3, Coins, CornerUpLeft, MoreHorizontal, Pencil, Users } from "lucide-react";
+import { Ban, Clock3, Coins, CornerUpLeft, Crown, MoreHorizontal, Pencil, Shield, Users } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import { formatCoins } from "@/lib/chat";
 
@@ -100,6 +100,7 @@ export default function MessageBubble({
   last = true,
   showAvatar = false,
   showName = false,
+  badge = null, // "owner" | "admin": a crown or shield by the sender's name
   selected = false,
   onMenu,
   onReply,
@@ -230,8 +231,10 @@ export default function MessageBubble({
           {last && !deleted && <Tail mine={mine} color={bg} />}
 
           {showName && first && !mine && (
-            <button type="button" data-no-menu onClick={() => onOpenProfile?.(m.sender)} className={`block max-w-full truncate text-[12.5px] font-bold hover:underline mb-0.5 ${coinCard ? "text-[#5A3500]" : "text-[#E0708C]"}`}>
-              @{String(m.senderName || m.sender).replace(/^@/, "")}
+            <button type="button" data-no-menu onClick={() => onOpenProfile?.(m.sender)} className={`flex items-center gap-1 max-w-full text-[12.5px] font-bold hover:underline mb-0.5 ${coinCard ? "text-[#5A3500]" : "text-[#E0708C]"}`}>
+              <span className="truncate">@{String(m.senderName || m.sender).replace(/^@/, "")}</span>
+              {badge === "owner" && <Crown size={12} className="shrink-0 text-amber-300" aria-label="group owner" />}
+              {badge === "admin" && <Shield size={12} className="shrink-0 text-sky-300" aria-label="group admin" />}
             </button>
           )}
 

@@ -58,6 +58,19 @@ export async function ownedUsername(db, uid, username) {
 export const MAX_GROUP_MEMBERS = 100;
 export const GROUP_NAME_MAX = 60;
 export const GROUP_DESCRIPTION_MAX = 200;
+// Creating a group costs this much from the creator's main wallet ($, agents pay less).
+export const GROUP_CREATE_PRICE = 5;
+export const AGENT_GROUP_CREATE_PRICE = 3;
+export const groupCreatePrice = (isAgent) => (isAgent === true ? AGENT_GROUP_CREATE_PRICE : GROUP_CREATE_PRICE);
+// Admins pin up to this many messages (`pinnedMessages`, newest first) and block players
+// from the group (`groupBlocked`: they can't join, be added or accept an invite until unblocked).
+export const MAX_PINNED_MESSAGES = 3;
+export const isBlockedFromGroup = (convo, name) => !!name && (convo?.groupBlocked || []).includes(name);
+// Each list (Private, Groups) keeps up to this many chats pinned on top: chat_state.pinned
+// (conversation id -> when it was pinned, ms; 0 or missing = not pinned).
+export const MAX_PINNED_CHATS = 3;
+/** `convos` with the pinned ones first (most recently pinned on top), the rest in their order. */
+export const pinnedFirst = (convos, pinned = {}) => [...convos].sort((a, b) => (Number(pinned[b.id]) || 0) - (Number(pinned[a.id]) || 0));
 export const groupOwner = (convo) => convo?.owner || convo?.createdBy || "";
 export const isGroupAdmin = (convo, name) =>
   !!name && (groupOwner(convo) === name || (convo?.admins || []).includes(name));

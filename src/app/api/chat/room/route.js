@@ -16,6 +16,9 @@ import { chatSettingsFor } from "@/lib/chatSettings";
 //
 // GET /api/chat/room -> { members, online }: every chat username, and how many were
 // active in Chats in the last few minutes (counted, never listed).
+// GET /api/chat/room?search=words -> { results, scanned, since }   admin/staff/support: the
+//   messages among the latest SEARCH_SCAN that contain every word (case-insensitive, in the
+//   text or the sender's name), newest first; `since` = when the oldest scanned one was sent.
 
 const ROOM_COLLECTION = "chatroom_messages";
 const RATE_COLLECTION = "chatroom_rate"; // per-account { lastPostAt, lastText } — server only
@@ -23,6 +26,8 @@ const MAX_LENGTH = 500;
 const MIN_INTERVAL_MS = 3000;
 const DELETED_TEXT = "— message deleted —";
 const QUOTE_LENGTH = 140;
+const SEARCH_SCAN = 3000; // Firestore can't search text: an admin search reads this many of the latest messages
+const SEARCH_RESULTS = 200;
 
 /** Validates chatroom text; returns { body } or { error }. */
 function cleanText(text) {
@@ -123,9 +128,10 @@ async function edit(db, caller, { id, text }) {
   const { body, error } = cleanText(text);
   if (error) return fail(error);
   const ref = db.collection(ROOM_COLLECTION).doc(String(id || ""));
-  const snap = await ref.get();
+  const [snap, userSnap] = await Promise.all([ref.get(), db.collection("users").doc(caller.uid).get()]);
   if (!snap.exists) return fail("Message not found.", 404);
   if (snap.data().senderUid !== caller.uid) return fail("You can only edit your own messages.", 403);
+  if (userSnap.data()?.chatMuted) return fail("You've been muted in the chatroom, so you can't edit messages.", 403);
   if (snap.data().deletedForEveryone) return fail("Deleted messages can't be edited.", 400);
   if (snap.data().kind === "coins") return fail("Coin messages can't be edited.", 400);
   if (String(snap.data().text || "") === body) return NextResponse.json({ ok: true }); // unchanged: not "edited"
@@ -148,11 +154,33 @@ async function remove(db, caller, { id }) {
   return NextResponse.json({ ok: true });
 }
 
+async function searchRoom(db, caller, search) {
+  const userSnap = await db.collection("users").doc(caller.uid).get();
+  if (!resolvePrivilegedRole(userSnap.exists ? userSnap.data().role : null, caller.email)) return fail("Admins only.", 403);
+  const words = String(search).toLowerCase().split(/\s+/).filter(Boolean).slice(0, 8);
+  if (!words.length || words.join(" ").length < 2) return fail("Type at least 2 letters to search.");
+  const snap = await db.collection(ROOM_COLLECTION).orderBy("createdAt", "desc").limit(SEARCH_SCAN)
+    .select("sender", "senderName", "senderUid", "text", "createdAt", "deletedForEveryone", "kind", "replyTo", "editedAt").get();
+  const results = [];
+  for (const d of snap.docs) {
+    const m = d.data();
+    if (m.deletedForEveryone) continue;
+    const hay = `${m.text || ""} @${m.sender || ""} @${m.senderName || ""}`.toLowerCase();
+    if (!words.every((w) => hay.includes(w))) continue;
+    results.push({ id: d.id, ...m, createdAt: m.createdAt?.toMillis?.() ?? null, editedAt: m.editedAt?.toMillis?.() ?? null });
+    if (results.length >= SEARCH_RESULTS) break;
+  }
+  const oldest = snap.docs[snap.docs.length - 1]?.data().createdAt?.toMillis?.() ?? null;
+  return NextResponse.json({ results, scanned: snap.size, since: oldest, complete: snap.size < SEARCH_SCAN });
+}
+
 export async function GET(req) {
   try {
     const caller = await getCaller(req);
     if (!caller) return fail("Sign in again to continue.", 401);
     const db = getAdminDb();
+    const search = new URL(req.url).searchParams.get("search");
+    if (search !== null) return await searchRoom(db, caller, search);
     const since = admin.firestore.Timestamp.fromMillis(Date.now() - PRESENCE_ONLINE_MS);
     const [members, online] = await Promise.all([
       db.collection("usernames").where("deleted", "==", false).count().get(),

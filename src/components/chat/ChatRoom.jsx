@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
-import { collection, doc, getDoc, limit, onSnapshot, orderBy, query } from "firebase/firestore";
+import { collection, doc, limit, onSnapshot, orderBy, query } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
 import { containsMediaMarker, formatCount } from "@/lib/chat";
@@ -36,6 +36,7 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
   const [editing, setEditing] = useState(null);
   const inputRef = useRef(null);
   const [isStaff, setIsStaff] = useState(false);
+  const [muted, setMuted] = useState(false); // muted by an admin: no posting or editing (the server checks too)
   const [stats, setStats] = useState(null); // { members, online }
   const [burst, setBurst] = useState(null); // coins-sent animation
   const clearBurst = useCallback(() => setBurst(null), []);
@@ -89,12 +90,13 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
   }, [uid]);
 
   // StraWins admins/staff can delete anyone's message in the Chatroom (the server
-  // re-checks the role); players can only delete their own.
+  // re-checks the role); players can only delete their own. A muted player can't edit.
   useEffect(() => {
     if (!uid) return;
-    getDoc(doc(db, "users", uid))
-      .then((s) => setIsStaff(!!resolvePrivilegedRole(s.data()?.role, auth.currentUser?.email)))
-      .catch(() => {});
+    return onSnapshot(doc(db, "users", uid), (s) => {
+      setIsStaff(!!resolvePrivilegedRole(s.data()?.role, auth.currentUser?.email));
+      setMuted(!!s.data()?.chatMuted);
+    }, () => {});
   }, [uid]);
 
   // Sent messages stay in the outbox until the real one arrives from the server.
@@ -223,7 +225,7 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
         loading={!loaded}
         emptyText="No messages yet — say hello to everyone!"
         onReply={startReply}
-        onEdit={startEdit}
+        onEdit={muted ? undefined : startEdit}
         onDelete={remove}
         canDelete={(m) => m.senderUid === uid || isStaff}
         deleteLabel={(m) => (m.senderUid === uid ? "Delete for everyone" : "Delete message (admin)")}

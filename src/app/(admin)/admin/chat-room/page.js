@@ -5,6 +5,7 @@ import { db } from "@/lib/firebase";
 import { collection, doc, limit, onSnapshot, orderBy, query, updateDoc, where } from "firebase/firestore";
 import { authFetch } from "@/lib/authFetch";
 import { Loader2, MessagesSquare, Trash2, User, Volume2, VolumeX } from "lucide-react";
+import ChatRoomSearch from "@/components/admin/ChatRoomSearch";
 
 // Admin → Chat Room: the general chatroom (chatroom_messages). Deleting goes through
 // /api/chat/room (admins may delete any message); muting sets users/{uid}.chatMuted,
@@ -73,6 +74,8 @@ export default function AdminChatRoom() {
             </div>
           </div>
         </div>
+
+        <ChatRoomSearch />
 
         {muted.length > 0 && (
           <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6 space-y-3">

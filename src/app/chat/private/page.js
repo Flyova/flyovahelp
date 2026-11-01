@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
-import { Archive, ArchiveRestore, Ban, ChevronDown, Flag, MessagesSquare, Trash2, UserRound } from "lucide-react";
-import { departedFrom, presenceOf } from "@/lib/chat";
+import { Archive, ArchiveRestore, Ban, ChevronDown, Flag, MessagesSquare, Pin, PinOff, Trash2, UserRound } from "lucide-react";
+import { departedFrom, pinnedFirst, presenceOf } from "@/lib/chat";
 import { useChatStatusLine } from "@/lib/chatPhotos";
 import { useChat } from "@/components/chat/ChatProvider";
 import Avatar, { DeletedAvatar } from "@/components/Avatar";
@@ -13,14 +13,14 @@ import PlayerSearch from "@/components/chat/PlayerSearch";
 /**
  * Private chats: only the people you're actually talking to (a chat shows up
  * once it has a message), plus a search to find anyone else and message them.
- * Each chat can be archived (moved to the Archived row above the list) or deleted for you.
+ * Each chat can be pinned on top, archived (moved to the Archived row above the list) or deleted for you.
  */
 export default function PrivateChatsPage() {
   const {
     identities, active, selectIdentity,
     convos, convosLoading, myNameIn, openIds, setOpenId, setErr, typingIn, unread,
     messagePrivately, openProfile, blockUser, unblockUser, reportUser, presence, presenceNow, blockedNames,
-    chatState, archiveChat, removeChat, isDeletedForMe,
+    chatState, archiveChat, pinChat, removeChat, isDeletedForMe,
   } = useChat();
   const [showArchived, setShowArchived] = useState(false);
   const openId = openIds.private;
@@ -30,22 +30,25 @@ export default function PrivateChatsPage() {
   // They deleted their username: the chat is read-only, and the name may be someone else's now.
   const gone = departedFrom(open, other);
   const chats = convos.filter((c) => c.type !== "group" && (c.lastMessage || c.id === openId) && !isDeletedForMe(c));
-  const inbox = chats.filter((c) => !chatState.archived[c.id]);
+  const inbox = pinnedFirst(chats.filter((c) => !chatState.archived[c.id]), chatState.pinned);
   const archived = chats.filter((c) => chatState.archived[c.id]);
   const archivedUnread = archived.filter((c) => unread[c.id]).length;
   const chatMenu = (c) => [
+    !chatState.archived[c.id] && (chatState.pinned[c.id]
+      ? { label: "Unpin", icon: PinOff, run: () => pinChat(c, false) }
+      : { label: "Pin to top", icon: Pin, run: () => pinChat(c, true) }),
     chatState.archived[c.id]
       ? { label: "Unarchive", icon: ArchiveRestore, run: () => archiveChat(c.id, false) }
       : { label: "Archive", icon: Archive, run: () => archiveChat(c.id, true) },
     { label: "Delete chat", icon: Trash2, danger: true, run: () => removeChat(c) },
-  ];
+  ].filter(Boolean);
   const openChat = (id) => setOpenId("private", id);
   const statusLine = useChatStatusLine(other); // their status, shown under their name
   const status = other && !gone ? presenceOf(presence[other], presenceNow) : null;
   const iBlocked = !!other && !gone && blockedNames.includes(other);
   const online = new Set(Object.keys(presence).filter((name) => presenceOf(presence[name], presenceNow)?.online));
   const listProps = {
-    loading: convosLoading, typingIn, unread, online, blocked: new Set(blockedNames), myNameIn, openId, onOpen: openChat, rowMenu: chatMenu,
+    loading: convosLoading, typingIn, unread, online, blocked: new Set(blockedNames), myNameIn, openId, onOpen: openChat, rowMenu: chatMenu, pinned: chatState.pinned,
   };
 
   return (

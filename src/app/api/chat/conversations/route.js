@@ -4,8 +4,10 @@ import { getCaller } from "@/lib/apiAuth";
 import {
   isValidUsername, liveDmRef, norm, ownedUsername, participantUidsFor, usernameUids,
   GROUP_DESCRIPTION_MAX, GROUP_NAME_MAX, MAX_GROUP_MEMBERS, groupByInvite, groupOwner, groupSearchKeys, isGroupAdmin,
+  MAX_PINNED_MESSAGES, groupCreatePrice, isBlockedFromGroup,
 } from "@/lib/chat";
 import { chatSettingsFor } from "@/lib/chatSettings";
+import { cents, formatUsd, isBanned } from "@/lib/money";
 import { groupInviteRef } from "@/lib/groupInvites";
 import { sendPushToUsers } from "@/lib/push";
 
@@ -16,7 +18,8 @@ import { sendPushToUsers } from "@/lib/push";
 // chat as one of its members — the owner, plus accounts logged in to the username.
 //
 //   { action: "dm", as, target }                              -> { id }  open/create a private chat
-//   { action: "group", as, name, description?, visibility? }  -> { id }  create a group (caller owns it)
+//   { action: "group", as, name, description?, visibility? }  -> { id }  create a group (caller owns it): costs
+//                                                                        groupCreatePrice from the caller's main wallet
 //   { action: "join", convoId, as }                           -> { id }  join a public group
 //   { action: "leave", convoId, as }                          -> { ok }  leave a group (not the owner)
 //   { action: "addMember", convoId, as, username }            -> { ok, invited? }  admins; players whose settings say
@@ -33,6 +36,10 @@ import { sendPushToUsers } from "@/lib/push";
 //   { action: "deleteChat", convoId, as }                     -> { ok }  private chat: delete it and its messages for both people
 //   { action: "inviteLink", convoId, as, op }                 -> { code }  admins: op "create", "reset" (new link) or "delete"
 //   { action: "joinByLink", code, as }                        -> { id }  join a group (public or private) with its invite link
+//   { action: "blockMember", convoId, as, username }          -> { ok }  admins: removes them and keeps them out (no joining,
+//                                                                        adding or invites) until unblocked; only the owner blocks admins
+//   { action: "unblockMember", convoId, as, username }        -> { ok }  admins
+//   { action: "pinMessage", convoId, as, messageId, pin }     -> { ok }  admins: pin (up to MAX_PINNED_MESSAGES) or unpin a message
 
 const FV = () => admin.firestore.FieldValue;
 const fail = (error, status = 400) => NextResponse.json({ error }, { status });
@@ -128,24 +135,41 @@ async function createGroup(db, caller, { as, name, description, visibility }) {
   const vis = visibilityOf(visibility);
 
   const ref = db.collection("conversations").doc();
-  const batch = db.batch();
-  const preview = activity(batch, db, ref.id, `@${me.lower} created the group`);
-  batch.set(ref, {
-    type: "group",
-    groupName,
-    description: cleanDescription(description),
-    visibility: vis,
-    searchKeys: vis === "public" ? groupSearchKeys(groupName) : [],
-    participants: [me.lower],
-    participantUids: usernameUids(me),
-    owner: me.lower,
-    admins: [me.lower],
-    removed: [],
-    createdBy: me.lower,
-    createdAt: FV().serverTimestamp(),
-    ...preview,
+  const userRef = db.collection("users").doc(caller.uid);
+  // The caller's main wallet pays for the group in the same transaction that creates it.
+  const refused = await db.runTransaction(async (tx) => {
+    const userSnap = await tx.get(userRef);
+    if (!userSnap.exists) return { error: "Account not found.", status: 404 };
+    const user = userSnap.data();
+    if (isBanned(user)) return { error: "Your account can't create groups.", status: 403 };
+    const price = groupCreatePrice(user.isAgent);
+    if (cents(user.wallet) < cents(price)) {
+      return { error: `Creating a group costs ${formatUsd(price)} from your main wallet; you have ${formatUsd(user.wallet)}.`, status: 402 };
+    }
+    tx.update(userRef, { wallet: FV().increment(-price) });
+    tx.set(userRef.collection("transactions").doc(), {
+      title: "Group Created", amount: -price, type: "group_create", status: "completed", timestamp: FV().serverTimestamp(),
+      description: `${groupName} (as @${me.lower})`, convoId: ref.id,
+    });
+    const preview = activity(tx, db, ref.id, `@${me.lower} created the group`);
+    tx.set(ref, {
+      type: "group",
+      groupName,
+      description: cleanDescription(description),
+      visibility: vis,
+      searchKeys: vis === "public" ? groupSearchKeys(groupName) : [],
+      participants: [me.lower],
+      participantUids: usernameUids(me),
+      owner: me.lower,
+      admins: [me.lower],
+      removed: [],
+      createdBy: me.lower,
+      createdAt: FV().serverTimestamp(),
+      ...preview,
+    });
+    return null;
   });
-  await batch.commit();
+  if (refused) return fail(refused.error, refused.status);
   return NextResponse.json({ id: ref.id });
 }
 
@@ -154,6 +178,7 @@ async function joinGroup(db, caller, { convoId, as }) {
   if (!me) return fail("You can only chat as one of your own usernames.", 403);
   const refused = await withGroup(db, convoId, (convo, tx) => {
     if ((convo.participants || []).includes(me.lower)) return null; // already in
+    if (isBlockedFromGroup(convo, me.lower)) return { error: "An admin blocked you from this group.", status: 403 };
     if (convo.visibility !== "public") return { error: "This group is private. Ask an admin to add you.", status: 403 };
     if ((convo.removed || []).includes(me.lower)) return { error: "An admin removed you from this group.", status: 403 };
     if ((convo.participants || []).length >= MAX_GROUP_MEMBERS) return { error: `This group is full (${MAX_GROUP_MEMBERS} members).`, status: 400 };
@@ -204,6 +229,7 @@ async function addMember(db, caller, { convoId, as, username }) {
     if (!isGroupAdmin(convo, me.lower)) return { error: "Only group admins can add members.", status: 403 };
     const participants = convo.participants || [];
     if (participants.includes(other.lower)) return { error: `@${other.lower} is already in this group.`, status: 409 };
+    if (isBlockedFromGroup(convo, other.lower)) return { error: `@${other.lower} is blocked from this group. Unblock them in group info first.`, status: 403 };
     if (participants.length >= MAX_GROUP_MEMBERS) return { error: `Groups are limited to ${MAX_GROUP_MEMBERS} members.`, status: 400 };
     if (invite) {
       const ref = groupInviteRef(db, convoId, other.lower);
@@ -240,6 +266,7 @@ async function acceptInvite(db, caller, { convoId, as }) {
     const { by } = invite.data();
     tx.delete(ref);
     if ((convo.participants || []).includes(me.lower)) return null; // already in
+    if (isBlockedFromGroup(convo, me.lower)) return { error: "An admin blocked you from this group.", status: 403 };
     if (!isGroupAdmin(convo, by)) return { error: `@${by} isn't an admin of this group any more, so the invite was withdrawn.`, status: 410 };
     if ((convo.participants || []).length >= MAX_GROUP_MEMBERS) return { error: `This group is full (${MAX_GROUP_MEMBERS} members).`, status: 400 };
     return {
@@ -384,7 +411,84 @@ async function deleteMessage(db, caller, { convoId, as, messageId }) {
     // Activity lines go without a trace; messages leave "— message deleted —".
     if (msg.data().kind === "system") tx.delete(msgRef);
     else tx.update(msgRef, { text: DELETED_TEXT, deletedForEveryone: true, removedBy: me.lower });
-    return null;
+    const pins = convo.pinnedMessages || [];
+    return pins.some((p) => p.id === msgRef.id) ? { pinnedMessages: pins.filter((p) => p.id !== msgRef.id) } : null;
+  });
+  return refused || NextResponse.json({ ok: true });
+}
+
+// Blocking keeps a player out of the group until an admin unblocks them: it removes
+// them (and any invite waiting for them), and they can't join, be added or accept an invite.
+async function blockMember(db, caller, { convoId, as, username }) {
+  const me = await ownedUsername(db, caller.uid, as);
+  if (!me) return fail("You can only act as one of your own usernames.", 403);
+  const other = await anyUsername(db, username);
+  if (!other) return fail("That username doesn't exist.", 404);
+  if (other.lower === me.lower) return fail("You can't block yourself.");
+  if (!CONVO_ID.test(String(convoId || ""))) return fail("Group not found.", 404);
+
+  const refused = await withGroup(db, convoId, async (convo, tx) => {
+    if (!isGroupAdmin(convo, me.lower)) return { error: "Only group admins can block members.", status: 403 };
+    if (groupOwner(convo) === other.lower) return { error: "The owner can't be blocked.", status: 403 };
+    if ((convo.admins || []).includes(other.lower) && groupOwner(convo) !== me.lower) {
+      return { error: "Only the owner can block an admin.", status: 403 };
+    }
+    if (isBlockedFromGroup(convo, other.lower)) return null;
+    const participants = convo.participants || [];
+    const member = participants.includes(other.lower);
+    const participantUids = member
+      ? await participantUidsFor((...refs) => tx.getAll(...refs), db, participants.filter((p) => p !== other.lower))
+      : null;
+    tx.delete(groupInviteRef(db, convoId, other.lower));
+    return {
+      groupBlocked: FV().arrayUnion(other.lower),
+      ...(member && {
+        participants: FV().arrayRemove(other.lower),
+        admins: FV().arrayRemove(other.lower),
+        participantUids,
+        ...activity(tx, db, convoId, `@${me.lower} removed @${other.lower}`),
+      }),
+    };
+  });
+  return refused || NextResponse.json({ ok: true });
+}
+
+async function unblockMember(db, caller, { convoId, as, username }) {
+  const me = await ownedUsername(db, caller.uid, as);
+  if (!me) return fail("You can only act as one of your own usernames.", 403);
+  const lower = norm(String(username || "").replace(/^@/, ""));
+  const refused = await withGroup(db, convoId, (convo) => {
+    if (!isGroupAdmin(convo, me.lower)) return { error: "Only group admins can unblock members.", status: 403 };
+    if (!isBlockedFromGroup(convo, lower)) return null;
+    // Unblocked players can join a public group on their own again.
+    return { groupBlocked: FV().arrayRemove(lower), removed: FV().arrayRemove(lower) };
+  });
+  return refused || NextResponse.json({ ok: true });
+}
+
+// Pinned messages sit on top of the group's thread for everyone: newest first, with
+// a copy of the text so the bar shows even when the message is too old to be loaded.
+async function pinMessage(db, caller, { convoId, as, messageId, pin }) {
+  const me = await ownedUsername(db, caller.uid, as);
+  if (!me) return fail("You can only act as one of your own usernames.", 403);
+  if (!CONVO_ID.test(String(convoId || "")) || !CONVO_ID.test(String(messageId || ""))) return fail("Message not found.", 404);
+  const msgRef = db.collection("conversations").doc(String(convoId)).collection("messages").doc(String(messageId));
+
+  const refused = await withGroup(db, convoId, async (convo, tx) => {
+    if (!isGroupAdmin(convo, me.lower)) return { error: "Only group admins can pin messages.", status: 403 };
+    const pins = convo.pinnedMessages || [];
+    const pinned = pins.some((p) => p.id === msgRef.id);
+    if (pin !== true) return pinned ? { pinnedMessages: pins.filter((p) => p.id !== msgRef.id) } : null;
+    if (pinned) return null;
+    if (pins.length >= MAX_PINNED_MESSAGES) return { error: `You can pin up to ${MAX_PINNED_MESSAGES} messages. Unpin one first.`, status: 409 };
+    const msg = await tx.get(msgRef);
+    if (!msg.exists) return { error: "Message not found.", status: 404 };
+    const m = msg.data();
+    if (m.kind === "system" || m.kind === "coins" || m.deletedForEveryone) return { error: "Only messages people wrote can be pinned.", status: 400 };
+    return {
+      pinnedMessages: [{ id: msgRef.id, sender: m.sender || "", text: String(m.text || "").slice(0, 200), pinnedBy: me.lower, pinnedAt: Date.now() }, ...pins],
+      ...activity(tx, db, convoId, `@${me.lower} pinned a message`),
+    };
   });
   return refused || NextResponse.json({ ok: true });
 }
@@ -456,6 +560,7 @@ async function joinByLink(db, caller, { code, as }) {
   const refused = await withGroup(db, group.id, (convo, tx) => {
     if ((convo.participants || []).includes(me.lower)) return null; // already in
     if (convo.inviteCode !== code) return { error: "This group link doesn't work any more. Ask an admin for a new one.", status: 404 };
+    if (isBlockedFromGroup(convo, me.lower)) return { error: "An admin blocked you from this group.", status: 403 };
     if ((convo.removed || []).includes(me.lower)) return { error: "An admin removed you from this group.", status: 403 };
     if ((convo.participants || []).length >= MAX_GROUP_MEMBERS) return { error: `This group is full (${MAX_GROUP_MEMBERS} members).`, status: 400 };
     return {
@@ -485,6 +590,9 @@ const ACTIONS = {
   deleteChat,
   inviteLink,
   joinByLink,
+  blockMember,
+  unblockMember,
+  pinMessage,
 };
 
 export async function POST(req) {
