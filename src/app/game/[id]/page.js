@@ -67,7 +67,7 @@ export default function GamePage() {
   const [presenceNow, setPresenceNow] = useState(() => Date.now());
   const ROUNDS_PER_PLAYER = 15;
   const MAX_ROUNDS = ROUNDS_PER_PLAYER * 2;
-  const MATCH_ADMIN_FEE_RATE = 0.25;
+  const MATCH_ADMIN_FEE_RATE = 0.18;
   // Turn countdown is anchored to the server-stored turnStartedAt instead of a
   // local counter, so navigating away and back (or a re-render) recomputes the
   // true remaining time instead of restarting the clock at 60s.
@@ -144,7 +144,7 @@ export default function GamePage() {
         const unsubWallet = onSnapshot(doc(db, "users", u.uid), (snap) => {
           if (snap.exists()) {
             setMyWallet(snap.data().wallet || 0);
-            setGamesRestricted(!!snap.data().restrictGames);
+            setGamesRestricted(!!(snap.data().restrictGames || snap.data().restrictFriends));
           }
         });
         setLoadingAuth(false);
@@ -415,11 +415,11 @@ export default function GamePage() {
 
     try {
       const totalWager = (stakeAmount * ROUNDS_PER_PLAYER);
-      const calculatedFee = stakeAmount * MATCH_ADMIN_FEE_RATE;
+      const calculatedFee = Math.round(stakeAmount * MATCH_ADMIN_FEE_RATE * 100) / 100;
       const totalCost = totalWager + calculatedFee;
 
       if (gamesRestricted) {
-        return showNotification("warning", "Games Restricted", "Games have been restricted on your account. Please contact support.");
+        return showNotification("warning", "Game Restricted", "Play with Friends has been restricted on your account. Please contact support.");
       }
       if (myWallet < totalCost) {
         return showNotification(
@@ -672,7 +672,7 @@ export default function GamePage() {
               </div>
               <div className="space-y-2 mb-8 px-2">
                 <div className="flex justify-between text-[10px] font-black uppercase"><span className="opacity-40">Entry Wager ({ROUNDS_PER_PLAYER}x)</span><span>${stakeAmount * ROUNDS_PER_PLAYER}</span></div>
-                <div className="flex justify-between text-[10px] font-black uppercase text-emerald-400"><span>Match Admin Fee (25%)</span><span>${(stakeAmount * MATCH_ADMIN_FEE_RATE).toFixed(2)}</span></div>
+                <div className="flex justify-between text-[10px] font-black uppercase text-emerald-400"><span>Match Admin Fee ({Math.round(MATCH_ADMIN_FEE_RATE * 100)}%)</span><span>${(Math.round(stakeAmount * MATCH_ADMIN_FEE_RATE * 100) / 100).toFixed(2)}</span></div>
               </div>
               <button onClick={initiateChallenge} disabled={isSendingChallenge} className="w-full bg-[#8B1E3F] py-4 rounded-2xl font-black uppercase text-xs mb-3 shadow-lg disabled:opacity-50">{isSendingChallenge ? "Sending..." : "Send Challenge"}</button>
               <button onClick={() => setShowStakeModal(null)} className="w-full text-gray-500 font-black uppercase text-[10px]">Cancel</button>

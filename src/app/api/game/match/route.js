@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import { generateDistinctNumberPool } from "@/lib/gameNumbers";
-import { FV, GAMES_RESTRICTED, cents, formatUsd, isBanned, isGameRestricted, referrerOf, toDollars } from "@/lib/money";
+import { FV, cents, formatUsd, gameRestricted, isBanned, isGameRestricted, referrerOf, toDollars } from "@/lib/money";
 import { creditInflowSafely } from "@/lib/inflowBonus";
 import { HEAD_TO_HEAD_WIN_CAP, escrowRef, matchCost, settleMatch } from "@/lib/matches";
 import { notifyUser } from "@/lib/notifications";
@@ -49,12 +49,12 @@ async function accept(db, caller, { challengeId }) {
     }
     if (!me.exists || !challenger.exists) return { error: "Account not found.", status: 404 };
     if (isBanned(me.data())) return { error: "Your account can't play.", status: 403 };
-    if (isGameRestricted(me.data())) return { error: GAMES_RESTRICTED, status: 403 };
+    if (isGameRestricted(me.data(), "friends")) return { error: gameRestricted("friends"), status: 403 };
     const totalC = cents(cost.totalCost);
     if (cents(me.data().wallet) < totalC) {
       return { error: `Insufficient balance to accept challenge. Required: ${formatUsd(cost.totalCost)} | Available: ${formatUsd(me.data().wallet)}`, status: 402 };
     }
-    if (isBanned(challenger.data()) || isGameRestricted(challenger.data()) || cents(challenger.data().wallet) < totalC) {
+    if (isBanned(challenger.data()) || isGameRestricted(challenger.data(), "friends") || cents(challenger.data().wallet) < totalC) {
       tx.delete(challengeRef);
       return { error: "The challenger can't cover this match any more.", status: 409 };
     }

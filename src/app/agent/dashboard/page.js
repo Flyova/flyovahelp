@@ -179,7 +179,7 @@ export default function AgentDashboard() {
   const handleAcceptTrade = async (trade) => {
     setActionLoading(trade.id);
     try {
-      // A deposit's amount + 3% comes out of your agent balance (the server checks it).
+      // A deposit's amount + the admin fee comes out of your agent balance (the server checks it).
       const res = await authFetch("/api/trades", { method: "POST", body: { action: "accept", id: trade.id } });
       if (res.error) alert("Accept error: " + res.error);
     } catch (e) {

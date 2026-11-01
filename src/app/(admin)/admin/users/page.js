@@ -14,12 +14,16 @@ const formatJoinedDate = (timestamp) => {
 const normalizePin = (value) => String(value || "").replace(/\D/g, "").slice(0, 8);
 const WELCOME_BONUS_AMOUNT = 3;
 
+// Each game is restricted on its own; the older restrictGames: true still bars all three.
 const RESTRICTION_FIELDS = [
   { key: "restrictDeposit", label: "Deposits" },
   { key: "restrictWithdrawal", label: "Withdrawals" },
   { key: "restrictTransfer", label: "Transfers" },
-  { key: "restrictGames", label: "Games" },
+  { key: "restrictFriends", label: "Play with Friends", game: true },
+  { key: "restrictFlyova", label: "StraWins to Dollars", game: true },
+  { key: "restrictPredict", label: "Predict and Win", game: true },
 ];
+const isRestricted = (user, f) => Boolean(user?.[f.key] || (f.game && user?.restrictGames));
 
 const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
 
@@ -134,14 +138,20 @@ export default function UserManagement() {
     }
   };
 
-  const handleToggleRestriction = async (user, field, label) => {
-    const newValue = !user[field];
-    if (!window.confirm(`${newValue ? "Restrict" : "Unrestrict"} ${label} for ${user.username}?`)) return;
+  const handleToggleRestriction = async (user, f) => {
+    const newValue = !isRestricted(user, f);
+    if (!window.confirm(`${newValue ? "Restrict" : "Unrestrict"} ${f.label} for ${user.username}?`)) return;
 
+    // Allowing one game for a player barred from all of them: the other games stay barred, one by one.
+    const update = { [f.key]: newValue };
+    if (f.game && user.restrictGames) {
+      update.restrictGames = false;
+      for (const g of RESTRICTION_FIELDS) if (g.game && g.key !== f.key) update[g.key] = true;
+    }
     try {
-      await updateDoc(doc(db, "users", user.id), { [field]: newValue });
+      await updateDoc(doc(db, "users", user.id), update);
     } catch (err) {
-      alert(`Failed to update ${label} restriction: ` + err.message);
+      alert(`Failed to update ${f.label} restriction: ` + err.message);
     }
   };
 
@@ -600,12 +610,12 @@ export default function UserManagement() {
                   <label className="text-[10px] font-black uppercase text-slate-400">Account Restrictions</label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {RESTRICTION_FIELDS.map((f) => {
-                      const restricted = Boolean(liveSelectedUser?.[f.key]);
+                      const restricted = isRestricted(liveSelectedUser, f);
                       return (
                         <button
                           key={f.key}
                           type="button"
-                          onClick={() => handleToggleRestriction(liveSelectedUser, f.key, f.label)}
+                          onClick={() => handleToggleRestriction(liveSelectedUser, f)}
                           className={`p-4 rounded-2xl text-[10px] font-black uppercase border transition-all flex items-center justify-center gap-2 ${restricted ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-emerald-50 border-emerald-200 text-emerald-600"}`}
                         >
                           {restricted ? <ShieldAlert size={14} /> : <CheckCircle size={14} />}

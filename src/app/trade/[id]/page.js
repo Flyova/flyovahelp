@@ -6,6 +6,7 @@ import {
   doc, onSnapshot, collection, addDoc, serverTimestamp, query, orderBy
 } from "firebase/firestore";
 import { authFetch } from "@/lib/authFetch";
+import { AGENT_FEE_RATE } from "@/lib/agentFees";
 import { formatLocal } from "@/lib/currency";
 import { 
   Send, ShieldCheck, Landmark, AlertCircle, 
@@ -194,13 +195,12 @@ export default function TradeRoom() {
 
   const handleAcceptTrade = async () => {
     const amount = Number(trade.amount);
-    // Apply Fix: 3% for Deposit, 5% for Withdrawal
-    const feePercent = trade.type === "deposit" ? 0.03 : 0.05;
+    const feePercent = AGENT_FEE_RATE[trade.type];
     const feeAmount = amount * feePercent;
 
     const confirmMsg = trade.type === "deposit" 
-      ? `Accept trade? You'll be charged $${amount} + $${feeAmount.toFixed(2)} (3% admin fee).`
-      : `Accept this withdrawal request for $${amount}? A 5% admin fee ($${feeAmount.toFixed(2)}) applies.`;
+      ? `Accept trade? You'll be charged $${amount} + $${feeAmount.toFixed(2)} (${Math.round(feePercent * 100)}% admin fee).`
+      : `Accept this withdrawal request for $${amount}? A ${Math.round(feePercent * 100)}% admin fee ($${feeAmount.toFixed(2)}) applies.`;
 
     if (!window.confirm(confirmMsg)) return;
     
@@ -219,7 +219,7 @@ export default function TradeRoom() {
     setLoading(true);
     try {
       // Deposit: the player's wallet gets the amount (and their referrer 2.5%).
-      // Withdrawal: your agent balance gets the amount less 5%. The server emails the player.
+      // Withdrawal: your agent balance gets the amount less the admin fee. The server emails the player.
       const res = await authFetch("/api/trades", { method: "POST", body: { action: "confirm", id } });
       if (res.error) alert("Error completing trade: " + res.error);
     } catch (e) { 
@@ -236,7 +236,7 @@ export default function TradeRoom() {
   const canConfirm = (trade.type === "deposit" && isAgent) || (trade.type === "withdrawal" && !isAgent);
   
   // Update Display Fee for Agent Summary
-  const currentFeePercent = trade.type === "deposit" ? 0.03 : 0.05;
+  const currentFeePercent = AGENT_FEE_RATE[trade.type];
   const calculatedFee = Number(trade.amount) * currentFeePercent;
   const acceptedMs = trade.acceptedAt?.toMillis?.() || 0;
   const unpaidWaitMin = acceptedMs && nowMs ? Math.max(0, Math.ceil((acceptedMs + 15 * 60 * 1000 - nowMs) / 60000)) : 15;
@@ -269,7 +269,7 @@ export default function TradeRoom() {
             <div className="flex items-center gap-2 mb-1">
               <Receipt size={14} className="text-[#2457D6]" />
               <span className="text-[10px] font-black uppercase tracking-widest text-[#2457D6]">
-                Agent {trade.type === "deposit" ? "Deduction" : "Earnings"} Summary ({currentFeePercent * 100}%)
+                Agent {trade.type === "deposit" ? "Deduction" : "Earnings"} Summary ({Math.round(currentFeePercent * 100)}%)
               </span>
             </div>
             <div className="grid grid-cols-2 gap-y-2">

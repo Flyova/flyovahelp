@@ -1,11 +1,11 @@
 // "Play with friends" matches (games/{id}). Both players stake 15 rounds' worth plus a
-// 25% fee when the challenge is accepted (/api/game/match); the stakes are recorded on
+// 18% fee when the challenge is accepted (/api/game/match); the stakes are recorded on
 // the server-only match_escrow/{gameId}, and a match can never pay out more than they
 // add up to, whatever the players' apps wrote into its wagerPool while playing.
 import { FV, cents, toDollars } from "@/lib/money";
 
 export const ROUNDS_PER_PLAYER = 15;
-export const MATCH_ADMIN_FEE_RATE = 0.25;
+export const MATCH_ADMIN_FEE_RATE = 0.18;
 export const MAX_STAKE_PER_ROUND = 10000;
 export const HEAD_TO_HEAD_WIN_CAP = 15;
 

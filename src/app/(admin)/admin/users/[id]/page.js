@@ -7,7 +7,8 @@ import { Flag, Loader2, Trophy } from "lucide-react";
 import { depositLocked, flagReasonLabel, toDate } from "@/components/admin/accountFlags";
 
 const RESTRICTIONS = [
-  ["restrictDeposit", "Deposits"], ["restrictWithdrawal", "Withdrawals"], ["restrictTransfer", "Transfers"], ["restrictGames", "Games"],
+  ["restrictDeposit", "Deposits"], ["restrictWithdrawal", "Withdrawals"], ["restrictTransfer", "Transfers"],
+  ["restrictGames", "All games"], ["restrictFriends", "Play with Friends"], ["restrictFlyova", "StraWins to Dollars"], ["restrictPredict", "Predict and Win"],
 ];
 
 export default function UserActivityPage() {

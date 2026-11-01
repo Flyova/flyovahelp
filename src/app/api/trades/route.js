@@ -18,7 +18,7 @@ import { alertAdmins, notifyUser } from "@/lib/notifications";
 // can't change trades, wallets or agent balances (Firestore rules); the trade chat
 // (trades/{id}/messages) is still written directly.
 //
-//   deposit:    player creates -> agent accepts (agent balance pays amount + 3%) ->
+//   deposit:    player creates -> agent accepts (agent balance pays amount + 5%) ->
 //               player pays the agent and says so (markPaid) -> agent confirms (player's
 //               wallet gets the amount).
 //               Unpaid UNPAID_DEPOSIT_MS after accepting, the agent can call it unpaid
@@ -26,7 +26,7 @@ import { alertAdmins, notifyUser } from "@/lib/notifications";
 //               unpaid-deposit lock (lib/depositLock).
 //   withdrawal: player creates (wallet pays amount + any $3 bonus repayment) -> agent
 //               accepts -> agent pays the player and says so (markPaid) -> player confirms
-//               (agent balance gets amount − 5%). Not confirmed WITHDRAWAL_CONFIRM_MS after
+//               (agent balance gets amount − 7%). Not confirmed WITHDRAWAL_CONFIRM_MS after
 //               markPaid, the player is flagged for the admins (/api/cron/watch).
 //               Declined or expired: the amount goes back.
 //   A player needs a bank account (users/{uid}.bank, /api/wallet bankSet) to trade; it's

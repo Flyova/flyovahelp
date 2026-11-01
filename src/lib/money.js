@@ -16,8 +16,7 @@ export const USDT_NETWORK = "TRC20";
 export const USDT_ADDRESS = "TNpj89XtibkLWcMCNMoe53PmcdAaGYv1nA";
 export const ADMIN_NOTIFY_EMAIL = "arbie1877@gmail.com";
 
-/** Agent commission on a trade, taken from the agent's own balance. */
-export const AGENT_FEE_RATE = { deposit: 0.03, withdrawal: 0.05 };
+export { AGENT_FEE_RATE } from "@/lib/agentFees";
 /** Referrer's cut of a deposit: through an agent, or direct (USDT, approved by an admin). */
 export const REFERRAL_COMMISSION = { agent: 0.025, direct: 0.005 };
 /** Changing the account's username (the main account's, like a chat username). */
@@ -75,9 +74,17 @@ export function parseAmount(value, { min = 0.01, max = MAX_AMOUNT } = {}) {
 }
 
 export const isBanned = (u) => !!(u?.isban || u?.banned);
-/** An admin can bar a player from games only (users/{uid}.restrictGames). */
-export const isGameRestricted = (u) => !!u?.restrictGames;
-export const GAMES_RESTRICTED = "Games have been restricted on your account. Please contact support.";
+/**
+ * An admin can bar a player from each game on its own (users/{uid}.restrictFriends,
+ * restrictFlyova, restrictPredict). The older restrictGames: true bars all three.
+ */
+export const GAMES = {
+  friends: { field: "restrictFriends", name: "Play with Friends" },
+  flyova: { field: "restrictFlyova", name: "StraWins to Dollars" },
+  predict: { field: "restrictPredict", name: "Predict and Win" },
+};
+export const isGameRestricted = (u, game) => !!(u?.restrictGames || u?.[GAMES[game].field]);
+export const gameRestricted = (game) => `${GAMES[game].name} has been restricted on your account. Please contact support.`;
 
 /** The $3 sign-up bonus is taken back on the first withdrawal or transfer. */
 export const owesBonus = (u) => !!u?.bonusClaimed && !u?.bonusDeducted;

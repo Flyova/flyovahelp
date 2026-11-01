@@ -78,6 +78,7 @@ service cloud.firestore {
         'inflowBonus', 'inflowEarned', 'inflowAccess', 'inflowAccessAt', 'freeWithdrawalMonth',
         'hasTxPin', 'bank', 'bankUpdatedAt', 'depositLockedUntil', 'depositLockedAt', 'invalidDeposits',
         'signupRewards', 'signupRewardsTotal', 'signupRewardPaidTo', 'referralCode', 'restrictGames',
+        'restrictFriends', 'restrictFlyova', 'restrictPredict',
         'flagged', 'flagReason', 'flaggedAt', 'flagCount', 'deletionRequested', 'deletionRequestDate',
         'hasApplied', 'agentStatus',
         'fullName', 'username', 'freeWithdrawals', 'usernameChangedAt', 'profileChangedAt'];
@@ -109,6 +110,7 @@ service cloud.firestore {
           'inflowBonus', 'inflowEarned', 'inflowAccess', 'inflowAccessAt', 'freeWithdrawalMonth', 'freeWithdrawals',
           'hasTxPin', 'bank', 'bankUpdatedAt', 'depositLockedUntil', 'depositLockedAt', 'invalidDeposits',
         'signupRewards', 'signupRewardsTotal', 'signupRewardPaidTo', 'referralCode', 'restrictGames',
+        'restrictFriends', 'restrictFlyova', 'restrictPredict',
         'flagged', 'flagReason', 'flaggedAt', 'flagCount', 'deletionRequested', 'deletionRequestDate',
         'hasApplied', 'agentStatus'])
         // Account age unlocks free usernames, the inflow bonus and the 18-month perks, so it's the real sign-up time.
@@ -202,6 +204,7 @@ service cloud.firestore {
       allow create: if request.auth != null
         && request.resource.data.from == request.auth.uid
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('restrictGames', false) == false
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('restrictFriends', false) == false
         && request.resource.data.to is string && request.resource.data.to != request.auth.uid
         && request.resource.data.status == 'pending'
         && request.resource.data.stakePerRound is int
