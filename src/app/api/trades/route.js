@@ -463,6 +463,9 @@ async function presenceOf(db, uids) {
   return new Map(snaps.map((u) => [u.id, agentPresence(u.exists ? u.data() : null)]));
 }
 
+/** Online while they have the site or app open, unless they've switched themselves offline (the app's agents.active). */
+const seen = (a, p) => ({ online: !!p?.online && a?.active !== false, lastSeenAt: p?.lastSeenAt ?? null });
+
 async function agentsView(db, caller, params) {
   const type = params.get("type") === "withdrawal" ? "withdrawal" : "deposit";
   const amount = Number(params.get("amount")) || 0;
@@ -486,7 +489,7 @@ async function agentsView(db, caller, params) {
         deposit_tiers: tiers("deposit_tiers"),
         withdrawal_tiers: tiers("withdrawal_tiers"),
         rate: rateFor(a, type, amount),
-        ...presence.get(d.id),
+        ...seen(a, presence.get(d.id)),
         rating: ratingOf(a),
       };
     })
@@ -509,7 +512,7 @@ async function agentView(db, caller, params) {
   return NextResponse.json({
     name: a.full_name || t.agentName || "Agent", country: t.country || a.country || "",
     ...(showBank ? { bank: { bankName: a.bankName || "", accountName: a.accountName || "", accountNumber: a.accountNumber || "" } } : {}),
-    ...presence.get(t.agentId),
+    ...seen(a, presence.get(t.agentId)),
     rating: ratingOf(a),
     myRating: mine.exists ? Number(mine.data().stars) || 0 : 0,
   });

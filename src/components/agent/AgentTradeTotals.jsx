@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
 import { ArrowDownLeft, ArrowUpRight, BarChart3 } from "lucide-react";
+import { auth } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
 import { PERIODS, PERIOD_LABELS, myTz } from "@/lib/periods";
 
@@ -14,8 +16,13 @@ export default function AgentTradeTotals({ refreshKey }) {
   const [periods, setPeriods] = useState(null);
   const [period, setPeriod] = useState("day");
   const [error, setError] = useState("");
+  const [uid, setUid] = useState(null);
+
+  // Ask once the sign-in is back (a fresh page load restores it a moment later).
+  useEffect(() => onAuthStateChanged(auth, (u) => setUid(u?.uid || null)), []);
 
   useEffect(() => {
+    if (!uid) return;
     let live = true;
     authFetch(`/api/trades?view=agentStats&tz=${myTz()}`).then((res) => {
       if (!live) return;
@@ -23,7 +30,7 @@ export default function AgentTradeTotals({ refreshKey }) {
       else { setPeriods(res.periods); setError(""); }
     });
     return () => { live = false; };
-  }, [refreshKey]);
+  }, [uid, refreshKey]);
 
   const p = periods?.[period];
   const rows = [
