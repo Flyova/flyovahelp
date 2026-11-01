@@ -7,13 +7,15 @@ import {
   INFLOW_ACCESS_PRICE, INFLOW_CATEGORIES, INFLOW_MIN_AGE_MONTHS, INFLOW_PAYOUT_DAY,
   creditInflowSafely, inflowEligibility, inflowLedger, inflowRecords, isPayoutDay, nextPayoutMs,
 } from "@/lib/inflowBonus";
+import { msOf, perPeriod, periodStarts, periodsOf, tzOffset } from "@/lib/periods";
 
 // The inflow bonus (lib/inflowBonus): what the account has earned, whether it can
 // earn, and moving it to the main wallet.
 //
-//   GET                                    -> { eligible, purchased, eligibleAt, minAgeMonths, accessPrice, balance,
-//                                               earned, payoutDay, payoutToday, nextPayoutAt, categories, history }
+//   GET ?tz=                               -> { eligible, purchased, eligibleAt, minAgeMonths, accessPrice, balance,
+//                                               earned, payoutDay, payoutToday, nextPayoutAt, categories, periods, history }
 //                                               categories: [{ key, label, rate, text, earned, count }], what each has paid so far
+//                                               periods: { day, week, month, year } earned in each (lib/periods; tz as there)
 //   POST { action: "buyAccess" }           -> { balance }   $250 from the main wallet unlocks it before 8 months
 //   POST { action: "withdraw" }            -> { amount, balance }   the whole bonus to the main wallet, on the 15th (UTC)
 //   POST { action: "settle", kind, id }    -> { credited }  admin/staff, after approving a USDT deposit or withdrawal
@@ -23,21 +25,25 @@ const users = (db) => db.collection("users");
 const HISTORY = 100;
 const ms = (ts) => ts?.toMillis?.() || null;
 
-async function view(db, caller) {
+async function view(db, caller, params) {
   const snap = await users(db).doc(caller.uid).get();
   if (!snap.exists) return fail("Account not found.", 404);
   const me = snap.data();
   const [status, records, all] = await Promise.all([
     inflowEligibility(caller.uid, me),
     inflowRecords(db, caller.uid).orderBy("createdAt", "desc").limit(HISTORY).get(),
-    inflowRecords(db, caller.uid).select("category", "amount").get(),
+    inflowRecords(db, caller.uid).select("category", "amount", "createdAt").get(),
   ]);
-  // Totals per category over the whole history, not just the latest records shown.
+  // Totals per category over the whole history, not just the latest records shown,
+  // and what was earned today, this week, month and year (payouts aren't earnings).
   const totals = new Map();
+  const starts = periodStarts(tzOffset(params));
+  const periodC = perPeriod(() => 0);
   for (const d of all.docs) {
-    const { category, amount } = d.data();
+    const { category, amount, createdAt } = d.data();
     const t = totals.get(category) || { earnedC: 0, count: 0 };
     totals.set(category, { earnedC: t.earnedC + cents(amount), count: t.count + 1 });
+    if (Object.hasOwn(INFLOW_CATEGORIES, category)) for (const p of periodsOf(msOf(createdAt), starts)) periodC[p] += cents(amount);
   }
   const history = records.docs.map((d) => {
     const r = d.data();
@@ -56,6 +62,7 @@ async function view(db, caller) {
       key, label: c.label, rate: c.rate, text: c.text,
       earned: toDollars(totals.get(key)?.earnedC || 0), count: totals.get(key)?.count || 0,
     })),
+    periods: Object.fromEntries(Object.entries(periodC).map(([p, c]) => [p, toDollars(c)])),
     history,
   });
 }
@@ -141,7 +148,7 @@ export async function GET(req) {
   try {
     const caller = await getCaller(req);
     if (!caller) return fail("Sign in again to continue.", 401);
-    return await view(getAdminDb(), caller);
+    return await view(getAdminDb(), caller, new URL(req.url).searchParams);
   } catch (e) {
     console.error("Inflow view error:", e);
     return fail("Something went wrong. Please try again.", 500);

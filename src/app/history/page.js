@@ -12,8 +12,10 @@ import {
   XCircle,
   Loader2,
   Send,
-  RefreshCw
+  RefreshCw,
+  BarChart3
 } from "lucide-react";
+import Link from "next/link";
 // FIREBASE IMPORTS
 import { auth, db } from "@/lib/firebase";
 import { collection, query, onSnapshot, orderBy, where } from "firebase/firestore";
@@ -361,6 +363,10 @@ export default function HistoryPage() {
           <span>HISTORY</span>
         </h1>
         <p className="relative z-10 text-white/60 text-[10px] font-black uppercase mt-2 tracking-[0.3em]">Ledger & Performance</p>
+        {/* Today / week / month / year totals of games, transfers, chat coins, deposits and withdrawals. */}
+        <Link href="/history/totals" className="relative z-10 mt-4 inline-flex items-center gap-2 bg-black/20 hover:bg-black/30 border border-white/15 px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all">
+          <BarChart3 size={14} /> My totals
+        </Link>
       </div>
 
       <div className="p-4 max-w-2xl lg:max-w-4xl mx-auto mt-4">

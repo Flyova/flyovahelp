@@ -7,6 +7,7 @@ import {
 } from "firebase/firestore";
 import { authFetch } from "@/lib/authFetch";
 import { formatLocal } from "@/lib/currency";
+import { AgentPresence, AgentRating, StarPicker } from "@/components/AgentStatus";
 import { 
   Send, ShieldCheck, Landmark, AlertCircle, 
   CheckCircle2, Loader2, MessageSquare, Info, Paperclip, ImageIcon, Clock, XCircle, ArrowLeft, Receipt, Copy
@@ -27,6 +28,9 @@ export default function TradeRoom() {
   const [nowMs, setNowMs] = useState(0);
   // The agent's country, for older trades that don't carry it (their total's currency).
   const [agentCountry, setAgentCountry] = useState("");
+  // The player's view of the agent: online, their rating, and the stars this player gave them.
+  const [agentStatus, setAgentStatus] = useState(null);
+  const [rating, setRating] = useState(false);
   // Set once our "I've sent the money" goes through, so it can't be tapped again while
   // the trade's own update is still on its way.
   const [sentByMe, setSentByMe] = useState(false);
@@ -77,6 +81,7 @@ export default function TradeRoom() {
           if (!agentInfo.error) {
             setOtherPartyName(agentInfo.name);
             setAgentCountry(agentInfo.country || "");
+            setAgentStatus({ online: !!agentInfo.online, lastSeenAt: agentInfo.lastSeenAt || null, rating: agentInfo.rating, myRating: agentInfo.myRating || 0 });
             if (needBank && agentInfo.bank) setAgentBank({ ...agentInfo.bank, full_name: agentInfo.name });
           }
         }
@@ -154,6 +159,18 @@ export default function TradeRoom() {
       else if (res.error) alert(res.error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  /** The player rates this trade's agent, 1–5 stars (a new rating replaces theirs). */
+  const rateAgent = async (stars) => {
+    setRating(true);
+    try {
+      const res = await authFetch("/api/trades", { method: "POST", body: { action: "rate", id, stars } });
+      if (res.error) return alert(res.error);
+      setAgentStatus((prev) => ({ ...prev, rating: res.rating, myRating: res.myRating }));
+    } finally {
+      setRating(false);
     }
   };
 
@@ -259,6 +276,7 @@ export default function TradeRoom() {
               Trade with {otherPartyName || "Loading..."}
             </h1>
             <p className="text-[10px] font-bold text-[#8B1E3F] uppercase tracking-widest">${Number(trade.amount).toLocaleString()}</p>
+            {!isAgent && agentStatus && <AgentPresence online={agentStatus.online} lastSeenAt={agentStatus.lastSeenAt} />}
           </div>
         </div>
         <StatusBadge status={trade.status} />
@@ -353,6 +371,16 @@ export default function TradeRoom() {
                     {loading ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle2 size={16} />} I&apos;ve Sent the Money
                   </button>
                 )
+            )}
+
+            {trade.status === "completed" && agentStatus && (
+                <div className="p-5 bg-[#142036] rounded-3xl border border-white/5 text-center space-y-2">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-white/50">
+                      {agentStatus.myRating ? "Your rating (tap to change)" : `How was ${otherPartyName || "your agent"}?`}
+                    </p>
+                    <StarPicker value={agentStatus.myRating} onRate={rateAgent} disabled={rating} />
+                    <AgentRating rating={agentStatus.rating} />
+                </div>
             )}
         </div>
       )}

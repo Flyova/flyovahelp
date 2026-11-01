@@ -12,6 +12,8 @@ import { creditInflowSafely } from "@/lib/inflowBonus";
 import { checkTxPin } from "@/lib/txPin";
 import { recordInvalidDeposit } from "@/lib/depositLock";
 import { alertAdmins, notifyUser } from "@/lib/notifications";
+import { agentPresence } from "@/lib/agentPresence";
+import { msOf, perPeriod, periodStarts, periodsOf, tzOffset } from "@/lib/periods";
 
 // Trades with local agents: a player deposits or withdraws by paying (or being paid
 // by) an agent outside the app, and balances move here. Players' and agents' apps
@@ -34,15 +36,22 @@ import { alertAdmins, notifyUser } from "@/lib/notifications";
 //   Admins are alerted when a trade starts, completes or goes wrong.
 //
 //   GET ?view=agents&type=deposit|withdrawal&amount= -> { agents: [{ id, full_name, deposit_rate, withdrawal_rate,
-//        deposit_tiers, withdrawal_tiers, rate }] } approved agents in your country (for a deposit, ones whose
-//        balance covers amount + fee); `rate` is the one this amount gets (lib/money rateFor)
-//   GET ?view=agent&id=   -> { name, country, bank? }   a trade's agent; the bank details only for the
-//        depositor, once the agent has accepted (agents' records aren't readable by players)
+//        deposit_tiers, withdrawal_tiers, rate, online, lastSeenAt, rating }] } approved agents in your country
+//        (for a deposit, ones whose balance covers amount + fee), the most rated first; `rate` is the one this
+//        amount gets (lib/money rateFor), `rating` = { average, count }, online/lastSeenAt from lib/agentPresence
+//   GET ?view=agent&id=   -> { name, country, bank?, online, lastSeenAt, rating, myRating }   a trade's agent; the
+//        bank details only for the depositor, once the agent has accepted (agents' records aren't readable by
+//        players); myRating: the stars this trade's player gave the agent (0 if none)
+//   GET ?view=agentStats&tz= -> { rating, periods: { day|week|month|year: { deposit, withdrawal: { count, amount } } } }
+//        an agent's own completed trades (lib/periods)
 //   POST { action: "create", type, agentId, amount, txPin? } -> { id, balance? }   txPin for a withdrawal
 //   POST { action: "accept" | "decline" | "confirm" | "expire" | "markPaid" | "notPaid", id } -> { ok }
 //        markPaid: whoever sends the money says they have (the player on a deposit, the agent on
 //        a withdrawal); Confirm is refused until then. A trade keeps the agent's `country`
 //        for showing its local-currency total.
+//   POST { action: "rate", id, stars } -> { rating, myRating }   the player of a completed trade rates its agent
+//        1–5; one rating per player per agent (agent_ratings/{agentId}_{playerId}), a new one replaces it,
+//        tallied on agents/{id}.ratingCount and ratingTotal
 //   POST { action: "agentTopup" | "agentWithdraw", amount } -> { wallet, agentBalance }
 //                                                    an agent moving money between their two balances
 //   POST { action: "staffCancel" | "staffRefund", id } -> { ok, refunded? }   admin/staff/support (Agent TX page):
@@ -441,6 +450,19 @@ async function staffRefund(db, caller, { id }) {
   return NextResponse.json({ ok: true, refunded: out.refunded });
 }
 
+/** { average (1 decimal), count } of an agent's ratings. */
+function ratingOf(a) {
+  const count = Math.max(0, Number(a?.ratingCount) || 0);
+  return { average: count ? Math.round((Number(a.ratingTotal) || 0) / count * 10) / 10 : 0, count };
+}
+
+/** Agent uid -> { online, lastSeenAt } (their users docs, which players can't read). */
+async function presenceOf(db, uids) {
+  if (!uids.length) return new Map();
+  const snaps = await db.getAll(...uids.map((uid) => db.collection("users").doc(uid)));
+  return new Map(snaps.map((u) => [u.id, agentPresence(u.exists ? u.data() : null)]));
+}
+
 async function agentsView(db, caller, params) {
   const type = params.get("type") === "withdrawal" ? "withdrawal" : "deposit";
   const amount = Number(params.get("amount")) || 0;
@@ -449,8 +471,9 @@ async function agentsView(db, caller, params) {
   const snap = await db.collection("agents").where("application_status", "==", "approved")
     .where("country", "==", me.country).where("banned", "==", false).limit(30).get();
   const needC = type === "deposit" ? Math.round(cents(amount) * (1 + AGENT_FEE_RATE.deposit)) : 0;
-  const agents = snap.docs
-    .filter((d) => d.id !== caller.uid && cents(d.data().agent_balance) >= needC)
+  const listed = snap.docs.filter((d) => d.id !== caller.uid && cents(d.data().agent_balance) >= needC);
+  const presence = await presenceOf(db, listed.map((d) => d.id));
+  const agents = listed
     .map((d) => {
       const a = d.data();
       const tiers = (key) => { const t = cleanRateTiers(a[key]); return t.error ? [] : t; };
@@ -463,8 +486,12 @@ async function agentsView(db, caller, params) {
         deposit_tiers: tiers("deposit_tiers"),
         withdrawal_tiers: tiers("withdrawal_tiers"),
         rate: rateFor(a, type, amount),
+        ...presence.get(d.id),
+        rating: ratingOf(a),
       };
-    });
+    })
+    // The most rated first (then the best rated, then whoever's online).
+    .sort((x, y) => y.rating.count - x.rating.count || y.rating.average - x.rating.average || y.online - x.online);
   return NextResponse.json({ agents });
 }
 
@@ -472,15 +499,81 @@ async function agentView(db, caller, params) {
   const snap = await db.collection("trades").doc(String(params.get("id") || "")).get();
   const t = snap.exists ? snap.data() : null;
   if (!t || (t.senderId !== caller.uid && t.agentId !== caller.uid)) return fail("Trade not found.", 404);
-  const a = (await db.collection("agents").doc(t.agentId).get()).data() || {};
+  const [agent, mine, presence] = await Promise.all([
+    db.collection("agents").doc(t.agentId).get(),
+    db.collection("agent_ratings").doc(`${t.agentId}_${t.senderId}`).get(),
+    presenceOf(db, [t.agentId]),
+  ]);
+  const a = agent.data() || {};
   const showBank = t.senderId === caller.uid && t.type === "deposit" && ["acknowledged", "completed"].includes(t.status);
   return NextResponse.json({
     name: a.full_name || t.agentName || "Agent", country: t.country || a.country || "",
     ...(showBank ? { bank: { bankName: a.bankName || "", accountName: a.accountName || "", accountNumber: a.accountNumber || "" } } : {}),
+    ...presence.get(t.agentId),
+    rating: ratingOf(a),
+    myRating: mine.exists ? Number(mine.data().stars) || 0 : 0,
   });
 }
 
-const VIEWS = { agents: agentsView, agent: agentView };
+/** An agent's completed deposits and withdrawals today, this week, month and year, and their rating. */
+async function agentStatsView(db, caller, params) {
+  const agent = await db.collection("agents").doc(caller.uid).get();
+  if (!agent.exists) return fail("This is for agents.", 403);
+  const starts = periodStarts(tzOffset(params));
+  // Equality filters only, so no extra index; the year's trades are picked out here.
+  const snap = await db.collection("trades").where("agentId", "==", caller.uid).where("status", "==", "completed")
+    .select("type", "amount", "completedAt").get();
+  const totals = perPeriod(() => ({ deposit: { count: 0, amountC: 0 }, withdrawal: { count: 0, amountC: 0 } }));
+  for (const d of snap.docs) {
+    const t = d.data();
+    if (!TYPES.includes(t.type)) continue;
+    for (const p of periodsOf(msOf(t.completedAt), starts)) {
+      totals[p][t.type].count += 1;
+      totals[p][t.type].amountC += cents(t.amount);
+    }
+  }
+  const out = (x) => ({ count: x.count, amount: toDollars(x.amountC) });
+  return NextResponse.json({
+    rating: ratingOf(agent.data()),
+    periods: Object.fromEntries(Object.entries(totals).map(([p, v]) => [p, { deposit: out(v.deposit), withdrawal: out(v.withdrawal) }])),
+  });
+}
+
+/** The player of a completed trade rates its agent, 1 to 5 stars; a later rating replaces theirs. */
+async function rate(db, caller, { id, stars }) {
+  const n = Number(stars);
+  if (!Number.isInteger(n) || n < 1 || n > 5) return fail("Choose 1 to 5 stars.");
+  const first = id && typeof id === "string" ? await db.collection("trades").doc(id).get() : null;
+  if (!first?.exists) return fail("Trade not found.", 404);
+  const t = first.data();
+  if (t.senderId !== caller.uid) return fail("Only this trade's player can rate its agent.", 403);
+  if (t.status !== "completed") return fail("You can rate the agent once the trade is completed.", 409);
+  const agentRef = db.collection("agents").doc(t.agentId);
+  const ratingRef = db.collection("agent_ratings").doc(`${t.agentId}_${caller.uid}`);
+  const out = await db.runTransaction(async (tx) => {
+    const [a, r] = await tx.getAll(agentRef, ratingRef);
+    if (!a.exists) return { error: "This agent isn't available any more.", status: 404 };
+    const old = r.exists ? Number(r.data().stars) || 0 : 0;
+    const now = FV().serverTimestamp();
+    tx.update(agentRef, { ratingTotal: FV().increment(n - old), ...(r.exists ? {} : { ratingCount: FV().increment(1) }) });
+    tx.set(ratingRef, {
+      agentId: t.agentId, playerId: caller.uid, stars: n, tradeId: id, updatedAt: now, ...(r.exists ? {} : { createdAt: now }),
+    }, { merge: true });
+    return {
+      changed: old !== n,
+      rating: ratingOf({ ratingCount: (Number(a.data().ratingCount) || 0) + (r.exists ? 0 : 1), ratingTotal: (Number(a.data().ratingTotal) || 0) + n - old }),
+    };
+  });
+  if (out.error) return fail(out.error, out.status);
+  if (out.changed) {
+    await notifyUser(db, t.agentId, {
+      type: "merchant", title: "New rating", body: `${t.senderName || "A player"} rated you ${n} star${n === 1 ? "" : "s"}.`, url: "/agent/dashboard",
+    });
+  }
+  return NextResponse.json({ rating: out.rating, myRating: n });
+}
+
+const VIEWS = { agents: agentsView, agent: agentView, agentStats: agentStatsView };
 
 export async function GET(req) {
   try {
@@ -497,7 +590,7 @@ export async function GET(req) {
 }
 
 const ACTIONS = {
-  create, accept, decline, confirm, expire, markPaid, notPaid, staffCancel, staffRefund,
+  create, accept, decline, confirm, expire, markPaid, notPaid, rate, staffCancel, staffRefund,
   agentTopup: (db, caller, body) => moveAgentBalance(db, caller, body.amount, true),
   agentWithdraw: (db, caller, body) => moveAgentBalance(db, caller, body.amount, false),
 };

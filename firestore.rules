@@ -87,6 +87,8 @@ service cloud.firestore {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
       return !changed.hasAny(lockedAccountFields())
         && (!changed.hasAny(['role']) || isPortalRole(request.resource.data.role))
+        // An agent's "online" heartbeat (lib/agentPresence) is always the real time.
+        && (!changed.hasAny(['activeAt']) || request.resource.data.activeAt == request.time)
         // A PIN is given once (sign-up, or the first login without one).
         && (!changed.hasAny(['pin']) || (
           resource.data.get('pin', '') in [null, '']
