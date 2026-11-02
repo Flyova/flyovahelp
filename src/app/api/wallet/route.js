@@ -24,7 +24,8 @@ import { recordPurchase } from "@/lib/purchases";
 // rules); every change is made here, inside one transaction that checks it.
 //
 //   GET ?view=recipient&pin=                    -> { name }            who a PIN belongs to
-//   GET ?view=referrals                         -> { referrals, qualified, needed, bonus, code, link, signupRewards, signupRewardsTotal }
+//   GET ?view=referrals                         -> { referrer, referrals, qualified, needed, bonus, code, link, signupRewards,
+//                                                                       signupRewardsTotal } referrer: who referred you, or null
 //   GET ?view=signups                           -> { total, verified, rewarded, byCountry, people } who registered with
 //                                                                       your link or code (username, country, when, verified)
 //   GET ?view=activity&tz=                      -> { periods: { day|week|month|year: { games, transfers, chat, withdrawals,
@@ -302,6 +303,28 @@ async function recipientView(db, caller, params) {
   return NextResponse.json({ name: target.data().fullName || target.data().username || "Player" });
 }
 
+/**
+ * Who referred the account: { username, fullName } (the mirror of referralsOf), or null.
+ * Older sign-ups only kept the referrer's username or full name in referredBy; when no
+ * single account matches it any more, that name is all there is.
+ */
+async function referrerOf(db, uid, me) {
+  const shown = (u) => ({ username: u.username || "", fullName: u.fullName || "" });
+  const refUid = typeof me.referrerUid === "string" ? me.referrerUid.trim() : "";
+  if (refUid && refUid !== uid) {
+    const snap = await users(db).doc(refUid).get();
+    if (snap.exists) return shown(snap.data());
+  }
+  const label = typeof me.referredBy === "string" ? me.referredBy.trim() : "";
+  if (!label) return null;
+  for (const field of ["username", "fullName"]) {
+    const snap = await users(db).where(field, "==", label).limit(2).get();
+    const others = snap.docs.filter((d) => d.id !== uid);
+    if (others.length === 1) return shown(others[0].data());
+  }
+  return { username: "", fullName: label };
+}
+
 async function referralsView(db, caller) {
   const snap = await users(db).doc(caller.uid).get();
   if (!snap.exists) return fail("Account not found.", 404);
@@ -319,6 +342,7 @@ async function referralsView(db, caller) {
   })));
   referrals.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   return NextResponse.json({
+    referrer: await referrerOf(db, caller.uid, me),
     referrals,
     qualified: referrals.filter((r) => r.hasDeposited).length,
     needed,

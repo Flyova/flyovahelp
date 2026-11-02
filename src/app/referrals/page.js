@@ -32,6 +32,7 @@ export default function ReferralsPage() {
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
   const [referrals, setReferrals] = useState([]);
+  const [referrer, setReferrer] = useState(undefined); // who referred you: { username, fullName }, null (no one), undefined (loading)
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [referralsChecked, setReferralsChecked] = useState(false);
@@ -59,6 +60,7 @@ export default function ReferralsPage() {
           const res = await authFetch("/api/wallet?view=referrals");
           if (res.error) throw new Error(res.error);
           setReferrals(res.referrals);
+          setReferrer(res.referrer ?? null);
           if (res.needed) setNeeded(res.needed);
           setCode(res.code || "");
           setLink(res.link || "");
@@ -206,6 +208,31 @@ export default function ReferralsPage() {
           Your referral balance unlocks once {needed} of your referrals have each deposited at least ${MIN_QUALIFYING_DEPOSIT}
           {needed < MIN_QUALIFIED_REFERRALS ? " (fewer for accounts over 18 months old)" : ""}.
         </p>
+
+        {/* WHO REFERRED YOU */}
+        {referrer !== undefined && (
+          <div data-testid="referred-by" className="bg-[#142036] rounded-[2rem] p-5 border border-white/5 shadow-xl flex items-center gap-4">
+            {referrer ? (
+              <>
+                <Avatar username={referrer.username || referrer.fullName} size={44} rounded="rounded-2xl" className="border border-white/5 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 mb-1">Referred by</p>
+                  {referrer.username && (
+                    <h4 className="font-black italic uppercase text-[#8B1E3F] leading-none truncate">@{referrer.username}</h4>
+                  )}
+                  {referrer.fullName && (
+                    <p className="text-[10px] font-bold text-white/60 uppercase tracking-tighter truncate mt-1">{referrer.fullName}</p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <UserCircle size={28} className="text-white/20 shrink-0" />
+                <p className="text-[11px] font-bold text-white/50">No one referred you. You joined without a referral code.</p>
+              </>
+            )}
+          </div>
+        )}
 
         {/* SIGN-UP REWARDS: their own balance and button */}
         <div className="bg-[#142036] rounded-[2rem] p-6 border border-white/5 shadow-xl">
