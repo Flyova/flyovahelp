@@ -31,7 +31,7 @@ export default function BlockedPage() {
   return (
     <SettingsPage title="Blocked">
       <SettingsIntro>
-        Players @{name} has blocked can&apos;t message it or send it coins, and their Chatroom messages are hidden. They aren&apos;t told.
+        Players @{name} has blocked can&apos;t message it or send it chat coins, and their Chatroom messages are hidden. They aren&apos;t told.
       </SettingsIntro>
       <SettingsSection>
         {blocked === null && <p className="px-4 py-6 text-center text-sm text-white/45">Loading…</p>}

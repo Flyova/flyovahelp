@@ -85,8 +85,8 @@ export default function ChatSettingsPage() {
             { key: "profile", icon: UserRound, title: "Profile", text: "Photo, bio, status and gender", href: "/chat/settings/profile", words: "picture photo avatar bio status gender male female devices" },
             { key: "notifications", icon: Bell, title: "Notifications", text: "Message sounds and which chats play them", value: settingsLoaded ? soundsValue : "", href: "/chat/settings/notifications", words: "sound mute alert tone ringtone ring" },
             { key: "online", icon: Radio, title: "Online status", text: "Show when you're online or last seen", value: settingsLoaded ? onOff(s.showOnline) : "", href: "/chat/settings/online-status", words: "last seen active offline" },
-            { key: "privacy", icon: Shield, title: "Privacy", text: "Read receipts, coins on show, country, who can add you to groups", href: "/chat/settings/privacy", words: "seen read receipts show off coins hide country groups add" },
-            { key: "coins", icon: Wallet, title: "Coin wallet", text: "This username's own coins: buy, withdraw, activity", value: `${formatCoins(coinsOf(name))} coins`, onClick: () => openCoinWallet(name), chevron: true, words: "buy withdraw send balance money" },
+            { key: "privacy", icon: Shield, title: "Privacy", text: "Read receipts, chat coins on show, country, who can add you to groups", href: "/chat/settings/privacy", words: "seen read receipts show off coins hide country groups add" },
+            { key: "coins", icon: Wallet, title: "Coin wallet", text: "This username's own chat coins: buy, withdraw, activity", value: `${formatCoins(coinsOf(name))} chat coins`, onClick: () => openCoinWallet(name), chevron: true, words: "buy withdraw send balance money" },
             { key: "blocked", icon: Ban, title: "Blocked", text: "Players this profile has blocked", value: name === active ? blockedNames.length || "" : "", href: "/chat/settings/blocked", words: "unblock block" },
             {
               key: "password",

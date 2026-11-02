@@ -9,6 +9,7 @@ import {
   coinBuyQuote, coinWithdrawQuote, formatCents, formatCoins, isCoinAmount,
 } from "@/lib/chat";
 import Avatar from "@/components/Avatar";
+import BonusRepay, { owesWelcomeBonus } from "@/components/BonusRepay";
 import ChatSheet from "@/components/chat/ChatSheet";
 
 const coinsApi = (body) => authFetch("/api/chat/coins", { method: "POST", body });
@@ -57,7 +58,7 @@ function AmountPicker({ presets, value, onChange, max }) {
         }}
         inputMode="numeric"
         placeholder="Or type an amount"
-        aria-label="Number of coins"
+        aria-label="Number of chat coins"
         className="mt-2 w-full bg-black/40 border border-white/10 focus:border-[#F6C453] rounded-xl px-3 py-2.5 text-base md:text-sm outline-none"
       />
     </div>
@@ -74,8 +75,8 @@ function QuoteRow({ label, value, strong = false }) {
 }
 
 function activityLine(a) {
-  if (a.kind === "buy") return { text: `Bought ${formatCoins(a.coins)} coins`, sub: `${formatCents(a.cents)} incl. ${formatCents(a.feeCents)} fee`, delta: a.coins };
-  if (a.kind === "withdraw") return { text: `Withdrew ${formatCoins(a.coins)} coins`, sub: `${formatCents(a.cents)} to main balance`, delta: -a.coins };
+  if (a.kind === "buy") return { text: `Bought ${formatCoins(a.coins)} chat coins`, sub: `${formatCents(a.cents)} incl. ${formatCents(a.feeCents)} fee`, delta: a.coins };
+  if (a.kind === "withdraw") return { text: `Withdrew ${formatCoins(a.coins)} chat coins`, sub: `${formatCents(a.cents)} to main balance`, delta: -a.coins };
   if (a.kind === "sent") return { text: `Sent to @${a.to}`, sub: "", delta: -a.coins };
   if (a.kind === "moved") return { text: a.from ? `Moved from @${a.from}` : "Moved from your account wallet", sub: a.from ? "username deleted" : "", delta: a.coins };
   return { text: `From @${a.from}`, sub: "", delta: a.coins };
@@ -85,19 +86,24 @@ function activityLine(a) {
  * A username's coin wallet (`name`; each username has its own): balance, buy
  * coins from the main balance (7% fee), withdraw them back (12% fee; `canWithdraw`
  * only for the account that owns the username) and recent activity. Sending
- * happens from a player in the Chatroom or a group.
+ * happens from a player in the Chatroom or a group. Buying waits until the $3
+ * welcome bonus is paid back.
  */
 export function CoinWalletSheet({ uid, name, coins, canWithdraw = true, onClose }) {
   const [tab, setTab] = useState("buy");
   const [amount, setAmount] = useState(0);
   const [mainCents, setMainCents] = useState(null);
+  const [owesBonus, setOwesBonus] = useState(false);
   const [activity, setActivity] = useState([]);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState({ type: "", msg: "" });
 
   useEffect(() => {
     if (!uid) return;
-    return onSnapshot(doc(db, "users", uid), (s) => setMainCents(Math.round(Number(s.data()?.wallet || 0) * 100)), () => {});
+    return onSnapshot(doc(db, "users", uid), (s) => {
+      setMainCents(Math.round(Number(s.data()?.wallet || 0) * 100));
+      setOwesBonus(owesWelcomeBonus(s.data()));
+    }, () => {});
   }, [uid]);
   useEffect(() => {
     if (!name) return;
@@ -133,7 +139,7 @@ export function CoinWalletSheet({ uid, name, coins, canWithdraw = true, onClose 
     setNote({
       type: "success",
       msg: buying
-        ? `Added ${formatCoins(amount)} coins.`
+        ? `Added ${formatCoins(amount)} chat coins.`
         : `${formatCents(withdrawQ.payout)} is now in your main balance.`,
     });
     setAmount(0);
@@ -145,12 +151,12 @@ export function CoinWalletSheet({ uid, name, coins, canWithdraw = true, onClose 
         <div className="flex flex-col items-center text-center">
           <CoinIcon size={30} />
           <p className="mt-3 text-[11px] font-black uppercase tracking-wider text-white/45">Coin wallet · @{name}</p>
-          <p className="text-3xl font-black leading-tight">{formatCoins(coins)} <span className="text-lg text-white/60">coins</span></p>
-          <p className="text-xs text-white/45 mt-0.5">1 coin = {formatCents(COIN_CENTS)} · worth {formatCents(coins * COIN_CENTS)}</p>
+          <p className="text-3xl font-black leading-tight">{formatCoins(coins)} <span className="text-lg text-white/60">chat coins</span></p>
+          <p className="text-xs text-white/45 mt-0.5">1 chat coin = {formatCents(COIN_CENTS)} · worth {formatCents(coins * COIN_CENTS)}</p>
         </div>
 
         <div className="mt-5 grid grid-cols-2 bg-black/25 rounded-2xl p-1" role="tablist">
-          {[["buy", "Buy coins", Plus], ["withdraw", "Withdraw", Wallet]].map(([key, label, Icon]) => (
+          {[["buy", "Buy chat coins", Plus], ["withdraw", "Withdraw", Wallet]].map(([key, label, Icon]) => (
             <button
               key={key}
               type="button"
@@ -164,61 +170,67 @@ export function CoinWalletSheet({ uid, name, coins, canWithdraw = true, onClose 
           ))}
         </div>
 
-        <div className="mt-4">
-          <AmountPicker
-            key={tab}
-            presets={buying ? [10, 50, 100, 500, 1000] : [10, 50, 100, 500, "all"]}
-            value={amount}
-            onChange={(n) => {
-              setAmount(n);
-              setNote({ type: "", msg: "" });
-            }}
-            max={buying ? undefined : coins}
-          />
-        </div>
+        {buying && owesBonus ? (
+          <BonusRepay className="mt-4" what="buy chat coins" balance={mainCents === null ? null : mainCents / 100} />
+        ) : (
+          <>
+            <div className="mt-4">
+              <AmountPicker
+                key={tab}
+                presets={buying ? [10, 50, 100, 500, 1000] : [10, 50, 100, 500, "all"]}
+                value={amount}
+                onChange={(n) => {
+                  setAmount(n);
+                  setNote({ type: "", msg: "" });
+                }}
+                max={buying ? undefined : coins}
+              />
+            </div>
 
-        {valid && (
-          <div className="mt-3 space-y-1 bg-black/20 rounded-2xl p-3.5">
-            {buying ? (
-              <>
-                <QuoteRow label={`${formatCoins(amount)} coins`} value={formatCents(buyQ.value)} />
-                <QuoteRow label={`Fee (${pct(COIN_BUY_FEE)})`} value={formatCents(buyQ.fee)} />
-                <QuoteRow label="You pay from main balance" value={formatCents(buyQ.total)} strong />
-              </>
-            ) : (
-              <>
-                <QuoteRow label={`${formatCoins(amount)} coins`} value={formatCents(withdrawQ.value)} />
-                <QuoteRow label={`Fee (${pct(COIN_WITHDRAW_FEE)})`} value={`−${formatCents(withdrawQ.fee)}`} />
-                <QuoteRow label="You get in main balance" value={formatCents(withdrawQ.payout)} strong />
-              </>
+            {valid && (
+              <div className="mt-3 space-y-1 bg-black/20 rounded-2xl p-3.5">
+                {buying ? (
+                  <>
+                    <QuoteRow label={`${formatCoins(amount)} chat coins`} value={formatCents(buyQ.value)} />
+                    <QuoteRow label={`Fee (${pct(COIN_BUY_FEE)})`} value={formatCents(buyQ.fee)} />
+                    <QuoteRow label="You pay from main balance" value={formatCents(buyQ.total)} strong />
+                  </>
+                ) : (
+                  <>
+                    <QuoteRow label={`${formatCoins(amount)} chat coins`} value={formatCents(withdrawQ.value)} />
+                    <QuoteRow label={`Fee (${pct(COIN_WITHDRAW_FEE)})`} value={`−${formatCents(withdrawQ.fee)}`} />
+                    <QuoteRow label="You get in main balance" value={formatCents(withdrawQ.payout)} strong />
+                  </>
+                )}
+              </div>
             )}
-          </div>
-        )}
-        {amount > MAX_COINS_PER_ACTION && <p className="mt-2 text-xs text-red-300">At most {formatCoins(MAX_COINS_PER_ACTION)} coins at a time.</p>}
-        {short && (
-          <p className="mt-2 text-xs text-red-300">
-            {buying ? `Your main balance is ${formatCents(mainCents)}.` : `You have ${formatCoins(coins)} coins.`}
-          </p>
-        )}
-        {note.msg && (
-          <p className={`mt-3 text-xs font-bold p-2.5 rounded-xl ${note.type === "error" ? "bg-red-500/10 text-red-300" : "bg-emerald-500/10 text-emerald-300"}`}>{note.msg}</p>
-        )}
+            {amount > MAX_COINS_PER_ACTION && <p className="mt-2 text-xs text-red-300">At most {formatCoins(MAX_COINS_PER_ACTION)} chat coins at a time.</p>}
+            {short && (
+              <p className="mt-2 text-xs text-red-300">
+                {buying ? `Your main balance is ${formatCents(mainCents)}.` : `You have ${formatCoins(coins)} chat coins.`}
+              </p>
+            )}
+            {note.msg && (
+              <p className={`mt-3 text-xs font-bold p-2.5 rounded-xl ${note.type === "error" ? "bg-red-500/10 text-red-300" : "bg-emerald-500/10 text-emerald-300"}`}>{note.msg}</p>
+            )}
 
-        <button
-          type="button"
-          onClick={submit}
-          disabled={!valid || short || busy || notOwner}
-          className="mt-4 w-full h-12 rounded-xl bg-gradient-to-br from-[#F6C453] to-[#D18E1F] text-[#2B1800] text-sm font-black uppercase disabled:opacity-40 flex items-center justify-center gap-2"
-        >
-          {busy && <Loader2 size={16} className="animate-spin" />}
-          {buying
-            ? valid ? `Buy ${formatCoins(amount)} coins · ${formatCents(buyQ.total)}` : "Choose how many coins"
-            : valid ? `Withdraw ${formatCoins(amount)} coins` : "Choose how many coins"}
-        </button>
+            <button
+              type="button"
+              onClick={submit}
+              disabled={!valid || short || busy || notOwner}
+              className="mt-4 w-full h-12 rounded-xl bg-gradient-to-br from-[#F6C453] to-[#D18E1F] text-[#2B1800] text-sm font-black uppercase disabled:opacity-40 flex items-center justify-center gap-2"
+            >
+              {busy && <Loader2 size={16} className="animate-spin" />}
+              {buying
+                ? valid ? `Buy ${formatCoins(amount)} chat coins · ${formatCents(buyQ.total)}` : "Choose how many chat coins"
+                : valid ? `Withdraw ${formatCoins(amount)} chat coins` : "Choose how many chat coins"}
+            </button>
+          </>
+        )}
         <p className="mt-2 text-center text-[11px] text-white/40">
           {buying
             ? `Main balance: ${mainCents === null ? "…" : formatCents(mainCents)}`
-            : notOwner ? `Only the account that owns @${name} can withdraw its coins.` : "Withdrawn coins go to your main balance."} To send coins, tap a player in the Chatroom or a group.
+            : notOwner ? `Only the account that owns @${name} can withdraw its chat coins.` : "Withdrawn chat coins go to your main balance."} To send chat coins, tap a player in the Chatroom or a group.
         </p>
 
         {activity.length > 0 && (
@@ -274,26 +286,26 @@ export function SendCoinsSheet({ to, as, convoId, coins, onClose, onTopUp }) {
   };
 
   return (
-    <ChatSheet label={`Send coins to @${to}`} onClose={onClose}>
+    <ChatSheet label={`Send chat coins to @${to}`} onClose={onClose}>
       <div className="p-5 pt-7">
         <div className="flex flex-col items-center text-center">
           <div className="relative">
             <Avatar username={to} size={72} rounded="rounded-full" />
             <CoinIcon size={14} className="absolute -right-1 -bottom-1 ring-4 ring-[#142036]" />
           </div>
-          <h2 className="mt-3 text-lg font-black leading-tight">Send coins to @{to}</h2>
+          <h2 className="mt-3 text-lg font-black leading-tight">Send chat coins to @{to}</h2>
           <p className="text-xs text-white/50 mt-0.5">No fee. Everyone in the {convoId ? "group" : "Chatroom"} will see it.</p>
         </div>
 
         <div className="mt-4 flex items-center justify-between bg-black/20 rounded-2xl px-3.5 py-2.5">
           <span className="flex items-center gap-2 text-sm font-bold"><CoinIcon size={12} /> You have {formatCoins(coins)}</span>
-          <button type="button" onClick={onTopUp} className="text-[11px] font-black uppercase text-[#F6C453] hover:underline">Add coins</button>
+          <button type="button" onClick={onTopUp} className="text-[11px] font-black uppercase text-[#F6C453] hover:underline">Add chat coins</button>
         </div>
 
         <div className="mt-4">
           <AmountPicker presets={[10, 50, 100, 500, 1000]} value={amount} onChange={(n) => { setAmount(n); setError(""); }} max={coins} />
         </div>
-        {short && <p className="mt-2 text-xs text-red-300">You have {formatCoins(coins)} coins. Add more to send this many.</p>}
+        {short && <p className="mt-2 text-xs text-red-300">You have {formatCoins(coins)} chat coins. Add more to send this many.</p>}
         {error && <p className="mt-3 text-xs font-bold p-2.5 rounded-xl bg-red-500/10 text-red-300">{error}</p>}
 
         <button
@@ -303,7 +315,7 @@ export function SendCoinsSheet({ to, as, convoId, coins, onClose, onTopUp }) {
           className="mt-4 w-full h-12 rounded-xl bg-gradient-to-br from-[#F6C453] to-[#D18E1F] text-[#2B1800] text-sm font-black uppercase disabled:opacity-40 flex items-center justify-center gap-2"
         >
           {busy && <Loader2 size={16} className="animate-spin" />}
-          {valid ? `Send ${formatCoins(amount)} coin${amount === 1 ? "" : "s"}` : "Choose how many coins"}
+          {valid ? `Send ${formatCoins(amount)} chat coin${amount === 1 ? "" : "s"}` : "Choose how many chat coins"}
         </button>
       </div>
     </ChatSheet>

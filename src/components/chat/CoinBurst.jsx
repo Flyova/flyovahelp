@@ -56,7 +56,7 @@ export default function CoinBurst({ coins, to, forYou = false, onDone }) {
         <p className="flex items-center justify-center gap-1.5 text-xl font-black leading-tight">
           <Coins size={20} /> {forYou ? `You got ${formatCoins(coins)}!` : `+${formatCoins(coins)}`}
         </p>
-        <p className="text-[12px] font-bold opacity-80">{forYou ? `coin${coins === 1 ? "" : "s"}` : `coin${coins === 1 ? "" : "s"} to @${to}`}</p>
+        <p className="text-[12px] font-bold opacity-80">{forYou ? `chat coin${coins === 1 ? "" : "s"}` : `chat coin${coins === 1 ? "" : "s"} to @${to}`}</p>
       </div>
     </div>
   );

@@ -28,6 +28,8 @@ import { sendPushToUsers } from "@/lib/push";
 //   { action: "declineInvite", convoId, as }                  -> { ok }
 //   { action: "removeMember", convoId, as, username }         -> { ok }  admins; only the owner removes admins
 //   { action: "setAdmin", convoId, as, username, admin }      -> { ok }  owner only
+//   { action: "transferOwner", convoId, as, username }        -> { ok }  owner only: `username` owns it now, the old
+//                                                                        owner stays on as an admin
 //   { action: "updateGroup", convoId, as, name?, description?, visibility? } -> { ok }  admins
 //   { action: "lockGroup", convoId, as, locked }              -> { ok }  admins: when locked, only admins can send messages
 //   { action: "deleteGroup", convoId, as }                    -> { ok }  owner only
@@ -197,7 +199,7 @@ async function leaveGroup(db, caller, { convoId, as }) {
   const refused = await withGroup(db, convoId, async (convo, tx) => {
     const participants = convo.participants || [];
     if (!participants.includes(me.lower)) return { error: "You're not in this group.", status: 400 };
-    if (groupOwner(convo) === me.lower) return { error: "You own this group. Delete it instead of leaving.", status: 400 };
+    if (groupOwner(convo) === me.lower) return { error: "You own this group. Make another member the owner first, or delete it.", status: 400 };
     const remaining = participants.filter((p) => p !== me.lower);
     const participantUids = await participantUidsFor((...refs) => tx.getAll(...refs), db, remaining);
     return {
@@ -327,6 +329,25 @@ async function setAdmin(db, caller, { convoId, as, username, admin: makeAdmin })
     return {
       admins: makeAdmin ? FV().arrayUnion(lower) : FV().arrayRemove(lower),
       ...activity(tx, db, convoId, makeAdmin ? `@${me.lower} made @${lower} an admin` : `@${me.lower} removed @${lower} as admin`),
+    };
+  });
+  return refused || NextResponse.json({ ok: true });
+}
+
+async function transferOwner(db, caller, { convoId, as, username }) {
+  const me = await ownedUsername(db, caller.uid, as);
+  if (!me) return fail("You can only act as one of your own usernames.", 403);
+  const other = await activeUsername(db, username);
+  if (!other) return fail("That username doesn't exist.", 404);
+
+  const refused = await withGroup(db, convoId, (convo, tx) => {
+    if (groupOwner(convo) !== me.lower) return { error: "Only the group owner can make someone else the owner.", status: 403 };
+    if (other.lower === me.lower) return { error: "You're the owner already.", status: 400 };
+    if (!(convo.participants || []).includes(other.lower)) return { error: `@${other.lower} isn't in this group.`, status: 400 };
+    return {
+      owner: other.lower,
+      admins: [...(convo.admins || []).filter((a) => a !== other.lower && a !== me.lower), me.lower],
+      ...activity(tx, db, convoId, `@${me.lower} made @${other.lower} the group owner`),
     };
   });
   return refused || NextResponse.json({ ok: true });
@@ -582,6 +603,7 @@ const ACTIONS = {
   declineInvite,
   removeMember,
   setAdmin,
+  transferOwner,
   updateGroup,
   lockGroup,
   deleteGroup,

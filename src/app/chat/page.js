@@ -98,7 +98,7 @@ export default function ChatsHome() {
           <CoinIcon size={16} />
           <span className="min-w-0">
             <span className="block text-[13px] font-black">Coin wallet</span>
-            <span className="block text-[11px] text-white/45 truncate">{formatCount(coins)} coins</span>
+            <span className="block text-[11px] text-white/45 truncate">{formatCount(coins)} chat coins</span>
           </span>
         </button>
         <Link href="/chat/settings" className="flex items-center gap-3 bg-[#142036] hover:bg-[#1A2A46] border border-white/5 rounded-2xl p-3.5">

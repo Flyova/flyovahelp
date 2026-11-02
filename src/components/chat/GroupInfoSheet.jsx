@@ -159,8 +159,8 @@ function Badge({ children, tone = "neutral" }) {
 /**
  * Group info: name, description, who can join and the member list. The owner
  * and admins edit the group, lock it (only admins can send messages) and add or
- * remove members; only the owner makes or removes admins and deletes the group.
- * Everyone else can leave.
+ * remove members; only the owner makes or removes admins, hands the group to
+ * another member and deletes it. Everyone else can leave.
  *
  * `act(action, body)` calls /api/chat/conversations for this group and resolves
  * to an error message, or "" on success. `onLeave` leaves (or, for the owner,
@@ -314,6 +314,16 @@ export default function GroupInfoSheet({ convo, me, act, onClose, onOpenProfile,
                           className="h-8 px-3 rounded-lg bg-white/[0.06] hover:bg-white/10 flex items-center gap-1.5 text-[11px] font-bold disabled:opacity-50"
                         >
                           {isAdmin ? <ShieldOff size={13} /> : <Shield size={13} />} {isAdmin ? "Remove admin" : "Make admin"}
+                        </button>
+                      )}
+                      {canToggleAdmin(p) && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={async () => (await confirmAction({ title: `Make @${p} the owner?`, message: `@${p} will own ${convo.groupName}. You stay on as an admin, but only the owner can change admins or delete the group.`, confirmLabel: "Make owner" })) && run("transferOwner", { username: p }, `@${p} is now the group owner.`)}
+                          className="h-8 px-3 rounded-lg bg-white/[0.06] hover:bg-white/10 flex items-center gap-1.5 text-[11px] font-bold disabled:opacity-50"
+                        >
+                          <Crown size={13} /> Make owner
                         </button>
                       )}
                       {canRemove(p) && (

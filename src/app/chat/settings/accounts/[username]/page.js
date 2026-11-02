@@ -74,7 +74,7 @@ export default function AccountPage() {
   };
 
   const remove = async () => {
-    if (!(await confirmAction({ title: `Delete @${name}?`, message: `@${name} leaves all its groups. People you chatted with privately keep those chats but can't reply. Its coins move to your main username, and anyone can then take the name. This can't be undone.`, confirmLabel: "Delete" }))) return;
+    if (!(await confirmAction({ title: `Delete @${name}?`, message: `@${name} leaves all its groups. People you chatted with privately keep those chats but can't reply. Its chat coins move to your main username, and anyone can then take the name. This can't be undone.`, confirmLabel: "Delete" }))) return;
     setBusy("delete");
     const r = await authFetch("/api/chat/usernames", { method: "DELETE", body: { username: name } }).catch((e) => ({ error: e.message }));
     setBusy("");
@@ -105,7 +105,7 @@ export default function AccountPage() {
         {name === active ? (
           <SettingsRow icon={CheckCircle2} title="You're chatting as this username" text="New chats and Chatroom messages use it" />
         ) : (
-          <SettingsRow icon={CheckCircle2} title="Chat as this username" text="Its own chats, groups, coins and settings" onClick={() => { selectIdentity(name); flashNotice(`You're now chatting as @${name}.`); }} />
+          <SettingsRow icon={CheckCircle2} title="Chat as this username" text="Its own chats, groups, chat coins and settings" onClick={() => { selectIdentity(name); flashNotice(`You're now chatting as @${name}.`); }} />
         )}
         <SettingsRow icon={SlidersHorizontal} title="Settings for this profile" text="Notifications, online status, privacy, blocked" onClick={() => { setSettingsName(name); router.push("/chat/settings"); }} chevron />
       </SettingsSection>

@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
-import { isBanned, isGameRestricted } from "@/lib/money";
+import { isBanned, isGameRestricted, owesBonus } from "@/lib/money";
 
 // Who's in the "play with friends" lobby right now. The apps used to read this
 // straight from other players' accounts; players can only read their own now
-// (Firestore rules), so this returns just what the lobby shows.
+// (Firestore rules), so this returns just what the lobby shows. Players who still
+// owe the $3 welcome bonus can't play, so they aren't listed.
 //
 // The lobby is everyone on the game page, plus players who turned on "Always show
 // me online" (users/{uid}.friendsStayOnline, Settings): they're listed wherever they
@@ -51,8 +52,8 @@ export async function GET(req) {
       });
     }
     const list = [...players.values()].filter((p) => p.id !== caller.uid);
-    const roles = new Map([...here.docs, ...stay.docs].map((d) => [d.id, d.data().role]));
-    return NextResponse.json({ players: list.filter((p) => !PRIVILEGED.includes(roles.get(p.id))) });
+    const accounts = new Map([...here.docs, ...stay.docs].map((d) => [d.id, d.data()]));
+    return NextResponse.json({ players: list.filter((p) => !PRIVILEGED.includes(accounts.get(p.id).role) && !owesBonus(accounts.get(p.id))) });
   } catch (e) {
     console.error("Lobby error:", e);
     return NextResponse.json({ error: "Could not load players." }, { status: 500 });

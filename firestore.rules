@@ -70,7 +70,7 @@ service cloud.firestore {
     // counts those emailed changes for the admins. `role`, `pin`, `phone` and `dob`
     // have their own checks below.
     function lockedAccountFields() {
-      return ['isban', 'banned', 'verified', 'otp', 'isAgent', 'chatMuted',
+      return ['isban', 'banned', 'verified', 'otp', 'isAgent', 'chatMuted', 'chatMutedUntil',
         'restrictDeposit', 'restrictWithdrawal', 'restrictTransfer',
         'uid', 'email', 'emailLower', 'createdAt', 'referrerUid', 'referredBy', 'lastAdminLogin',
         'wallet', 'referralBonus', 'agent_balance', 'bonusClaimed', 'bonusDeducted',
@@ -111,7 +111,7 @@ service cloud.firestore {
       // welcome bonus. The email code is made by the server (email_codes).
       allow create: if request.auth != null && request.auth.uid == userId
         && request.resource.data.get('uid', userId) == userId
-        && !request.resource.data.keys().hasAny(['isban', 'banned', 'isAgent', 'chatMuted', 'referralBonus', 'otp',
+        && !request.resource.data.keys().hasAny(['isban', 'banned', 'isAgent', 'chatMuted', 'chatMutedUntil', 'referralBonus', 'otp',
           'agent_balance', 'subscription_expires', 'subscription_started_at',
           'restrictDeposit', 'restrictWithdrawal', 'restrictTransfer',
           'inflowBonus', 'inflowEarned', 'inflowAccess', 'inflowAccessAt', 'freeWithdrawalMonth', 'freeWithdrawals',

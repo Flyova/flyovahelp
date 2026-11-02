@@ -564,7 +564,7 @@ export function ChatProvider({ children }) {
     if (!active) return needUsername();
     if (!(await confirmAction({
       title: `Block @${target}?`,
-      message: "They won't be able to message you or send you coins, and you won't see them in the Chatroom.",
+      message: "They won't be able to message you or send you chat coins, and you won't see them in the Chatroom.",
       confirmLabel: "Block",
     }))) return;
     try {

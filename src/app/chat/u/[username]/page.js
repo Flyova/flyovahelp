@@ -191,7 +191,7 @@ export default function PlayerProfilePage() {
             )}
             {profile?.coins != null && (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-br from-[#F6C453] to-[#D18E1F] text-[#2B1800] text-xs font-black">
-                <Coins size={13} /> {formatCoins(profile.coins)} coins
+                <Coins size={13} /> {formatCoins(profile.coins)} chat coins
               </span>
             )}
           </div>
@@ -337,10 +337,10 @@ export default function PlayerProfilePage() {
       )}
 
       {choosingCoins && (
-        <ChatSheet label="Where to send coins" onClose={() => setChoosingCoins(false)}>
+        <ChatSheet label="Where to send chat coins" onClose={() => setChoosingCoins(false)}>
           <div className="p-5 pt-7">
-            <h2 className="text-lg font-black pr-10">Send coins to @{name}</h2>
-            <p className="text-xs text-white/50 mt-0.5 mb-4">Coins are sent in the Chatroom or a group you share, where everyone sees the coin card.</p>
+            <h2 className="text-lg font-black pr-10">Send chat coins to @{name}</h2>
+            <p className="text-xs text-white/50 mt-0.5 mb-4">Chat coins are sent in the Chatroom or a group you share, where everyone sees the coin card.</p>
             <div className="space-y-1.5">
               {[{ id: null, label: "Chatroom", sub: "Everyone" }, ...shared.map((g) => ({ id: g.id, label: g.groupName, sub: "Group" }))].map((c) => (
                 <button

@@ -47,7 +47,7 @@ function ChatShell({ children }) {
             <button
               type="button"
               onClick={openCoinWallet}
-              aria-label={`Coin wallet: ${formatCoins(coins)} coins`}
+              aria-label={`Coin wallet: ${formatCoins(coins)} chat coins`}
               className="h-10 pl-1.5 pr-3.5 rounded-full bg-gradient-to-br from-[#F6C453] to-[#D18E1F] text-[#2B1800] flex items-center gap-1.5 text-sm font-black active:scale-95 transition"
             >
               <span className="w-7 h-7 rounded-full bg-white/35 flex items-center justify-center"><Coins size={15} /></span>

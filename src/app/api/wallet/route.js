@@ -41,6 +41,8 @@ import { periodStarts, tzOffset } from "@/lib/periods";
 //   POST { action: "bankSet", bankName, accountNumber, txPin? } -> { bank } the bank account for trades with agents; its
 //                                                                       beneficiary is the account's full name
 //   POST { action: "usernameChange", username }  -> { username, balance } the account's username, for USERNAME_CHANGE_PRICE
+//   POST { action: "bonusRepay" }               -> { balance }         pay back the $3 welcome bonus now (play with friends
+//                                                                       and buying chat coins need it paid back)
 //   POST { action: "jackpot", id }              -> { balance, amount } claim a jackpot an admin gave you
 //   POST { action: "deposit", amount }          -> { id, amount, existing } start (or resume) a USDT deposit
 //   POST { action: "depositProof", id, hash, image }  -> { ok }        payment hash + screenshot for the admins
@@ -456,11 +458,39 @@ async function usernameChange(db, caller, { username }) {
   return NextResponse.json({ username: out.username, balance: out.balance });
 }
 
+// The $3 welcome bonus paid back on its own (otherwise it's taken on the first
+// withdrawal, transfer or trade).
+async function bonusRepay(db, caller) {
+  const userRef = users(db).doc(caller.uid);
+  const out = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef);
+    if (!snap.exists) return { error: "Account not found.", status: 404 };
+    const me = snap.data();
+    if (!owesBonus(me)) return { balance: Number(me.wallet || 0) }; // paid back already (a double tap)
+    const owedC = cents(BONUS_REPAYMENT);
+    if (cents(me.wallet) < owedC) {
+      return { error: `You need ${formatUsd(BONUS_REPAYMENT)} in your wallet to pay back the welcome bonus; you have ${formatUsd(me.wallet)}. Deposit first.`, status: 402 };
+    }
+    const now = FV().serverTimestamp();
+    tx.update(userRef, {
+      wallet: FV().increment(-BONUS_REPAYMENT), bonusDeducted: true, welcomeBonusStatus: "recovered", welcomeBonusRecoveredAt: now,
+    });
+    tx.set(userRef.collection("transactions").doc(), {
+      title: "Welcome Bonus Repaid", amount: -BONUS_REPAYMENT, type: "adjustment", status: "completed", timestamp: now,
+      details: "Signup bonus paid back",
+    });
+    return { balance: toDollars(cents(me.wallet) - owedC) };
+  });
+  if (out.error) return fail(out.error, out.status);
+  return NextResponse.json({ balance: out.balance });
+}
+
 const activityView = async (db, caller, params) => NextResponse.json(await playerActivity(db, caller.uid, periodStarts(tzOffset(params))));
 
 const VIEWS = { recipient: recipientView, referrals: referralsView, signups: signupsView, activity: activityView };
 const ACTIONS = {
   transfer, withdraw, referral, signupClaim, jackpot, deposit, depositProof, depositCancel, pinSet, pinReset, bankSet, usernameChange,
+  bonusRepay,
 };
 
 export async function GET(req) {

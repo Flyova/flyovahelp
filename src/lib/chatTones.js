@@ -29,7 +29,7 @@ export const CHAT_TONE_TITLES = {
   private: { title: "Private chats", what: "new private messages" },
   groups: { title: "Groups", what: "new messages in your groups" },
   room: { title: "Chatroom", what: "new messages in the Chatroom" },
-  coins: { title: "Coins", what: "coins sent in your chats" },
+  coins: { title: "Chat coins", what: "chat coins sent in your chats" },
 };
 /** A chat profile's sounds until it picks others: { private, groups, room, coins }. */
 export const defaultChatTones = () => Object.fromEntries(CHAT_TONE_KINDS.map((k) => [k, DEFAULT_TONES[k]]));

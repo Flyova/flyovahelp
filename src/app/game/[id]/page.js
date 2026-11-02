@@ -11,6 +11,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { authFetch } from "@/lib/authFetch";
 import { User, Zap, Wallet, ShieldCheck, Trophy, Ghost, MessageSquare, Send, X as CloseIcon, Search, Users, Timer as TimerIcon, RefreshCw, Loader2 } from "lucide-react";
 import ToastNotification from "@/components/ToastNotification";
+import BonusRepay, { owesWelcomeBonus } from "@/components/BonusRepay";
 import { generateDistinctNumberPool } from "@/lib/gameNumbers";
 
 export default function GamePage() {
@@ -21,6 +22,7 @@ export default function GamePage() {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [myWallet, setMyWallet] = useState(0);
   const [gamesRestricted, setGamesRestricted] = useState(false);
+  const [owesBonus, setOwesBonus] = useState(false);
 
   const [activeGame, setActiveGame] = useState(null);
   const [numbers, setNumbers] = useState([]);
@@ -145,6 +147,7 @@ export default function GamePage() {
           if (snap.exists()) {
             setMyWallet(snap.data().wallet || 0);
             setGamesRestricted(!!(snap.data().restrictGames || snap.data().restrictFriends));
+            setOwesBonus(owesWelcomeBonus(snap.data()));
           }
         });
         setLoadingAuth(false);
@@ -627,6 +630,16 @@ export default function GamePage() {
             <p className="text-[10px] text-gray-500 font-black uppercase mt-4">Crediting final balance to wallet...</p>
         </div>
         <button onClick={finalizeAndRefund} disabled={isSettling} className="w-full max-w-sm bg-[#2457D6] py-5 rounded-2xl font-black uppercase italic shadow-lg disabled:opacity-50">{isSettling ? "Settling..." : "Claim & Exit"}</button>
+      </div>
+    );
+  }
+
+  // A match already running is played out; a new one waits for the $3 bonus to be paid back.
+  if (!activeGame && owesBonus) {
+    return (
+      <div className="min-h-screen bg-[#0B1220] text-white p-6 pb-32 flex flex-col items-center justify-center">
+        <h1 className="text-xl font-black italic uppercase mb-5">Play with Friends</h1>
+        <BonusRepay className="w-full max-w-sm" what="play with friends" balance={myWallet} />
       </div>
     );
   }

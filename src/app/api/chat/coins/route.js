@@ -3,11 +3,12 @@ import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import { sendPushToUsers } from "@/lib/push";
 import {
-  canPostInGroup, coinBuyQuote, coinWithdrawQuote, formatCents, formatCoins, isCoinAmount, liveUsername, ownedUsername,
+  canPostInGroup, chatMuteMessage, coinBuyQuote, coinWithdrawQuote, formatCents, formatCoins, isCoinAmount, liveUsername, ownedUsername,
   usernameUids, MAX_COINS_PER_ACTION,
 } from "@/lib/chat";
 import { activityRef, balanceOf, mainUsername, walletRef } from "@/lib/coinWallets";
 import { chatSettingsFor } from "@/lib/chatSettings";
+import { bonusOwedError, owesBonus } from "@/lib/money";
 
 // Chat coins. Each username has its own wallet, username_wallets/{username}, and
 // each movement is logged in its activity (lib/coinWallets); both are server-only
@@ -24,7 +25,7 @@ import { chatSettingsFor } from "@/lib/chatSettings";
 
 const FV = () => admin.firestore.FieldValue;
 const fail = (error, status = 400) => NextResponse.json({ error }, { status });
-const amountError = `Choose between 1 and ${formatCoins(MAX_COINS_PER_ACTION)} coins.`;
+const amountError = `Choose between 1 and ${formatCoins(MAX_COINS_PER_ACTION)} chat coins.`;
 
 const cents = (dollars) => Math.round(Number(dollars || 0) * 100);
 const bannedUser = (u) => !!(u.isban || u.banned);
@@ -38,7 +39,7 @@ async function walletUsername(db, caller, as) {
 async function buy(db, caller, { as, coins }) {
   if (!isCoinAmount(coins)) return fail(amountError);
   const me = await walletUsername(db, caller, as);
-  if (!me) return fail("Choose one of your chat usernames to buy coins for.", 403);
+  if (!me) return fail("Choose one of your chat usernames to buy chat coins for.", 403);
   const q = coinBuyQuote(coins);
   const userRef = db.collection("users").doc(caller.uid);
   const wallet = walletRef(db, me.lower);
@@ -46,7 +47,8 @@ async function buy(db, caller, { as, coins }) {
   const out = await db.runTransaction(async (tx) => {
     const [userSnap, walletSnap] = await tx.getAll(userRef, wallet);
     if (!userSnap.exists) return { error: "Account not found.", status: 404 };
-    if (bannedUser(userSnap.data())) return { error: "Your account can't buy coins.", status: 403 };
+    if (bannedUser(userSnap.data())) return { error: "Your account can't buy chat coins.", status: 403 };
+    if (owesBonus(userSnap.data())) return { error: bonusOwedError("buy chat coins"), status: 403 };
     if (cents(userSnap.data().wallet) < q.total) {
       return { error: `Not enough in your main balance: ${formatCents(q.total)} needed (including the ${formatCents(q.fee)} fee).`, status: 402 };
     }
@@ -71,7 +73,7 @@ async function withdraw(db, caller, { as, coins }) {
   const me = await walletUsername(db, caller, as);
   if (!me) return fail("Choose one of your chat usernames to withdraw from.", 403);
   // Coins turn into money in the caller's main balance, so only the owner can.
-  if (!me.owned) return fail(`Only the account that owns @${me.lower} can withdraw its coins.`, 403);
+  if (!me.owned) return fail(`Only the account that owns @${me.lower} can withdraw its chat coins.`, 403);
   const q = coinWithdrawQuote(coins);
   const userRef = db.collection("users").doc(caller.uid);
   const wallet = walletRef(db, me.lower);
@@ -79,9 +81,9 @@ async function withdraw(db, caller, { as, coins }) {
   const out = await db.runTransaction(async (tx) => {
     const [userSnap, walletSnap] = await tx.getAll(userRef, wallet);
     if (!userSnap.exists) return { error: "Account not found.", status: 404 };
-    if (bannedUser(userSnap.data())) return { error: "Your account can't withdraw coins.", status: 403 };
+    if (bannedUser(userSnap.data())) return { error: "Your account can't withdraw chat coins.", status: 403 };
     const have = balanceOf(walletSnap);
-    if (have < coins) return { error: `You only have ${formatCoins(have)} coins.`, status: 402 };
+    if (have < coins) return { error: `You only have ${formatCoins(have)} chat coins.`, status: 402 };
     const balance = have - coins;
     tx.set(wallet, { balance, updatedAt: FV().serverTimestamp() }, { merge: true });
     tx.update(userRef, { wallet: FV().increment(q.payout / 100) });
@@ -101,19 +103,19 @@ async function withdraw(db, caller, { as, coins }) {
 async function send(db, caller, { as, to, coins, convoId }) {
   if (!isCoinAmount(coins)) return fail(amountError);
   const me = await ownedUsername(db, caller.uid, as);
-  if (!me) return fail("You can only send coins as one of your own usernames.", 403);
+  if (!me) return fail("You can only send chat coins as one of your own usernames.", 403);
   const other = await liveUsername(db, to);
   if (!other) return fail("That player doesn't exist any more.", 404);
   // Not to your own usernames (nor ones you're logged in to): coins stay with the username they were bought for.
-  if (usernameUids(other).includes(caller.uid)) return fail("You can't send coins to yourself.");
+  if (usernameUids(other).includes(caller.uid)) return fail("You can't send chat coins to yourself.");
 
   const [userSnap, blockSnap] = await db.getAll(
     db.collection("users").doc(caller.uid),
     db.collection("chat_blocks").doc(`${other.lower}_${me.lower}`),
   );
   const user = userSnap.exists ? userSnap.data() : {};
-  if (bannedUser(user)) return fail("Your account can't send coins.", 403);
-  if (blockSnap.exists) return fail("You can't send coins to this player.", 403);
+  if (bannedUser(user)) return fail("Your account can't send chat coins.", 403);
+  if (blockSnap.exists) return fail("You can't send chat coins to this player.", 403);
 
   // Where the coin card goes: a group you're both in, or the public chatroom.
   let msgRef;
@@ -122,7 +124,7 @@ async function send(db, caller, { as, to, coins, convoId }) {
     convoRef = db.collection("conversations").doc(String(convoId));
     const convoSnap = await convoRef.get();
     const c = convoSnap.exists ? convoSnap.data() : null;
-    if (!c || c.deleted || c.type !== "group") return fail("Coins can only be sent in the Chatroom or a group.", 400);
+    if (!c || c.deleted || c.type !== "group") return fail("Chat coins can only be sent in the Chatroom or a group.", 400);
     const members = c.participants || [];
     if (!members.includes(me.lower) || !(c.participantUids || []).includes(caller.uid)) return fail("You're not in this group.", 403);
     if (!members.includes(other.lower)) return fail(`@${other.lower} isn't in this group.`, 400);
@@ -130,16 +132,17 @@ async function send(db, caller, { as, to, coins, convoId }) {
     if (!canPostInGroup(c, me.lower)) return fail("This group is locked. Only admins can send messages.", 403);
     msgRef = convoRef.collection("messages").doc();
   } else {
-    if (user.chatMuted) return fail("You've been muted in the chatroom.", 403);
+    const muted = chatMuteMessage(user);
+    if (muted) return fail(muted, 403);
     msgRef = db.collection("chatroom_messages").doc();
   }
 
   const fromWallet = walletRef(db, me.lower);
   const toWallet = walletRef(db, other.lower);
-  const text = `sent ${formatCoins(coins)} coin${coins === 1 ? "" : "s"} to @${other.lower}`;
+  const text = `sent ${formatCoins(coins)} chat coin${coins === 1 ? "" : "s"} to @${other.lower}`;
   const out = await db.runTransaction(async (tx) => {
     const have = balanceOf(await tx.get(fromWallet));
-    if (have < coins) return { error: `You only have ${formatCoins(have)} coins.`, status: 402 };
+    if (have < coins) return { error: `You only have ${formatCoins(have)} chat coins.`, status: 402 };
     const balance = have - coins;
     const now = FV().serverTimestamp();
     tx.set(fromWallet, { balance, updatedAt: now }, { merge: true });
@@ -153,7 +156,7 @@ async function send(db, caller, { as, to, coins, convoId }) {
     if (convoRef) tx.update(convoRef, { lastMessage: `@${me.lower} ${text}`, lastMessageAt: now });
     tx.set(db.collection("notifications").doc(), {
       toUsername: other.lower, fromUsername: me.lower, kind: "coins", coins,
-      title: `@${me.lower} sent you ${formatCoins(coins)} coins`, body: "Tap to see your coin wallet.",
+      title: `@${me.lower} sent you ${formatCoins(coins)} chat coin${coins === 1 ? "" : "s"}`, body: "Tap to see your coin wallet.",
       convoId: convoId || null, read: false, createdAt: now,
     });
     return { balance };
@@ -164,8 +167,8 @@ async function send(db, caller, { as, to, coins, convoId }) {
   const settings = await chatSettingsFor(db, [{ name: other.lower, uid: other.uid }]).catch(() => new Map());
   const tone = settings.get(other.lower)?.sounds.tones.coins;
   await sendPushToUsers([{ uid: other.uid, tone, data: { url: convoId ? `/chat/${convoId}?as=${encodeURIComponent(other.lower)}` : "/chat" } }], {
-    title: "You received coins",
-    body: `@${me.lower} sent you ${formatCoins(coins)} coins`,
+    title: "You received chat coins",
+    body: `@${me.lower} sent you ${formatCoins(coins)} chat coin${coins === 1 ? "" : "s"}`,
     data: { kind: "coins", convoId: convoId || null },
   }).catch(() => 0);
   return NextResponse.json({ balance: out.balance });

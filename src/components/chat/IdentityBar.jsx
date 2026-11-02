@@ -85,7 +85,7 @@ export default function IdentityBar({ identities, active, onSelect }) {
                         <span className="block text-[13px] font-bold truncate">@{i.username}</span>
                         <span className="block text-[10.5px] text-white/45">
                           {i.linked ? "Logged in from another account" : i.isDefault ? "Main username" : "Extra username"}
-                          {coinsOf && ` · ${formatCoins(coinsOf(i.usernameLower))} coins`}
+                          {coinsOf && ` · ${formatCoins(coinsOf(i.usernameLower))} chat coins`}
                         </span>
                       </span>
                       {active === i.usernameLower

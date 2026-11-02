@@ -4,7 +4,7 @@ import { Search } from "lucide-react";
 import { collection, doc, limit, onSnapshot, orderBy, query } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
-import { containsMediaMarker, formatCount } from "@/lib/chat";
+import { containsMediaMarker, formatCount, isChatMuted } from "@/lib/chat";
 import { playChatSound, playCoinSound } from "@/lib/chatSound";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import ChatMessages from "@/components/chat/ChatMessages";
@@ -95,7 +95,7 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
     if (!uid) return;
     return onSnapshot(doc(db, "users", uid), (s) => {
       setIsStaff(!!resolvePrivilegedRole(s.data()?.role, auth.currentUser?.email));
-      setMuted(!!s.data()?.chatMuted);
+      setMuted(isChatMuted(s.data()));
     }, () => {});
   }, [uid]);
 

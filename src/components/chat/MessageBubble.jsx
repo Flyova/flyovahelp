@@ -257,7 +257,7 @@ export default function MessageBubble({
           ) : coinCard ? (
             <p className="flex items-center gap-1.5 pr-[60px] text-[13.5px] leading-[1.38] whitespace-nowrap">
               <span className="w-[18px] h-[18px] shrink-0 rounded-full bg-white/40 flex items-center justify-center"><Coins size={11} /></span>
-              <span className="font-black">{formatCoins(m.coins)} coin{m.coins === 1 ? "" : "s"}</span>
+              <span className="font-black">{formatCoins(m.coins)} chat coin{m.coins === 1 ? "" : "s"}</span>
               <span className="min-w-0 truncate font-semibold opacity-80">to @{m.to}</span>
             </p>
           ) : (

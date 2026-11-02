@@ -40,8 +40,8 @@ export default function PrivacySettingsPage() {
         />
         <SettingsSwitch
           icon={Coins}
-          title="Show off your coins"
-          text="Show your coin balance on this profile for other players to see."
+          title="Show off your chat coins"
+          text="Show your chat coin balance on this profile for other players to see."
           on={s.showCoins}
           disabled={busy === "coins"}
           onChange={(v) => save("coins", { showCoins: v })}

@@ -88,6 +88,8 @@ export const gameRestricted = (game) => `${GAMES[game].name} has been restricted
 
 /** The $3 sign-up bonus is taken back on the first withdrawal or transfer. */
 export const owesBonus = (u) => !!u?.bonusClaimed && !u?.bonusDeducted;
+/** Play with friends and buying chat coins wait until it's paid back (/api/wallet bonusRepay). */
+export const bonusOwedError = (what) => `Pay back the ${formatUsd(BONUS_REPAYMENT)} welcome bonus first to ${what}.`;
 
 /** Withdrawals need a real full name: two or more words, none of them an initial. */
 export function isValidAccountName(name) {

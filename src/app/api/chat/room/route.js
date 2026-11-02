@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
-import { PRESENCE_ONLINE_MS, containsMediaMarker, mentionsIn, ownedUsername, usernameUids } from "@/lib/chat";
+import { PRESENCE_ONLINE_MS, chatMuteMessage, containsMediaMarker, mentionsIn, ownedUsername, usernameUids } from "@/lib/chat";
 import { sendPushToUsers } from "@/lib/push";
 import { chatSettingsFor } from "@/lib/chatSettings";
 
@@ -93,7 +93,8 @@ async function send(db, caller, { as, text, replyTo }) {
 
   const user = userSnap.exists ? userSnap.data() : {};
   if (user.isban || user.banned) return fail("Your account can't post in the chatroom.", 403);
-  if (user.chatMuted) return fail("You've been muted in the chatroom.", 403);
+  const muted = chatMuteMessage(user);
+  if (muted) return fail(muted, 403);
 
   const now = Date.now();
   const rateRef = db.collection(RATE_COLLECTION).doc(caller.uid);
@@ -131,9 +132,10 @@ async function edit(db, caller, { id, text }) {
   const [snap, userSnap] = await Promise.all([ref.get(), db.collection("users").doc(caller.uid).get()]);
   if (!snap.exists) return fail("Message not found.", 404);
   if (snap.data().senderUid !== caller.uid) return fail("You can only edit your own messages.", 403);
-  if (userSnap.data()?.chatMuted) return fail("You've been muted in the chatroom, so you can't edit messages.", 403);
+  const muted = chatMuteMessage(userSnap.data());
+  if (muted) return fail(muted, 403);
   if (snap.data().deletedForEveryone) return fail("Deleted messages can't be edited.", 400);
-  if (snap.data().kind === "coins") return fail("Coin messages can't be edited.", 400);
+  if (snap.data().kind === "coins") return fail("Chat coin messages can't be edited.", 400);
   if (String(snap.data().text || "") === body) return NextResponse.json({ ok: true }); // unchanged: not "edited"
   await ref.update({ text: body, editedAt: admin.firestore.FieldValue.serverTimestamp() });
   return NextResponse.json({ ok: true });

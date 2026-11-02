@@ -46,7 +46,7 @@ function byDay(messages) {
  * while its write hasn't reached the server. Handlers left out hide their menu item.
  * `seenBy` (message id -> usernames) puts read-receipt avatars under messages,
  * `sentId` marks your latest message "Sent", and `typing` (usernames) shows a
- * typing bubble at the bottom. `onSendCoins(username)` adds "Send coins" to other
+ * typing bubble at the bottom. `onSendCoins(username)` adds "Send chat coins" to other
  * people's messages (Chatroom and groups only); `onBlock(username)` adds Block. `burst` = { id, coins, to, forYou }
  * plays the coins-sent animation over the list; `onBurstDone` clears it. Group
  * activity ("@ade joined the group", kind "system") shows as a small centred line;
@@ -163,7 +163,7 @@ export default function ChatMessages({
       { label: "Copy text", icon: Copy, run: () => navigator.clipboard?.writeText(m.text).catch(() => {}) },
       mine && onEdit && !isCoinCard(m) && { label: "Edit", icon: Pencil, run: () => onEdit(m) },
       !mine && onOpenProfile && { label: "View profile", icon: UserRound, run: () => onOpenProfile(m.sender) },
-      !mine && onSendCoins && { label: "Send coins", icon: Coins, run: () => onSendCoins(m.sender) },
+      !mine && onSendCoins && { label: "Send chat coins", icon: Coins, run: () => onSendCoins(m.sender) },
       !mine && onMessagePrivately && { label: "Message privately", icon: MessageCircle, run: () => onMessagePrivately(m.sender) },
       onDelete && canDelete(m) && { label: deleteLabel(m), icon: Trash2, danger: true, run: () => onDelete(m) },
       !mine && onBlock && { label: `Block @${m.sender}`, icon: Ban, danger: true, run: () => onBlock(m.sender) },

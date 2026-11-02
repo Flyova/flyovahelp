@@ -81,6 +81,28 @@ export const canPostInGroup = (convo, name) => !convo?.locked || isGroupAdmin(co
 export const inGroupAs = (convo, uid, as) =>
   (convo?.participantUids || []).includes(uid) && (!as || (convo?.participants || []).includes(norm(as)));
 
+// An admin's Chatroom mute: users/{uid}.chatMuted, until chatMutedUntil (ms; none =
+// for good). It lifts by itself once that time passes.
+export const CHAT_MUTE_DAYS = [7, 30];
+const mutedUntilMs = (u) => Number(u?.chatMutedUntil?.toMillis?.() || u?.chatMutedUntil || 0);
+export const isChatMuted = (u, now = Date.now()) => !!u?.chatMuted && (!mutedUntilMs(u) || mutedUntilMs(u) > now);
+/** "6 days, 23 hours": how long a mute has left, or "" for one with no end. */
+export function chatMuteLeft(u, now = Date.now()) {
+  if (!mutedUntilMs(u)) return "";
+  const mins = Math.max(1, Math.ceil((mutedUntilMs(u) - now) / 60000));
+  const unit = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const [d, h, m] = [Math.floor(mins / 1440), Math.floor((mins % 1440) / 60), mins % 60];
+  if (d) return h ? `${unit(d, "day")}, ${unit(h, "hour")}` : unit(d, "day");
+  if (h) return m ? `${unit(h, "hour")}, ${unit(m, "minute")}` : unit(h, "hour");
+  return unit(m, "minute");
+}
+/** What a muted player is told when they post, with how long is left; "" when not muted. */
+export function chatMuteMessage(u, now = Date.now()) {
+  if (!isChatMuted(u, now)) return "";
+  const left = chatMuteLeft(u, now);
+  return left ? `You've been muted in the chatroom. It ends in ${left}.` : "You've been muted in the chatroom permanently.";
+}
+
 // What a group search is matched on: lowercase, single spaces, at most 40 characters.
 export const groupSearchTerm = (q) => String(q || "").toLowerCase().replace(/\s+/g, " ").trim().slice(0, 40);
 
