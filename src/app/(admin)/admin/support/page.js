@@ -2,11 +2,13 @@
 import { useEffect, useState, useRef } from "react";
 import {
   Search, MessageCircle, Send, Loader2,
-  ChevronLeft, MoreVertical, Trash2
+  ChevronLeft, MoreVertical, Trash2, Image as ImageIcon, X
 } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { authFetch } from "@/lib/authFetch";
+import { supportJpeg } from "@/lib/supportPhotos";
+import SupportImage from "@/components/SupportImage";
 
 const CHAT_NOTIFY_EMAIL = "contact.notifications.surname@gmail.com";
 const CLEANUP_STORAGE_KEY = "support_cleanup_last_run";
@@ -21,7 +23,9 @@ export default function AdminSupport() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [deletingMessageKey, setDeletingMessageKey] = useState(null);
+  const [replyPhoto, setReplyPhoto] = useState(""); // a photo (JPEG data URL) to send with the reply
   const scrollRef = useRef(null);
+  const fileRef = useRef(null);
 
   useEffect(() => {
     const now = Date.now();
@@ -237,9 +241,37 @@ export default function AdminSupport() {
     }
   };
 
+  const pickReplyPhoto = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      setReplyPhoto(await supportJpeg(file));
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  // A photo, with the typed text as its caption, goes through /api/support.
+  const sendReplyPhoto = async () => {
+    setSending(true);
+    const res = await authFetch("/api/support", {
+      method: "POST",
+      body: { image: replyPhoto, caption: replyText.trim(), chatId: selectedChat.id },
+    });
+    if (res?.error) alert(res.error);
+    else {
+      setReplyPhoto("");
+      setReplyText("");
+    }
+    setSending(false);
+  };
+
   const handleSendReply = async (e) => {
     e.preventDefault();
-    if (!replyText.trim() || !selectedChat || sending) return;
+    if (!selectedChat || sending) return;
+    if (replyPhoto) return sendReplyPhoto();
+    if (!replyText.trim()) return;
 
     setSending(true);
     const text = replyText;
@@ -420,7 +452,8 @@ export default function AdminSupport() {
                       ? 'bg-[#1D4FC4] text-white rounded-br-none'
                       : 'bg-white text-slate-700 border border-gray-100 rounded-bl-none'
                     }`}>
-                      <p className="font-medium leading-relaxed">{msg.text}</p>
+                      {msg.imageId && <SupportImage chatId={selectedChat.id} imageId={msg.imageId} />}
+                      {msg.text ? <p className={`font-medium leading-relaxed ${msg.imageId ? "mt-2" : ""}`}>{msg.text}</p> : null}
                       <p className={`text-[9px] mt-2 font-bold uppercase tracking-widest ${isAdmin ? 'text-[#D7E2FF]' : 'text-slate-500'}`}>
                         {isAdmin ? 'Admin • 10:25 AM' : 'User • 10:24 AM'}
                       </p>
@@ -442,18 +475,36 @@ export default function AdminSupport() {
 
             {/* INPUT AREA */}
             <div className="p-6 bg-white border-t border-gray-100">
+              {replyPhoto && (
+                <div className="max-w-5xl mx-auto mb-3 flex items-center gap-3">
+                  <div className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- a data URL preview */}
+                    <img src={replyPhoto} alt="Photo to send" className="w-16 h-16 rounded-xl object-cover border border-gray-200" />
+                    <button type="button" onClick={() => setReplyPhoto("")} aria-label="Remove photo"
+                      className="absolute -top-2 -right-2 p-1 rounded-full bg-white border border-gray-300 text-slate-600">
+                      <X size={12} />
+                    </button>
+                  </div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Add a caption or just send it</p>
+                </div>
+              )}
               <form onSubmit={handleSendReply} className="flex items-center gap-4 max-w-5xl mx-auto">
+                <input ref={fileRef} type="file" accept="image/*" onChange={pickReplyPhoto} className="hidden" />
+                <button type="button" onClick={() => fileRef.current?.click()} disabled={sending} aria-label="Send a photo"
+                  className="p-3 rounded-2xl bg-gray-100 text-slate-500 hover:bg-gray-200 disabled:opacity-50">
+                  <ImageIcon size={20} />
+                </button>
                 <div className="flex-1 bg-[#0B1220] rounded-2xl px-4 py-3 flex items-center border border-white/10 focus-within:border-[#2457D6] transition-all">
                   <input 
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
-                    placeholder="Write your response..."
+                    placeholder={replyPhoto ? "Add a caption..." : "Write your response..."}
                     className="flex-1 bg-transparent outline-none text-sm font-semibold text-white placeholder:text-slate-400 caret-white"
                   />
                 </div>
                 <button 
                   type="submit"
-                  disabled={!replyText.trim() || sending}
+                  disabled={(!replyText.trim() && !replyPhoto) || sending}
                   className="bg-[#1D4FC4] hover:bg-[#1D4FC4] text-white px-6 py-3 rounded-2xl font-bold text-xs uppercase tracking-widest shadow-lg shadow-[#D7E2FF] transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2"
                 >
                   {sending ? <Loader2 size={16} className="animate-spin" /> : <><Send size={16}/> Send</>}

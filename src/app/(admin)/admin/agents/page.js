@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
+import { agentBankMatches } from "@/lib/agentBank";
 import { 
   collection, 
   query, 
@@ -146,6 +147,7 @@ export default function AdminAgentManagement() {
                         <div>
                             <h3 className="font-black uppercase italic text-xs text-slate-800">{agent.full_name}</h3>
                             <span className="text-[9px] text-slate-400 font-bold uppercase">{agent.country}</span>
+                            {!agentBankMatches(agent) && <BankNameBadge />}
                             <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">
                               Joined: {formatJoinedDate(agent)}
                             </p>
@@ -201,7 +203,14 @@ export default function AdminAgentManagement() {
                           </div>
                       )}
                       <div className="space-y-4">
-                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Landmark size={14} className="text-[#2457D6]" /> Bank Details</p>
+                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Landmark size={14} className="text-[#2457D6]" /> Bank Details {!agentBankMatches(selectedAgent) && <BankNameBadge />}</p>
+                          {!agentBankMatches(selectedAgent) && (
+                              <p className="text-xs font-bold text-rose-600">
+                                {selectedAgent.accountName
+                                  ? `The account name isn't the agent's approved name (${selectedAgent.full_name || "none"}), so they can't take new trades.`
+                                  : "No bank account in the agent's name yet, so they can't take new trades."}
+                              </p>
+                          )}
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                               <StatBox label="Bank Name" value={selectedAgent.bankName || "Not Provided"} />
                               <StatBox label="Account Name" value={selectedAgent.accountName || "Not Provided"} />
@@ -252,6 +261,11 @@ function TabButton({ active, onClick, icon: Icon, label, count }) {
             <Icon size={14} /> {label} {count !== null && <span className="ml-1 opacity-60">({count})</span>}
         </button>
     );
+}
+
+/** The agent's bank account isn't in their approved name (lib/agentBank): no new trades. */
+function BankNameBadge() {
+  return <span className="ml-2 inline-block px-2 py-0.5 rounded-full bg-rose-100 text-rose-600 text-[8px] font-black uppercase tracking-wider align-middle">Bank name mismatch</span>;
 }
 
 function InfoBadge({ icon: Icon, label }) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
+import { SUPPORT_PHOTO_LABEL } from "@/lib/supportPhotos";
 
 export const runtime = "nodejs";
 
@@ -69,6 +70,7 @@ const serializeChat = (docSnap) => {
     messages: rawMessages.map((message) => ({
       id: message?.id || null,
       text: String(message?.text || ""),
+      imageId: message?.imageId ? String(message.imageId) : null, // a photo (/api/support)
       senderId: String(message?.senderId || ""),
       senderType: String(message?.senderType || "user"),
       timestamp: normalizeIsoTime(message?.timestamp) || new Date().toISOString(),
@@ -200,12 +202,18 @@ export async function POST(request) {
         return NextResponse.json({ error: "Message not found." }, { status: 404 });
       }
 
-      const lastMessage = nextMessages.length > 0 ? nextMessages[nextMessages.length - 1].text : "";
-      await chatRef.update({
-        messages: nextMessages,
-        lastMessage,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      const last = nextMessages[nextMessages.length - 1];
+      const lastMessage = last ? last.text || (last.imageId ? SUPPORT_PHOTO_LABEL : "") : "";
+      // A deleted photo message takes its photo with it.
+      const photoIds = currentMessages.filter(matchesTarget).map((m) => m?.imageId).filter((id) => typeof id === "string" && id);
+      await Promise.all([
+        chatRef.update({
+          messages: nextMessages,
+          lastMessage,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }),
+        ...photoIds.map((id) => chatRef.collection("support_images").doc(id).delete()),
+      ]);
       return NextResponse.json({ ok: true });
     }
 

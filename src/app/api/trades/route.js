@@ -13,6 +13,7 @@ import { checkTxPin } from "@/lib/txPin";
 import { recordInvalidDeposit } from "@/lib/depositLock";
 import { alertAdmins, notifyUser } from "@/lib/notifications";
 import { agentPresence } from "@/lib/agentPresence";
+import { agentBankMatches, agentBankProblem } from "@/lib/agentBank";
 import { msOf, perPeriod, periodStarts, periodsOf, tzOffset } from "@/lib/periods";
 
 // Trades with local agents: a player deposits or withdraws by paying (or being paid
@@ -37,12 +38,15 @@ import { msOf, perPeriod, periodStarts, periodsOf, tzOffset } from "@/lib/period
 //               Declined or expired: the amount goes back.
 //   A player needs a bank account (users/{uid}.bank, /api/wallet bankSet) to trade; it's
 //   copied onto the trade as senderBank for the agent. A withdrawal also needs their PIN.
+//   An agent whose bank account isn't in their approved agent name (lib/agentBank) isn't
+//   listed and can't be given or accept new trades; trades already accepted can finish.
 //   Admins are alerted when a trade starts, completes or goes wrong.
 //
 //   GET ?view=agents&type=deposit|withdrawal&amount= -> { agents: [{ id, full_name, deposit_rate, withdrawal_rate,
 //        deposit_tiers, withdrawal_tiers, rate, online, lastSeenAt, rating }] } approved agents in your country
-//        (for a deposit, ones whose balance covers amount + fee), the most rated first; `rate` is the one this
-//        amount gets (lib/money rateFor), `rating` = { average, count }, online/lastSeenAt from lib/agentPresence
+//        whose bank account is in their name (for a deposit, ones whose balance covers amount + fee), the most
+//        rated first; `rate` is the one this amount gets (lib/money rateFor), `rating` = { average, count },
+//        online/lastSeenAt from lib/agentPresence
 //   GET ?view=agent&id=   -> { name, country, bank?, online, lastSeenAt, rating, myRating }   a trade's agent; the
 //        bank details only for the depositor, once the agent has accepted (agents' records aren't readable by
 //        players); myRating: the stars this trade's player gave the agent (0 if none)
@@ -97,6 +101,7 @@ async function create(db, caller, { type, agentId, amount, txPin }) {
     const pending = await tx.get(open);
     if (!u.exists) return { error: "Account not found.", status: 404 };
     if (!isTradingAgent(a.exists && a.data())) return { error: "This agent isn't available. Please choose another.", status: 409 };
+    if (!agentBankMatches(a.data())) return { error: "This agent can't take trades right now. Please choose another.", status: 409 };
     if (!pending.empty) return { error: "You already have an active pending trade.", status: 409 };
     const me = u.data();
     const agent = a.data();
@@ -172,6 +177,7 @@ async function accept(db, caller, { id }) {
     if (isExpired(t)) return { error: "This trade has expired.", status: 409 };
     const a = await tx.get(agentRef);
     if (!isTradingAgent(a.exists && a.data())) return { error: "Your agent account can't take trades.", status: 403 };
+    if (!agentBankMatches(a.data())) return { error: agentBankProblem(a.data()), status: 403 };
     const amount = Number(t.amount);
     const feeC = Math.round(cents(amount) * AGENT_FEE_RATE[t.type]);
     const totalC = cents(amount) + feeC;
@@ -555,7 +561,7 @@ async function agentsView(db, caller, params) {
   const snap = await db.collection("agents").where("application_status", "==", "approved")
     .where("country", "==", me.country).where("banned", "==", false).limit(30).get();
   const needC = type === "deposit" ? Math.round(cents(amount) * (1 + AGENT_FEE_RATE.deposit)) : 0;
-  const listed = snap.docs.filter((d) => d.id !== caller.uid && cents(d.data().agent_balance) >= needC);
+  const listed = snap.docs.filter((d) => d.id !== caller.uid && cents(d.data().agent_balance) >= needC && agentBankMatches(d.data()));
   const presence = await presenceOf(db, listed.map((d) => d.id));
   const agents = listed
     .map((d) => {

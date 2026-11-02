@@ -1,9 +1,11 @@
 "use client";
 import { useState, useEffect } from "react";
 import { db, auth } from "@/lib/firebase";
-import { doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
+import { authFetch } from "@/lib/authFetch";
+import { agentBankProblem, sameAccountName } from "@/lib/agentBank";
 import { 
   ChevronLeft, 
   User, 
@@ -12,13 +14,15 @@ import {
   MapPin, 
   Save, 
   Loader2,
-  Lock
+  Lock,
+  AlertTriangle
 } from "lucide-react";
 
 export default function AgentProfile() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [saved, setSaved] = useState(null); // the agent record as stored, for the "can't trade" banner
   const [profile, setProfile] = useState({
     fullName: "", // We'll map full_name to this for the state
     country: "",
@@ -35,6 +39,7 @@ export default function AgentProfile() {
       const unsubProfile = onSnapshot(agentRef, (snap) => {
         if (snap.exists()) {
           const data = snap.data();
+          setSaved(data);
           setProfile({
             // Correcting the mapping: agent collection uses full_name
             fullName: data.full_name || "", 
@@ -52,21 +57,23 @@ export default function AgentProfile() {
     return () => unsubAuth();
   }, [router]);
 
+  // The account must be in the approved agent name (the server checks too).
+  const nameMismatch = profile.accountName.trim() !== "" && !sameAccountName(profile.fullName, profile.accountName);
+  const tradeBlock = saved ? agentBankProblem(saved) : null;
+
   const handleUpdate = async (e) => {
     e.preventDefault();
+    if (nameMismatch) return alert(`The account must be in your approved agent name, ${profile.fullName}.`);
     setUpdating(true);
     try {
-      const agentRef = doc(db, "agents", auth.currentUser.uid);
-      // Only updating bank-related fields
-      await updateDoc(agentRef, {
-        bankName: profile.bankName,
-        accountName: profile.accountName,
-        accountNumber: profile.accountNumber
+      const res = await authFetch("/api/agent", {
+        method: "POST",
+        body: { action: "bank", bankName: profile.bankName, accountName: profile.accountName, accountNumber: profile.accountNumber },
       });
-      alert("Bank details updated successfully!");
+      alert(res?.error || "Bank details updated successfully!");
     } catch (error) {
       console.error(error);
-      alert("Failed to update bank details.");
+      alert(error?.message || "Failed to update bank details.");
     } finally {
       setUpdating(false);
     }
@@ -94,7 +101,13 @@ export default function AgentProfile() {
       </div>
 
       <form onSubmit={handleUpdate} className="p-6 space-y-8">
-        
+        {tradeBlock && (
+          <div className="flex gap-3 items-start bg-rose-500/10 border border-rose-500/30 rounded-3xl p-4">
+            <AlertTriangle size={18} className="text-rose-400 shrink-0 mt-0.5" />
+            <p className="text-xs font-bold text-rose-200 leading-relaxed">{tradeBlock}</p>
+          </div>
+        )}
+
         {/* PERSONAL INFORMATION (NON-EDITABLE) */}
         <section className="space-y-4">
           <div className="flex items-center gap-2 px-2">
@@ -150,8 +163,13 @@ export default function AgentProfile() {
                 placeholder="Exact name on bank app"
                 value={profile.accountName}
                 onChange={(e) => setProfile({...profile, accountName: e.target.value})}
-                className="w-full bg-[#0B1220] p-4 rounded-2xl border border-white/5 outline-none focus:border-[#8B1E3F] transition-all font-bold text-sm"
+                className={`w-full bg-[#0B1220] p-4 rounded-2xl border outline-none focus:border-[#8B1E3F] transition-all font-bold text-sm ${nameMismatch ? "border-rose-500/60" : "border-white/5"}`}
               />
+              <p className={`text-[10px] font-bold ml-2 ${nameMismatch ? "text-rose-400" : "text-gray-500"}`}>
+                {nameMismatch
+                  ? `Must be your approved agent name, ${profile.fullName}. Agents can't trade with an account in another name.`
+                  : "Must be in your approved agent name."}
+              </p>
             </div>
 
             <div className="space-y-1">
@@ -182,8 +200,8 @@ export default function AgentProfile() {
         {/* Save Button */}
         <button 
           type="submit"
-          disabled={updating}
-          className="w-full bg-[#2457D6] py-5 rounded-3xl font-black uppercase italic tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-[#2457D6]/20 active:scale-95 transition-all"
+          disabled={updating || nameMismatch}
+          className="w-full bg-[#2457D6] disabled:opacity-40 py-5 rounded-3xl font-black uppercase italic tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-[#2457D6]/20 active:scale-95 transition-all"
         >
           {updating ? <Loader2 className="animate-spin" /> : (
             <>

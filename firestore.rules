@@ -176,14 +176,15 @@ service cloud.firestore {
     // An agent's record (ID photos, contact details, balance) is read only by the
     // agent and staff; players get agent lists and a trade's bank details from
     // /api/trades. Applying (which costs a fee) and approval go through /api/agent.
-    // An agent edits their bank details and availability here, and their rates here
-    // or (with rates for bigger amounts) through /api/agent.
+    // An agent edits their availability here, and their rates here or (with rates for
+    // bigger amounts) through /api/agent. Their bank details change only through
+    // /api/agent, which checks the account is in their approved name.
     match /agents/{agentId} {
       allow read: if request.auth != null && (request.auth.uid == agentId || isStaff());
       allow update: if request.auth != null && request.auth.uid == agentId
         && resource.data.get('application_status', '') == 'approved'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deposit_rate', 'withdrawal_rate', 'exchange_rate',
-          'ratesUpdatedAt', 'bankName', 'accountName', 'accountNumber', 'phone_number', 'profileUpdatedAt', 'active']);
+          'ratesUpdatedAt', 'phone_number', 'profileUpdatedAt', 'active']);
     }
 
     // --- TRADES & MESSAGES ---
