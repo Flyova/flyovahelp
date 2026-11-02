@@ -71,7 +71,7 @@ service cloud.firestore {
     // have their own checks below.
     function lockedAccountFields() {
       return ['isban', 'banned', 'verified', 'otp', 'isAgent', 'chatMuted', 'chatMutedUntil',
-        'restrictDeposit', 'restrictWithdrawal', 'restrictTransfer',
+        'chatRestricted', 'chatRestrictedUntil', 'restrictDeposit', 'restrictWithdrawal', 'restrictTransfer',
         'uid', 'email', 'emailLower', 'createdAt', 'referrerUid', 'referredBy', 'lastAdminLogin',
         'wallet', 'referralBonus', 'agent_balance', 'bonusClaimed', 'bonusDeducted',
         'welcomeBonusClaimed', 'welcomeBonusPaid', 'welcomeBonusAmount', 'welcomeBonusStatus',
@@ -111,7 +111,8 @@ service cloud.firestore {
       // welcome bonus. The email code is made by the server (email_codes).
       allow create: if request.auth != null && request.auth.uid == userId
         && request.resource.data.get('uid', userId) == userId
-        && !request.resource.data.keys().hasAny(['isban', 'banned', 'isAgent', 'chatMuted', 'chatMutedUntil', 'referralBonus', 'otp',
+        && !request.resource.data.keys().hasAny(['isban', 'banned', 'isAgent', 'chatMuted', 'chatMutedUntil',
+          'chatRestricted', 'chatRestrictedUntil', 'referralBonus', 'otp',
           'agent_balance', 'subscription_expires', 'subscription_started_at',
           'restrictDeposit', 'restrictWithdrawal', 'restrictTransfer',
           'inflowBonus', 'inflowEarned', 'inflowAccess', 'inflowAccessAt', 'freeWithdrawalMonth', 'freeWithdrawals',
@@ -275,6 +276,14 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/usernames/$(name)).data.get('deleted', false) == false;
     }
 
+    // An admin can restrict an account from sending in Chats (from a report):
+    // users.chatRestricted, until chatRestrictedUntil (ms; none = for good).
+    function chatRestrictedNow() {
+      let u = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return u.get('chatRestricted', false) == true
+        && (u.get('chatRestrictedUntil', 0) == 0 || u.get('chatRestrictedUntil', 0) > request.time.toMillis());
+    }
+
     function chatConvo(convoId) {
       return get(/databases/$(database)/documents/conversations/$(convoId)).data;
     }
@@ -354,6 +363,7 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read: if isChatMember(convoId);
         allow create: if isChatMember(convoId)
+          && !chatRestrictedNow()
           && ownsUsername(request.resource.data.sender)
           && !(request.resource.data.sender in chatConvo(convoId).get('blocked', []))
           && canPostIn(convoId, request.resource.data.sender)
@@ -374,6 +384,7 @@ service cloud.firestore {
             && request.resource.data.text == '— message deleted —'
           ) || (
             resource.data.deletedForEveryone == false
+            && !chatRestrictedNow()
             && resource.data.get('kind', '') != 'coins' // coin cards can't be edited
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt'])
             && request.resource.data.text != resource.data.text // unchanged text isn't an edit
@@ -454,7 +465,7 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow create: if ownsUsername(request.resource.data.fromUsername);
+      allow create: if ownsUsername(request.resource.data.fromUsername) && !chatRestrictedNow();
       allow read, update: if ownsUsername(resource.data.toUsername);
       allow delete: if false;
     }

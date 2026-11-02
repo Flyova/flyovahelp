@@ -5,6 +5,7 @@ import { collection, doc, getDocs, onSnapshot, orderBy, query, serverTimestamp, 
 import { Activity, Ban, CheckCircle, Edit2, Flag, Gift, Loader2, Save, Search, ShieldAlert, Trophy, Users, X } from "lucide-react";
 import Link from "next/link";
 import { changedBeforeCounts, depositLocked, flagReasonLabel, groupJackpots, profileChangeCounts, toDate } from "@/components/admin/accountFlags";
+import ChatRestrictButton, { chatRestrictionLabel } from "@/components/admin/ChatRestrict";
 
 const formatJoinedDate = (timestamp) => {
   if (!timestamp?.toDate) return "N/A";
@@ -381,13 +382,16 @@ export default function UserManagement() {
                               {flagReasonLabel(u.flagReason)}{toDate(u.flaggedAt) ? ` · ${toDate(u.flaggedAt).toLocaleDateString()}` : ""}
                             </p>
                           )}
-                          {(RESTRICTION_FIELDS.some((f) => u[f.key]) || jp || depositLocked(u) || profileChangeCounts(u).length > 0 || changedBeforeCounts(u)) && (
+                          {(RESTRICTION_FIELDS.some((f) => u[f.key]) || jp || depositLocked(u) || profileChangeCounts(u).length > 0 || changedBeforeCounts(u) || chatRestrictionLabel(u)) && (
                             <div className="flex flex-wrap gap-1 mt-1">
                               {RESTRICTION_FIELDS.filter((f) => u[f.key]).map((f) => (
                                 <span key={f.key} className="text-[8px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-black uppercase">
                                   {f.label} Restricted
                                 </span>
                               ))}
+                              {chatRestrictionLabel(u) && (
+                                <span className="text-[8px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-black uppercase">{chatRestrictionLabel(u)}</span>
+                              )}
                               {depositLocked(u) && (
                                 <span className="text-[8px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-black uppercase">
                                   Deposits locked (unpaid requests)
@@ -637,6 +641,12 @@ export default function UserManagement() {
                         </button>
                       );
                     })}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <ChatRestrictButton uid={liveSelectedUser?.id} name={liveSelectedUser?.username || liveSelectedUser?.fullName || ""} user={liveSelectedUser} />
+                    {chatRestrictionLabel(liveSelectedUser) && (
+                      <span className="text-[10px] font-black uppercase text-rose-600">{chatRestrictionLabel(liveSelectedUser)}</span>
+                    )}
                   </div>
                 </div>
               </div>

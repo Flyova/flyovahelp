@@ -4,14 +4,15 @@ import Link from "next/link";
 import { db } from "@/lib/firebase";
 import { collection, deleteField, doc, limit, onSnapshot, orderBy, query, updateDoc, where } from "firebase/firestore";
 import { authFetch } from "@/lib/authFetch";
-import { CHAT_MUTE_DAYS, chatMuteLeft, isChatMuted } from "@/lib/chat";
+import { CHAT_SANCTION_LENGTHS, chatMuteLeft, chatSanctionLabel, isChatMuted } from "@/lib/chat";
 import { Loader2, MessagesSquare, Trash2, User, Volume2, VolumeX } from "lucide-react";
 import ChatRoomSearch from "@/components/admin/ChatRoomSearch";
 
 // Admin → Chat Room: the general chatroom (chatroom_messages). Deleting goes through
 // /api/chat/room (admins may delete any message); muting sets users/{uid}.chatMuted
-// and, for 7 or 30 days, chatMutedUntil (lib/chat), which the room route checks
-// before every post.
+// and, for 24 hours, 1 week or 30 days, chatMutedUntil (lib/chat), which the room
+// route checks before every post. In Chats only STRAWINS (lib/chat ROOM_ADMIN) does
+// this; other staff accounts don't moderate the Chatroom there.
 
 const when = (ts) => (ts?.toDate ? ts.toDate().toLocaleString() : "-");
 const daysFromNow = (days) => Date.now() + days * 86400000;
@@ -50,10 +51,10 @@ export default function AdminChatRoom() {
     if (res.error) alert(res.error);
   };
 
-  // `days`: 7 or 30, null forever; false unmutes.
+  // `days`: 1, 7 or 30, null forever; false unmutes.
   const setMute = async (uid, name, days) => {
     if (!uid) return;
-    const how = days ? `for ${days} days` : "forever";
+    const how = days ? `for ${chatSanctionLabel(days).toLowerCase()}` : "forever";
     if (!window.confirm(days !== false ? `Mute @${name} in the chatroom ${how}? They won't be able to post.` : `Let @${name} post in the chatroom again?`)) return;
     setChoosing(null);
     setBusy(uid);
@@ -118,6 +119,8 @@ export default function AdminChatRoom() {
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs font-black text-slate-800">@{m.senderName || m.sender}</span>
+                      {m.official && <span className="text-[9px] bg-amber-300 text-amber-950 px-2 py-0.5 rounded-full font-black uppercase">Chatroom admin</span>}
+                      {m.pinned && <span className="text-[9px] bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full font-black uppercase">Pinned</span>}
                       {isMuted && <span className="text-[9px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-black uppercase">Muted</span>}
                       {m.kind === "coins" && <span className="text-[9px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-black uppercase">Coins</span>}
                       {m.deletedForEveryone && <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-black uppercase">Deleted</span>}
@@ -143,10 +146,10 @@ export default function AdminChatRoom() {
                     {m.senderUid && choosing === m.id && (
                       <span className="inline-flex flex-wrap items-center gap-1 rounded-xl bg-amber-50 p-1">
                         <span className="px-2 text-[10px] font-black uppercase text-amber-700">Mute for</span>
-                        {[...CHAT_MUTE_DAYS, null].map((days) => (
+                        {CHAT_SANCTION_LENGTHS.map((days) => (
                           <button key={days ?? "forever"} onClick={() => setMute(m.senderUid, m.sender, days)}
                             className="px-2.5 py-1.5 rounded-lg bg-white text-amber-700 text-[10px] font-black uppercase hover:bg-amber-100">
-                            {days ? `${days} days` : "Forever"}
+                            {chatSanctionLabel(days)}
                           </button>
                         ))}
                         <button onClick={() => setChoosing(null)} className="px-2 py-1.5 text-[10px] font-black uppercase text-slate-400 hover:text-slate-600">Cancel</button>

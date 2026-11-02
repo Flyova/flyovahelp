@@ -72,6 +72,7 @@ export default function ChatMessages({
   onBlock,
   onPin, // group admins: pin or unpin a message (`isPinned` says which it is)
   isPinned = () => false,
+  extraMenuItems, // message -> more menu items after Pin (the Chatroom admin's Mute)
   badgeFor, // name -> "owner" | "admin" | null: the badge by a sender's name in a group
   seenBy = {},
   sentId = null,
@@ -162,6 +163,7 @@ export default function ChatMessages({
     return [
       onReply && { label: "Reply", icon: CornerUpLeft, run: () => onReply(m) },
       onPin && !isCoinCard(m) && (isPinned(m) ? { label: "Unpin", icon: PinOff, run: () => onPin(m) } : { label: "Pin", icon: Pin, run: () => onPin(m) }),
+      ...(extraMenuItems?.(m) || []),
       { label: "Copy text", icon: Copy, run: () => navigator.clipboard?.writeText(m.text).catch(() => {}) },
       mine && onEdit && !isCoinCard(m) && { label: "Edit", icon: Pencil, run: () => onEdit(m) },
       !mine && onOpenProfile && { label: "View profile", icon: UserRound, run: () => onOpenProfile(m.sender) },
@@ -235,7 +237,7 @@ export default function ChatMessages({
                     last={!next || startsRun(m, next)}
                     showAvatar={showAvatars}
                     showName={showNames}
-                    badge={badgeFor?.(m.sender) ?? null}
+                    badge={m.official ? "official" : badgeFor?.(m.sender) ?? null}
                     selected={menu?.message.id === m.id}
                     onMenu={isDeleted(m) ? undefined : (msg, at) => setMenu({ message: msg, at })}
                     onReply={onReply}

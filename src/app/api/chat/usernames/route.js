@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminDb, admin } from "@/lib/firebaseAdmin";
-import { norm, isValidUsername, monthsSince, usernameCharge } from "@/lib/chat";
+import { norm, isReservedUsername, isValidUsername, monthsSince, usernameCharge } from "@/lib/chat";
 import { getCaller } from "@/lib/apiAuth";
 import { moveAccountCoins } from "@/lib/coinWallets";
 import { releasedUsernameCount, releaseUsername } from "@/lib/chatRelease";
@@ -53,6 +53,7 @@ export async function GET(req) {
 
 // POST /api/chat/usernames { username } — priced by usernameCharge (lib/chat): the
 // first is free, then $1 from the wallet; accounts 8+ months old get 100 free, agents 5.
+// "strawins" (the Chatroom's admin) and other names containing it are for admins only.
 export async function POST(req) {
   try {
     const caller = await getCaller(req);
@@ -73,6 +74,8 @@ export async function POST(req) {
     const userSnap = await userRef.get();
     if (!userSnap.exists) return NextResponse.json({ error: "Account not found" }, { status: 404 });
     const u = userSnap.data();
+    if (isReservedUsername(lower) && u.role !== "admin")
+      return NextResponse.json({ error: "Names with \"strawins\" in them are kept for StraWins." }, { status: 403 });
     const live = (await db.collection("usernames").where("uid", "==", uid).get()).size;
     const owned = live + (await releasedUsernameCount(db, uid)); // deleted names still count toward the price
     const isAgent = !!(u.isAgent || (await db.collection("agents").doc(uid).get()).exists);

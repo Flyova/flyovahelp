@@ -4,14 +4,16 @@ import { inGroupAs, norm } from "@/lib/chat";
 import { getCaller } from "@/lib/apiAuth";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import { chatSettingsFor } from "@/lib/chatSettings";
+import { roomAdminName } from "@/lib/chatRoomAdmin";
 import { accountCreatedMs } from "@/lib/money";
 
 const MAX_GROUPS = 10;
 
 // GET /api/chat/profile?u=username&as=yours — the public profile shown when you tap a
 // player in chat: chat username, bio, status and gender, country (unless they hide it),
-// when they joined StraWins, badges (verified, agent, StraWins staff), the public
-// groups they're in, and their chat coins only if they chose to show them off.
+// when they joined StraWins, badges (verified, agent, StraWins staff, "official" for the
+// Chatroom's admin), the public groups they're in, and their chat coins only if they
+// chose to show them off.
 // Never their real name, email, phone, PIN or money balances.
 export async function GET(req) {
   try {
@@ -62,6 +64,7 @@ export async function GET(req) {
       country: hideCountry ? "" : u.country || "",
       memberSince, // ms
       badges: [
+        lower === roomAdminName() && u.role === "admin" && "official",
         u.verified === true && "verified",
         u.isAgent === true && "agent",
         resolvePrivilegedRole(u.role, u.email) && "staff",
