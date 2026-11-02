@@ -17,7 +17,7 @@ import { recordInvalidDeposit } from "@/lib/depositLock";
 import { notifyUser } from "@/lib/notifications";
 import { ensureReferralCode } from "@/lib/referralCode";
 import { playerActivity } from "@/lib/activity";
-import { periodStarts, tzOffset } from "@/lib/periods";
+import { customRange, periodStarts, tzOffset } from "@/lib/periods";
 import { recordPurchase } from "@/lib/purchases";
 
 // The main wallet, users/{uid}.wallet. Players' apps can only read it (Firestore
@@ -30,6 +30,8 @@ import { recordPurchase } from "@/lib/purchases";
 //                                                                       your link or code (username, country, when, verified)
 //   GET ?view=activity&tz=                      -> { periods: { day|week|month|year: { games, transfers, chat, withdrawals,
 //                                                                       deposits } }, partial } your money in each (lib/activity)
+//   GET ?view=activity&tz=&from=&to=            -> { periods: { custom }, partial, range: { from, to } } the same for the days
+//                                                                       from..to (YYYY-MM-DD, yours, both included; lib/periods)
 //   POST { action: "transfer", pin, amount, txPin } -> { record, balance } fee + any $3 bonus repayment on top
 //   POST { action: "withdraw", amount, address, txPin } -> { balance, id, fee } USDT; local-agent withdrawals are trades (/api/trades);
 //                                                                       free on the perk days in lib/accountPerks
@@ -512,7 +514,13 @@ async function bonusRepay(db, caller) {
   return NextResponse.json({ balance: out.balance });
 }
 
-const activityView = async (db, caller, params) => NextResponse.json(await playerActivity(db, caller.uid, periodStarts(tzOffset(params))));
+async function activityView(db, caller, params) {
+  const tz = tzOffset(params);
+  const custom = customRange(params, tz);
+  if (custom?.error) return fail(custom.error);
+  const out = await playerActivity(db, caller.uid, periodStarts(tz), custom);
+  return NextResponse.json(custom ? { ...out, range: { from: custom.from, to: custom.to } } : out);
+}
 
 const VIEWS = { recipient: recipientView, referrals: referralsView, signups: signupsView, activity: activityView };
 const ACTIONS = {

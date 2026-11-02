@@ -4,9 +4,10 @@ import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
-import { PERIODS, PERIOD_LABELS, myTz } from "@/lib/periods";
+import { PERIODS, PERIOD_LABELS, myTz, rangeLabel, rangeQuery } from "@/lib/periods";
+import { CustomRangePicker } from "@/components/PeriodTabs";
 import {
-  ArrowDownToLine, ArrowRightLeft, ArrowUpRight, CalendarClock, CheckCircle2, ChevronLeft,
+  ArrowDownToLine, ArrowRightLeft, ArrowUpRight, CalendarClock, CalendarRange, CheckCircle2, ChevronLeft,
   Handshake, Loader2, Lock, Target, TrendingUp, Wallet,
 } from "lucide-react";
 
@@ -24,6 +25,8 @@ export default function InflowBonusPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [only, setOnly] = useState(""); // a category to show the history of, or "" for all
+  // "Custom" under Your earnings: days the player picks, and what they earned in them.
+  const [custom, setCustom] = useState({ open: false, range: null, amount: null, busy: false, error: "" });
 
   const load = useCallback(async () => {
     const res = await authFetch(`/api/inflow?tz=${myTz()}`);
@@ -32,6 +35,12 @@ export default function InflowBonusPage() {
   }, []);
 
   useEffect(() => onAuthStateChanged(auth, (u) => (u ? load() : router.push("/login"))), [load, router]);
+
+  const askRange = async (range) => {
+    setCustom((c) => ({ ...c, range, amount: null, busy: true, error: "" }));
+    const res = await authFetch(`/api/inflow?tz=${myTz()}${rangeQuery(range)}`);
+    setCustom((c) => ({ ...c, busy: false, ...(res.error ? { error: res.error } : { amount: res.periods?.custom ?? 0 }) }));
+  };
 
   const act = async (action, confirmText) => {
     if (confirmText && !window.confirm(confirmText)) return;
@@ -107,7 +116,20 @@ export default function InflowBonusPage() {
                   <p className="text-xl font-black italic text-emerald-400">{usd(data.periods[p])}</p>
                 </div>
               ))}
+              <button data-testid="custom-earnings" onClick={() => setCustom((c) => ({ ...c, open: !c.open }))} aria-expanded={custom.open}
+                className={`col-span-2 bg-[#142036] rounded-3xl p-4 border text-left flex items-center justify-between gap-3 ${custom.open ? "border-[#2457D6]" : "border-white/5"}`}>
+                <div className="min-w-0">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-white/40 truncate">
+                    {PERIOD_LABELS.custom}{custom.range ? ` · ${rangeLabel(custom.range)}` : ""}
+                  </p>
+                  <p className="text-xl font-black italic text-emerald-400">
+                    {custom.busy ? "…" : custom.amount != null ? usd(custom.amount) : <span className="text-white/50 text-sm not-italic">Pick the days</span>}
+                  </p>
+                </div>
+                <CalendarRange size={18} className="text-white/40 shrink-0" />
+              </button>
             </div>
+            {custom.open && <CustomRangePicker range={custom.range} onPick={askRange} busy={custom.busy} error={custom.error} />}
           </div>
         )}
 

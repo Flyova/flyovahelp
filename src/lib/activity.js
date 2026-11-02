@@ -1,10 +1,11 @@
-// A player's money today, this week, this month and this year (/api/wallet?view=activity):
+// A player's money today, this week, this month and this year, or in a custom range of
+// days (/api/wallet?view=activity):
 // games (staked, won back, net, wins and losses), transfers, chat coins and usernames,
 // withdrawals and deposits. Built from the records the History page shows: the player's
 // transactions, their USDT deposits and withdrawals, and their trades with agents.
 import { admin } from "@/lib/firebaseAdmin";
 import { cents, toDollars } from "@/lib/money";
-import { msOf, perPeriod, periodsOf } from "@/lib/periods";
+import { inRange, msOf, perPeriod, periodsOf } from "@/lib/periods";
 
 // StraWins to Dollars settles a stake as a win (×1.3), a partial (92% back; 80% on
 // older rows, which have no stakeAmount) or a loss (/api/cron/game-engine).
@@ -96,20 +97,27 @@ const finish = (x) => ({
   deposits: { count: x.deposits.count, amount: money(x.deposits.amountC) },
 });
 
-/** { periods: { day|week|month|year: totals }, partial } for `uid`, with periods starting at `starts` (lib/periods). */
-export async function playerActivity(db, uid, starts) {
+/**
+ * { periods: { day|week|month|year: totals }, partial } for `uid`, with periods starting at
+ * `starts` (lib/periods); with a `custom` range (lib/periods customRange) only
+ * { periods: { custom: totals }, partial }, since the page already has the others.
+ */
+export async function playerActivity(db, uid, starts, custom = null) {
   const userRef = db.collection("users").doc(uid);
-  const since = admin.firestore.Timestamp.fromMillis(starts.year);
+  const ts = (ms) => admin.firestore.Timestamp.fromMillis(ms);
+  let txQuery = userRef.collection("transactions").where("timestamp", ">=", ts(custom ? custom.start : starts.year));
+  if (custom) txQuery = txQuery.where("timestamp", "<", ts(custom.end));
   // Equality filters only on the shared collections, so no extra indexes; the year is picked out here.
   const [txs, deposits, withdrawals, trades] = await Promise.all([
-    userRef.collection("transactions").where("timestamp", ">=", since).limit(MAX_RECORDS)
-      .select("title", "type", "status", "amount", "stakeAmount", "fee", "direction", "timestamp").get(),
+    txQuery.limit(MAX_RECORDS).select("title", "type", "status", "amount", "stakeAmount", "fee", "direction", "timestamp").get(),
     db.collection("deposits").where("userId", "==", uid).select("status", "amount", "processedAt", "createdAt").get(),
     db.collection("withdrawals").where("userId", "==", uid).select("status", "amount", "completedAt", "processedAt", "timestamp").get(),
     db.collection("trades").where("senderId", "==", uid).where("status", "==", "completed").select("type", "amount", "completedAt").get(),
   ]);
-  const totals = perPeriod(emptyTotals);
-  const add = (at, fn) => { for (const p of periodsOf(at, starts)) fn(totals[p]); };
+  const totals = custom ? { custom: emptyTotals() } : perPeriod(emptyTotals);
+  const add = (at, fn) => {
+    for (const p of custom ? (inRange(at, custom) ? ["custom"] : []) : periodsOf(at, starts)) fn(totals[p]);
+  };
 
   for (const d of txs.docs) add(msOf(d.data().timestamp), (x) => addTransaction(x, d.data()));
   for (const d of deposits.docs) {

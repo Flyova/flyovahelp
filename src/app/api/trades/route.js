@@ -14,7 +14,7 @@ import { recordInvalidDeposit } from "@/lib/depositLock";
 import { alertAdmins, notifyUser } from "@/lib/notifications";
 import { agentPresence } from "@/lib/agentPresence";
 import { agentBankMatches, agentBankProblem } from "@/lib/agentBank";
-import { msOf, perPeriod, periodStarts, periodsOf, tzOffset } from "@/lib/periods";
+import { customRange, msOf, perPeriod, periodStarts, periodsOf, tzOffset } from "@/lib/periods";
 
 // Trades with local agents: a player deposits or withdraws by paying (or being paid
 // by) an agent outside the app, and balances move here. Players' and agents' apps
@@ -50,7 +50,8 @@ import { msOf, perPeriod, periodStarts, periodsOf, tzOffset } from "@/lib/period
 //   GET ?view=agent&id=   -> { name, country, bank?, online, lastSeenAt, rating, myRating }   a trade's agent; the
 //        bank details only for the depositor, once the agent has accepted (agents' records aren't readable by
 //        players); myRating: the stars this trade's player gave the agent (0 if none)
-//   GET ?view=agentStats&tz= -> { rating, periods: { day|week|month|year: { deposit, withdrawal: { count, amount } } } }
+//   GET ?view=agentStats&tz=[&from=&to=] -> { rating, periods: { day|week|month|year[|custom]: { deposit, withdrawal: { count, amount } } } }
+//                            custom: the days from..to (YYYY-MM-DD, the agent's, both included; lib/periods)
 //        an agent's own completed trades (lib/periods)
 //   POST { action: "create", type, agentId, amount, txPin? } -> { id, balance? }   txPin for a withdrawal
 //   POST { action: "accept" | "decline" | "confirm" | "expire" | "markPaid" | "notPaid", id } -> { ok }
@@ -605,19 +606,22 @@ async function agentView(db, caller, params) {
   });
 }
 
-/** An agent's completed deposits and withdrawals today, this week, month and year, and their rating. */
+/** An agent's completed deposits and withdrawals today, this week, month and year (and a custom range), and their rating. */
 async function agentStatsView(db, caller, params) {
   const agent = await db.collection("agents").doc(caller.uid).get();
   if (!agent.exists) return fail("This is for agents.", 403);
-  const starts = periodStarts(tzOffset(params));
+  const tz = tzOffset(params);
+  const starts = periodStarts(tz);
+  const custom = customRange(params, tz);
+  if (custom?.error) return fail(custom.error);
   // Equality filters only, so no extra index; the year's trades are picked out here.
   const snap = await db.collection("trades").where("agentId", "==", caller.uid).where("status", "==", "completed")
     .select("type", "amount", "completedAt").get();
-  const totals = perPeriod(() => ({ deposit: { count: 0, amountC: 0 }, withdrawal: { count: 0, amountC: 0 } }));
+  const totals = perPeriod(() => ({ deposit: { count: 0, amountC: 0 }, withdrawal: { count: 0, amountC: 0 } }), custom);
   for (const d of snap.docs) {
     const t = d.data();
     if (!TYPES.includes(t.type)) continue;
-    for (const p of periodsOf(msOf(t.completedAt), starts)) {
+    for (const p of periodsOf(msOf(t.completedAt), starts, custom)) {
       totals[p][t.type].count += 1;
       totals[p][t.type].amountC += cents(t.amount);
     }

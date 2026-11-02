@@ -4,11 +4,13 @@ import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
-import { PERIODS, PERIOD_LABELS, myTz } from "@/lib/periods";
+import { myTz, rangeLabel, rangeQuery } from "@/lib/periods";
+import { CustomRangePicker, PeriodTabs } from "@/components/PeriodTabs";
 import { ArrowDownLeft, ArrowUpRight, BarChart3, ChevronLeft, Coins, Send, Swords } from "lucide-react";
 
-// Your money today, this week, this month and this year (/api/wallet?view=activity):
-// games won and lost, transfers, chat coins and usernames, withdrawals and deposits.
+// Your money today, this week, this month and this year, or in days you pick (Custom)
+// (/api/wallet?view=activity): games won and lost, transfers, chat coins and usernames,
+// withdrawals and deposits.
 
 const usd = (n) => `$${Math.abs(Number(n || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const signed = (n) => `${Number(n) > 0 ? "+" : Number(n) < 0 ? "−" : ""}${usd(n)}`;
@@ -37,13 +39,23 @@ export default function TotalsPage() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [period, setPeriod] = useState("day");
+  // The Custom tab: the days picked and their totals (asked for separately).
+  const [custom, setCustom] = useState({ range: null, data: null, busy: false, error: "" });
 
   useEffect(() => onAuthStateChanged(auth, (u) => {
     if (!u) return router.push("/login");
     authFetch(`/api/wallet?view=activity&tz=${myTz()}`).then((res) => (res.error ? setError(res.error) : setData(res)));
   }), [router]);
 
-  const p = data?.periods?.[period];
+  const pickRange = async (range) => {
+    setCustom({ range, data: null, busy: true, error: "" });
+    const res = await authFetch(`/api/wallet?view=activity&tz=${myTz()}${rangeQuery(range)}`);
+    setCustom(res.error ? { range, data: null, busy: false, error: res.error } : { range, data: res, busy: false, error: "" });
+  };
+
+  const isCustom = period === "custom";
+  const shown = isCustom ? custom.data : data;
+  const p = shown?.periods?.[period];
 
   return (
     <div className="min-h-screen bg-[#0B1220] text-white pb-24">
@@ -55,17 +67,15 @@ export default function TotalsPage() {
       </div>
 
       <div className="px-6 space-y-5 max-w-md mx-auto w-full">
-        <div className="grid grid-cols-4 gap-2">
-          {PERIODS.map((k) => (
-            <button key={k} onClick={() => setPeriod(k)}
-              className={`py-3 rounded-2xl text-[9px] font-black uppercase tracking-wider border-2 ${period === k ? "bg-[#8B1E3F] border-[#8B1E3F] text-white" : "bg-[#142036] border-white/5 text-gray-400"}`}>
-              {PERIOD_LABELS[k]}
-            </button>
-          ))}
-        </div>
+        <PeriodTabs value={period} onChange={setPeriod} />
 
-        {error && <p className="text-sm font-bold text-red-400 text-center">{error}</p>}
-        {!p && !error && <div className="h-40 bg-[#142036] rounded-[2rem] animate-pulse" />}
+        {isCustom && <CustomRangePicker range={custom.range} onPick={pickRange} busy={custom.busy} error={custom.error} />}
+        {isCustom && p && custom.range && (
+          <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-white/50 px-2">{rangeLabel(custom.range)}</h2>
+        )}
+
+        {error && !isCustom && <p className="text-sm font-bold text-red-400 text-center">{error}</p>}
+        {!p && (isCustom ? custom.busy : !error) && <div className="h-40 bg-[#142036] rounded-[2rem] animate-pulse" />}
 
         {p && (
           <>
@@ -103,7 +113,8 @@ export default function TotalsPage() {
 
             <p className="text-[10px] font-bold text-white/30 text-center leading-relaxed px-2">
               In your own time zone; weeks start on Monday. Deposits and withdrawals count once they&apos;re completed,
-              with agents or in USDT.{data.partial ? " This year has more records than we can add up at once, so it's partly counted." : ""}
+              with agents or in USDT.{shown.partial
+                ? ` ${isCustom ? "These days have" : "This year has"} more records than we can add up at once, so it's partly counted.` : ""}
             </p>
           </>
         )}

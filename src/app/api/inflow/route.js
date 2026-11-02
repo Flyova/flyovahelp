@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminDb } from "@/lib/firebaseAdmin";
+import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import { FV, cents, formatUsd, isBanned, toDollars } from "@/lib/money";
@@ -7,7 +7,7 @@ import {
   INFLOW_ACCESS_PRICE, INFLOW_CATEGORIES, INFLOW_MIN_AGE_MONTHS, INFLOW_PAYOUT_DAY,
   creditInflowSafely, inflowEligibility, inflowLedger, inflowRecords, isPayoutDay, nextPayoutMs,
 } from "@/lib/inflowBonus";
-import { msOf, perPeriod, periodStarts, periodsOf, tzOffset } from "@/lib/periods";
+import { customRange, inRange, msOf, perPeriod, periodStarts, periodsOf, tzOffset } from "@/lib/periods";
 
 // The inflow bonus (lib/inflowBonus): what the account has earned, whether it can
 // earn, and moving it to the main wallet.
@@ -16,6 +16,8 @@ import { msOf, perPeriod, periodStarts, periodsOf, tzOffset } from "@/lib/period
 //                                               earned, payoutDay, payoutToday, nextPayoutAt, categories, periods, history }
 //                                               categories: [{ key, label, rate, text, earned, count }], what each has paid so far
 //                                               periods: { day, week, month, year } earned in each (lib/periods; tz as there)
+//   GET ?tz=&from=&to=                     -> { periods: { custom }, range: { from, to } }   earned in the days from..to
+//                                               (YYYY-MM-DD, yours, both included; lib/periods customRange)
 //   POST { action: "buyAccess" }           -> { balance }   $250 from the main wallet unlocks it before 8 months
 //   POST { action: "withdraw" }            -> { amount, balance }   the whole bonus to the main wallet, on the 15th (UTC)
 //   POST { action: "settle", kind, id }    -> { credited }  admin/staff, after approving a USDT deposit or withdrawal
@@ -25,7 +27,22 @@ const users = (db) => db.collection("users");
 const HISTORY = 100;
 const ms = (ts) => ts?.toMillis?.() || null;
 
+/** Earned in a custom range of days: the custom tab of "Your earnings". */
+async function customView(db, caller, custom) {
+  const snap = await inflowRecords(db, caller.uid).where("createdAt", ">=", admin.firestore.Timestamp.fromMillis(custom.start))
+    .where("createdAt", "<", admin.firestore.Timestamp.fromMillis(custom.end)).select("category", "amount", "createdAt").get();
+  let earnedC = 0;
+  for (const d of snap.docs) {
+    const { category, amount, createdAt } = d.data();
+    if (Object.hasOwn(INFLOW_CATEGORIES, category) && inRange(msOf(createdAt), custom)) earnedC += cents(amount);
+  }
+  return NextResponse.json({ periods: { custom: toDollars(earnedC) }, range: { from: custom.from, to: custom.to } });
+}
+
 async function view(db, caller, params) {
+  const custom = customRange(params, tzOffset(params));
+  if (custom?.error) return fail(custom.error);
+  if (custom) return customView(db, caller, custom);
   const snap = await users(db).doc(caller.uid).get();
   if (!snap.exists) return fail("Account not found.", 404);
   const me = snap.data();
