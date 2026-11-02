@@ -76,7 +76,7 @@ export default function TradeRoom() {
             authFetch(`/api/trades?view=agent&id=${encodeURIComponent(snap.id)}`).then((info) => setAgentCountry(info.country || ""));
           }
         } else {
-          const isApproved = data.status === "acknowledged" || data.status === "completed";
+          const isApproved = ["acknowledged", "disputed", "completed"].includes(data.status);
           const needBank = data.type === "deposit" && isApproved && !agentBank;
           const agentInfo = await authFetch(`/api/trades?view=agent&id=${encodeURIComponent(snap.id)}`);
           if (!agentInfo.error) {
@@ -324,7 +324,7 @@ export default function TradeRoom() {
                 </div>
             </div>
 
-            {trade.type === "deposit" && agentBank && (trade.status === "acknowledged" || trade.status === "completed") && (
+            {trade.type === "deposit" && agentBank && ["acknowledged", "disputed", "completed"].includes(trade.status) && (
                 <div className="p-5 bg-white text-slate-900 rounded-3xl shadow-2xl space-y-3 border-l-8 border-[#2457D6]">
                     <div className="flex justify-between items-start">
                         <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Agent Bank Details</p>
@@ -360,7 +360,14 @@ export default function TradeRoom() {
                 </div>
             )}
 
-            {trade.type === "deposit" && trade.status === "acknowledged" && (
+            {trade.type === "deposit" && trade.status === "disputed" && (
+                <div className="p-4 bg-amber-500/10 rounded-3xl border border-amber-500/30 text-center text-[11px] font-bold text-amber-300">
+                    {otherPartyName || "The agent"} says your payment didn&apos;t arrive. An admin is checking it.
+                    {" "}If you paid, send your proof in the chat below.
+                </div>
+            )}
+
+            {trade.type === "deposit" && ["acknowledged", "disputed"].includes(trade.status) && (
                 moneySent ? (
                   <div className="p-4 bg-emerald-500/10 rounded-3xl border border-emerald-500/30 text-center text-[11px] font-bold text-emerald-300">
                     You said you&apos;ve sent {total}. The agent will confirm once it arrives.
@@ -388,7 +395,13 @@ export default function TradeRoom() {
       {/* Scenario 2: For Agent (Summary + the player's bank account) */}
       {isAgent && (
         <div className="m-4 space-y-3">
-            {trade.type === "deposit" && trade.status === "acknowledged" && trade.playerPaidAt && (
+            {trade.type === "deposit" && trade.status === "disputed" && (
+                <div className="p-4 bg-amber-500/10 rounded-3xl border border-amber-500/30 text-[11px] font-bold text-amber-300">
+                    You said the player didn&apos;t pay. An admin is checking it, and the ${(Number(trade.amount) + Number(trade.fee ?? calculatedFee)).toFixed(2)} stays on hold until then.
+                    {" "}If the money arrives, you can still confirm it below.
+                </div>
+            )}
+            {trade.type === "deposit" && ["acknowledged", "disputed"].includes(trade.status) && trade.playerPaidAt && (
                 <div className="p-4 bg-emerald-500/10 rounded-3xl border border-emerald-500/30 text-[11px] font-bold text-emerald-300">
                     The player says they&apos;ve sent {total}. Check your bank, then confirm below.
                 </div>
@@ -489,7 +502,7 @@ export default function TradeRoom() {
         {/* The agent's two deposit buttons share a row, so the chat keeps its room. */}
         {trade.status === 'acknowledged' && isAgent && trade.type === "deposit" && (
              <div className="flex gap-2 max-w-md mx-auto w-full">
-               <button onClick={() => tradeStep("notPaid", "Cancel this deposit because the player didn't pay? Your balance comes back, and it counts against the player.")} disabled={loading || unpaidWaitMin > 0}
+               <button onClick={() => tradeStep("notPaid", "Report that the player didn't pay? The money stays on hold until an admin checks. If they agree, it comes back to your balance.")} disabled={loading || unpaidWaitMin > 0}
                  className="flex-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 py-3.5 rounded-2xl font-black uppercase text-[9px] tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-40">
                  <XCircle size={13} className="shrink-0" /> {unpaidWaitMin > 0 ? `Didn't pay (${unpaidWaitMin} min)` : "Didn't pay"}
                </button>
@@ -499,6 +512,15 @@ export default function TradeRoom() {
                  {moneySent ? "Confirm received" : "Waiting for player"}
                </button>
              </div>
+        )}
+
+        {/* Under review: the agent can still confirm if the money turns up. */}
+        {trade.status === 'disputed' && isAgent && trade.type === "deposit" && (
+             <button onClick={handleFinalConfirm} disabled={loading || !moneySent}
+               className="max-w-md mx-auto w-full bg-green-600 py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all disabled:opacity-40 disabled:active:scale-100">
+               {loading ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
+               {moneySent ? "It arrived: confirm received" : "Waiting for an admin"}
+             </button>
         )}
 
         {trade.status === 'acknowledged' && canConfirm && !isAgent && (
@@ -517,9 +539,10 @@ function StatusBadge({ status }) {
         pending: "bg-orange-500/20 text-orange-400", 
         acknowledged: "bg-[#2457D6]/20 text-[#7A9BEE]", 
         completed: "bg-green-500/20 text-green-400", 
-        cancelled: "bg-rose-500/20 text-rose-400" 
+        cancelled: "bg-rose-500/20 text-rose-400",
+        disputed: "bg-amber-500/20 text-amber-300",
     };
-    return <div className={`px-4 py-1.5 rounded-full text-[8px] font-black uppercase tracking-tighter ${colors[status]}`}>{status}</div>;
+    return <div className={`px-4 py-1.5 rounded-full text-[8px] font-black uppercase tracking-tighter ${colors[status]}`}>{status === "disputed" ? "under review" : status}</div>;
 }
 
 function MessageBubble({ msg, isMe }) {

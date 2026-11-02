@@ -41,6 +41,7 @@ export default function AgentTransactions() {
   const [chatTrade, setChatTrade] = useState(null);
   const [tradeMessages, setTradeMessages] = useState([]);
   const [chatLoading, setChatLoading] = useState(false);
+  const [disputedTrades, setDisputedTrades] = useState([]); // waiting for an admin, however old: always listed first
 
   const PAGE_SIZE = 20;
 
@@ -148,6 +149,16 @@ export default function AgentTransactions() {
   }, []);
 
   useEffect(() => {
+    const unsub = onSnapshot(query(collection(db, "trades"), where("status", "==", "disputed")), async (snap) => {
+      const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      await fetchAgentNames(docs.map((t) => t.agentId));
+      await fetchUserProfiles(docs.flatMap((t) => [t.senderId, t.agentId]));
+      setDisputedTrades(docs);
+    }, (err) => console.error("Disputed trades fetch error:", err));
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
     if (!chatTrade?.id) return undefined;
     const q = query(collection(db, "trades", chatTrade.id, "messages"), orderBy("createdAt", "asc"));
     const unsub = onSnapshot(
@@ -224,6 +235,25 @@ export default function AgentTransactions() {
     }
   };
 
+  // A deposit the agent called unpaid: its amount + fee stays held until an admin decides.
+  const handleResolve = async (trade, paid) => {
+    const held = (Number(trade.amount) + Number(trade.fee || trade.feeCharged || 0)).toFixed(2);
+    const question = paid
+      ? `The player paid: complete this deposit? $${Number(trade.amount).toFixed(2)} goes to ${trade.senderName || "the player"}'s wallet.`
+      : `The player didn't pay: cancel this deposit? $${held} goes back to the agent's balance, and it counts toward the player's unpaid-deposit lock.`;
+    if (!window.confirm(question)) return;
+    setActionLoading(trade.id + "_resolve");
+    try {
+      const res = await authFetch("/api/trades", { method: "POST", body: { action: "staffResolve", id: trade.id, paid } });
+      if (res.error) return alert(res.error);
+      alert(paid ? "Deposit completed." : `Deposit cancelled. $${held} is back in the agent's balance.`);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleCancelTrade = async (trade) => {
     const currentStatus = normalizeStatus(trade?.status);
     if (["completed", "cancelled", "refunded"].includes(currentStatus) || trade?.refunded) {
@@ -243,7 +273,8 @@ export default function AgentTransactions() {
     }
   };
 
-  const filtered = trades.filter(t => {
+  const disputedIds = new Set(disputedTrades.map((t) => t.id));
+  const filtered = [...disputedTrades, ...trades.filter((t) => !disputedIds.has(t.id))].filter(t => {
     const term = searchTerm.toLowerCase();
     const name = agentNames[t.agentId] || t.agentName || "";
     const profile = userProfiles[t.senderId] || {};
@@ -342,6 +373,8 @@ export default function AgentTransactions() {
                             ? "bg-orange-100 text-orange-600"
                             : status === "acknowledged"
                               ? "bg-[#D7E2FF] text-[#2457D6]"
+                              : status === "disputed"
+                                ? "bg-red-100 text-red-700"
                               : status === "refunded"
                                 ? "bg-amber-100 text-amber-700"
                                 : "bg-slate-100 text-slate-400";
@@ -396,7 +429,7 @@ export default function AgentTransactions() {
                     </td>
                     <td className="p-6">
                        <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${statusClass}`}>
-                         {status}
+                         {status === "disputed" ? "To decide" : status}
                        </span>
                        <p className="text-[10px] font-bold text-slate-400 mt-2 flex items-center gap-1 uppercase">
                          <Calendar size={10} /> {trade.createdAt?.toDate ? trade.createdAt.toDate().toLocaleDateString() : '---'}
@@ -414,7 +447,17 @@ export default function AgentTransactions() {
                          )}
                          {trade.declineReason === "Player didn't pay" && (
                            <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-rose-100 text-rose-700">
-                             Player didn&apos;t pay (agent cancelled)
+                             {trade.resolution === "unpaid" ? "Player didn't pay (admin agreed)" : "Player didn't pay (agent cancelled)"}
+                           </span>
+                         )}
+                         {status === "disputed" && (
+                           <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-amber-100 text-amber-700">
+                             Agent says player didn&apos;t pay{trade.playerPaidAt ? " · player says paid" : ""} · ${(Number(trade.amount) + Number(trade.fee || trade.feeCharged || 0)).toFixed(2)} held
+                           </span>
+                         )}
+                         {trade.resolution === "paid" && (
+                           <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-emerald-100 text-emerald-700">
+                             Agent said unpaid · admin confirmed paid
                            </span>
                          )}
                        </div>
@@ -431,6 +474,26 @@ export default function AgentTransactions() {
                                 <MessageSquare size={12} />
                                 <span className="text-[8px] font-black uppercase tracking-tighter">View Chat</span>
                             </button>
+                            {status === "disputed" ? (
+                              <div className="flex flex-col gap-1">
+                                <button
+                                    onClick={() => handleResolve(trade, true)}
+                                    disabled={actionLoading === trade.id + "_resolve"}
+                                    className="flex items-center gap-1 px-3 py-2 bg-emerald-50 text-emerald-700 rounded-xl hover:bg-emerald-500 hover:text-white transition-all border border-emerald-100 disabled:opacity-40"
+                                >
+                                    <span className="text-[8px] font-black uppercase tracking-tighter">Player paid</span>
+                                </button>
+                                <button
+                                    onClick={() => handleResolve(trade, false)}
+                                    disabled={actionLoading === trade.id + "_resolve"}
+                                    className="flex items-center gap-1 px-3 py-2 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-500 hover:text-white transition-all border border-rose-100 disabled:opacity-40"
+                                >
+                                    {actionLoading === trade.id + "_resolve" ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+                                    <span className="text-[8px] font-black uppercase tracking-tighter">Didn&apos;t pay</span>
+                                </button>
+                              </div>
+                            ) : (
+                            <>
                             {/* YELLOW REFUND BUTTON */}
                             <button 
                                 onClick={() => handleRefundOnly(trade)}
@@ -448,6 +511,8 @@ export default function AgentTransactions() {
                                 {actionLoading === trade.id + "_cancel" ? <Loader2 size={12} className="animate-spin" /> : <ArrowUpRight size={12} />}
                                 <span className="text-[8px] font-black uppercase tracking-tighter">Cancel</span>
                             </button>
+                            </>
+                            )}
                         </div>
                     </td>
                         </>

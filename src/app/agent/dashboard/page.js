@@ -84,7 +84,7 @@ export default function AgentDashboard() {
       const qActive = query(
         collection(db, "trades"),
         where("agentId", "==", u.uid),
-        where("status", "in", ["pending", "acknowledged"])
+        where("status", "in", ["pending", "acknowledged", "disputed"])
       );
       const unsubActive = onSnapshot(qActive, (snap) => {
         setTrades(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -378,9 +378,9 @@ export default function AgentDashboard() {
                     ) : (
                     <button 
                         onClick={() => router.push(`/trade/${trade.id}`)} 
-                        className="w-full bg-emerald-500 py-4 rounded-2xl text-[10px] font-black uppercase italic tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                        className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase italic tracking-widest flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all ${trade.status === 'disputed' ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' : 'bg-emerald-500 shadow-emerald-500/20'}`}
                     >
-                        Go to Chat Room <ArrowUpRight size={16} />
+                        {trade.status === 'disputed' ? "Unpaid: an admin is checking" : "Go to Chat Room"} <ArrowUpRight size={16} />
                     </button>
                     )}
                 </div>

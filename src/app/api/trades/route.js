@@ -24,8 +24,12 @@ import { msOf, perPeriod, periodStarts, periodsOf, tzOffset } from "@/lib/period
 //               player pays the agent and says so (markPaid) -> agent confirms (player's
 //               wallet gets the amount).
 //               Unpaid UNPAID_DEPOSIT_MS after accepting, the agent can call it unpaid
-//               (notPaid): their balance comes back and it counts toward the player's
-//               unpaid-deposit lock (lib/depositLock).
+//               (notPaid): the trade is "disputed" and what accepting took stays held
+//               until an admin decides (staffResolve). Didn't pay: the agent's balance
+//               comes back and it counts toward the player's unpaid-deposit lock
+//               (lib/depositLock). Paid: the deposit completes as if the agent confirmed.
+//               Until then the agent can still confirm it and the player can still say
+//               they've paid.
 //   withdrawal: player creates (wallet pays amount + any $3 bonus repayment) -> agent
 //               accepts -> agent pays the player and says so (markPaid) -> player confirms
 //               (agent balance gets amount − 7%). Not confirmed WITHDRAWAL_CONFIRM_MS after
@@ -57,6 +61,9 @@ import { msOf, perPeriod, periodStarts, periodsOf, tzOffset } from "@/lib/period
 //   POST { action: "staffCancel" | "staffRefund", id } -> { ok, refunded? }   admin/staff/support (Agent TX page):
 //                                                    a refund returns a deposit's locked amount + fee to the
 //                                                    agent, or a withdrawal's amount to the player, once
+//                                                    (not on a disputed trade: that's staffResolve)
+//   POST { action: "staffResolve", id, paid } -> { ok }   admin/staff/support: settle a disputed deposit;
+//                                                    paid false = the player didn't pay, true = they did
 
 const fail = (error, status = 400) => NextResponse.json({ error }, { status });
 const TYPES = ["deposit", "withdrawal"];
@@ -244,26 +251,23 @@ async function expire(db, caller, { id }) {
   return NextResponse.json({ ok: true });
 }
 
-async function confirm(db, caller, { id }) {
+/**
+ * Completes a trade: a deposit's amount goes to the player's wallet (and their
+ * referrer's commission), a withdrawal's amount less the fee to the agent's balance.
+ * `check(t)` returns an { error, status } that stops it, or nothing. Used when the
+ * receiving side confirms, and when an admin settles a disputed deposit as paid.
+ */
+async function completeTrade(db, id, check, extra = {}) {
   // Deposits pay the depositor's referrer; resolved before the transaction (it may need queries).
   const first = id && typeof id === "string" ? await db.collection("trades").doc(id).get() : null;
-  if (!first?.exists) return fail("Trade not found.", 404);
+  if (!first?.exists) return { error: "Trade not found.", status: 404 };
   const senderRef = db.collection("users").doc(first.data().senderId);
   const senderFirst = (await senderRef.get()).data() || {};
   const referrerId = first.data().type === "deposit" ? await referrerOf(db, senderRef.id, senderFirst) : null;
 
   const out = await onTrade(db, id, async (tx, t, tradeRef) => {
-    const confirmer = t.type === "deposit" ? t.agentId : t.senderId;
-    if (confirmer !== caller.uid) {
-      return { error: t.type === "deposit" ? "Only the agent confirms a deposit." : "Only the player confirms a withdrawal.", status: 403 };
-    }
-    if (t.status !== "acknowledged" || t.refunded) return { error: "This trade can't be confirmed now.", status: 409 };
-    if (!(t.type === "deposit" ? t.playerPaidAt : t.agentPaidAt)) {
-      return {
-        error: t.type === "deposit" ? "The player hasn't said they've sent the money yet." : "Your agent hasn't said they've sent the money yet.",
-        status: 409,
-      };
-    }
+    const refused = check(t);
+    if (refused) return refused;
     const amount = Number(t.amount);
     const feeC = Math.round(cents(amount) * AGENT_FEE_RATE[t.type]);
     const now = FV().serverTimestamp();
@@ -287,11 +291,11 @@ async function confirm(db, caller, { id }) {
     }
     const gone = FV().delete();
     tx.update(tradeRef, {
-      status: "completed", completedAt: now, finalFee: toDollars(feeC),
+      status: "completed", completedAt: now, finalFee: toDollars(feeC), ...extra,
       cancelledAt: gone, cancelledBy: gone, declineReason: gone, reason: gone, refunded: gone, refundedAt: gone, autoRefunded: gone,
     });
   });
-  if (out.error) return fail(out.error, out.status);
+  if (out.error) return out;
   const t = out.trade;
   const sourceId = `trade_${id}`;
   const net = toDollars(cents(t.amount) - Math.round(cents(t.amount) * AGENT_FEE_RATE[t.type]));
@@ -305,6 +309,27 @@ async function confirm(db, caller, { id }) {
     creditInflowSafely(db, { uid: t.senderId, category: t.type, base: Number(t.amount), sourceId, note: `With agent ${t.agentName || ""}`.trim() }),
     t.type === "deposit" && creditInflowSafely(db, { uid: t.agentId, category: "agent_deposit", base: Number(t.amount), sourceId, note: `Deposit by ${t.senderName || "a player"}` }),
   ]);
+  return out;
+}
+
+async function confirm(db, caller, { id }) {
+  const out = await completeTrade(db, id, (t) => {
+    const confirmer = t.type === "deposit" ? t.agentId : t.senderId;
+    if (confirmer !== caller.uid) {
+      return { error: t.type === "deposit" ? "Only the agent confirms a deposit." : "Only the player confirms a withdrawal.", status: 403 };
+    }
+    // A deposit the agent called unpaid can still be confirmed if the money turns up.
+    const open = t.status === "acknowledged" || (t.type === "deposit" && t.status === "disputed");
+    if (!open || t.refunded) return { error: "This trade can't be confirmed now.", status: 409 };
+    if (!(t.type === "deposit" ? t.playerPaidAt : t.agentPaidAt)) {
+      return {
+        error: t.type === "deposit" ? "The player hasn't said they've sent the money yet." : "Your agent hasn't said they've sent the money yet.",
+        status: 409,
+      };
+    }
+    return null;
+  });
+  if (out.error) return fail(out.error, out.status);
   return NextResponse.json({ ok: true });
 }
 
@@ -318,61 +343,63 @@ async function markPaid(db, caller, { id }) {
     if (payer !== caller.uid) {
       return { error: t.type === "deposit" ? "Only the player pays a deposit." : "Only this trade's agent pays a withdrawal.", status: 403 };
     }
-    if (t.status !== "acknowledged" || t.refunded) return { error: "Wait for the agent to accept this trade.", status: 409 };
+    // A player can still say they paid a deposit the agent called unpaid (an admin is deciding).
+    const open = t.status === "acknowledged" || (t.type === "deposit" && t.status === "disputed");
+    if (!open || t.refunded) return { error: "Wait for the agent to accept this trade.", status: 409 };
     const field = t.type === "deposit" ? "playerPaidAt" : "agentPaidAt";
     if (t[field]) return { error: "You've already said this one is paid.", status: 409 };
     tx.update(tradeRef, { [field]: FV().serverTimestamp() });
   });
   if (out.error) return fail(out.error, out.status);
   const t = out.trade;
-  await (t.type === "deposit"
-    ? notifyUser(db, t.agentId, {
-      type: "merchant", title: "The player says they've paid you",
-      body: `${t.senderName || "The player"} sent their ${formatUsd(t.amount)} deposit. Check your bank and confirm it.`,
-      url: `/trade/${id}`,
-    })
-    : notifyUser(db, t.senderId, {
-      type: "merchant", title: "Your agent says they've paid you",
-      body: `${t.agentName || "Your agent"} sent ${formatUsd(t.amount)}. Check your bank and confirm within ${WITHDRAWAL_CONFIRM_MS / 60000} minutes.`,
-      url: `/trade/${id}`,
-    }));
+  await Promise.all([
+    t.type === "deposit"
+      ? notifyUser(db, t.agentId, {
+        type: "merchant", title: "The player says they've paid you",
+        body: `${t.senderName || "The player"} sent their ${formatUsd(t.amount)} deposit. Check your bank and confirm it.`,
+        url: `/trade/${id}`,
+      })
+      : notifyUser(db, t.senderId, {
+        type: "merchant", title: "Your agent says they've paid you",
+        body: `${t.agentName || "Your agent"} sent ${formatUsd(t.amount)}. Check your bank and confirm within ${WITHDRAWAL_CONFIRM_MS / 60000} minutes.`,
+        url: `/trade/${id}`,
+      }),
+    t.status === "disputed" && alertAdmins(db, {
+      type: "trade", title: "Player says they paid a deposit under review", uid: t.senderId, url: "/admin/agent-tx",
+      body: `${t.senderName || "The player"} says they sent the ${formatUsd(t.amount)} that ${t.agentName || "the agent"} called unpaid.`,
+    }),
+  ]);
   return NextResponse.json({ ok: true });
 }
 
 /**
- * The player never paid an accepted deposit: the agent cancels it and gets back what
- * accepting took from their balance; it counts toward the player's unpaid-deposit lock.
+ * The agent says the player never paid an accepted deposit. What accepting took from
+ * their balance stays held, and the admins decide (staffResolve).
  */
 async function notPaid(db, caller, { id }) {
-  const agentRef = db.collection("agents").doc(caller.uid);
   const out = await onTrade(db, id, async (tx, t, tradeRef) => {
     if (t.agentId !== caller.uid) return { error: "Only this trade's agent can do that.", status: 403 };
     if (t.type !== "deposit") return { error: "Only a deposit can be marked unpaid.", status: 409 };
+    if (t.status === "disputed") return { error: "You've already said this one wasn't paid. An admin is checking it.", status: 409 };
     if (t.status !== "acknowledged" || t.refunded) return { error: "This trade can't be cancelled now.", status: 409 };
     const acceptedMs = t.acceptedAt?.toMillis?.() || 0;
     const wait = acceptedMs + UNPAID_DEPOSIT_MS - Date.now();
     if (wait > 0) return { error: `Give the player ${Math.ceil(wait / 60000)} more min to pay.`, status: 409 };
-    const refundC = cents(t.amount) + cents(t.fee || t.feeCharged || 0);
-    const now = FV().serverTimestamp();
-    tx.update(agentRef, { agent_balance: FV().increment(toDollars(refundC)) });
-    tx.update(tradeRef, {
-      status: "cancelled", cancelledAt: now, cancelledBy: "agent", declineReason: "Player didn't pay",
-      refunded: true, refundedAt: now, refundTarget: "agent", refundAmount: toDollars(refundC),
-    });
+    tx.update(tradeRef, { status: "disputed", disputedAt: FV().serverTimestamp(), disputeReason: "Player didn't pay" });
   });
   if (out.error) return fail(out.error, out.status);
   const t = out.trade;
+  const held = formatUsd(toDollars(cents(t.amount) + cents(t.fee || t.feeCharged || 0)));
   await Promise.all([
-    recordInvalidDeposit(db, t.senderId, { sourceId: `trade_${id}`, what: `a ${formatUsd(t.amount)} deposit with ${t.agentName || "an agent"} left unpaid` }),
     notifyUser(db, t.senderId, {
-      type: "warning", title: "Deposit cancelled: not paid",
-      body: `${t.agentName || "The agent"} didn't receive your ${formatUsd(t.amount)}. Unpaid requests can lock deposits for 48 hours.`,
+      type: "warning", title: "Your agent says you didn't pay",
+      body: `${t.agentName || "The agent"} says your ${formatUsd(t.amount)} deposit didn't arrive. An admin is checking it. If you paid, send your proof in the trade chat.`,
       url: `/trade/${id}`,
     }),
     alertAdmins(db, {
-      type: "trade", title: t.playerPaidAt ? "Disputed agent deposit" : "Agent deposit unpaid", uid: t.senderId, url: "/admin/agent-tx",
-      body: `${t.agentName || "Agent"} says ${t.senderName || "a player"} didn't pay ${formatUsd(t.amount)}${t.playerPaidAt ? ", but the player said they had" : ""}.`,
-      email: !!t.playerPaidAt,
+      type: "trade", title: "Agent deposit to check", uid: t.senderId, url: "/admin/agent-tx",
+      body: `${t.agentName || "Agent"} says ${t.senderName || "a player"} didn't pay ${formatUsd(t.amount)}${t.playerPaidAt ? ", but the player said they had" : ""}. ${held} stays held until you decide on Agent TX.`,
+      email: true,
     }),
   ]);
   return NextResponse.json({ ok: true });
@@ -415,6 +442,7 @@ async function staffCancel(db, caller, { id }) {
     if (["completed", "cancelled", "refunded"].includes(t.status) || t.refunded) {
       return { error: "This trade can no longer be cancelled.", status: 409 };
     }
+    if (t.status === "disputed") return { error: "Decide this one with Player paid or Didn't pay.", status: 409 };
     tx.update(tradeRef, { status: "cancelled", cancelledAt: FV().serverTimestamp(), cancelledBy: "admin" });
   });
   if (out.error) return fail(out.error, out.status);
@@ -426,6 +454,7 @@ async function staffRefund(db, caller, { id }) {
   const out = await onTrade(db, id, async (tx, t, tradeRef) => {
     if (t.refunded) return { error: "This trade has already been refunded.", status: 409 };
     if (t.status === "completed") return { error: "A completed trade can't be refunded.", status: 409 };
+    if (t.status === "disputed") return { error: "Decide this one with Player paid or Didn't pay.", status: 409 };
     const now = FV().serverTimestamp();
     let refundC;
     if (t.type === "deposit") {
@@ -447,6 +476,58 @@ async function staffRefund(db, caller, { id }) {
     return { trade: t, refunded: toDollars(refundC) };
   });
   if (out.error) return fail(out.error, out.status);
+  return NextResponse.json({ ok: true, refunded: out.refunded });
+}
+
+/**
+ * An admin settles a deposit the agent called unpaid. Didn't pay: the held amount and
+ * fee go back to the agent and it counts toward the player's unpaid-deposit lock.
+ * Paid: the deposit completes, as if the agent had confirmed it.
+ */
+async function staffResolve(db, caller, { id, paid }) {
+  if (!(await isStaffCaller(db, caller))) return fail("Staff only.", 403);
+  if (typeof paid !== "boolean") return fail("Say whether the player paid.");
+  const notDisputed = (t) => (t.status !== "disputed" || t.refunded ? { error: "This trade isn't waiting for a decision.", status: 409 } : null);
+  const decided = { resolvedAt: FV().serverTimestamp(), resolvedBy: caller.uid, resolution: paid ? "paid" : "unpaid" };
+
+  if (paid) {
+    const out = await completeTrade(db, id, notDisputed, decided);
+    if (out.error) return fail(out.error, out.status);
+    await notifyUser(db, out.trade.agentId, {
+      type: "merchant", title: "An admin confirmed the player paid",
+      body: `The ${formatUsd(out.trade.amount)} deposit from ${out.trade.senderName || "the player"} is complete.`, url: `/trade/${id}`,
+    });
+    return NextResponse.json({ ok: true });
+  }
+
+  const out = await onTrade(db, id, async (tx, t, tradeRef) => {
+    const refused = notDisputed(t);
+    if (refused) return refused;
+    const agentRef = db.collection("agents").doc(t.agentId);
+    if (!(await tx.get(agentRef)).exists) return { error: "Agent profile not found.", status: 404 };
+    const refundC = cents(t.amount) + cents(t.fee || t.feeCharged || 0);
+    const now = FV().serverTimestamp();
+    tx.update(agentRef, { agent_balance: FV().increment(toDollars(refundC)) });
+    tx.update(tradeRef, {
+      status: "cancelled", cancelledAt: now, cancelledBy: "admin", declineReason: "Player didn't pay", ...decided,
+      refunded: true, refundedAt: now, refundTarget: "agent", refundAmount: toDollars(refundC),
+    });
+    return { trade: t, refunded: toDollars(refundC) };
+  });
+  if (out.error) return fail(out.error, out.status);
+  const t = out.trade;
+  await Promise.all([
+    recordInvalidDeposit(db, t.senderId, { sourceId: `trade_${id}`, what: `a ${formatUsd(t.amount)} deposit with ${t.agentName || "an agent"} left unpaid` }),
+    notifyUser(db, t.senderId, {
+      type: "warning", title: "Deposit cancelled: not paid",
+      body: `An admin checked: ${t.agentName || "the agent"} didn't receive your ${formatUsd(t.amount)}. Unpaid requests can lock deposits for 48 hours.`,
+      url: `/trade/${id}`,
+    }),
+    notifyUser(db, t.agentId, {
+      type: "merchant", title: "Unpaid deposit refunded",
+      body: `An admin agreed ${t.senderName || "the player"} didn't pay. ${formatUsd(out.refunded)} is back in your agent balance.`, url: `/trade/${id}`,
+    }),
+  ]);
   return NextResponse.json({ ok: true, refunded: out.refunded });
 }
 
@@ -508,7 +589,7 @@ async function agentView(db, caller, params) {
     presenceOf(db, [t.agentId]),
   ]);
   const a = agent.data() || {};
-  const showBank = t.senderId === caller.uid && t.type === "deposit" && ["acknowledged", "completed"].includes(t.status);
+  const showBank = t.senderId === caller.uid && t.type === "deposit" && ["acknowledged", "disputed", "completed"].includes(t.status);
   return NextResponse.json({
     name: a.full_name || t.agentName || "Agent", country: t.country || a.country || "",
     ...(showBank ? { bank: { bankName: a.bankName || "", accountName: a.accountName || "", accountNumber: a.accountNumber || "" } } : {}),
@@ -593,7 +674,7 @@ export async function GET(req) {
 }
 
 const ACTIONS = {
-  create, accept, decline, confirm, expire, markPaid, notPaid, rate, staffCancel, staffRefund,
+  create, accept, decline, confirm, expire, markPaid, notPaid, rate, staffCancel, staffRefund, staffResolve,
   agentTopup: (db, caller, body) => moveAgentBalance(db, caller, body.amount, true),
   agentWithdraw: (db, caller, body) => moveAgentBalance(db, caller, body.amount, false),
 };
