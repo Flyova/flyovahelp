@@ -51,6 +51,7 @@ function byDay(messages) {
  * plays the coins-sent animation over the list; `onBurstDone` clears it. Group
  * activity ("@ade joined the group", kind "system") shows as a small centred line;
  * when `canDelete` allows it (group admins), tapping the line offers to remove it.
+ * `notice` (the safety caution) sits above the first message.
  */
 export default function ChatMessages({
   messages,
@@ -79,6 +80,7 @@ export default function ChatMessages({
   onBurstDone,
   unreadFromId = null,
   focus = null,
+  notice = null,
 }) {
   const listRef = useRef(null);
   const atBottomRef = useRef(true);
@@ -176,10 +178,12 @@ export default function ChatMessages({
       <div ref={listRef} onScroll={onScroll} className="chat-wallpaper h-full overflow-y-auto overscroll-contain px-2 sm:px-4 md:px-8 pb-3">
         {loading && <p className="text-center text-xs text-white/40 pt-8">Loading messages…</p>}
         {!loading && !messages.length && (
-          <div className="h-full flex items-center justify-center">
+          <div className="min-h-full flex flex-col items-center justify-center gap-1 py-4">
+            {notice}
             <p className="chat-pop text-center text-[13px] text-white/60 bg-black/25 backdrop-blur rounded-2xl px-5 py-3 max-w-xs">{emptyText}</p>
           </div>
         )}
+        {!loading && messages.length > 0 && notice}
 
         {byDay(messages).map((day) => (
           <section key={day.key} className="relative">

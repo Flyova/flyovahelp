@@ -15,6 +15,7 @@ import ChatComposer from "@/components/chat/ChatComposer";
 import PinnedBar from "@/components/chat/PinnedBar";
 import MessageMenu from "@/components/chat/MessageMenu";
 import ChatSearchSheet from "@/components/chat/ChatSearchSheet";
+import ChatCaution from "@/components/chat/ChatCaution";
 
 const FRESH_MS = 800; // messages that arrived this recently animate in
 const MENU_WIDTH = 228;
@@ -401,6 +402,7 @@ export default function ConversationThread({
         onBurstDone={clearBurst}
         unreadFromId={unreadFromId}
         focus={focus}
+        notice={lost ? null : <ChatCaution group={isGroup} />}
       />
 
       {closed ? (
