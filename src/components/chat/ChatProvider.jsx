@@ -129,6 +129,7 @@ export function ChatProvider({ children }) {
   const [identities, setIdentities] = useState([]);
   const [identitiesLoaded, setIdentitiesLoaded] = useState(false);
   const [usernamePrice, setUsernamePrice] = useState(null); // what one more username costs ($, 0 = free)
+  const [usernameFree, setUsernameFree] = useState(null); // why it's free (lib/chat usernameFree), or null
   const [active, setActive] = useState(""); // usernameLower you post and start chats as
   const [allConvos, setAllConvos] = useState([]); // every conversation the account can read
   const [convosLoaded, setConvosLoaded] = useState(false);
@@ -170,6 +171,7 @@ export function ChatProvider({ children }) {
     setIdentities(items);
     setIdentitiesLoaded(true);
     if (typeof d.nextPrice === "number") setUsernamePrice(d.nextPrice);
+    setUsernameFree(d.free || null);
     setActive((cur) => (cur && items.some((i) => i.usernameLower === cur) ? cur : items.find((x) => x.isDefault)?.usernameLower || items[0]?.usernameLower || ""));
   }, []);
 
@@ -625,7 +627,7 @@ export function ChatProvider({ children }) {
   const convosLoading = !identitiesLoaded || (identities.length > 0 && !convosLoaded);
 
   const value = useMemo(() => ({
-    uid, identities, identitiesLoaded, active, selectIdentity, refreshIdentities, createUsername, usernamePrice,
+    uid, identities, identitiesLoaded, active, selectIdentity, refreshIdentities, createUsername, usernamePrice, usernameFree,
     convos, myConvos, convosLoading, blockedNames, myNameIn, typingIn, unread, unreadByName, chatState,
     openIds, setOpenId,
     err, setErr, notice, flashNotice,
@@ -634,7 +636,7 @@ export function ChatProvider({ children }) {
     updateChatState, soundOn, toneFor, presence, presenceNow,
     settingsFor, updateSettings, settingsLoaded, settingsName, setSettingsName: setSettingsChoice,
     archiveChat, pinChat, deleteChat, removeChat, isDeletedForMe, ask, confirmAction, needUsername,
-  }), [uid, identities, identitiesLoaded, active, selectIdentity, myConvos, unreadByName, coinsOf, refreshIdentities, createUsername, usernamePrice, archiveChat, pinChat, deleteChat, isDeletedForMe, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, notice, flashNotice, openProfile, messagePrivately, blockUser, unblockUser, reportUser, coins, openCoinWallet, sendCoins, updateChatState, soundOn, toneFor, presence, presenceNow, settingsFor, updateSettings, settingsLoaded, settingsName, removeChat, ask, confirmAction, needUsername]);
+  }), [uid, identities, identitiesLoaded, active, selectIdentity, myConvos, unreadByName, coinsOf, refreshIdentities, createUsername, usernamePrice, usernameFree, archiveChat, pinChat, deleteChat, isDeletedForMe, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, notice, flashNotice, openProfile, messagePrivately, blockUser, unblockUser, reportUser, coins, openCoinWallet, sendCoins, updateChatState, soundOn, toneFor, presence, presenceNow, settingsFor, updateSettings, settingsLoaded, settingsName, removeChat, ask, confirmAction, needUsername]);
 
   // Whose coins the open coin sheet uses: the wallet's username, or who you send as.
   const walletName = coinSheet?.name || active;

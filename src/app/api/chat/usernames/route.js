@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { getAdminDb, admin } from "@/lib/firebaseAdmin";
-import { norm, isValidUsername, monthsSince, usernameCharge } from "@/lib/chat";
+import { norm, isValidUsername, monthsSince, usernameCharge, usernameFree } from "@/lib/chat";
 import { getCaller } from "@/lib/apiAuth";
 import { moveAccountCoins } from "@/lib/coinWallets";
 import { releasedUsernameCount, releaseUsername } from "@/lib/chatRelease";
+import { recordPurchase } from "@/lib/purchases";
 
 const unauthorized = () => NextResponse.json({ error: "Sign in again to continue." }, { status: 401 });
 
@@ -11,9 +12,9 @@ const unauthorized = () => NextResponse.json({ error: "Sign in again to continue
 // verified ID token; any uid in the query/body is ignored (it used to be trusted,
 // which let anyone create usernames on — and charge — someone else's wallet).
 
-// GET /api/chat/usernames -> { items, nextPrice }: the usernames the signed-in account can
+// GET /api/chat/usernames -> { items, nextPrice, free }: the usernames the signed-in account can
 // chat as (its own, plus other accounts' it has logged in to: `linked: true`), and
-// what one more username would cost (0 = free). Also moves the old account-wide
+// what one more username would cost (0 = free; `free` says why, lib/chat usernameFree). Also moves the old account-wide
 // coin balance to the main username, the first time.
 export async function GET(req) {
   try {
@@ -42,17 +43,17 @@ export async function GET(req) {
       releasedUsernameCount(db, uid),
     ]);
     const u = userSnap.exists ? userSnap.data() : {};
-    const nextPrice = usernameCharge({
+    const pricing = {
       owned: owned.size + released, ageMonths: monthsSince(u.createdAt), isAgent: !!(u.isAgent || agentSnap.exists), freeUsernameUsed: u.freeUsernameUsed,
-    });
-    return NextResponse.json({ items, nextPrice });
+    };
+    return NextResponse.json({ items, nextPrice: usernameCharge(pricing), free: usernameFree(pricing) });
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
 
 // POST /api/chat/usernames { username } — priced by usernameCharge (lib/chat): the
-// first is free, then $1 from the wallet; accounts 8+ months old get 100 free, agents 5.
+// first is free, then $1 from the wallet; accounts 8+ months old get 10 more free, agents 3.
 export async function POST(req) {
   try {
     const caller = await getCaller(req);
@@ -76,7 +77,8 @@ export async function POST(req) {
     const live = (await db.collection("usernames").where("uid", "==", uid).get()).size;
     const owned = live + (await releasedUsernameCount(db, uid)); // deleted names still count toward the price
     const isAgent = !!(u.isAgent || (await db.collection("agents").doc(uid).get()).exists);
-    const charge = usernameCharge({ owned, ageMonths: monthsSince(u.createdAt), isAgent, freeUsernameUsed: u.freeUsernameUsed });
+    const pricing = { owned, ageMonths: monthsSince(u.createdAt), isAgent, freeUsernameUsed: u.freeUsernameUsed };
+    const charge = usernameCharge(pricing);
     // One transaction: the name check, a fresh balance check, the charge and the
     // records commit together, so two buyers can't both get a name and a
     // concurrent stake can't be overwritten by a stale wallet value.
@@ -97,12 +99,14 @@ export async function POST(req) {
         username: String(username).trim(), uid, bio: "", status: "",
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
+      const txRef = charge > 0 ? db.collection("users").doc(uid).collection("transactions").doc() : null;
+      recordPurchase(tx, db, { kind: "username", uid, amount: charge, free: usernameFree(pricing)?.reason || null, username: lower, item: `@${lower}`, txId: txRef?.id });
       if (charge > 0) {
         tx.update(userRef, {
           wallet: admin.firestore.FieldValue.increment(-charge),
           freeUsernameUsed: true,
         });
-        tx.set(db.collection("users").doc(uid).collection("transactions").doc(), {
+        tx.set(txRef, {
           type: "username_purchase", category: "finance", status: "completed", amount: -charge, username: lower,
           title: `Bought chat username @${lower}`, note: `Username @${username}`,
           createdAt: admin.firestore.FieldValue.serverTimestamp(), timestamp: admin.firestore.FieldValue.serverTimestamp(),

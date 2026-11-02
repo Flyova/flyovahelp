@@ -6,8 +6,8 @@ import { SettingsPage } from "@/components/chat/SettingsList";
 const RULES = [
   "You can create or change a username on your account only once for free.",
   `Any other username on your account costs $${USERNAME_PRICE}, paid from your wallet.`,
-  `Accounts older than ${OLD_ACCOUNT_MONTHS} months can create up to ${FREE_USERNAMES_OLD_ACCOUNT} usernames for free.`,
-  `Agents can create up to ${FREE_USERNAMES_AGENT} usernames for free.`,
+  `Accounts older than ${OLD_ACCOUNT_MONTHS} months can create ${FREE_USERNAMES_OLD_ACCOUNT} more usernames for free.`,
+  `Agents can create ${FREE_USERNAMES_AGENT} more usernames for free.`,
   "A username belongs to the account that created it. To chat as another account's username, log in to it with its password in Chat settings.",
 ];
 

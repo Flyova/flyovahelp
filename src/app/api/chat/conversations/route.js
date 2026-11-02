@@ -10,6 +10,7 @@ import { chatSettingsFor } from "@/lib/chatSettings";
 import { cents, formatUsd, isBanned } from "@/lib/money";
 import { groupInviteRef } from "@/lib/groupInvites";
 import { sendPushToUsers } from "@/lib/push";
+import { recordPurchase } from "@/lib/purchases";
 
 // POST /api/chat/conversations — the only way conversations are created or joined.
 // Firestore rules forbid clients from creating conversations or changing their
@@ -149,10 +150,12 @@ async function createGroup(db, caller, { as, name, description, visibility }) {
       return { error: `Creating a group costs ${formatUsd(price)} from your main wallet; you have ${formatUsd(user.wallet)}.`, status: 402 };
     }
     tx.update(userRef, { wallet: FV().increment(-price) });
-    tx.set(userRef.collection("transactions").doc(), {
+    const txRef = userRef.collection("transactions").doc();
+    tx.set(txRef, {
       title: "Group Created", amount: -price, type: "group_create", status: "completed", timestamp: FV().serverTimestamp(),
       description: `${groupName} (as @${me.lower})`, convoId: ref.id,
     });
+    recordPurchase(tx, db, { kind: "group", uid: caller.uid, amount: price, username: me.lower, item: groupName, convoId: ref.id, txId: txRef.id });
     const preview = activity(tx, db, ref.id, `@${me.lower} created the group`);
     tx.set(ref, {
       type: "group",

@@ -9,11 +9,11 @@ import { SettingsButton, SettingsInput, SettingsIntro, SettingsMessage, Settings
 /** Add (free) or buy another chat username. */
 export default function AddUsernamePage() {
   const router = useRouter();
-  const { createUsername, usernamePrice, flashNotice } = useChat();
+  const { createUsername, usernamePrice, usernameFree, flashNotice } = useChat();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const offer = usernameOffer(usernamePrice);
+  const offer = usernameOffer(usernamePrice, usernameFree);
 
   const add = async (e) => {
     e.preventDefault();
@@ -21,10 +21,11 @@ export default function AddUsernamePage() {
     if (!username || busy) return;
     setBusy(true);
     setError("");
+    const price = usernamePrice; // the server charges what it offered (same rule, lib/chat usernameCharge)
     const problem = await createUsername(username);
     setBusy(false);
     if (problem) return setError(problem);
-    flashNotice(`@${username} is ready to use.`);
+    flashNotice(price > 0 ? `@${username} is ready to use. $${price} was taken from your wallet.` : `@${username} is ready to use (free).`);
     router.replace("/chat/settings/accounts");
   };
 

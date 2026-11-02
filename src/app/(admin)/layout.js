@@ -10,7 +10,7 @@ import {
   LayoutDashboard, ArrowDownCircle, UserCheck, Wallet,
   ArrowUpCircle, Send, Delete, Users, History, Trophy,
   MessageCircle, X, LogOut, Menu, Loader2, FileText, CheckCircle2, Phone, Bell,
-  TrendingUp, MessagesSquare, Coins, Activity
+  TrendingUp, MessagesSquare, Coins, Activity, ShoppingBag
 } from "lucide-react";
 
 export default function AdminLayout({ children }) {
@@ -155,6 +155,7 @@ export default function AdminLayout({ children }) {
       { name: "Support", icon: MessageCircle, path: "/admin/support" },
       { name: "Chat Room", icon: MessagesSquare, path: "/admin/chat-room" },
       { name: "Chat Coins", icon: Coins, path: "/admin/chat-coins" },
+      { name: "Purchases", icon: ShoppingBag, path: "/admin/purchases" },
       { name: "Chat Activity", icon: Activity, path: "/admin/chat-activity" },
       { name: "Testimonials", icon: CheckCircle2, path: "/admin/testimonials" },
       { name: "Send Jackpot", icon: Trophy, path: "/admin/jackpot" },
