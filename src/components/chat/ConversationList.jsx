@@ -5,6 +5,9 @@ import Avatar, { DeletedAvatar } from "@/components/Avatar";
 import { GroupAvatar } from "@/components/chat/GroupForm";
 import MessageMenu from "@/components/chat/MessageMenu";
 import { departedFrom, typingLabel } from "@/lib/chat";
+import { previewOf } from "@/lib/e2e";
+import { useE2EDevice } from "@/lib/e2eClient";
+import { useChat } from "@/components/chat/ChatProvider";
 
 const MENU_WIDTH = 228;
 
@@ -51,6 +54,7 @@ export default function ConversationList({
   className = "",
 }) {
   const [menu, setMenu] = useState(null); // { convo, at }
+  const device = useE2EDevice(useChat().uid); // opens encrypted private chats' previews (lib/e2e)
 
   return (
     <div className={`bg-[#142036] rounded-2xl border border-white/5 flex flex-col min-h-0 ${className}`}>
@@ -95,7 +99,7 @@ export default function ConversationList({
                   </span>
                   <span className="flex items-center justify-between gap-2">
                     <span className={`min-w-0 truncate text-xs ${isBlocked ? "text-red-300/80" : typing ? "text-[#E0708C]" : count ? "text-white/85 font-semibold" : "text-white/45"}`}>
-                      {gone ? "Deleted account" : isBlocked ? "Blocked" : typing || c.lastMessage || (group ? memberLabel((c.participants || []).length) : "No messages yet")}
+                      {gone ? "Deleted account" : isBlocked ? "Blocked" : typing || previewOf(c, device) || (group ? memberLabel((c.participants || []).length) : "No messages yet")}
                     </span>
                     {count > 0 && (
                       <span className="shrink-0 min-w-5 h-5 px-1.5 rounded-full bg-[#8B1E3F] text-[11px] font-black flex items-center justify-center" aria-label={`${count} unread`}>

@@ -138,6 +138,15 @@ export default function AdminChatActivity() {
                       <p className="text-[11px] font-bold text-slate-500 mt-0.5">
                         {r.reason || "No reason"}{r.messageId ? " · about a message" : ""}{r.room ? " · in the Chatroom" : r.convoId ? " · in a chat" : ""}
                       </p>
+                      {r.messageText && (
+                        <p className="text-[11px] text-slate-600 mt-1 px-2.5 py-1.5 rounded-lg bg-slate-50 break-words line-clamp-4">
+                          “{r.messageText}”
+                          {r.encrypted && <span className="block text-[9px] font-black uppercase text-amber-600 mt-0.5">Sent in by the reporter · end-to-end encrypted chat, StraWins can&apos;t check it</span>}
+                        </p>
+                      )}
+                      {r.encrypted && !r.messageText && (
+                        <p className="text-[9px] font-black uppercase text-amber-600 mt-0.5">Encrypted message · the reporter&apos;s device couldn&apos;t read it</p>
+                      )}
                       <p className="text-[10px] font-bold text-slate-400 mt-0.5">{when(r.createdAt)}{r.action ? ` · ${r.action}` : ""}</p>
                       {restrictedById[owners[r.reported]] && (
                         <p className="text-[9px] font-black uppercase text-rose-600 mt-0.5">{chatRestrictionLabel(restrictedById[owners[r.reported]])}</p>

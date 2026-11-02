@@ -65,7 +65,7 @@ async function chatMessage(db, caller, { convoId, messageId }) {
       chatSettingsFor(db, [...new Map(targets.map((t) => [t.name, { name: t.name, uid: t.owner }])).values()]),
     ]);
     // Being @mentioned always makes a sound.
-    const mentioned = new Set(mentionsIn(msg.text, 20));
+    const mentioned = new Set(msg.enc ? [] : mentionsIn(msg.text, 20));
     states.forEach((snap, i) => {
       const t = targets[i];
       const sounds = settings.get(t.name)?.sounds || {};
@@ -84,7 +84,8 @@ async function chatMessage(db, caller, { convoId, messageId }) {
   const mentionTitle = isGroup ? `@${msg.sender} mentioned you in ${convo.groupName || "a group"}` : `@${msg.sender} mentioned you`;
   for (const t of targets) if (t.mentioned) t.title = mentionTitle;
   const title = isGroup ? convo.groupName || "New group message" : `@${msg.sender}`;
-  const body = isGroup ? `@${msg.sender}: ${msg.text || ""}` : msg.text || "New message";
+  // An end-to-end encrypted message (lib/e2e) can't be read here: it just says there's one.
+  const body = msg.enc ? "New message" : isGroup ? `@${msg.sender}: ${msg.text || ""}` : msg.text || "New message";
   const sent = await sendPushToUsers(targets, { title, body, data: { kind: "chat", convoId }, pref: isGroup ? "group" : "message" });
   // Notifications page: each chat's latest message, one entry per conversation.
   await Promise.all([...new Map(targets.map((t) => [t.uid, t])).values()].map((t) => notifyUser(db, t.uid, {

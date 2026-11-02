@@ -17,6 +17,8 @@ import MessageMenu from "@/components/chat/MessageMenu";
 import ChatSearchSheet from "@/components/chat/ChatSearchSheet";
 import ChatCaution from "@/components/chat/ChatCaution";
 import useChatSanctions from "@/components/chat/useChatSanctions";
+import { ENCRYPTED_TEXT, readable } from "@/lib/e2e";
+import { chatDevices, sealForChat, useE2EDevice } from "@/lib/e2eClient";
 
 const FRESH_MS = 800; // messages that arrived this recently animate in
 const MENU_WIDTH = 228;
@@ -41,6 +43,10 @@ const lastWhere = (list, test) => {
  * `blockedByMe` = { name, onUnblock } when you've blocked the other person in a
  * private chat: you can't write to them until you unblock. A closed private chat
  * (the other player deleted their username) stays readable but takes no replies.
+ *
+ * A private chat is end-to-end encrypted once everyone in it has a device key
+ * (convo.e2e, lib/e2e): messages are sealed here before they're written and opened
+ * here when they arrive.
  *
  * While it's open and on screen it records how far you've read (privately for
  * unread counts, and on the conversation for read receipts if you share them)
@@ -78,6 +84,8 @@ export default function ConversationThread({
   const inputRef = useRef(null);
   const { uid, chatState, typingIn, soundOn, toneFor, settingsFor, presenceNow } = useChat();
   const [memberPresence, setMemberPresence] = useState({}); // group members' online status
+  const device = useE2EDevice(isGroup ? null : uid); // this browser's key for encrypted private chats
+  const encrypted = !isGroup && convo?.e2e === true;
   const [searching, setSearching] = useState(false);
   const [focus, setFocus] = useState(null); // { id } of a message to scroll to (from search)
 
@@ -141,9 +149,18 @@ export default function ConversationThread({
     );
   }, [convoId]);
 
+  // Encrypted messages, opened with this browser's key.
+  const opened = useMemo(() => (isGroup ? msgs : msgs.map((m) => readable(m, device))), [msgs, isGroup, device]);
+  // Opening a private chat asks for its keys: that's also when it turns encrypted,
+  // once everyone in it has a device key.
+  const haveConvo = !!convo;
+  useEffect(() => {
+    if (!isGroup && uid && haveConvo) chatDevices(uid, convoId).catch(() => {});
+  }, [isGroup, uid, convoId, haveConvo]);
+
   // A chat you deleted shows only what was said after you deleted it.
   const clearedMs = chatState.cleared[convoId]?.toMillis?.() ?? 0;
-  const shown = useMemo(() => (clearedMs ? msgs.filter((m) => m.pending || messageMillis(m) > clearedMs) : msgs), [msgs, clearedMs]);
+  const shown = useMemo(() => (clearedMs ? opened.filter((m) => m.pending || messageMillis(m) > clearedMs) : opened), [opened, clearedMs]);
   const blockedHere = !!convo?.blocked?.includes(me);
   // A locked group takes messages only from its admins.
   const lockedOut = isGroup && !!convo && !canPostInGroup(convo, me);
@@ -231,6 +248,18 @@ export default function ConversationThread({
   // You're here, so you count as online; everyone else by their online status.
   const onlineCount = isGroup ? 1 + members.filter((p) => p !== me && presenceOf(memberPresence[p], presenceNow)?.online).length : 0;
 
+  // The sealed form of a private chat message once the chat is encrypted, null
+  // while it isn't. Throws only when it is and sealing failed.
+  const sealMessage = async (payload, opts) => {
+    if (isGroup) return null;
+    try {
+      return await sealForChat(uid, convoId, payload, opts);
+    } catch (e) {
+      if (encrypted) throw e;
+      return null;
+    }
+  };
+
   const send = async () => {
     onError("");
     if (!me || cantSend) return;
@@ -245,9 +274,10 @@ export default function ConversationThread({
       setEditing(null);
       // Sending the text unchanged just leaves edit mode: no "edited" label.
       if (body === String(target.text || "").trim()) return;
-      await updateDoc(doc(db, "conversations", convoId, "messages", target.id), {
-        text: body, editedAt: serverTimestamp(),
-      }).catch((e) => {
+      await sealMessage({ t: body, ...(target.replyTo && { r: String(target.replyTo.text || "") }) }).then((enc) => updateDoc(
+        doc(db, "conversations", convoId, "messages", target.id),
+        enc ? { text: ENCRYPTED_TEXT, enc, editedAt: serverTimestamp() } : { text: body, editedAt: serverTimestamp() }
+      )).catch((e) => {
         setEditing(target);
         setText(body);
         onError(`Could not save the edit: ${e.message}`);
@@ -255,37 +285,57 @@ export default function ConversationThread({
       return;
     }
     const quoted = replyTo;
-    const quote = quoted ? { replyTo: { id: quoted.id, sender: quoted.sender, text: String(quoted.text || "").slice(0, 140) } } : {};
+    const quoteText = quoted ? String(quoted.text || "").slice(0, 140) : "";
     setReplyTo(null);
+    // In an encrypted chat the quote travels sealed with the message, not beside it.
+    const write = (enc) => addDoc(collection(db, "conversations", convoId, "messages"), enc ? {
+      sender: me, text: ENCRYPTED_TEXT, enc, createdAt: serverTimestamp(), deletedForEveryone: false,
+      ...(quoted && { replyTo: { id: quoted.id, sender: quoted.sender, text: "" } }),
+    } : {
+      sender: me, text: body, createdAt: serverTimestamp(), deletedForEveryone: false,
+      ...(quoted && { replyTo: { id: quoted.id, sender: quoted.sender, text: quoteText } }),
+    });
+    const payload = { t: body, ...(quoted && { r: quoteText }) };
     let msgRef;
+    let enc = null;
     try {
-      msgRef = await addDoc(collection(db, "conversations", convoId, "messages"), {
-        sender: me, text: body, createdAt: serverTimestamp(), deletedForEveryone: false, ...quote,
-      });
+      enc = await sealMessage(payload);
+      try {
+        msgRef = await write(enc);
+      } catch (e) {
+        // The chat may have turned encrypted a moment ago: seal it and try once more.
+        if (enc || isGroup || e?.code !== "permission-denied") throw e;
+        enc = await sealMessage(payload, { fresh: true });
+        if (!enc) throw e;
+        msgRef = await write(enc);
+      }
     } catch (e) {
       setReplyTo(quoted);
       setText(body);
       return onError(`Could not send: ${e.message}`);
     }
-    await updateDoc(doc(db, "conversations", convoId), {
-      lastMessage: body.slice(0, 120), lastMessageAt: serverTimestamp(),
-    }).catch(() => null);
+    await updateDoc(doc(db, "conversations", convoId), enc
+      ? { lastMessage: ENCRYPTED_TEXT, lastMessageEnc: enc, lastMessageAt: serverTimestamp() }
+      : { lastMessage: body.slice(0, 120), lastMessageAt: serverTimestamp() }
+    ).catch(() => null);
     // Fan out minimal notification docs; .catch on each write so one failure can't skip the push.
     const others = (convo.participants || []).filter((p) => p !== me);
     await Promise.all(others.map((p) => addDoc(collection(db, "notifications"), {
       toUsername: p, fromUsername: me, kind: isGroup ? "group" : "dm",
       title: isGroup ? `New message in ${convo.groupName || "your group"}` : `New message from @${me}`,
-      body: body.slice(0, 120), convoId, read: false, createdAt: serverTimestamp(),
+      body: enc ? "New message" : body.slice(0, 120), convoId, read: false, createdAt: serverTimestamp(),
     }).catch(() => null)));
     notifyPush({ event: "chat_message", convoId, messageId: msgRef.id });
   };
 
   const startReply = (m) => {
+    if (m.noKey) return onError("This message can't be read on this device, so it can't be quoted.");
     setEditing(null);
     setReplyTo(m);
     inputRef.current?.focus();
   };
   const startEdit = (m) => {
+    if (m.noKey) return onError("This message can't be read on this device, so it can't be edited here.");
     setReplyTo(null);
     setEditing(m);
     setText(m.text);
@@ -300,7 +350,7 @@ export default function ConversationThread({
   const deleteMessage = async (m) => {
     if (m.kind === "system" || m.sender !== me) return onModerate?.(m);
     await updateDoc(doc(db, "conversations", convoId, "messages", m.id), {
-      text: "— message deleted —", deletedForEveryone: true,
+      text: "— message deleted —", deletedForEveryone: true, ...(m.enc && { enc: deleteField() }),
     }).catch((e) => onError(`Could not delete: ${e.message}`));
   };
 
@@ -405,7 +455,7 @@ export default function ConversationThread({
         onBurstDone={clearBurst}
         unreadFromId={unreadFromId}
         focus={focus}
-        notice={lost ? null : <ChatCaution group={isGroup} />}
+        notice={lost ? null : <ChatCaution group={isGroup} encrypted={encrypted} />}
       />
 
       {closed ? (
@@ -459,6 +509,7 @@ export default function ConversationThread({
           presenceNow={presenceNow}
           messages={shown}
           clearedMs={clearedMs}
+          open={isGroup ? undefined : (m) => readable(m, device)}
           onJump={(id) => {
             setSearching(false);
             setFocus({ id });
