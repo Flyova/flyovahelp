@@ -4,7 +4,7 @@ import { getCaller } from "@/lib/apiAuth";
 import { liveUsername, ownedUsername, usernameUids } from "@/lib/chat";
 import { lockIfReported } from "@/lib/chatLock";
 
-// POST /api/chat/reports { as, reported, reason, room?, convoId?, messageId?, messageText?, from? } -> { ok }
+// POST /api/chat/reports { as, reported, reason, room?, convoId?, messageId?, messageText?, encrypted?, from? } -> { ok }
 // Reporting a player in Chats. Reports are made here (the rules don't let apps write
 // chat_reports) so each one carries the accounts on both sides: reporterUid (the
 // caller) and reportedUid (who owns the reported username). Admins read them on
@@ -34,6 +34,8 @@ export async function POST(req) {
     if (ID.test(String(body.convoId || ""))) extra.convoId = String(body.convoId);
     if (ID.test(String(body.messageId || ""))) extra.messageId = String(body.messageId);
     if (typeof body.messageText === "string") extra.messageText = body.messageText.slice(0, 500);
+    // From an end-to-end encrypted chat: the text (if any) is what the reporter's device sent in.
+    if (body.encrypted === true && extra.convoId) extra.encrypted = true;
     if (body.from === "profile") extra.from = "profile";
 
     const rateRef = db.collection(RATE_COLLECTION).doc(caller.uid);

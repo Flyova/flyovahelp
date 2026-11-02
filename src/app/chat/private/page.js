@@ -115,7 +115,11 @@ export default function PrivateChatsPage() {
             ] : []}
             onBack={() => openChat(null)}
             onError={setErr}
-            onReport={gone ? undefined : (m) => reportUser(m.sender)}
+            // The reporter's device sends in the message text: an encrypted chat's (lib/e2e)
+            // is unreadable to StraWins otherwise.
+            onReport={gone ? undefined : (m) => reportUser(m.sender, {
+              convoId: openId, messageId: m.id, ...(!m.noKey && { messageText: String(m.text || "").slice(0, 500) }), ...(m.enc && { encrypted: true }),
+            })}
             onOpenProfile={gone ? undefined : openProfile}
             blockedByMe={iBlocked ? { name: other, onUnblock: () => unblockUser(other) } : null}
           />

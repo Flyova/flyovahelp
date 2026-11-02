@@ -36,8 +36,9 @@ function Highlight({ text, q }) {
  * and its messages. Messages already on screen are searched at once; "Search older
  * messages" reads further back. Tapping a message on screen jumps to it
  * (`onJump(id)`); a person opens their profile. `convoId` "room" = the Chatroom.
+ * `open(message)` decrypts an encrypted private chat's older messages (lib/e2e).
  */
-export default function ChatSearchSheet({ convoId, title, isGroup, members, me, presence = {}, presenceNow, messages, clearedMs = 0, peopleLabel = "Members", onJump, onOpenProfile, onClose }) {
+export default function ChatSearchSheet({ convoId, title, isGroup, members, me, presence = {}, presenceNow, messages, clearedMs = 0, open, peopleLabel = "Members", onJump, onOpenProfile, onClose }) {
   const [q, setQ] = useState("");
   const [older, setOlder] = useState({ items: [], loading: false, done: false });
   const term = q.trim().toLowerCase();
@@ -47,7 +48,7 @@ export default function ChatSearchSheet({ convoId, title, isGroup, members, me, 
   const pool = [...messages, ...older.items];
   const hits = term.length >= MIN_QUERY
     ? pool
-      .filter((m) => m.kind !== "system" && !isDeleted(m) && String(m.text || "").toLowerCase().includes(term))
+      .filter((m) => m.kind !== "system" && !isDeleted(m) && !m.noKey && String(m.text || "").toLowerCase().includes(term))
       .sort((a, b) => messageMillis(b) - messageMillis(a))
       .slice(0, MAX_RESULTS)
     : [];
@@ -71,6 +72,7 @@ export default function ChatSearchSheet({ convoId, title, isGroup, members, me, 
       ));
       const items = snap.docs
         .map((d) => ({ id: d.id, ...d.data() }))
+        .map((m) => (open ? open(m) : m)) // encrypted private chats are searched on this device, opened
         .filter((m) => !clearedMs || messageMillis(m) > clearedMs);
       setOlder((o) => ({ items: [...o.items, ...items], loading: false, done: snap.size < OLDER_PAGE }));
     } catch {

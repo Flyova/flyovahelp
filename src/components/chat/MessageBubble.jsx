@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { BadgeCheck, Ban, Clock3, Coins, CornerUpLeft, Crown, MoreHorizontal, Pencil, Shield, Users } from "lucide-react";
+import { BadgeCheck, Ban, Clock3, Coins, CornerUpLeft, Crown, LockKeyhole, MoreHorizontal, Pencil, Shield, Users } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import { formatCoins } from "@/lib/chat";
 
@@ -258,6 +258,11 @@ export default function MessageBubble({
           {deleted ? (
             <p className="flex items-center gap-1.5 text-[13.5px] italic pr-12">
               <Ban size={13} /> Message deleted
+            </p>
+          ) : m.noKey ? (
+            // Encrypted, and this browser can't open it (lib/e2e).
+            <p className="flex items-center gap-1.5 text-[13.5px] italic opacity-70 pr-12">
+              <LockKeyhole size={13} className="shrink-0" /> {m.text}
             </p>
           ) : coinCard ? (
             <p className="flex items-center gap-1.5 pr-[60px] text-[13.5px] leading-[1.38] whitespace-nowrap">

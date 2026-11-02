@@ -336,6 +336,38 @@ service cloud.firestore {
       );
     }
 
+    // End-to-end encrypted private chats (lib/e2e): /api/chat/keys sets
+    // conversations.e2e once everyone in the chat has a device key, and from then on
+    // every message is sealed. Its `text` is this placeholder and any quote travels
+    // inside the seal; anywhere else, messages are plain text.
+    function validEnc(enc) {
+      return enc is map
+        && enc.keys().hasOnly(['v', 'ct', 'n', 'epk', 'keys'])
+        && enc.v == 1
+        && enc.ct is string && enc.ct.size() > 0 && enc.ct.size() <= 12000
+        && enc.n is string && enc.n.size() == 32
+        && enc.epk is string && enc.epk.size() == 44
+        && enc.keys is map && enc.keys.size() > 0 && enc.keys.size() <= 60;
+    }
+
+    function sealedRight(convoId, data) {
+      return chatConvo(convoId).get('e2e', false) == true
+        ? 'enc' in data && validEnc(data.enc)
+          && data.text == 'Encrypted message. Update StraWins to read it.'
+          && (!('replyTo' in data) || data.replyTo.text == '')
+        : !('enc' in data);
+    }
+
+    // The chat list's preview: an encrypted chat's is the placeholder plus the sealed message.
+    function previewSealedRight() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return resource.data.get('e2e', false) == true
+        ? !changed.hasAny(['lastMessage', 'lastMessageEnc'])
+          || (request.resource.data.lastMessage == 'Encrypted message. Update StraWins to read it.'
+            && validEnc(request.resource.data.get('lastMessageEnc', null)))
+        : !changed.hasAny(['lastMessageEnc']);
+    }
+
     // A presence change in one of a conversation's per-username maps (readAt or
     // typing) touches only the entry of `actor`, set to now or removed.
     function ownPresenceEntry(before, after, actor) {
@@ -380,7 +412,8 @@ service cloud.firestore {
       allow create, delete: if false; // server only
       allow update: if chatSignedIn()
         && request.auth.uid in resource.data.participantUids
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageAt', 'blocked', 'typing', 'readAt', 'presenceBy'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageEnc', 'lastMessageAt', 'blocked', 'typing', 'readAt', 'presenceBy'])
+        && previewSealedRight()
         && request.resource.data.get('blocked', []).hasAll(resource.data.get('blocked', []))
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['typing', 'readAt', 'presenceBy']) || ownPresenceChange());
 
@@ -394,26 +427,40 @@ service cloud.firestore {
           && !(request.resource.data.sender in chatConvo(convoId).get('blocked', []))
           && canPostIn(convoId, request.resource.data.sender)
           && chatConvo(convoId).get('closed', false) != true // the other player deleted their username
-          && request.resource.data.keys().hasOnly(['sender', 'text', 'createdAt', 'deletedForEveryone', 'replyTo'])
+          && request.resource.data.keys().hasOnly(['sender', 'text', 'createdAt', 'deletedForEveryone', 'replyTo', 'enc'])
           && validReplyQuote(request.resource.data)
+          && sealedRight(convoId, request.resource.data)
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 2000
           && request.resource.data.deletedForEveryone == false
           && request.resource.data.createdAt == request.time;
         // Only the sender may change a message: either "delete for everyone" (placeholder
-        // text) or an edit of a live message (new text + editedAt stamp).
+        // text, and the seal dropped) or an edit of a live message (new text + editedAt
+        // stamp; in an encrypted chat, a new seal).
         allow update: if ownsUsername(resource.data.sender) && (
           (
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'deletedForEveryone'])
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'deletedForEveryone', 'enc'])
             && request.resource.data.deletedForEveryone == true
             && request.resource.data.text == '— message deleted —'
+            && !('enc' in request.resource.data)
+          ) || (
+            resource.data.deletedForEveryone == false
+            && !chatRestrictedNow()
+            && resource.data.get('kind', '') != 'coins'
+            && chatConvo(convoId).get('e2e', false) == true
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'enc', 'editedAt'])
+            && request.resource.data.text == 'Encrypted message. Update StraWins to read it.'
+            && validEnc(request.resource.data.get('enc', null))
+            && request.resource.data.enc != resource.data.get('enc', null)
+            && request.resource.data.editedAt == request.time
           ) || (
             resource.data.deletedForEveryone == false
             && !chatRestrictedNow()
             && !chatLockedNow()
             && !nameLocked(resource.data.sender)
             && resource.data.get('kind', '') != 'coins' // coin cards can't be edited
+            && chatConvo(convoId).get('e2e', false) != true
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt'])
             && request.resource.data.text != resource.data.text // unchanged text isn't an edit
             && request.resource.data.text is string
@@ -477,6 +524,11 @@ service cloud.firestore {
         allow read: if chatSignedIn() && request.auth.uid == uid;
         allow write: if false;
       }
+    }
+
+    // Private-chat device keys (lib/e2e): server only (/api/chat/keys).
+    match /chat_devices/{uid} {
+      allow read, write: if false;
     }
 
     // Made through /api/chat/reports (which records both accounts and counts them toward
