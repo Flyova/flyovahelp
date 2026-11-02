@@ -236,12 +236,6 @@ export default function Settings() {
                   <ShieldCheck size={12} className="mr-1" />
                   <span className="text-[10px] font-black uppercase tracking-widest">Verified</span>
                 </div>
-                <div className="flex items-center text-white/30">
-                  <Calendar size={12} className="mr-1" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">
-                    Joined {userData?.createdAt?.toDate().toLocaleDateString() || "Today"}
-                  </span>
-                </div>
               </div>
             </div>
           </div>
