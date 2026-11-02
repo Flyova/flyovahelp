@@ -3,6 +3,7 @@ import { getAdminDb } from "@/lib/firebaseAdmin";
 import { norm } from "@/lib/chat";
 import { getCaller } from "@/lib/apiAuth";
 import { chatSettingsFor } from "@/lib/chatSettings";
+import { resolvePrivilegedRole } from "@/lib/adminAccess";
 
 const LIMIT = 8;
 const END = "";
@@ -12,7 +13,8 @@ const titleCase = (s) => s.toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (_, sep,
 // GET /api/chat/search?q=... — live suggestions while typing (2+ characters).
 // Chat usernames match by prefix; players match by name prefix, phone prefix,
 // country or referrer and are shown under the chat username you can message.
-// Indexed queries only: this runs on every (debounced) keystroke.
+// Indexed queries only: this runs on every (debounced) keystroke. Players whose account
+// is locked from Chats (lib/chat isChatLocked) aren't found, except by StraWins staff.
 export async function GET(req) {
   try {
     const caller = await getCaller(req);
@@ -30,13 +32,15 @@ export async function GET(req) {
     // A failing query (e.g. a missing index) shouldn't sink the others.
     const safe = (p) => p.catch(() => null);
 
-    const [names, byName, byPhone, byCountry, byReferrer] = await Promise.all([
+    const [names, byName, byPhone, byCountry, byReferrer, meSnap] = await Promise.all([
       safe(prefix(db.collection("usernames"), "usernameLower", q, LIMIT * 2)),
       safe(prefix(users, "fullName", titleCase(raw), 5)),
       looksLikePhone ? safe(prefix(users, "phone", `+${digits}`, 5)) : null,
       safe(users.where("country", "in", variants).limit(5).get()),
       safe(users.where("referredBy", "in", variants).limit(5).get()),
+      users.doc(caller.uid).get(),
     ]);
+    const isStaff = !!resolvePrivilegedRole(meSnap.exists ? meSnap.data().role : null, caller.email);
 
     // One row per player, under the chat username that matched (or their default one).
     const rows = new Map(); // uid -> row
@@ -81,7 +85,7 @@ export async function GET(req) {
     const items = [...rows.values()]
       .filter((r) => {
         const u = profiles.get(r.uid) || {};
-        return !u.deleted && !u.deletionRequested && !(r.match === "country" && hidesCountry.has(r.uid));
+        return !u.deleted && !u.deletionRequested && !(r.match === "country" && hidesCountry.has(r.uid)) && (isStaff || u.chatLocked !== true);
       })
       .sort((a, b) => MATCH_RANK[a.match] - MATCH_RANK[b.match] || a.usernameLower.length - b.usernameLower.length)
       .slice(0, LIMIT)

@@ -123,6 +123,31 @@ export function chatRestrictMessage(u, now = Date.now()) {
 /** Both, for the Chatroom: a restriction first, then a mute; "" when they can post. */
 export const chatRoomBlockMessage = (u, now = Date.now()) => chatRestrictMessage(u, now) || chatMuteMessage(u, now);
 
+// A lock on an account's Chats (users.chatLocked), set by an admin from Admin → Users
+// (chatLockReason "admin") or by CHAT_LOCK_REPORTS different accounts' open reports
+// (chatLockReason "reports"; only reports made since chatUnlockedAt count). None of
+// the account's usernames can send anything in Chats, even from another account logged
+// in to one (usernames/{name}.ownerChatLocked), and other players can't find, open or
+// message them. It stays until the player pays CHAT_UNLOCK_PRICE from their main wallet
+// (/api/chat/lock) or an admin lifts it. Separate from a timed restriction above.
+export const CHAT_UNLOCK_PRICE = 12;
+export const CHAT_LOCK_REPORTS = 50;
+export const isChatLocked = (u) => u?.chatLocked === true;
+/** What a locked player is told wherever they'd send something in Chats; "" when they aren't locked. */
+export function chatLockMessage(u) {
+  if (!isChatLocked(u)) return "";
+  return u.chatLockReason === "reports"
+    ? `Your account is locked from Chats because ${CHAT_LOCK_REPORTS} players reported it. Unlock it for $${CHAT_UNLOCK_PRICE} to chat again.`
+    : `An admin has locked your account from Chats. Unlock it for $${CHAT_UNLOCK_PRICE} to chat again.`;
+}
+/** For a username used from another account while its owner's account is locked. */
+export const lockedNameMessage = (name) => `@${name}'s account is locked from Chats, so no one can send messages as it.`;
+/**
+ * Why account `u` (its users doc) can't send as username `n` (its usernames doc, with
+ * `lower`) because of a lock, or "" when it can.
+ */
+export const chatLockRefusal = (u, n) => chatLockMessage(u) || (n?.ownerChatLocked ? lockedNameMessage(n.lower || n.usernameLower) : "");
+
 // The Chatroom's only admin: the chat username "strawins" (shown as STRAWINS), while
 // the account that owns it is a StraWins admin (lib/chatRoomAdmin checks that on the
 // server). Posting as it, it deletes anyone's message, pins messages and mutes players

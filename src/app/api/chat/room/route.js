@@ -3,7 +3,8 @@ import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import {
-  CHAT_MUTE_DAYS, MAX_PINNED_MESSAGES, PRESENCE_ONLINE_MS, chatRoomBlockMessage, chatSanctionLabel, containsMediaMarker, mentionsIn, ownedUsername, usernameUids,
+  CHAT_MUTE_DAYS, MAX_PINNED_MESSAGES, PRESENCE_ONLINE_MS, chatLockRefusal, chatRoomBlockMessage, chatSanctionLabel, containsMediaMarker, mentionsIn,
+  ownedUsername, usernameUids,
 } from "@/lib/chat";
 import { roomAdminAs } from "@/lib/chatRoomAdmin";
 import { sendPushToUsers } from "@/lib/push";
@@ -21,8 +22,9 @@ import { chatSettingsFor } from "@/lib/chatSettings";
 //   { action: "mute", id, as, days }       -> { ok }   the Chatroom's admin: mute the message's sender in the
 //                                                      Chatroom for CHAT_MUTE_DAYS days, or null for good
 //
-// Restricted players (from a report) and muted ones can't post or edit here. The
-// Chatroom's admin skips the slow mode, and its messages carry `official: true`.
+// Restricted players (from a report), muted ones and locked accounts (lib/chat
+// chatLockRefusal: theirs, or the owner's of the username they post as) can't post or
+// edit here. The Chatroom's admin skips the slow mode, and its messages carry `official: true`.
 //
 // GET /api/chat/room?as= -> { members, online, admin }: every chat username, how many were
 // active in Chats in the last few minutes (counted, never listed), and whether `as` (one
@@ -65,13 +67,15 @@ async function notifyMentions(db, me, body, messageId) {
   ]);
   const title = `@${me.lower} mentioned you in the Chatroom`;
   const preview = body.slice(0, 120);
-  const live = names.filter((n, i) => nameSnaps[i].exists && !nameSnaps[i].data().deleted);
+  // A username whose account is locked from Chats isn't there for other players.
+  const reachable = (s) => s.exists && !s.data().deleted && !s.data().ownerChatLocked;
+  const live = names.filter((n, i) => reachable(nameSnaps[i]));
   const settings = await chatSettingsFor(db, live.map((n) => ({ name: n, uid: nameSnaps[names.indexOf(n)].data().uid }))).catch(() => new Map());
   const targets = [];
   const writes = [];
   names.forEach((n, i) => {
     const s = nameSnaps[i];
-    if (!s.exists || s.data().deleted || blockSnaps[i].exists) return;
+    if (!reachable(s) || blockSnaps[i].exists) return;
     writes.push(db.collection("notifications").add({
       toUsername: n, fromUsername: me.lower, kind: "mention", title, body: preview, room: "public", messageId,
       read: false, createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -106,7 +110,7 @@ async function send(db, caller, { as, text, replyTo }) {
 
   const user = userSnap.exists ? userSnap.data() : {};
   if (user.isban || user.banned) return fail("Your account can't post in the chatroom.", 403);
-  const blocked = chatRoomBlockMessage(user);
+  const blocked = chatRoomBlockMessage(user) || chatLockRefusal(user, me);
   if (blocked) return fail(blocked, 403);
 
   const now = Date.now();
@@ -146,7 +150,10 @@ async function edit(db, caller, { id, text }) {
   const [snap, userSnap] = await Promise.all([ref.get(), db.collection("users").doc(caller.uid).get()]);
   if (!snap.exists) return fail("Message not found.", 404);
   if (snap.data().senderUid !== caller.uid) return fail("You can only edit your own messages.", 403);
-  const blocked = chatRoomBlockMessage(userSnap.data());
+  const sender = String(snap.data().sender || "");
+  const nameSnap = sender ? await db.collection("usernames").doc(sender).get() : null;
+  const blocked = chatRoomBlockMessage(userSnap.data())
+    || chatLockRefusal(userSnap.data(), nameSnap?.exists ? { lower: sender, ...nameSnap.data() } : null);
   if (blocked) return fail(blocked, 403);
   if (snap.data().deletedForEveryone) return fail("Deleted messages can't be edited.", 400);
   if (snap.data().kind === "coins") return fail("Chat coin messages can't be edited.", 400);

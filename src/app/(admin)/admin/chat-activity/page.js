@@ -4,8 +4,9 @@ import Link from "next/link";
 import { db } from "@/lib/firebase";
 import { collection, doc, getDoc, limit, onSnapshot, orderBy, query, updateDoc, where } from "firebase/firestore";
 import { Ban, CheckCircle2, Flag, Globe, Loader2, Lock, Users } from "lucide-react";
-import { chatSanctionLabel, isChatRestricted } from "@/lib/chat";
+import { CHAT_LOCK_REPORTS, CHAT_UNLOCK_PRICE, chatSanctionLabel, isChatRestricted } from "@/lib/chat";
 import ChatRestrictButton, { chatRestrictionLabel } from "@/components/admin/ChatRestrict";
+import ChatLockButton, { chatLockLabel } from "@/components/admin/ChatLock";
 
 // Admin → Chat Activity: reports (chat_reports), blocks (chat_blocks) and groups
 // (conversations of type "group": who made them, when, how many members). Only
@@ -26,6 +27,7 @@ export default function AdminChatActivity() {
   const [showResolved, setShowResolved] = useState(false);
   const [owners, setOwners] = useState({}); // reported username -> the uid that owns it (null: gone)
   const [restricted, setRestricted] = useState([]); // accounts restricted from Chats right now
+  const [locked, setLocked] = useState([]); // accounts whose Chats are locked (lib/chat isChatLocked)
 
   useEffect(() => {
     const done = (key) => () => setLoaded((l) => ({ ...l, [key]: true }));
@@ -47,6 +49,9 @@ export default function AdminChatActivity() {
       onSnapshot(query(collection(db, "users"), where("chatRestricted", "==", true)), (snap) => {
         setRestricted(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((u) => isChatRestricted(u)));
       }, () => {}),
+      onSnapshot(query(collection(db, "users"), where("chatLocked", "==", true)), (snap) => {
+        setLocked(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      }, () => {}),
     ];
     return () => unsubs.forEach((u) => u());
   }, []);
@@ -59,6 +64,16 @@ export default function AdminChatActivity() {
       .then((pairs) => setOwners((o) => ({ ...o, ...Object.fromEntries(pairs) })));
   }, [reports, owners]);
   const restrictedById = useMemo(() => Object.fromEntries(restricted.map((u) => [u.id, u])), [restricted]);
+  const lockedById = useMemo(() => Object.fromEntries(locked.map((u) => [u.id, u])), [locked]);
+  // Different accounts with open reports against each account (as far as the latest reports here go).
+  const reportersOf = useMemo(() => {
+    const by = {};
+    for (const r of reports) {
+      if (r.status === "resolved" || !r.reportedUid || !r.reporterUid) continue;
+      (by[r.reportedUid] ||= new Set()).add(r.reporterUid);
+    }
+    return by;
+  }, [reports]);
 
   const openReports = useMemo(() => reports.filter((r) => r.status !== "resolved"), [reports]);
   const liveGroups = useMemo(() => groups.filter((g) => (g.participants || []).length > 0), [groups]);
@@ -110,6 +125,21 @@ export default function AdminChatActivity() {
           </div>
         )}
 
+        {locked.length > 0 && (
+          <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6 space-y-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Locked from Chats · until they pay ${CHAT_UNLOCK_PRICE} or you unlock it</p>
+            <div className="flex flex-wrap gap-2">
+              {locked.map((u) => (
+                <span key={u.id} className="inline-flex items-center gap-2 bg-slate-100 border border-slate-200 text-slate-800 rounded-full pl-3 pr-1 py-1 text-[10px] font-black uppercase">
+                  <Link href={`/admin/users/${u.id}`}>{u.username ? `@${u.username}` : u.fullName || u.id.slice(0, 8)}</Link>
+                  <span className="font-bold normal-case text-slate-500">{chatLockLabel(u).replace("Locked from Chats · ", "")}</span>
+                  <ChatLockButton uid={u.id} name={u.username || u.fullName || u.id.slice(0, 8)} user={u} compact />
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-2 items-center">
           {TABS.map(([key, label]) => (
             <button key={key} onClick={() => setTab(key)}
@@ -142,6 +172,13 @@ export default function AdminChatActivity() {
                       {restrictedById[owners[r.reported]] && (
                         <p className="text-[9px] font-black uppercase text-rose-600 mt-0.5">{chatRestrictionLabel(restrictedById[owners[r.reported]])}</p>
                       )}
+                      {lockedById[r.reportedUid || owners[r.reported]] ? (
+                        <p className="text-[9px] font-black uppercase text-slate-700 mt-0.5">{chatLockLabel(lockedById[r.reportedUid || owners[r.reported]])}</p>
+                      ) : r.reportedUid && reportersOf[r.reportedUid]?.size > 1 ? (
+                        <p className="text-[9px] font-black uppercase text-amber-600 mt-0.5">
+                          Reported by {reportersOf[r.reportedUid].size} players · Chats lock at {CHAT_LOCK_REPORTS}
+                        </p>
+                      ) : null}
                     </div>
                     {owners[r.reported] && (
                       <ChatRestrictButton

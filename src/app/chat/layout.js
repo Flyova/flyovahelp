@@ -5,6 +5,8 @@ import { Coins, Settings, X } from "lucide-react";
 import { formatCoins } from "@/lib/chat";
 import { CHAT_SECTIONS, ChatProvider, useChat } from "@/components/chat/ChatProvider";
 import MobileNavMenu from "@/components/MobileNavMenu";
+import useChatSanctions from "@/components/chat/useChatSanctions";
+import ChatLockBar from "@/components/chat/ChatLockBar";
 
 /**
  * Chats: three pages (Chatroom, Private, Groups) under one header and tab bar.
@@ -21,7 +23,9 @@ export default function ChatLayout({ children }) {
 
 function ChatShell({ children }) {
   const pathname = usePathname();
-  const { openIds, err, setErr, notice, convos, unread, coins, openCoinWallet, chatState } = useChat();
+  const { uid, openIds, err, setErr, notice, convos, unread, coins, openCoinWallet, chatState } = useChat();
+  // Your account's Chats are locked: say why above every list, with the button to unlock.
+  const { locked, canUnlock } = useChatSanctions(uid);
   const section = pathname.split("/")[2] || "";
   // Chats with unread messages, badged on their tab (archived ones don't count).
   const counted = convos.filter((c) => unread[c.id] && !chatState.archived[c.id]);
@@ -86,6 +90,8 @@ function ChatShell({ children }) {
             </Link>
           ))}
         </nav>}
+        {/* An open chat and the Chatroom say it where you'd type instead. */}
+        {locked && !inThread && section !== "room" && <ChatLockBar text={locked} canUnlock={canUnlock} card />}
       </div>
 
       {err && (

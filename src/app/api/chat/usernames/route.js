@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminDb, admin } from "@/lib/firebaseAdmin";
-import { norm, isReservedUsername, isValidUsername, monthsSince, usernameCharge, usernameFree } from "@/lib/chat";
+import { norm, chatLockMessage, isChatLocked, isReservedUsername, isValidUsername, monthsSince, usernameCharge, usernameFree } from "@/lib/chat";
 import { getCaller } from "@/lib/apiAuth";
 import { moveAccountCoins } from "@/lib/coinWallets";
 import { releasedUsernameCount, releaseUsername } from "@/lib/chatRelease";
@@ -55,6 +55,7 @@ export async function GET(req) {
 // POST /api/chat/usernames { username } — priced by usernameCharge (lib/chat): the
 // first is free, then $1 from the wallet; accounts 8+ months old get 10 more free, agents 3.
 // "strawins" (the Chatroom's admin) and other names containing it are for admins only.
+// An account locked from Chats (lib/chat isChatLocked) can't add usernames.
 export async function POST(req) {
   try {
     const caller = await getCaller(req);
@@ -75,6 +76,7 @@ export async function POST(req) {
     const userSnap = await userRef.get();
     if (!userSnap.exists) return NextResponse.json({ error: "Account not found" }, { status: 404 });
     const u = userSnap.data();
+    if (isChatLocked(u)) return NextResponse.json({ error: chatLockMessage(u) }, { status: 403 });
     if (isReservedUsername(lower) && u.role !== "admin")
       return NextResponse.json({ error: "Names with \"strawins\" in them are kept for StraWins." }, { status: 403 });
     const live = (await db.collection("usernames").where("uid", "==", uid).get()).size;
@@ -89,6 +91,7 @@ export async function POST(req) {
     const result = await db.runTransaction(async (tx) => {
       const [nameSnap, freshUser] = await Promise.all([tx.get(nameRef), tx.get(userRef)]);
       if (nameSnap.exists) return { status: 409, error: "Username taken" };
+      if (isChatLocked(freshUser.data())) return { status: 403, error: chatLockMessage(freshUser.data()) };
       if (charge > 0 && Number(freshUser.data()?.wallet || 0) < charge) {
         return { status: 402, error: "Insufficient wallet balance ($1 required)" };
       }

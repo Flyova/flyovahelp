@@ -3,7 +3,7 @@ import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import { sendPushToUsers } from "@/lib/push";
 import {
-  canPostInGroup, chatMuteMessage, chatRestrictMessage, coinBuyQuote, coinWithdrawQuote, formatCents, formatCoins, isCoinAmount, liveUsername, ownedUsername,
+  canPostInGroup, chatLockRefusal, chatMuteMessage, chatRestrictMessage, coinBuyQuote, coinWithdrawQuote, formatCents, formatCoins, isCoinAmount, liveUsername, ownedUsername,
   usernameUids, MAX_COINS_PER_ACTION,
 } from "@/lib/chat";
 import { activityRef, balanceOf, mainUsername, walletRef } from "@/lib/coinWallets";
@@ -21,7 +21,8 @@ import { bonusOwedError, owesBonus } from "@/lib/money";
 //   POST { action: "withdraw", as, coins }            -> { balance }  value − 12% fee goes to the main wallet;
 //                                                                    only the account that owns the username
 //   POST { action: "send", as, to, coins, convoId? }  -> { balance }  free; in the Chatroom (no convoId)
-//                                                                    or a group you're both in, where a coin card is posted
+//                                                                    or a group you're both in, where a coin card is posted;
+//                                                                    not by or to an account locked from Chats (lib/chat chatLockRefusal)
 
 const FV = () => admin.firestore.FieldValue;
 const fail = (error, status = 400) => NextResponse.json({ error }, { status });
@@ -105,7 +106,8 @@ async function send(db, caller, { as, to, coins, convoId }) {
   const me = await ownedUsername(db, caller.uid, as);
   if (!me) return fail("You can only send chat coins as one of your own usernames.", 403);
   const other = await liveUsername(db, to);
-  if (!other) return fail("That player doesn't exist any more.", 404);
+  // A username whose account is locked from Chats isn't there for other players.
+  if (!other || other.ownerChatLocked) return fail("That player doesn't exist any more.", 404);
   // Not to your own usernames (nor ones you're logged in to): coins stay with the username they were bought for.
   if (usernameUids(other).includes(caller.uid)) return fail("You can't send chat coins to yourself.");
 
@@ -115,7 +117,7 @@ async function send(db, caller, { as, to, coins, convoId }) {
   );
   const user = userSnap.exists ? userSnap.data() : {};
   if (bannedUser(user)) return fail("Your account can't send chat coins.", 403);
-  const restricted = chatRestrictMessage(user);
+  const restricted = chatRestrictMessage(user) || chatLockRefusal(user, me);
   if (restricted) return fail(restricted, 403);
   if (blockSnap.exists) return fail("You can't send chat coins to this player.", 403);
 

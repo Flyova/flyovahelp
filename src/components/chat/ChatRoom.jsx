@@ -9,6 +9,7 @@ import { playChatSound, playCoinSound } from "@/lib/chatSound";
 import ChatMessages from "@/components/chat/ChatMessages";
 import PinnedBar from "@/components/chat/PinnedBar";
 import useChatSanctions from "@/components/chat/useChatSanctions";
+import ChatLockBar from "@/components/chat/ChatLockBar";
 import ChatComposer from "@/components/chat/ChatComposer";
 import { useChat } from "@/components/chat/ChatProvider";
 import ChatSearchSheet from "@/components/chat/ChatSearchSheet";
@@ -39,7 +40,8 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
   const [editing, setEditing] = useState(null);
   const inputRef = useRef(null);
   // A restriction from Chats or a Chatroom mute: no posting or editing (the server checks too).
-  const { roomBlocked } = useChatSanctions(uid);
+  // Nor while your Chats (or the Chats of the account that owns `active`) are locked.
+  const { roomBlocked, locked, canUnlock } = useChatSanctions(uid, active);
   const [stats, setStats] = useState(null); // { members, online, admin }: admin = you're posting as the Chatroom's admin
   const [pins, setPins] = useState([]);
   const [burst, setBurst] = useState(null); // coins-sent animation
@@ -250,7 +252,7 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
         loading={!loaded}
         emptyText="No messages yet — say hello to everyone!"
         onReply={startReply}
-        onEdit={roomBlocked ? undefined : startEdit}
+        onEdit={roomBlocked || locked ? undefined : startEdit}
         onDelete={remove}
         canDelete={(m) => m.senderUid === uid || roomAdmin}
         deleteLabel={(m) => (m.senderUid === uid ? "Delete for everyone" : "Delete message (admin)")}
@@ -267,7 +269,9 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
         focus={focus}
       />
 
-      {roomBlocked ? (
+      {locked ? (
+        <ChatLockBar text={locked} canUnlock={canUnlock} />
+      ) : roomBlocked ? (
         <p className="px-4 py-3.5 border-t border-white/5 bg-[#142036] flex items-center justify-center gap-2 text-center text-[13px] text-white/60">
           <Ban size={14} className="shrink-0" /> {roomBlocked}
         </p>

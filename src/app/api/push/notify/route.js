@@ -49,10 +49,12 @@ async function chatMessage(db, caller, { convoId, messageId }) {
   others.forEach((p, i) => {
     const o = ownerSnaps[i];
     if (!o.exists || o.data().deleted || blockSnaps[i].exists) return;
+    // A username whose account is locked from Chats isn't @mentioned (it's still a member, so it still hears of new messages).
+    const locked = o.data().ownerChatLocked === true;
     // The owner and any account logged in to the username. The mobile thread screen
     // needs to know which of the recipient's identities is active.
     for (const uid of usernameUids(o.data())) {
-      if (uid !== caller.uid) targets.push({ uid, name: p, owner: o.data().uid, data: { url: `/chat/${convoId}?as=${encodeURIComponent(p)}` } });
+      if (uid !== caller.uid) targets.push({ uid, name: p, owner: o.data().uid, locked, data: { url: `/chat/${convoId}?as=${encodeURIComponent(p)}` } });
     }
   });
 
@@ -70,7 +72,7 @@ async function chatMessage(db, caller, { convoId, messageId }) {
       const t = targets[i];
       const sounds = settings.get(t.name)?.sounds || {};
       t.tone = sounds.tones?.[isGroup ? "groups" : "private"]; // the sound their chat profile picked
-      if (mentioned.has(t.name)) {
+      if (mentioned.has(t.name) && !t.locked) {
         t.mentioned = true;
         return;
       }

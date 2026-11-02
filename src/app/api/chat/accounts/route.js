@@ -136,7 +136,7 @@ async function login(db, caller, { username, password }) {
   if (!isValidUsername(name)) return fail(WRONG, 403);
   const [nameSnap, authSnap] = await db.getAll(db.collection("usernames").doc(name), db.collection("username_auth").doc(name));
   const n = nameSnap.exists ? nameSnap.data() : null;
-  if (!n || n.deleted) return fail(WRONG, 403);
+  if (!n || n.deleted || n.ownerChatLocked) return fail(WRONG, 403); // a locked account's usernames aren't there for others
   if (usernameUids(n).includes(caller.uid)) return fail(`@${name} is already on your account.`);
   if (!authSnap.exists) return fail(WRONG, 403);
   const auth = authSnap.data();
@@ -185,7 +185,7 @@ async function confirmLogin(db, caller, { username, code }) {
   if (!isValidUsername(name)) return fail("Wrong code.", 403);
   const [nameSnap, authSnap] = await db.getAll(db.collection("usernames").doc(name), db.collection("username_auth").doc(name));
   const n = nameSnap.exists ? nameSnap.data() : null;
-  if (!n || n.deleted || !authSnap.exists) return fail("Start again: log in with the username and password.", 400);
+  if (!n || n.deleted || n.ownerChatLocked || !authSnap.exists) return fail("Start again: log in with the username and password.", 400);
   const auth = authSnap.data();
   const pending = auth.pending?.[caller.uid];
   if (!pending) return fail("Start again: log in with the username and password.", 400);
