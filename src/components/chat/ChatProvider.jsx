@@ -3,13 +3,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { usePathname, useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import {
-  Timestamp, addDoc, arrayUnion, collection, deleteDoc, doc, documentId, getCountFromServer, limit, onSnapshot, orderBy, query,
+  Timestamp, arrayUnion, collection, deleteDoc, doc, documentId, getCountFromServer, limit, onSnapshot, orderBy, query,
   serverTimestamp, setDoc, updateDoc, where,
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
 import { playChatSound, preloadTones } from "@/lib/chatSound";
-import { MAX_PINNED_CHATS, PRESENCE_PING_MS, READS_SINCE_MS, TYPING_SHOW_MS, departedFrom, norm } from "@/lib/chat";
+import { CHAT_UNLOCK_PRICE, MAX_PINNED_CHATS, PRESENCE_PING_MS, READS_SINCE_MS, TYPING_SHOW_MS, departedFrom, norm } from "@/lib/chat";
 import { defaultChatTones } from "@/lib/chatTones";
 import { CoinWalletSheet, SendCoinsSheet } from "@/components/chat/CoinSheets";
 import ChatDialog from "@/components/chat/ChatDialog";
@@ -603,15 +603,30 @@ export function ChatProvider({ children }) {
       actions: ["Spam or scam", "Abuse or harassment", "Inappropriate messages", "Something else"].map((r) => ({ label: r, value: r, tone: "secondary" })),
     });
     if (!reason) return;
-    try {
-      await addDoc(collection(db, "chat_reports"), {
-        reporter: active, reported: norm(targetLower), reason, ...extra, createdAt: serverTimestamp(), status: "open",
-      });
-      flashNotice("Report sent. Thanks, our team will review it.");
-    } catch (e) {
-      setErr(`Could not send the report: ${e.message}`);
-    }
+    // Reports go through the server, which counts them toward a lock on the reported account's Chats.
+    const r = await authFetch("/api/chat/reports", { method: "POST", body: { as: active, reported: norm(targetLower), reason, ...extra } })
+      .catch((e) => ({ error: e.message }));
+    if (r.error) setErr(`Could not send the report: ${r.error}`);
+    else flashNotice("Report sent. Thanks, our team will review it.");
   }, [active, ask, flashNotice]);
+
+  // A locked account pays CHAT_UNLOCK_PRICE from its main wallet to chat again (lib/chat chatLockMessage).
+  const unlockChats = useCallback(async () => {
+    const ok = await confirmAction({
+      title: `Unlock Chats for $${CHAT_UNLOCK_PRICE}?`,
+      message: `$${CHAT_UNLOCK_PRICE.toFixed(2)} comes out of your main wallet, and you can chat again right away.`,
+      confirmLabel: `Pay $${CHAT_UNLOCK_PRICE}`, danger: false,
+    });
+    if (!ok) return false;
+    const r = await authFetch("/api/chat/lock", { method: "POST", body: { action: "unlock" } }).catch((e) => ({ error: e.message }));
+    if (r.error) {
+      setErr(r.error);
+      return false;
+    }
+    flashNotice("Chats unlocked. You can chat again.");
+    refreshIdentities();
+    return true;
+  }, [confirmAction, flashNotice, refreshIdentities]);
 
   // A player's full profile page.
   const openProfile = useCallback((username) => router.push(`/chat/u/${encodeURIComponent(norm(username))}`), [router]);
@@ -631,12 +646,12 @@ export function ChatProvider({ children }) {
     convos, myConvos, convosLoading, blockedNames, myNameIn, typingIn, unread, unreadByName, chatState,
     openIds, setOpenId,
     err, setErr, notice, flashNotice,
-    openProfile, messagePrivately, blockUser, unblockUser, reportUser,
+    openProfile, messagePrivately, blockUser, unblockUser, reportUser, unlockChats,
     coins, coinsOf, openCoinWallet, sendCoins,
     updateChatState, soundOn, toneFor, presence, presenceNow,
     settingsFor, updateSettings, settingsLoaded, settingsName, setSettingsName: setSettingsChoice,
     archiveChat, pinChat, deleteChat, removeChat, isDeletedForMe, ask, confirmAction, needUsername,
-  }), [uid, identities, identitiesLoaded, active, selectIdentity, myConvos, unreadByName, coinsOf, refreshIdentities, createUsername, usernamePrice, usernameFree, archiveChat, pinChat, deleteChat, isDeletedForMe, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, notice, flashNotice, openProfile, messagePrivately, blockUser, unblockUser, reportUser, coins, openCoinWallet, sendCoins, updateChatState, soundOn, toneFor, presence, presenceNow, settingsFor, updateSettings, settingsLoaded, settingsName, removeChat, ask, confirmAction, needUsername]);
+  }), [uid, identities, identitiesLoaded, active, selectIdentity, myConvos, unreadByName, coinsOf, refreshIdentities, createUsername, usernamePrice, usernameFree, archiveChat, pinChat, deleteChat, isDeletedForMe, convos, convosLoading, blockedNames, myNameIn, typingIn, unread, chatState, openIds, setOpenId, err, notice, flashNotice, openProfile, messagePrivately, blockUser, unblockUser, reportUser, unlockChats, coins, openCoinWallet, sendCoins, updateChatState, soundOn, toneFor, presence, presenceNow, settingsFor, updateSettings, settingsLoaded, settingsName, removeChat, ask, confirmAction, needUsername]);
 
   // Whose coins the open coin sheet uses: the wallet's username, or who you send as.
   const walletName = coinSheet?.name || active;

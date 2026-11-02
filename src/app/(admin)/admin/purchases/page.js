@@ -3,10 +3,10 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { db } from "@/lib/firebase";
 import { collection, doc, getDoc, getDocs, limit, orderBy, query, where } from "firebase/firestore";
-import { AtSign, Loader2, MessagesSquare, ShoppingBag, UserPen } from "lucide-react";
+import { AtSign, Loader2, LockKeyholeOpen, MessagesSquare, ShoppingBag, UserPen } from "lucide-react";
 
-// Admin → Purchases: chat usernames bought, account username changes and groups created,
-// paid from players' main wallets. Since this page shipped each one is recorded in
+// Admin → Purchases: chat usernames bought, account username changes, groups created and
+// Chats unlocked ($12, lib/chatLock), paid from players' main wallets. Since this page shipped each one is recorded in
 // purchases/{id} (lib/purchases). Older ones are found where they were left: paid
 // usernames (usernames.pricePaid), accounts with usernameChangedAt and their
 // "username_change" transactions, and the creators' "group_create" transactions for
@@ -18,6 +18,7 @@ const KINDS = {
   username: { label: "Chat username", plural: "Chat usernames", icon: AtSign, tone: "bg-sky-100 text-sky-700" },
   username_change: { label: "Username change", plural: "Username changes", icon: UserPen, tone: "bg-violet-100 text-violet-700" },
   group: { label: "Group", plural: "Groups", icon: MessagesSquare, tone: "bg-emerald-100 text-emerald-700" },
+  chat_unlock: { label: "Chats unlock", plural: "Chats unlocks", icon: LockKeyholeOpen, tone: "bg-amber-100 text-amber-700" },
 };
 const FREE = {
   first: "Free · first username",
@@ -162,7 +163,7 @@ export default function AdminPurchases() {
             className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-bold outline-none focus:border-[#2457D6] md:w-80" />
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <Stat label="Total" n={totals.all.n} sum={totals.all.sum} />
           {Object.entries(KINDS).map(([k, v]) => <Stat key={k} label={v.plural} n={totals[k].n} sum={totals[k].sum} />)}
         </div>

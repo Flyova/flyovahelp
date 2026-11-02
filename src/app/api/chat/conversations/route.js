@@ -4,7 +4,7 @@ import { getCaller } from "@/lib/apiAuth";
 import {
   isValidUsername, liveDmRef, norm, ownedUsername, participantUidsFor, usernameUids,
   GROUP_DESCRIPTION_MAX, GROUP_NAME_MAX, MAX_GROUP_MEMBERS, groupByInvite, groupOwner, groupSearchKeys, isGroupAdmin,
-  MAX_PINNED_MESSAGES, groupCreatePrice, isBlockedFromGroup, chatRestrictMessage,
+  MAX_PINNED_MESSAGES, groupCreatePrice, isBlockedFromGroup, chatRestrictMessage, chatLockRefusal,
 } from "@/lib/chat";
 import { chatSettingsFor } from "@/lib/chatSettings";
 import { cents, formatUsd, isBanned } from "@/lib/money";
@@ -43,6 +43,10 @@ import { recordPurchase } from "@/lib/purchases";
 //                                                                        adding or invites) until unblocked; only the owner blocks admins
 //   { action: "unblockMember", convoId, as, username }        -> { ok }  admins
 //   { action: "pinMessage", convoId, as, messageId, pin }     -> { ok }  admins: pin (up to MAX_PINNED_MESSAGES) or unpin a message
+//
+// An account locked from Chats (lib/chat chatLockRefusal) can't create, join or add
+// anyone to a group as any username, nor can anyone as one of its usernames; and to
+// other players its usernames don't exist (no private chats, adding or inviting them).
 
 const FV = () => admin.firestore.FieldValue;
 const fail = (error, status = 400) => NextResponse.json({ error }, { status });
@@ -54,7 +58,20 @@ async function activeUsername(db, username) {
   if (!isValidUsername(lower)) return null;
   const snap = await db.collection("usernames").doc(lower).get();
   if (!snap.exists || snap.data().deleted) return null;
-  return { lower, uid: snap.data().uid, uids: usernameUids(snap.data()) };
+  return { lower, uid: snap.data().uid, uids: usernameUids(snap.data()), locked: !!snap.data().ownerChatLocked };
+}
+
+// Like activeUsername, for a player the caller wants to reach: a username whose
+// account is locked from Chats doesn't exist for other players.
+async function reachableUsername(db, caller, username) {
+  const other = await activeUsername(db, username);
+  return other && (!other.locked || other.uids.includes(caller.uid)) ? other : null;
+}
+
+/** Why the caller can't take part as `me` (a lock on their account or on its owner's), or "". */
+async function lockRefusal(db, caller, me) {
+  const snap = await db.collection("users").doc(caller.uid).get();
+  return chatLockRefusal(snap.exists ? snap.data() : {}, me);
 }
 
 // Like activeUsername, but also finds deleted usernames (they can still sit in a group).
@@ -103,7 +120,7 @@ async function withGroup(db, convoId, fn) {
 async function openDm(db, caller, { as, target }) {
   const me = await ownedUsername(db, caller.uid, as);
   if (!me) return fail("You can only chat as one of your own usernames.", 403);
-  const other = await activeUsername(db, target);
+  const other = await reachableUsername(db, caller, target);
   if (!other) return fail("That username doesn't exist.", 404);
   if (other.lower === me.lower) return fail("You can't message yourself.");
 
@@ -145,7 +162,8 @@ async function createGroup(db, caller, { as, name, description, visibility }) {
     if (!userSnap.exists) return { error: "Account not found.", status: 404 };
     const user = userSnap.data();
     if (isBanned(user)) return { error: "Your account can't create groups.", status: 403 };
-    if (chatRestrictMessage(user)) return { error: chatRestrictMessage(user), status: 403 };
+    const sanction = chatRestrictMessage(user) || chatLockRefusal(user, me);
+    if (sanction) return { error: sanction, status: 403 };
     const price = groupCreatePrice(user.isAgent);
     if (cents(user.wallet) < cents(price)) {
       return { error: `Creating a group costs ${formatUsd(price)} from your main wallet; you have ${formatUsd(user.wallet)}.`, status: 402 };
@@ -182,6 +200,8 @@ async function createGroup(db, caller, { as, name, description, visibility }) {
 async function joinGroup(db, caller, { convoId, as }) {
   const me = await ownedUsername(db, caller.uid, as);
   if (!me) return fail("You can only chat as one of your own usernames.", 403);
+  const locked = await lockRefusal(db, caller, me);
+  if (locked) return fail(locked, 403);
   const refused = await withGroup(db, convoId, (convo, tx) => {
     if ((convo.participants || []).includes(me.lower)) return null; // already in
     if (isBlockedFromGroup(convo, me.lower)) return { error: "An admin blocked you from this group.", status: 403 };
@@ -219,7 +239,9 @@ async function leaveGroup(db, caller, { convoId, as }) {
 async function addMember(db, caller, { convoId, as, username }) {
   const me = await ownedUsername(db, caller.uid, as);
   if (!me) return fail("You can only act as one of your own usernames.", 403);
-  const other = await activeUsername(db, username);
+  const locked = await lockRefusal(db, caller, me);
+  if (locked) return fail(locked, 403);
+  const other = await reachableUsername(db, caller, username);
   if (!other) return fail("That username doesn't exist.", 404);
   // Chat settings → Privacy: who can add them to groups.
   const settings = await chatSettingsFor(db, [{ name: other.lower, uid: other.uid }]);
@@ -265,6 +287,8 @@ async function acceptInvite(db, caller, { convoId, as }) {
   const me = await ownedUsername(db, caller.uid, as);
   if (!me) return fail("You can only act as one of your own usernames.", 403);
   if (!CONVO_ID.test(String(convoId || ""))) return fail("Group not found.", 404);
+  const locked = await lockRefusal(db, caller, me);
+  if (locked) return fail(locked, 403);
   const ref = groupInviteRef(db, convoId, me.lower);
   const refused = await withGroup(db, convoId, async (convo, tx) => {
     const invite = await tx.get(ref);
@@ -341,7 +365,7 @@ async function setAdmin(db, caller, { convoId, as, username, admin: makeAdmin })
 async function transferOwner(db, caller, { convoId, as, username }) {
   const me = await ownedUsername(db, caller.uid, as);
   if (!me) return fail("You can only act as one of your own usernames.", 403);
-  const other = await activeUsername(db, username);
+  const other = await reachableUsername(db, caller, username);
   if (!other) return fail("That username doesn't exist.", 404);
 
   const refused = await withGroup(db, convoId, (convo, tx) => {
@@ -580,6 +604,8 @@ async function inviteLink(db, caller, { convoId, as, op }) {
 async function joinByLink(db, caller, { code, as }) {
   const me = await ownedUsername(db, caller.uid, as);
   if (!me) return fail("You can only chat as one of your own usernames.", 403);
+  const locked = await lockRefusal(db, caller, me);
+  if (locked) return fail(locked, 403);
   const group = await groupByInvite(db, code);
   if (!group) return fail("This group link doesn't work any more. Ask an admin for a new one.", 404);
   const refused = await withGroup(db, group.id, (convo, tx) => {

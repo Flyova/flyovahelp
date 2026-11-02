@@ -14,7 +14,9 @@ const MAX_GROUPS = 10;
 // when they joined StraWins, badges (verified, agent, StraWins staff, "official" for the
 // Chatroom's admin), the public groups they're in, and their chat coins only if they
 // chose to show them off.
-// Never their real name, email, phone, PIN or money balances.
+// Never their real name, email, phone, PIN or money balances. A username whose account is
+// locked from Chats (lib/chat isChatLocked) doesn't exist here, except for its own
+// accounts and StraWins staff.
 export async function GET(req) {
   try {
     const caller = await getCaller(req);
@@ -28,6 +30,11 @@ export async function GET(req) {
     const nameSnap = await db.collection("usernames").doc(lower).get();
     const n = nameSnap.exists ? nameSnap.data() : null;
     if (!n || n.deleted || !n.uid) return NextResponse.json({ error: "This player no longer exists." }, { status: 404 });
+    const isYou = n.uid === caller.uid || (n.linkedUids || []).includes(caller.uid);
+    if (n.ownerChatLocked && !isYou) {
+      const me = (await db.collection("users").doc(caller.uid).get()).data();
+      if (!resolvePrivilegedRole(me?.role, caller.email)) return NextResponse.json({ error: "This player no longer exists." }, { status: 404 });
+    }
 
     const [[profileSnap, userSnap, coinSnap], settings] = await Promise.all([
       db.getAll(
@@ -70,7 +77,8 @@ export async function GET(req) {
         resolvePrivilegedRole(u.role, u.email) && "staff",
       ].filter(Boolean),
       publicGroups,
-      isYou: n.uid === caller.uid || (n.linkedUids || []).includes(caller.uid),
+      isYou,
+      ...(n.ownerChatLocked ? { chatLocked: true } : {}), // only its own accounts and staff get this far
       groupAdds, // who can add them to groups: "everyone", "ask" (they get an invite) or "nobody"
       allowsGroupAdds: groupAdds !== "nobody",
       coins: showCoins ? Math.max(0, Number(coinSnap.exists ? coinSnap.data().balance : 0) || 0) : null,

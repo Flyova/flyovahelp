@@ -6,6 +6,7 @@ import { collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, se
 import { Flag, Loader2, Trophy } from "lucide-react";
 import { changedBeforeCounts, depositLocked, flagReasonLabel, profileChangeCounts, toDate } from "@/components/admin/accountFlags";
 import ChatRestrictButton, { chatRestrictionLabel } from "@/components/admin/ChatRestrict";
+import ChatLockButton, { chatLockLabel } from "@/components/admin/ChatLock";
 import { chatMuteLeft, isChatMuted } from "@/lib/chat";
 
 const RESTRICTIONS = [
@@ -170,6 +171,9 @@ export default function UserActivityPage() {
             {chatRestrictionLabel(user) && (
               <span className="text-[10px] bg-rose-100 text-rose-700 px-2 py-1 rounded-full font-black uppercase">{chatRestrictionLabel(user)}</span>
             )}
+            {chatLockLabel(user) && (
+              <span className="text-[10px] bg-slate-900 text-white px-2 py-1 rounded-full font-black uppercase">{chatLockLabel(user)}</span>
+            )}
             {isChatMuted(user) && (
               <span className="text-[10px] bg-rose-100 text-rose-700 px-2 py-1 rounded-full font-black uppercase">
                 Muted in the Chatroom · {chatMuteLeft(user) ? `${chatMuteLeft(user)} left` : "forever"}
@@ -177,7 +181,10 @@ export default function UserActivityPage() {
             )}
           </div>
           <div className="md:col-span-3">
-            <ChatRestrictButton uid={id} name={user?.username || user?.fullName || id} user={user} />
+            <div className="flex flex-wrap gap-2">
+              <ChatRestrictButton uid={id} name={user?.username || user?.fullName || id} user={user} />
+              <ChatLockButton uid={id} name={user?.username || user?.fullName || id} user={user} />
+            </div>
           </div>
         </div>
       </div>

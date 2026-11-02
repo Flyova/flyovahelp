@@ -71,7 +71,8 @@ service cloud.firestore {
     // have their own checks below.
     function lockedAccountFields() {
       return ['isban', 'banned', 'verified', 'otp', 'isAgent', 'chatMuted', 'chatMutedUntil',
-        'chatRestricted', 'chatRestrictedUntil', 'restrictDeposit', 'restrictWithdrawal', 'restrictTransfer',
+        'chatRestricted', 'chatRestrictedUntil', 'chatLocked', 'chatLockReason', 'chatLockedAt', 'chatLockedBy', 'chatUnlockedAt',
+        'restrictDeposit', 'restrictWithdrawal', 'restrictTransfer',
         'uid', 'email', 'emailLower', 'createdAt', 'referrerUid', 'referredBy', 'lastAdminLogin',
         'wallet', 'referralBonus', 'agent_balance', 'bonusClaimed', 'bonusDeducted',
         'welcomeBonusClaimed', 'welcomeBonusPaid', 'welcomeBonusAmount', 'welcomeBonusStatus',
@@ -123,7 +124,8 @@ service cloud.firestore {
       allow create: if request.auth != null && request.auth.uid == userId
         && request.resource.data.get('uid', userId) == userId
         && !request.resource.data.keys().hasAny(['isban', 'banned', 'isAgent', 'chatMuted', 'chatMutedUntil',
-          'chatRestricted', 'chatRestrictedUntil', 'referralBonus', 'otp',
+          'chatRestricted', 'chatRestrictedUntil', 'chatLocked', 'chatLockReason', 'chatLockedAt', 'chatLockedBy', 'chatUnlockedAt',
+          'referralBonus', 'otp',
           'agent_balance', 'subscription_expires', 'subscription_started_at',
           'restrictDeposit', 'restrictWithdrawal', 'restrictTransfer',
           'inflowBonus', 'inflowEarned', 'inflowAccess', 'inflowAccessAt', 'freeWithdrawalMonth', 'freeWithdrawals',
@@ -296,6 +298,16 @@ service cloud.firestore {
         && (u.get('chatRestrictedUntil', 0) == 0 || u.get('chatRestrictedUntil', 0) > request.time.toMillis());
     }
 
+    // An account locked from Chats (users.chatLocked, until it pays to unlock or an admin
+    // lifts it) can't send as any username; nor can anyone send as one of its usernames
+    // (usernames/{name}.ownerChatLocked, set on all of them while it's locked).
+    function chatLockedNow() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('chatLocked', false) == true;
+    }
+    function nameLocked(name) {
+      return get(/databases/$(database)/documents/usernames/$(name)).data.get('ownerChatLocked', false) == true;
+    }
+
     function chatConvo(convoId) {
       return get(/databases/$(database)/documents/conversations/$(convoId)).data;
     }
@@ -376,7 +388,9 @@ service cloud.firestore {
         allow read: if isChatMember(convoId);
         allow create: if isChatMember(convoId)
           && !chatRestrictedNow()
+          && !chatLockedNow()
           && ownsUsername(request.resource.data.sender)
+          && !nameLocked(request.resource.data.sender)
           && !(request.resource.data.sender in chatConvo(convoId).get('blocked', []))
           && canPostIn(convoId, request.resource.data.sender)
           && chatConvo(convoId).get('closed', false) != true // the other player deleted their username
@@ -397,6 +411,8 @@ service cloud.firestore {
           ) || (
             resource.data.deletedForEveryone == false
             && !chatRestrictedNow()
+            && !chatLockedNow()
+            && !nameLocked(resource.data.sender)
             && resource.data.get('kind', '') != 'coins' // coin cards can't be edited
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt'])
             && request.resource.data.text != resource.data.text // unchanged text isn't an edit
@@ -463,9 +479,10 @@ service cloud.firestore {
       }
     }
 
+    // Made through /api/chat/reports (which records both accounts and counts them toward
+    // a Chats lock); admins review them on Admin → Chat Activity.
     match /chat_reports/{reportId} {
-      allow create: if ownsUsername(request.resource.data.reporter);
-      allow read, update, delete: if false; // review in the console / admin tools
+      allow read, write: if false;
     }
 
     match /chat_sessions/{sessionId} {
@@ -477,7 +494,11 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow create: if ownsUsername(request.resource.data.fromUsername) && !chatRestrictedNow();
+      allow create: if ownsUsername(request.resource.data.fromUsername) && !chatRestrictedNow()
+        && !chatLockedNow() && !nameLocked(request.resource.data.fromUsername)
+        // Nothing for a username whose account is locked from Chats: it isn't there for other players.
+        && (!exists(/databases/$(database)/documents/usernames/$(request.resource.data.toUsername))
+          || !nameLocked(request.resource.data.toUsername));
       allow read, update: if ownsUsername(resource.data.toUsername);
       allow delete: if false;
     }
