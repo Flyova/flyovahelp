@@ -1,10 +1,11 @@
 "use client";
+import Link from "next/link";
 import { doc, updateDoc } from "firebase/firestore";
 import { Bell } from "lucide-react";
 import { db } from "@/lib/firebase";
 
 // One switch per kind of notification (lib/notifications on the server). Off = no
-// phone push for it; it still shows on the Notifications page.
+// phone push for it; what the Notifications page lists is chosen there (lib/notificationFeed).
 const KINDS = [
   ["group", "Group messages", "New messages in your groups"],
   ["message", "Private messages", "New private chat messages"],
@@ -26,7 +27,7 @@ export default function NotificationPrefsCard({ uid, prefs }) {
         <Bell size={18} className="text-[#8B1E3F]" />
         <h3 className="font-black italic uppercase text-sm">Notifications</h3>
       </div>
-      <p className="text-[10px] text-white/50 mb-4 font-bold">Choose which activities send a notification to your phone. Everything still shows on your Notifications page.</p>
+      <p className="text-[10px] text-white/50 mb-4 font-bold">Choose which activities send a notification to your phone. To choose what&apos;s listed on your Notifications page, use <Link href="/notifications" className="text-[#7A9BEE] underline">Choose what shows</Link> there.</p>
       <div className="divide-y divide-white/5">
         {KINDS.map(([key, label, hint]) => {
           const on = prefs?.[key] !== false;

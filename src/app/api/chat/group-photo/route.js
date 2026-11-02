@@ -6,11 +6,15 @@ import { isGroupAdmin, ownedUsername } from "@/lib/chat";
 // Group photos. The image (a small square JPEG data URL) lives in
 // group_photos/{groupId}, which only this route reads and writes; the group itself
 // carries `photoVersion` (when it last changed, 0 = none) so apps know to show it.
+// A bigger copy of the same square, for members viewing the photo full screen, lives
+// in group_photos_large/{groupId} (photos set before it existed have none).
 //
-//   GET  ?id=<groupId>[&v=<photoVersion>]   -> the JPEG (404 when the group has none)
-//   POST { convoId, as, photoURL }           -> { ok, photoVersion }  admins; photoURL "" removes it
+//   GET  ?id=<groupId>[&v=<photoVersion>][&size=large]  -> the JPEG (404 when the group has none);
+//        size=large falls back to the small one
+//   POST { convoId, as, photoURL, largeURL? }           -> { ok, photoVersion }  admins; photoURL "" removes it
 
 const MAX_CHARS = 100000;
+const MAX_LARGE_CHARS = 700000; // well inside Firestore's 1 MiB document limit
 const PREFIX = "data:image/jpeg;base64,";
 const ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const fail = (error, status = 400) => NextResponse.json({ error }, { status });
@@ -20,7 +24,9 @@ export async function GET(req) {
   const params = new URL(req.url).searchParams;
   const id = String(params.get("id") || "");
   if (!ID_RE.test(id)) return new Response("Not found", { status: 404 });
-  const snap = await getAdminDb().collection("group_photos").doc(id).get();
+  const db = getAdminDb();
+  const large = params.get("size") === "large" ? await db.collection("group_photos_large").doc(id).get() : null;
+  const snap = large?.exists && String(large.data().photoURL || "").startsWith(PREFIX) ? large : await db.collection("group_photos").doc(id).get();
   const url = snap.exists ? String(snap.data().photoURL || "") : "";
   if (!url.startsWith(PREFIX)) return new Response("Not found", { status: 404, headers: { "Cache-Control": "public, max-age=300" } });
   const bytes = Uint8Array.from(atob(url.slice(PREFIX.length)), (c) => c.charCodeAt(0));
@@ -33,9 +39,11 @@ export async function POST(req) {
   try {
     const caller = await getCaller(req);
     if (!caller) return fail("Sign in again to continue.", 401);
-    const { convoId, as, photoURL } = await req.json().catch(() => ({}));
+    const { convoId, as, photoURL, largeURL } = await req.json().catch(() => ({}));
     const photo = String(photoURL || "");
     if (photo && (!photo.startsWith(PREFIX) || photo.length > MAX_CHARS)) return fail("That photo is too big or not a JPEG.");
+    const largePhoto = photo ? String(largeURL || "") : "";
+    if (largePhoto && (!largePhoto.startsWith(PREFIX) || largePhoto.length > MAX_LARGE_CHARS)) return fail("That photo is too big or not a JPEG.");
     const db = getAdminDb();
     const me = await ownedUsername(db, caller.uid, as);
     if (!me) return fail("You can only act as one of your own usernames.", 403);
@@ -50,6 +58,8 @@ export async function POST(req) {
     const text = photo ? `@${me.lower} changed the group photo` : `@${me.lower} removed the group photo`;
     const batch = db.batch();
     batch.set(db.collection("group_photos").doc(String(convoId)), { photoURL: photo, by: me.lower, updatedAt: FV().serverTimestamp() });
+    // Always rewritten, so an older app that sends no large copy doesn't leave the last photo's behind.
+    batch.set(db.collection("group_photos_large").doc(String(convoId)), { photoURL: largePhoto, by: me.lower, updatedAt: FV().serverTimestamp() });
     batch.set(ref.collection("messages").doc(), { kind: "system", sender: "", text, createdAt: FV().serverTimestamp(), deletedForEveryone: false });
     batch.update(ref, { photoVersion, lastMessage: text, lastMessageAt: FV().serverTimestamp() });
     await batch.commit();
