@@ -1,175 +1,269 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { db } from "@/lib/firebase";
-import { 
-  collection, 
-  query, 
-  getDocs, 
-  addDoc, 
-  serverTimestamp, 
-  where,
-  limit
-} from "firebase/firestore";
-import { Search, Trophy, Send, User, Loader2, CheckCircle2 } from "lucide-react";
+import { collection, doc, getDocs, limit, query, serverTimestamp, where, writeBatch } from "firebase/firestore";
+import { CheckCircle2, Loader2, Plus, Search, Send, Trash2, Trophy, User, X } from "lucide-react";
+
+// Admin → Send Jackpot: one or many players, each with their own amount. Every jackpot
+// is a pending jackpots/{id} the player claims from their dashboard (/api/wallet
+// "jackpot"); one send writes them all in a single batch, tagged with the same batchId.
+
+const MAX_RECIPIENTS = 100;
+const MAX_JACKPOT = 1000000; // lib/money MAX_AMOUNT: the claim refuses more
+const usd = (n) => `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/** The amount typed in a row, in dollars (whole cents), or null if it isn't one. */
+function amountOf(value) {
+  const s = String(value ?? "").trim();
+  if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
+  const n = Math.round(Number(s) * 100) / 100;
+  return n > 0 && n <= MAX_JACKPOT ? n : null;
+}
 
 export default function AdminJackpot() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [users, setUsers] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [amount, setAmount] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState(null);
   const [searching, setSearching] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [rows, setRows] = useState([]); // [{ user: { id, email, username, fullName }, amount: "" }]
+  const [reviewing, setReviewing] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const [sent, setSent] = useState(null); // { count, total }
 
-  // Search users by Email or ID
-  const handleSearch = async () => {
-    if (!searchTerm.trim()) return;
+  // Players whose email or account username starts with what was typed.
+  const handleSearch = async (e) => {
+    e?.preventDefault();
+    const term = searchTerm.trim().replace(/^@/, "");
+    if (!term) return;
     setSearching(true);
     try {
-      const q = query(
-        collection(db, "users"), 
-        where("email", ">=", searchTerm),
-        where("email", "<=", searchTerm + "\uf8ff"),
-        limit(5)
-      );
-      const snap = await getDocs(q);
-      const results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setUsers(results);
+      const prefix = (field, value) => getDocs(query(collection(db, "users"), where(field, ">=", value), where(field, "<=", `${value}`), limit(8)));
+      const snaps = await Promise.all([prefix("email", term), prefix("email", term.toLowerCase()), prefix("username", term)]);
+      const found = new Map();
+      for (const s of snaps) for (const d of s.docs) found.set(d.id, { id: d.id, email: d.data().email || "", username: d.data().username || "", fullName: d.data().fullName || "" });
+      setResults([...found.values()]);
     } catch (err) {
       console.error(err);
+      setResults([]);
     } finally {
       setSearching(false);
     }
   };
 
-  const sendJackpot = async () => {
-    if (!selectedUser || !amount || loading) return;
-    setLoading(true);
-    
-    try {
-      await addDoc(collection(db, "jackpots"), {
-        userId: selectedUser.id,
-        userEmail: selectedUser.email,
-        amount: Number(amount),
-        status: "pending", // pending, claimed
-        createdAt: serverTimestamp(),
-        type: "ADMIN_GIFT"
-      });
+  const addRow = (user) => {
+    setError("");
+    setSent(null);
+    setRows((r) => (r.some((x) => x.user.id === user.id) || r.length >= MAX_RECIPIENTS ? r : [...r, { user, amount: "" }]));
+  };
+  const setAmount = (id, amount) => setRows((r) => r.map((x) => (x.user.id === id ? { ...x, amount } : x)));
+  const removeRow = (id) => setRows((r) => r.filter((x) => x.user.id !== id));
 
-      setSuccess(true);
-      setAmount("");
-      setSelectedUser(null);
+  const total = useMemo(() => rows.reduce((s, x) => s + (amountOf(x.amount) || 0), 0), [rows]);
+  const invalid = rows.filter((x) => amountOf(x.amount) === null).length;
+
+  const review = () => {
+    if (!rows.length) return setError("Add at least one player.");
+    if (invalid) return setError(`Enter an amount for ${invalid === 1 ? "1 player" : `${invalid} players`} (more than $0, at most 2 decimals).`);
+    setError("");
+    setReviewing(true);
+  };
+
+  const send = async () => {
+    if (sending) return;
+    setSending(true);
+    setError("");
+    try {
+      const batch = writeBatch(db);
+      const batchId = doc(collection(db, "jackpots")).id;
+      for (const { user, amount } of rows) {
+        batch.set(doc(collection(db, "jackpots")), {
+          userId: user.id,
+          userEmail: user.email,
+          amount: amountOf(amount),
+          status: "pending", // pending, claimed
+          createdAt: serverTimestamp(),
+          type: "ADMIN_GIFT",
+          batchId,
+        });
+      }
+      await batch.commit();
+      setSent({ count: rows.length, total });
+      setRows([]);
+      setResults(null);
       setSearchTerm("");
-      setTimeout(() => setSuccess(false), 3000);
+      setReviewing(false);
     } catch (err) {
       console.error(err);
-      alert("Failed to dispatch jackpot");
+      setError(`Failed to dispatch the jackpots: ${err?.message || err}. Nothing was sent.`);
+      setReviewing(false);
     } finally {
-      setLoading(false);
+      setSending(false);
     }
   };
 
+  const who = (u) => (u.username ? `@${u.username}` : u.fullName || u.email);
+
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center gap-4 mb-8">
         <div className="p-4 bg-amber-100 text-amber-600 rounded-3xl">
           <Trophy size={32} />
         </div>
         <div>
           <h1 className="text-3xl font-black uppercase italic tracking-tighter text-slate-800">Jackpot Dispatch</h1>
-          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Reward loyal players with instant bonuses</p>
+          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Send jackpots to one or many players, each with its own amount</p>
         </div>
       </div>
 
+      {sent && (
+        <div role="status" className="bg-emerald-500 text-white rounded-[2rem] p-6 flex items-center gap-3">
+          <CheckCircle2 size={28} />
+          <p className="font-black uppercase tracking-widest italic text-sm">
+            {sent.count === 1 ? "1 jackpot" : `${sent.count} jackpots`} dispatched · {usd(sent.total)}
+          </p>
+          <button onClick={() => setSent(null)} className="ml-auto opacity-80 hover:opacity-100" aria-label="Dismiss"><X size={18} /></button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Step 1: Find User */}
+        {/* Step 1: Find players */}
         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
           <h3 className="text-sm font-black text-[#1D4FC4] uppercase mb-6 flex items-center gap-2">
-            <User size={16} className="text-[#1D4FC4]" /> 1. Select Recipient
+            <User size={16} className="text-[#1D4FC4]" /> 1. Add Players
           </h3>
-          
-          <div className="flex gap-2 mb-6">
+
+          <form onSubmit={handleSearch} className="flex gap-2 mb-6">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <input 
+              <input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search user email..."
+                placeholder="Search email or username..."
                 className="w-full bg-slate-50 border text-black border-slate-100 rounded-2xl py-3 pl-10 pr-4 text-sm outline-none focus:border-[#2457D6] transition-all"
               />
             </div>
-            <button 
-              onClick={handleSearch}
+            <button
+              type="submit"
               disabled={searching}
               className="bg-slate-800 text-white px-6 rounded-2xl font-bold text-xs uppercase hover:bg-black transition-all"
             >
               {searching ? <Loader2 className="animate-spin" size={16} /> : "Find"}
             </button>
-          </div>
+          </form>
 
           <div className="space-y-2">
-            {users.map(u => (
-              <div 
-                key={u.id}
-                onClick={() => setSelectedUser(u)}
-                className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
-                  selectedUser?.id === u.id ? 'border-[#2457D6] bg-[#D7E2FF]' : 'border-slate-100 hover:bg-slate-50'
-                }`}
-              >
-                <div>
-                  <p className="text-xs font-black text-slate-700">{u.email}</p>
-                  <p className="text-[10px] text-slate-400">UID: {u.id.slice(0,8)}...</p>
-                </div>
-                {selectedUser?.id === u.id && <CheckCircle2 size={18} className="text-[#1D4FC4]" />}
-              </div>
-            ))}
+            {results?.length === 0 && <p className="text-xs font-bold text-slate-400 text-center py-4">No players found.</p>}
+            {results?.map((u) => {
+              const added = rows.some((x) => x.user.id === u.id);
+              return (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => addRow(u)}
+                  disabled={added || rows.length >= MAX_RECIPIENTS}
+                  className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                    added ? "border-[#2457D6] bg-[#D7E2FF]" : "border-slate-100 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="min-w-0">
+                    <span className="block text-xs font-black text-slate-700 truncate">{u.email || who(u)}</span>
+                    <span className="block text-[10px] text-slate-400 truncate">{u.username ? `@${u.username} · ` : ""}UID: {u.id.slice(0, 8)}...</span>
+                  </span>
+                  {added ? <CheckCircle2 size={18} className="text-[#1D4FC4] shrink-0" /> : <Plus size={18} className="text-slate-400 shrink-0" />}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Step 2: Amount & Send */}
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden">
-          {success && (
-            <div className="absolute inset-0 bg-emerald-500 flex flex-col items-center justify-center text-white z-20 animate-in fade-in duration-300">
-              <CheckCircle2 size={48} className="mb-2" />
-              <p className="font-black uppercase tracking-widest italic">Jackpot Dispatched!</p>
+        {/* Step 2: Amounts & Send */}
+        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+          <h3 className="text-sm font-black uppercase mb-6 text-[#1D4FC4] flex items-center gap-2">
+            <Send size={16} className="text-amber-600" /> 2. Set Amounts
+          </h3>
+
+          {rows.length === 0 ? (
+            <p className="text-xs font-bold text-slate-400 text-center py-10">Find players and tap them to add them here.</p>
+          ) : (
+            <div className="space-y-2 mb-6 max-h-[50vh] overflow-y-auto pr-1">
+              {rows.map(({ user, amount }) => {
+                const bad = amount !== "" && amountOf(amount) === null;
+                return (
+                  <div key={user.id} data-jackpot-row={user.email} className="flex items-center gap-2 p-3 rounded-2xl border border-slate-100">
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-xs font-black text-slate-700 truncate">{who(user)}</span>
+                      <span className="block text-[10px] text-slate-400 truncate">{user.email}</span>
+                    </span>
+                    <span className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 font-black text-slate-400 text-sm">$</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={amount}
+                        onChange={(e) => setAmount(user.id, e.target.value)}
+                        placeholder="0.00"
+                        aria-label={`Amount for ${user.email}`}
+                        className={`w-28 bg-slate-50 border rounded-xl py-2 pl-7 pr-2 text-sm font-black text-slate-800 outline-none ${bad ? "border-rose-400" : "border-slate-100 focus:border-amber-500"}`}
+                      />
+                    </span>
+                    <button type="button" onClick={() => removeRow(user.id)} aria-label={`Remove ${user.email}`} className="p-2 text-slate-400 hover:text-rose-600">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
 
-          <h3 className="text-sm font-black uppercase mb-6 text-[#1D4FC4] flex items-center gap-2">
-            <Send size={16} className="text-amber-600" /> 2. Set Amount
-          </h3>
-
-          <div className="space-y-6">
-            <div>
-              <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Amount (USD)</label>
-              <div className="relative mt-1">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-400">$</span>
-                <input 
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full bg-slate-50 border border-slate-100 rounded-3xl py-6 pl-10 pr-4 text-3xl font-black text-slate-800 outline-none focus:border-amber-500"
-                />
-              </div>
-            </div>
-
-            <button 
-              onClick={sendJackpot}
-              disabled={!selectedUser || !amount || loading}
-              className="w-full bg-amber-500 hover:bg-amber-600 py-6 rounded-[2rem] text-white font-black uppercase tracking-widest shadow-xl shadow-amber-200 transition-all active:scale-95 disabled:opacity-30 disabled:grayscale"
-            >
-              {loading ? <Loader2 className="animate-spin mx-auto" size={24} /> : "Dispatch Jackpot"}
-            </button>
-
-            {selectedUser && (
-              <p className="text-center text-[10px] font-bold text-slate-400 uppercase italic">
-                Sending to: <span className="text-slate-600">{selectedUser.email}</span>
-              </p>
-            )}
+          <div className="flex items-center justify-between mb-4 text-xs font-black uppercase tracking-widest text-slate-500">
+            <span>{rows.length} player{rows.length === 1 ? "" : "s"}</span>
+            <span data-jackpot-total>Total {usd(total)}</span>
           </div>
+          {error && <p className="text-xs font-bold text-rose-600 mb-4">{error}</p>}
+          <button
+            type="button"
+            onClick={review}
+            disabled={!rows.length || sending}
+            className="w-full bg-amber-500 hover:bg-amber-600 py-6 rounded-[2rem] text-white font-black uppercase tracking-widest shadow-xl shadow-amber-200 transition-all active:scale-95 disabled:opacity-30 disabled:grayscale"
+          >
+            Review & Dispatch
+          </button>
+          {rows.length >= MAX_RECIPIENTS && (
+            <p className="text-center text-[10px] font-bold text-slate-400 uppercase mt-3">Up to {MAX_RECIPIENTS} players per dispatch</p>
+          )}
         </div>
       </div>
+
+      {reviewing && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Confirm jackpots">
+          <div className="bg-white rounded-[2rem] w-full max-w-md p-8 space-y-5">
+            <h3 className="text-lg font-black uppercase italic tracking-tighter text-slate-800">
+              Send {rows.length === 1 ? "1 jackpot" : `${rows.length} jackpots`}?
+            </h3>
+            <div className="max-h-[45vh] overflow-y-auto divide-y divide-slate-100 border border-slate-100 rounded-2xl">
+              {rows.map(({ user, amount }) => (
+                <div key={user.id} className="flex justify-between gap-3 px-4 py-2.5 text-xs">
+                  <span className="font-bold text-slate-600 truncate">{who(user)}</span>
+                  <span className="font-black text-slate-800">{usd(amountOf(amount))}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-between text-sm font-black text-slate-800">
+              <span>Total</span>
+              <span>{usd(total)}</span>
+            </div>
+            <p className="text-[11px] font-bold text-slate-400">Each player sees their jackpot on their dashboard and claims it into their wallet.</p>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setReviewing(false)} disabled={sending} className="flex-1 py-4 rounded-2xl bg-slate-100 text-slate-600 font-black uppercase text-xs">
+                Back
+              </button>
+              <button type="button" onClick={send} disabled={sending} className="flex-1 py-4 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-black uppercase text-xs">
+                {sending ? <Loader2 className="animate-spin mx-auto" size={18} /> : "Send"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

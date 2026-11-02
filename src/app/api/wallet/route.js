@@ -18,6 +18,7 @@ import { notifyUser } from "@/lib/notifications";
 import { ensureReferralCode } from "@/lib/referralCode";
 import { playerActivity } from "@/lib/activity";
 import { periodStarts, tzOffset } from "@/lib/periods";
+import { recordPurchase } from "@/lib/purchases";
 
 // The main wallet, users/{uid}.wallet. Players' apps can only read it (Firestore
 // rules); every change is made here, inside one transaction that checks it.
@@ -445,10 +446,12 @@ async function usernameChange(db, caller, { username }) {
     }
     const now = FV().serverTimestamp();
     tx.update(userRef, { username: name, wallet: FV().increment(-USERNAME_CHANGE_PRICE), usernameChangedAt: now });
-    tx.set(userRef.collection("transactions").doc(), {
+    const txRef = userRef.collection("transactions").doc();
+    tx.set(txRef, {
       title: "Username Change", amount: -USERNAME_CHANGE_PRICE, type: "username_change", status: "completed", timestamp: now,
       description: `@${me.username || ""} → @${name}`,
     });
+    recordPurchase(tx, db, { kind: "username_change", uid: caller.uid, amount: USERNAME_CHANGE_PRICE, username: name, item: `@${me.username || ""} → @${name}`, txId: txRef.id });
     return { username: name, balance: toDollars(cents(me.wallet) - priceC), old: me.username || "" };
   });
   if (out.error) return fail(out.error, out.status);

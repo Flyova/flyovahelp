@@ -209,10 +209,29 @@ export function usernameCharge({ owned, ageMonths, isAgent, freeUsernameUsed }) 
   return freeUsernameUsed === true || owned >= 1 ? USERNAME_PRICE : 0;
 }
 
-/** Wording for the add-a-username button and heading, from what it would cost (null = not known yet). */
-export const usernameOffer = (price) => (price > 0
+/**
+ * Why the next chat username is free (null when it costs USERNAME_PRICE): { reason:
+ * "first" | "agent" | "old_account", left }, `left` counting the next one.
+ */
+export function usernameFree({ owned, ageMonths, isAgent, freeUsernameUsed }) {
+  if (usernameCharge({ owned, ageMonths, isAgent, freeUsernameUsed }) > 0) return null;
+  if (owned < 1) return { reason: "first", left: 1 };
+  const old = ageMonths >= OLD_ACCOUNT_MONTHS;
+  return { reason: old ? "old_account" : "agent", left: 1 + (old ? FREE_USERNAMES_OLD_ACCOUNT : FREE_USERNAMES_AGENT) - owned };
+}
+
+/** usernameFree in words: "accounts 8+ months old get 10 more free, 7 left". */
+export function usernameFreeText(free) {
+  if (!free) return "";
+  if (free.reason === "first") return "your first username is free";
+  const [who, quota] = free.reason === "agent" ? ["agents", FREE_USERNAMES_AGENT] : [`accounts ${OLD_ACCOUNT_MONTHS}+ months old`, FREE_USERNAMES_OLD_ACCOUNT];
+  return `${who} get ${quota} more free, ${free.left} left`;
+}
+
+/** Wording for the add-a-username button and heading, from what it would cost (null = not known yet) and why it's free. */
+export const usernameOffer = (price, free) => (price > 0
   ? { button: `Buy · $${price}`, title: `Buy a chat username ($${price} from your wallet)` }
-  : { button: "Add", title: price === 0 ? "Add a chat username (free)" : "Add a chat username" });
+  : { button: "Add", title: price === 0 ? `Add a chat username (free${free ? `: ${usernameFreeText(free)}` : ""})` : "Add a chat username" });
 
 /** One line about one of your usernames: main/extra/logged in, password, other accounts, in use. */
 export function accountLabels(identity, info, active) {

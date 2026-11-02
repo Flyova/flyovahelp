@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Ban, Bell, Check, ChevronDown, Info, KeyRound, LifeBuoy, LogIn, Radio, Shield, UserPlus, UserRound, Users, Wallet } from "lucide-react";
-import { formatCoins } from "@/lib/chat";
+import { formatCoins, usernameFreeText } from "@/lib/chat";
 import { useChat } from "@/components/chat/ChatProvider";
 import Avatar from "@/components/Avatar";
 import { SettingsPage, SettingsRow, SettingsSearch, SettingsSection } from "@/components/chat/SettingsList";
@@ -67,7 +67,7 @@ function ProfileSwitcher() {
  * each open their own page.
  */
 export default function ChatSettingsPage() {
-  const { identities, active, usernamePrice, coinsOf, openCoinWallet, blockedNames, myConvos, settingsName, settingsFor, settingsLoaded } = useChat();
+  const { identities, active, usernamePrice, usernameFree, coinsOf, openCoinWallet, blockedNames, myConvos, settingsName, settingsFor, settingsLoaded } = useChat();
   const [q, setQ] = useState("");
 
   const name = settingsName;
@@ -109,7 +109,8 @@ export default function ChatSettingsPage() {
           key: "add",
           icon: UserPlus,
           title: "Add a username",
-          text: usernamePrice > 0 ? `Buy another chat username for $${usernamePrice} from your wallet` : "Add another chat username",
+          text: usernamePrice > 0 ? `Buy another chat username for $${usernamePrice} from your wallet`
+            : usernameFree ? `Free: ${usernameFreeText(usernameFree)}` : "Add another chat username",
           value: usernamePrice === 0 ? "Free" : usernamePrice > 0 ? `$${usernamePrice}` : "",
           href: "/chat/settings/add-username",
           words: "buy create new username",
