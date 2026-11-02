@@ -6,7 +6,7 @@ import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, deleteDoc, doc, limit, onSnapshot, orderBy, query, updateDoc, writeBatch } from "firebase/firestore";
 import {
-  AlertTriangle, Bell, CheckCircle2, ChevronLeft, Gamepad2, Info, Landmark, Mail, MailOpen, Megaphone, MessageCircle,
+  AlertTriangle, Bell, CheckCircle2, ChevronLeft, Gamepad2, Info, Landmark, LifeBuoy, Mail, MailOpen, Megaphone, MessageCircle,
   ShieldCheck, SlidersHorizontal, Trash2, Users,
 } from "lucide-react";
 import { DELETED_ANNOUNCEMENTS, FEED_KINDS, READ_ANNOUNCEMENTS, shownInFeed, storeIds, storedIds } from "@/lib/notificationFeed";
@@ -18,6 +18,7 @@ const TYPES = {
   merchant: { label: "Agent", icon: Landmark, color: "text-amber-400 bg-amber-500/10" },
   game: { label: "Game update", icon: Gamepad2, color: "text-violet-400 bg-violet-500/10" },
   account: { label: "Account activity", icon: ShieldCheck, color: "text-[#7A9BEE] bg-[#2457D6]/10" },
+  support: { label: "Support", icon: LifeBuoy, color: "text-emerald-400 bg-emerald-500/10" },
   info: { label: "Info", icon: Info, color: "text-[#7A9BEE] bg-[#2457D6]/10" },
   success: { label: "Success", icon: CheckCircle2, color: "text-green-400 bg-green-500/10" },
   warning: { label: "Warning", icon: AlertTriangle, color: "text-rose-400 bg-rose-500/10" },

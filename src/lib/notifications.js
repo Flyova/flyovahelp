@@ -8,10 +8,11 @@ import { ADMIN_NOTIFY_EMAIL } from "@/lib/money";
 // the admins' alerts, admin_notifications (Admin → Alerts).
 //
 // Types: chat ("group", "message"), trades with agents ("merchant"), friends games and
-// rounds ("game"), security and account changes ("account"), and general news
-// ("info", "success", "warning"). Admin announcements (broadcasts) use info,
-// success, warning and game too.
-export const NOTIFICATION_TYPES = ["group", "message", "merchant", "game", "account", "info", "success", "warning"];
+// rounds ("game"), security and account changes ("account"), replies in Live Support
+// ("support"), and general news ("info", "success", "warning"). Admin announcements
+// (broadcasts) use info, success, warning and game too. Support replies have no
+// switch: they only come to a player who wrote to support.
+export const NOTIFICATION_TYPES = ["group", "message", "merchant", "game", "account", "support", "info", "success", "warning"];
 
 const FV = () => admin.firestore.FieldValue;
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -37,6 +38,10 @@ export async function notifyUser(db, uid, { type = "info", title, body = "", url
     console.error("Notification failed:", e?.message || e);
   }
 }
+
+/** Tells a player support wrote in their Live Support chat: one notification, replaced by the next. */
+export const notifySupportReply = (db, uid, text) =>
+  notifyUser(db, uid, { type: "support", title: "StraWins Support replied", body: text, url: "/support", key: "support" });
 
 /** notifyUser for several players at once. */
 export const notifyUsers = (db, uids, message) => Promise.all([...new Set(uids.filter(Boolean))].map((uid) => notifyUser(db, uid, message)));
