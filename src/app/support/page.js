@@ -14,6 +14,8 @@ import {
   updateDoc, arrayUnion 
 } from "firebase/firestore";
 import { authFetch } from "@/lib/authFetch";
+import { supportJpeg } from "@/lib/supportPhotos";
+import SupportImage from "@/components/SupportImage";
 
 export default function SupportChat() {
   const CHAT_NOTIFY_EMAIL = "contact.notifications.surname@gmail.com";
@@ -26,7 +28,10 @@ export default function SupportChat() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [chatResolved, setChatResolved] = useState(false);
+  const [photo, setPhoto] = useState(""); // a picked photo (JPEG data URL) waiting to be sent
+  const [photoError, setPhotoError] = useState("");
   const scrollRef = useRef(null);
+  const fileRef = useRef(null);
 
   useEffect(() => {
     const now = Date.now();
@@ -85,9 +90,37 @@ export default function SupportChat() {
     }
   }, [messages]);
 
+  const pickPhoto = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setPhotoError("");
+    try {
+      setPhoto(await supportJpeg(file));
+    } catch (err) {
+      setPhotoError(err.message);
+    }
+  };
+
+  // A photo (with the typed text as its caption) goes through /api/support, which also
+  // emails the team; text alone is written straight to the chat.
+  const sendPhoto = async () => {
+    setSending(true);
+    setPhotoError("");
+    const res = await authFetch("/api/support", { method: "POST", body: { image: photo, caption: newMessage.trim() } });
+    if (res?.error) setPhotoError(res.error);
+    else {
+      setPhoto("");
+      setNewMessage("");
+    }
+    setSending(false);
+  };
+
   const sendMessage = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || sending) return;
+    if (sending) return;
+    if (photo) return sendPhoto();
+    if (!newMessage.trim()) return;
 
     setSending(true);
     const textToSend = newMessage;
@@ -221,7 +254,8 @@ export default function SupportChat() {
                     ? "bg-[#2457D6] text-white rounded-tr-none border border-white/10" 
                     : "bg-[#142036] text-white border border-white/5 rounded-tl-none"
                   }`}>
-                    {msg.text}
+                    {msg.imageId && <SupportImage imageId={msg.imageId} />}
+                    {msg.text ? <p className={msg.imageId ? "mt-2" : undefined}>{msg.text}</p> : null}
                   </div>
                   <span className="text-[8px] font-black uppercase text-gray-600 mt-2 px-1">
                     {isMe ? "Sent" : "Agent"}
@@ -235,18 +269,45 @@ export default function SupportChat() {
 
       {/* INPUT AREA - ADJUSTED FOR BOTTOM NAV BAR */}
       <div className="shrink-0 p-6 bg-[#142036] border-t border-white/5 pb-32"> 
+        {(photo || photoError) && (
+          <div className="max-w-4xl mx-auto mb-3 flex items-center gap-3">
+            {photo && (
+              <div className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element -- a data URL preview */}
+                <img src={photo} alt="Photo to send" className="w-16 h-16 rounded-xl object-cover border border-white/10" />
+                <button type="button" onClick={() => setPhoto("")} aria-label="Remove photo"
+                  className="absolute -top-2 -right-2 p-1 rounded-full bg-[#0B1220] border border-white/20 text-white">
+                  <X size={12} />
+                </button>
+              </div>
+            )}
+            <p className={`text-[10px] font-black uppercase tracking-widest ${photoError ? "text-rose-400" : "text-gray-500"}`}>
+              {photoError || "Add a caption or just send it"}
+            </p>
+          </div>
+        )}
         <form onSubmit={sendMessage} className="flex items-center gap-3 max-w-4xl mx-auto">
+          <input ref={fileRef} type="file" accept="image/*" onChange={pickPhoto} className="hidden" />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={sending}
+            aria-label="Send a photo"
+            className="p-4 rounded-2xl bg-black/40 border border-white/10 text-gray-400 hover:text-white active:scale-95 disabled:opacity-30"
+          >
+            <ImageIcon size={22} />
+          </button>
           <div className="flex-1 relative">
             <input 
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="Type a message..."
+              placeholder={photo ? "Add a caption..." : "Type a message..."}
               className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 px-6 text-sm font-bold text-white placeholder:text-slate-500 outline-none focus:border-[#2457D6] transition-all"
             />
           </div>
           <button 
             type="submit"
-            disabled={!newMessage.trim() || sending}
+            disabled={(!newMessage.trim() && !photo) || sending}
             className="bg-[#2457D6] p-4 rounded-2xl text-white shadow-xl active:scale-95 disabled:opacity-30"
           >
             {sending ? <Loader2 size={22} className="animate-spin" /> : <Send size={22} />}

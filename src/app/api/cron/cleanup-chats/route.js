@@ -11,21 +11,27 @@ export async function GET() {
     let batch = adminDb.batch();
     const cutoffMs = Date.now() - (7 * 24 * 60 * 60 * 1000);
     
+    const queueDelete = async (ref) => {
+      batch.delete(ref);
+      opsInBatch++;
+      if (opsInBatch >= BATCH_LIMIT) {
+        await batch.commit();
+        batch = adminDb.batch();
+        opsInBatch = 0;
+      }
+    };
+
     // collectionGroup("support_chats") covers top-level + nested support chats.
     const chatsSnap = await adminDb.collectionGroup("support_chats").get();
     for (const chatDoc of chatsSnap.docs) {
       const data = chatDoc.data() || {};
       const updatedAtMs = data.updatedAt?.toMillis?.() || 0;
       if (updatedAtMs > 0 && updatedAtMs < cutoffMs) {
-        batch.delete(chatDoc.ref);
-        opsInBatch++;
+        // Its photos (/api/support) go with it: deleting a doc leaves its subcollections.
+        const photos = await chatDoc.ref.collection("support_images").select().get();
+        for (const photo of photos.docs) await queueDelete(photo.ref);
+        await queueDelete(chatDoc.ref);
         totalDeleted++;
-
-        if (opsInBatch >= BATCH_LIMIT) {
-          await batch.commit();
-          batch = adminDb.batch();
-          opsInBatch = 0;
-        }
       }
     }
 
