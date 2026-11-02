@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Pin, X } from "lucide-react";
 
 /**
- * A group's pinned messages, in a bar under the thread header (WhatsApp style):
+ * A group's (or the Chatroom's) pinned messages, in a bar under the header (WhatsApp style):
  * one at a time, newest first. Tapping it jumps to that message and moves on to
  * the next pin. `pins` = [{ id, sender, text }]; `onUnpin(pin)` (admins) adds an
  * unpin button.

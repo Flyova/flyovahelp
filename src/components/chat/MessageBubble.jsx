@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { Ban, Clock3, Coins, CornerUpLeft, Crown, MoreHorizontal, Pencil, Shield, Users } from "lucide-react";
+import { BadgeCheck, Ban, Clock3, Coins, CornerUpLeft, Crown, MoreHorizontal, Pencil, Shield, Users } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import { formatCoins } from "@/lib/chat";
 
@@ -100,7 +100,7 @@ export default function MessageBubble({
   last = true,
   showAvatar = false,
   showName = false,
-  badge = null, // "owner" | "admin": a crown or shield by the sender's name
+  badge = null, // "owner" | "admin": a crown or shield by the sender's name; "official": the Chatroom's admin (STRAWINS)
   selected = false,
   onMenu,
   onReply,
@@ -235,6 +235,11 @@ export default function MessageBubble({
               <span className="truncate">@{String(m.senderName || m.sender).replace(/^@/, "")}</span>
               {badge === "owner" && <Crown size={12} className="shrink-0 text-amber-300" aria-label="group owner" />}
               {badge === "admin" && <Shield size={12} className="shrink-0 text-sky-300" aria-label="group admin" />}
+              {badge === "official" && (
+                <span className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-[#F6C453] px-1.5 py-px text-[9.5px] font-black uppercase tracking-wide text-[#2B1800]" aria-label="StraWins admin">
+                  <BadgeCheck size={11} strokeWidth={2.6} /> Admin
+                </span>
+              )}
             </button>
           )}
 

@@ -3,7 +3,7 @@ import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import { sendPushToUsers } from "@/lib/push";
 import {
-  canPostInGroup, chatMuteMessage, coinBuyQuote, coinWithdrawQuote, formatCents, formatCoins, isCoinAmount, liveUsername, ownedUsername,
+  canPostInGroup, chatMuteMessage, chatRestrictMessage, coinBuyQuote, coinWithdrawQuote, formatCents, formatCoins, isCoinAmount, liveUsername, ownedUsername,
   usernameUids, MAX_COINS_PER_ACTION,
 } from "@/lib/chat";
 import { activityRef, balanceOf, mainUsername, walletRef } from "@/lib/coinWallets";
@@ -115,6 +115,8 @@ async function send(db, caller, { as, to, coins, convoId }) {
   );
   const user = userSnap.exists ? userSnap.data() : {};
   if (bannedUser(user)) return fail("Your account can't send chat coins.", 403);
+  const restricted = chatRestrictMessage(user);
+  if (restricted) return fail(restricted, 403);
   if (blockSnap.exists) return fail("You can't send chat coins to this player.", 403);
 
   // Where the coin card goes: a group you're both in, or the public chatroom.

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FieldPath, addDoc, collection, deleteField, doc, documentId, limitToLast, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
 } from "firebase/firestore";
-import { ChevronLeft, LockKeyhole, MoreHorizontal, Search, UserX } from "lucide-react";
+import { Ban, ChevronLeft, LockKeyhole, MoreHorizontal, Search, UserX } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { TYPING_PING_MS, canPostInGroup, containsMediaMarker, formatCount, groupOwner, isValidText, presenceOf, typingLabel } from "@/lib/chat";
 import { notifyPush } from "@/lib/pushClient";
@@ -16,6 +16,7 @@ import PinnedBar from "@/components/chat/PinnedBar";
 import MessageMenu from "@/components/chat/MessageMenu";
 import ChatSearchSheet from "@/components/chat/ChatSearchSheet";
 import ChatCaution from "@/components/chat/ChatCaution";
+import useChatSanctions from "@/components/chat/useChatSanctions";
 
 const FRESH_MS = 800; // messages that arrived this recently animate in
 const MENU_WIDTH = 228;
@@ -148,7 +149,9 @@ export default function ConversationThread({
   const lockedOut = isGroup && !!convo && !canPostInGroup(convo, me);
   // A closed private chat: the other player deleted their username.
   const closed = !isGroup && !!convo?.closed;
-  const cantSend = !convo || blockedHere || lost || !!blockedByMe || lockedOut || closed;
+  // An admin restricted your account from Chats (from a report): read only until it ends.
+  const { restricted } = useChatSanctions(uid);
+  const cantSend = !convo || blockedHere || lost || !!blockedByMe || lockedOut || closed || !!restricted;
   // Read receipts are a setting of the chat profile you're in this chat as.
   const receipts = settingsFor(me).readReceipts;
 
@@ -416,6 +419,10 @@ export default function ConversationThread({
             Unblock
           </button>
         </div>
+      ) : restricted ? (
+        <p className="px-4 py-3.5 border-t border-white/5 bg-[#142036] flex items-center justify-center gap-2 text-center text-[13px] text-white/60">
+          <Ban size={14} className="shrink-0" /> {restricted}
+        </p>
       ) : lockedOut ? (
         <p className="px-4 py-3.5 border-t border-white/5 bg-[#142036] flex items-center justify-center gap-2 text-[13px] text-white/60">
           <LockKeyhole size={14} className="shrink-0" /> Only admins can send messages

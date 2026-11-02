@@ -4,7 +4,7 @@ import { getCaller } from "@/lib/apiAuth";
 import {
   isValidUsername, liveDmRef, norm, ownedUsername, participantUidsFor, usernameUids,
   GROUP_DESCRIPTION_MAX, GROUP_NAME_MAX, MAX_GROUP_MEMBERS, groupByInvite, groupOwner, groupSearchKeys, isGroupAdmin,
-  MAX_PINNED_MESSAGES, groupCreatePrice, isBlockedFromGroup,
+  MAX_PINNED_MESSAGES, groupCreatePrice, isBlockedFromGroup, chatRestrictMessage,
 } from "@/lib/chat";
 import { chatSettingsFor } from "@/lib/chatSettings";
 import { cents, formatUsd, isBanned } from "@/lib/money";
@@ -145,6 +145,7 @@ async function createGroup(db, caller, { as, name, description, visibility }) {
     if (!userSnap.exists) return { error: "Account not found.", status: 404 };
     const user = userSnap.data();
     if (isBanned(user)) return { error: "Your account can't create groups.", status: 403 };
+    if (chatRestrictMessage(user)) return { error: chatRestrictMessage(user), status: 403 };
     const price = groupCreatePrice(user.isAgent);
     if (cents(user.wallet) < cents(price)) {
       return { error: `Creating a group costs ${formatUsd(price)} from your main wallet; you have ${formatUsd(user.wallet)}.`, status: 402 };

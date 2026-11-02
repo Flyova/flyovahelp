@@ -5,6 +5,8 @@ import { db } from "@/lib/firebase";
 import { collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
 import { Flag, Loader2, Trophy } from "lucide-react";
 import { changedBeforeCounts, depositLocked, flagReasonLabel, profileChangeCounts, toDate } from "@/components/admin/accountFlags";
+import ChatRestrictButton, { chatRestrictionLabel } from "@/components/admin/ChatRestrict";
+import { chatMuteLeft, isChatMuted } from "@/lib/chat";
 
 const RESTRICTIONS = [
   ["restrictDeposit", "Deposits"], ["restrictWithdrawal", "Withdrawals"], ["restrictTransfer", "Transfers"],
@@ -165,6 +167,17 @@ export default function UserActivityPage() {
                 Lift lock
               </button>
             )}
+            {chatRestrictionLabel(user) && (
+              <span className="text-[10px] bg-rose-100 text-rose-700 px-2 py-1 rounded-full font-black uppercase">{chatRestrictionLabel(user)}</span>
+            )}
+            {isChatMuted(user) && (
+              <span className="text-[10px] bg-rose-100 text-rose-700 px-2 py-1 rounded-full font-black uppercase">
+                Muted in the Chatroom · {chatMuteLeft(user) ? `${chatMuteLeft(user)} left` : "forever"}
+              </span>
+            )}
+          </div>
+          <div className="md:col-span-3">
+            <ChatRestrictButton uid={id} name={user?.username || user?.fullName || id} user={user} />
           </div>
         </div>
       </div>

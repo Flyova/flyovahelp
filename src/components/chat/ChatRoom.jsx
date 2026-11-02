@@ -1,13 +1,14 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Search } from "lucide-react";
-import { collection, doc, limit, onSnapshot, orderBy, query } from "firebase/firestore";
-import { db, auth } from "@/lib/firebase";
+import { Ban, Search, VolumeX } from "lucide-react";
+import { collection, limit, onSnapshot, orderBy, query, where } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
-import { containsMediaMarker, formatCount, isChatMuted } from "@/lib/chat";
+import { CHAT_SANCTION_LENGTHS, chatSanctionLabel, containsMediaMarker, formatCount } from "@/lib/chat";
 import { playChatSound, playCoinSound } from "@/lib/chatSound";
-import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import ChatMessages from "@/components/chat/ChatMessages";
+import PinnedBar from "@/components/chat/PinnedBar";
+import useChatSanctions from "@/components/chat/useChatSanctions";
 import ChatComposer from "@/components/chat/ChatComposer";
 import { useChat } from "@/components/chat/ChatProvider";
 import ChatSearchSheet from "@/components/chat/ChatSearchSheet";
@@ -19,11 +20,13 @@ const FRESH_MS = 800; // messages that arrived this recently animate in
 /**
  * Public chatroom: one room for every signed-in player. Reading is live from
  * Firestore; sending, editing and deleting go through /api/chat/room (rate limits,
- * bans). Tap (or right-click) a message for its menu, swipe left to reply.
+ * bans). Tap (or right-click) a message for its menu, swipe left to reply. Posting as
+ * STRAWINS (the Chatroom's admin, lib/chat ROOM_ADMIN) adds Delete, Pin and Mute to
+ * everyone's messages; its pinned messages show in a bar on top.
  * `sound`: play the new-message sound when someone else posts.
  */
 export default function ChatRoom({ uid, active, blocked = [], sound = true, onMessagePrivately, onReport, onOpenProfile, onSendCoins, onBlock }) {
-  const { confirmAction, toneFor } = useChat();
+  const { confirmAction, ask, toneFor } = useChat();
   const [messages, setMessages] = useState([]);
   const [outbox, setOutbox] = useState([]); // your messages on their way: shown at once, with a clock
   const [searching, setSearching] = useState(false);
@@ -35,9 +38,10 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
   const [replyTo, setReplyTo] = useState(null);
   const [editing, setEditing] = useState(null);
   const inputRef = useRef(null);
-  const [isStaff, setIsStaff] = useState(false);
-  const [muted, setMuted] = useState(false); // muted by an admin: no posting or editing (the server checks too)
-  const [stats, setStats] = useState(null); // { members, online }
+  // A restriction from Chats or a Chatroom mute: no posting or editing (the server checks too).
+  const { roomBlocked } = useChatSanctions(uid);
+  const [stats, setStats] = useState(null); // { members, online, admin }: admin = you're posting as the Chatroom's admin
+  const [pins, setPins] = useState([]);
   const [burst, setBurst] = useState(null); // coins-sent animation
   const clearBurst = useCallback(() => setBurst(null), []);
   const soundRef = useRef(sound);
@@ -80,22 +84,22 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
     );
   }, [uid]);
 
-  // How many players are in the Chatroom (everyone with a chat username) and online now.
+  // How many players are in the Chatroom (everyone with a chat username) and online now,
+  // and whether the username you're posting as is the Chatroom's admin.
   useEffect(() => {
     if (!uid) return;
-    const load = () => authFetch("/api/chat/room").then((r) => !r.error && setStats(r)).catch(() => {});
+    const load = () => authFetch(`/api/chat/room?as=${encodeURIComponent(active || "")}`).then((r) => !r.error && setStats(r)).catch(() => {});
     load();
     const t = setInterval(load, STATS_EVERY_MS);
     return () => clearInterval(t);
-  }, [uid]);
+  }, [uid, active]);
+  const roomAdmin = !!stats?.admin;
 
-  // StraWins admins/staff can delete anyone's message in the Chatroom (the server
-  // re-checks the role); players can only delete their own. A muted player can't edit.
+  // The Chatroom admin's pinned messages, newest pin first.
   useEffect(() => {
     if (!uid) return;
-    return onSnapshot(doc(db, "users", uid), (s) => {
-      setIsStaff(!!resolvePrivilegedRole(s.data()?.role, auth.currentUser?.email));
-      setMuted(isChatMuted(s.data()));
+    return onSnapshot(query(collection(db, "chatroom_messages"), where("pinned", "==", true)), (s) => {
+      setPins(s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((m) => !m.deletedForEveryone).sort((a, b) => (b.pinnedAt || 0) - (a.pinnedAt || 0)));
     }, () => {});
   }, [uid]);
 
@@ -181,11 +185,30 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
     setTimeout(() => setOutbox((o) => o.filter((m) => m.id !== local.id)), 15000);
   };
 
+  // Other people's messages are deleted only by the Chatroom's admin (the server re-checks).
   const remove = async (m) => {
-    if (m.senderUid !== uid && !(await confirmAction({ title: "Delete this message?", message: `@${m.sender}'s message is removed for everyone. Only StraWins admins can do this.`, confirmLabel: "Delete" }))) return;
-    const r = await authFetch("/api/chat/room", { method: "POST", body: { action: "delete", id: m.id } });
+    const mine = m.senderUid === uid;
+    if (!mine && !(await confirmAction({ title: "Delete this message?", message: `@${m.sender}'s message is removed for everyone.`, confirmLabel: "Delete" }))) return;
+    const r = await authFetch("/api/chat/room", { method: "POST", body: { action: "delete", id: m.id, ...(mine ? {} : { as: active }) } });
     if (r.error) setError(r.error);
   };
+  const togglePin = async (m, pin) => {
+    setError("");
+    const r = await authFetch("/api/chat/room", { method: "POST", body: { action: "pin", id: m.id, as: active, pin } });
+    if (r.error) setError(r.error);
+  };
+  const mute = async (m) => {
+    const days = await ask({
+      title: `Mute @${m.sender} in the Chatroom?`,
+      message: "They can still read, but can't post or edit until it ends.",
+      actions: CHAT_SANCTION_LENGTHS.map((d) => ({ label: chatSanctionLabel(d), value: d ?? "forever", tone: d ? "primary" : "danger" })),
+    });
+    if (days === null) return;
+    setError("");
+    const r = await authFetch("/api/chat/room", { method: "POST", body: { action: "mute", id: m.id, as: active, days: days === "forever" ? null : days } });
+    if (r.error) setError(r.error);
+  };
+  const pinnedIds = new Set(pins.map((p) => p.id));
 
   return (
     // Sized to the visible screen (minus the app header from md up, the Chats title, tabs and identity bar) so the composer never hides.
@@ -215,6 +238,8 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
         </div>
       </div>
 
+      <PinnedBar pins={pins} onJump={(id) => setFocus({ id })} onUnpin={roomAdmin ? (p) => togglePin(p, false) : undefined} />
+
       {error && <div className="mx-3 mt-3 bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-bold p-2.5 rounded-xl">{error}</div>}
 
       <ChatMessages
@@ -225,10 +250,13 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
         loading={!loaded}
         emptyText="No messages yet — say hello to everyone!"
         onReply={startReply}
-        onEdit={muted ? undefined : startEdit}
+        onEdit={roomBlocked ? undefined : startEdit}
         onDelete={remove}
-        canDelete={(m) => m.senderUid === uid || isStaff}
+        canDelete={(m) => m.senderUid === uid || roomAdmin}
         deleteLabel={(m) => (m.senderUid === uid ? "Delete for everyone" : "Delete message (admin)")}
+        onPin={roomAdmin ? (m) => togglePin(m, !pinnedIds.has(m.id)) : undefined}
+        isPinned={(m) => pinnedIds.has(m.id)}
+        extraMenuItems={roomAdmin ? (m) => (m.senderUid && m.senderUid !== uid && !m.pending ? [{ label: `Mute @${m.sender}`, icon: VolumeX, danger: true, run: () => mute(m) }] : []) : undefined}
         onMessagePrivately={onMessagePrivately}
         onReport={onReport}
         onOpenProfile={onOpenProfile}
@@ -239,21 +267,27 @@ export default function ChatRoom({ uid, active, blocked = [], sound = true, onMe
         focus={focus}
       />
 
-      <ChatComposer
-        value={text}
-        onChange={setText}
-        onSend={send}
-        onCancel={cancelMode}
-        mode={editing ? "edit" : replyTo ? "reply" : null}
-        modeMessage={editing ?? replyTo}
-        placeholder={active ? "Message everyone…" : "Claim a username to post"}
-        disabled={!active}
-        maxLength={MAX_LENGTH}
-        sending={sending}
-        inputRef={inputRef}
-        mentionPeople={recentPosters}
-        searchPlayers
-      />
+      {roomBlocked ? (
+        <p className="px-4 py-3.5 border-t border-white/5 bg-[#142036] flex items-center justify-center gap-2 text-center text-[13px] text-white/60">
+          <Ban size={14} className="shrink-0" /> {roomBlocked}
+        </p>
+      ) : (
+        <ChatComposer
+          value={text}
+          onChange={setText}
+          onSend={send}
+          onCancel={cancelMode}
+          mode={editing ? "edit" : replyTo ? "reply" : null}
+          modeMessage={editing ?? replyTo}
+          placeholder={active ? "Message everyone…" : "Claim a username to post"}
+          disabled={!active}
+          maxLength={MAX_LENGTH}
+          sending={sending}
+          inputRef={inputRef}
+          mentionPeople={recentPosters}
+          searchPlayers
+        />
+      )}
 
       {searching && (
         <ChatSearchSheet

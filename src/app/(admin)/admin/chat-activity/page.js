@@ -1,13 +1,17 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { db } from "@/lib/firebase";
-import { collection, doc, limit, onSnapshot, orderBy, query, updateDoc, where } from "firebase/firestore";
+import { collection, doc, getDoc, limit, onSnapshot, orderBy, query, updateDoc, where } from "firebase/firestore";
 import { Ban, CheckCircle2, Flag, Globe, Loader2, Lock, Users } from "lucide-react";
+import { chatSanctionLabel, isChatRestricted } from "@/lib/chat";
+import ChatRestrictButton, { chatRestrictionLabel } from "@/components/admin/ChatRestrict";
 
 // Admin → Chat Activity: reports (chat_reports), blocks (chat_blocks) and groups
 // (conversations of type "group": who made them, when, how many members). Only
 // what the conversations record says about a group; private chats and messages
-// are never read here.
+// are never read here. A reported player's account (the owner of the reported
+// username) can be restricted from Chats from its report (components/admin/ChatRestrict).
 
 const TABS = [["reports", "Reports"], ["blocks", "Blocked"], ["groups", "Groups"]];
 const ms = (ts) => (ts?.toMillis ? ts.toMillis() : 0);
@@ -20,6 +24,8 @@ export default function AdminChatActivity() {
   const [groups, setGroups] = useState([]);
   const [loaded, setLoaded] = useState({});
   const [showResolved, setShowResolved] = useState(false);
+  const [owners, setOwners] = useState({}); // reported username -> the uid that owns it (null: gone)
+  const [restricted, setRestricted] = useState([]); // accounts restricted from Chats right now
 
   useEffect(() => {
     const done = (key) => () => setLoaded((l) => ({ ...l, [key]: true }));
@@ -37,18 +43,31 @@ export default function AdminChatActivity() {
         setGroups(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => ms(b.createdAt) - ms(a.createdAt)));
         done("groups")();
       }, done("groups")),
+      // A restriction that ran out stays chatRestricted: true but no longer counts.
+      onSnapshot(query(collection(db, "users"), where("chatRestricted", "==", true)), (snap) => {
+        setRestricted(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((u) => isChatRestricted(u)));
+      }, () => {}),
     ];
     return () => unsubs.forEach((u) => u());
   }, []);
+
+  // Who owns each reported username (usernames/{name}.uid), looked up once per name.
+  useEffect(() => {
+    const missing = [...new Set(reports.map((r) => r.reported).filter((n) => n && !(n in owners)))];
+    if (!missing.length) return;
+    Promise.all(missing.map((n) => getDoc(doc(db, "usernames", n)).then((s) => [n, s.exists() && !s.data().deleted ? s.data().uid : null]).catch(() => [n, null])))
+      .then((pairs) => setOwners((o) => ({ ...o, ...Object.fromEntries(pairs) })));
+  }, [reports, owners]);
+  const restrictedById = useMemo(() => Object.fromEntries(restricted.map((u) => [u.id, u])), [restricted]);
 
   const openReports = useMemo(() => reports.filter((r) => r.status !== "resolved"), [reports]);
   const liveGroups = useMemo(() => groups.filter((g) => (g.participants || []).length > 0), [groups]);
   const members = useMemo(() => liveGroups.reduce((s, g) => s + (g.participants || []).length, 0), [liveGroups]);
   const shownReports = showResolved ? reports : openReports;
 
-  const resolve = async (r, status) => {
+  const resolve = async (r, status, extra = {}) => {
     try {
-      await updateDoc(doc(db, "chat_reports", r.id), { status });
+      await updateDoc(doc(db, "chat_reports", r.id), { status, ...extra });
     } catch (err) {
       alert("Couldn't update the report: " + err.message);
     }
@@ -75,6 +94,21 @@ export default function AdminChatActivity() {
           <Stat label="Groups" value={liveGroups.length} />
           <Stat label="Group members" value={members} />
         </div>
+
+        {restricted.length > 0 && (
+          <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6 space-y-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Restricted from Chats</p>
+            <div className="flex flex-wrap gap-2">
+              {restricted.map((u) => (
+                <span key={u.id} className="inline-flex items-center gap-2 bg-rose-50 border border-rose-100 text-rose-700 rounded-full pl-3 pr-1 py-1 text-[10px] font-black uppercase">
+                  <Link href={`/admin/users/${u.id}`}>{u.username ? `@${u.username}` : u.fullName || u.id.slice(0, 8)}</Link>
+                  <span className="font-bold normal-case text-rose-500">{chatRestrictionLabel(u).replace("Restricted from Chats · ", "")}</span>
+                  <ChatRestrictButton uid={u.id} name={u.username || u.fullName || u.id.slice(0, 8)} user={u} compact />
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2 items-center">
           {TABS.map(([key, label]) => (
@@ -104,8 +138,19 @@ export default function AdminChatActivity() {
                       <p className="text-[11px] font-bold text-slate-500 mt-0.5">
                         {r.reason || "No reason"}{r.messageId ? " · about a message" : ""}{r.room ? " · in the Chatroom" : r.convoId ? " · in a chat" : ""}
                       </p>
-                      <p className="text-[10px] font-bold text-slate-400 mt-0.5">{when(r.createdAt)}</p>
+                      <p className="text-[10px] font-bold text-slate-400 mt-0.5">{when(r.createdAt)}{r.action ? ` · ${r.action}` : ""}</p>
+                      {restrictedById[owners[r.reported]] && (
+                        <p className="text-[9px] font-black uppercase text-rose-600 mt-0.5">{chatRestrictionLabel(restrictedById[owners[r.reported]])}</p>
+                      )}
                     </div>
+                    {owners[r.reported] && (
+                      <ChatRestrictButton
+                        uid={owners[r.reported]}
+                        name={r.reported}
+                        user={restrictedById[owners[r.reported]]}
+                        onRestricted={(days) => resolve(r, "resolved", { action: `Restricted from Chats: ${chatSanctionLabel(days).toLowerCase()}` })}
+                      />
+                    )}
                     {r.status === "resolved" ? (
                       <button onClick={() => resolve(r, "open")} className="px-3 py-2 rounded-xl bg-slate-100 text-slate-600 text-[10px] font-black uppercase">Reopen</button>
                     ) : (

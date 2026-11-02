@@ -43,6 +43,7 @@ function Row({ icon: Icon, children, onClick, danger = false, disabled = false, 
 }
 
 const BADGES = {
+  official: { label: "StraWins Admin", icon: BadgeCheck, className: "bg-[#F6C453] text-[#2B1800]" },
   verified: { label: "Verified", icon: BadgeCheck, className: "bg-[#2457D6]/25 text-[#8FB0FF]" },
   agent: { label: "StraWins Agent", icon: Store, className: "bg-emerald-500/15 text-emerald-300" },
   staff: { label: "StraWins Team", icon: Crown, className: "bg-amber-400/15 text-amber-300" },
