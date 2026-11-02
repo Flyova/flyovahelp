@@ -8,7 +8,8 @@ import PlayerSearch from "@/components/chat/PlayerSearch";
 import { SettingsSwitch } from "@/components/chat/SettingsList";
 import { groupOwner, isGroupAdmin } from "@/lib/chat";
 import { authFetch } from "@/lib/authFetch";
-import { squareJpeg } from "@/lib/groupPhotos";
+import { groupPhotoJpegs } from "@/lib/groupPhotos";
+import GroupPhotoViewer from "@/components/chat/GroupPhotoViewer";
 import { useChat } from "@/components/chat/ChatProvider";
 
 const SITE = "https://strawins.com";
@@ -98,15 +99,16 @@ function GroupLink({ convo, amAdmin, act }) {
   );
 }
 
-/** The group's picture; admins tap it to change it, or remove it. */
+/** The group's picture: members tap it to see it full screen; admins change it with the camera button, or remove it. */
 function GroupPhoto({ convo, me, amAdmin, onNote }) {
   const { confirmAction } = useChat();
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(false);
+  const [viewing, setViewing] = useState(false);
 
-  const save = async (photoURL, done) => {
+  const save = async (photoURL, done, largeURL = "") => {
     setBusy(true);
-    const r = await authFetch("/api/chat/group-photo", { method: "POST", body: { convoId: convo.id, as: me, photoURL } }).catch((e) => ({ error: e.message }));
+    const r = await authFetch("/api/chat/group-photo", { method: "POST", body: { convoId: convo.id, as: me, photoURL, largeURL } }).catch((e) => ({ error: e.message }));
     setBusy(false);
     onNote(r.error ? { type: "error", msg: r.error } : { type: "success", msg: done });
   };
@@ -116,7 +118,8 @@ function GroupPhoto({ convo, me, amAdmin, onNote }) {
     if (!file) return;
     if (!file.type.startsWith("image/")) return onNote({ type: "error", msg: "Choose a photo (an image file)." });
     try {
-      await save(await squareJpeg(file), "Group photo updated.");
+      const { photoURL, largeURL } = await groupPhotoJpegs(file);
+      await save(photoURL, "Group photo updated.", largeURL);
     } catch (err) {
       setBusy(false);
       onNote({ type: "error", msg: err.message });
@@ -126,15 +129,27 @@ function GroupPhoto({ convo, me, amAdmin, onNote }) {
     if (await confirmAction({ title: "Remove the group photo?", confirmLabel: "Remove" })) save("", "Group photo removed.");
   };
 
-  if (!amAdmin) return <GroupAvatar size={88} groupId={convo.id} version={convo.photoVersion} />;
+  const viewer = viewing && convo.photoVersion ? <GroupPhotoViewer convo={convo} onClose={() => setViewing(false)} /> : null;
+  const photo = convo.photoVersion ? (
+    <button type="button" onClick={() => setViewing(true)} aria-label="View group photo" className="block rounded-full">
+      <GroupAvatar size={88} groupId={convo.id} version={convo.photoVersion} />
+    </button>
+  ) : null;
+  if (!amAdmin) return <>{photo || <GroupAvatar size={88} />}{viewer}</>;
   return (
     <>
-      <button type="button" onClick={() => fileRef.current?.click()} disabled={busy} aria-label="Change group photo" className="relative rounded-full">
-        <GroupAvatar size={88} groupId={convo.id} version={convo.photoVersion} />
-        <span className="absolute -right-1 -bottom-1 w-8 h-8 rounded-full bg-[#2457D6] ring-4 ring-[#142036] flex items-center justify-center">
+      <span className="relative block">
+        {photo || (
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={busy} aria-label="Add a group photo" className="block rounded-full">
+            <GroupAvatar size={88} />
+          </button>
+        )}
+        <button type="button" onClick={() => fileRef.current?.click()} disabled={busy} aria-label="Change group photo"
+          className="absolute -right-1 -bottom-1 w-8 h-8 rounded-full bg-[#2457D6] ring-4 ring-[#142036] flex items-center justify-center">
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
-        </span>
-      </button>
+        </button>
+      </span>
+      {viewer}
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={pick} />
       {convo.photoVersion ? (
         <button type="button" onClick={remove} disabled={busy} className="mt-2 text-[11px] font-bold text-red-300/80 hover:text-red-300">Remove photo</button>

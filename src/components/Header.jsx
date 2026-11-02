@@ -21,6 +21,7 @@ import { auth, db } from "@/lib/firebase";
 import { collection, doc, limit, onSnapshot, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { AGENT_HEARTBEAT_MS } from "@/lib/agentPresence";
+import { shownInFeed } from "@/lib/notificationFeed";
 
 /** `hideOnMobile`: hidden below md but still mounted, so the idle sign-out below keeps running. */
 export default function Header({ hideOnMobile = false }) {
@@ -37,7 +38,9 @@ export default function Header({ hideOnMobile = false }) {
     isAgent: false,
     signupRewards: "0.0000",
   });
-  const [unread, setUnread] = useState(0);
+  const [unreadTypes, setUnreadTypes] = useState([]);
+  const [feed, setFeed] = useState(null); // the kinds the player hid from Notifications
+  const unread = unreadTypes.filter((type) => shownInFeed(feed, type)).length;
 
   useEffect(() => {
     let unsubscribeUser = null;
@@ -47,17 +50,18 @@ export default function Header({ hideOnMobile = false }) {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
         const userDocRef = doc(db, "users", user.uid);
-        // The bell: unread notifications (lib/notifications on the server).
+        // The bell: unread notifications (lib/notifications on the server), of the kinds the player shows.
         unsubscribeUnread = onSnapshot(
           query(collection(db, "users", user.uid, "notifications"), where("read", "==", false), limit(99)),
-          (snap) => setUnread(snap.size),
-          () => setUnread(0)
+          (snap) => setUnreadTypes(snap.docs.map((d) => d.data().type || "info")),
+          () => setUnreadTypes([])
         );
         
         // 1. Listen to User Document
         unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
+            setFeed(data.notificationFeed || null);
 
             setUserData(prev => ({
               ...prev,
@@ -91,7 +95,7 @@ export default function Header({ hideOnMobile = false }) {
         if (unsubscribeAgent) unsubscribeAgent();
         unsubscribeAgent = null;
         if (unsubscribeUnread) unsubscribeUnread();
-        setUnread(0);
+        setUnreadTypes([]);
         setUserData({ wallet: "0.00", referralBonus: "0.00", inflowBonus: "0.00", gameCredits: "0.00", agentBalance: "0.00", pin: "--------", isAgent: false, signupRewards: "0.0000" });
       }
     });
