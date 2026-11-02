@@ -15,6 +15,7 @@ import { authFetch } from "@/lib/authFetch";
 import RateTiers, { rowsToTiers, tiersToRows } from "@/components/agent/RateTiers";
 import AgentTradeTotals from "@/components/agent/AgentTradeTotals";
 import { AgentRating } from "@/components/AgentStatus";
+import { agentBankProblem } from "@/lib/agentBank";
 import { useRouter } from "next/navigation";
 import { 
   Check, 
@@ -322,6 +323,16 @@ export default function AgentDashboard() {
       </div>
 
       <div className="p-6 space-y-10">
+        {agent && agentBankProblem(agent) && (
+          <button onClick={() => router.push("/agent/profile")}
+            className="w-full text-left flex gap-3 items-start bg-rose-500/10 border border-rose-500/30 rounded-3xl p-5">
+            <ShieldAlert size={20} className="text-rose-400 shrink-0 mt-0.5" />
+            <span className="space-y-1">
+              <span className="block text-[11px] font-black uppercase tracking-widest text-rose-300">{"You can't take trades"}</span>
+              <span className="block text-xs font-bold text-rose-100/90 leading-relaxed">{agentBankProblem(agent)}</span>
+            </span>
+          </button>
+        )}
         <AgentTradeTotals refreshKey={tradeHistory.map((t) => `${t.id}:${t.status}`).join(",")} />
 
         <section className="space-y-6">

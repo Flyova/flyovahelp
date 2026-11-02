@@ -5,18 +5,22 @@ import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import { AGENT_APPLICATION_FEE, FV, cents, cleanRateTiers, formatUsd, isBanned, toDollars } from "@/lib/money";
 import { notify } from "@/lib/moneyEmails";
 import { alertAdmins, notifyUser } from "@/lib/notifications";
+import { sameAccountName } from "@/lib/agentBank";
 
-// Becoming an agent, and an agent's rates. agents/{uid} is written only here (and by
+// Becoming an agent, and an agent's rates and bank account. agents/{uid} is written only here (and by
 // admins): an application costs AGENT_APPLICATION_FEE from the main wallet, which is
 // refunded if it's declined.
 //
 //   POST { action: "apply", fullName, email, phone, country, age, passportPhoto, identityCard,
 //          bankName?, accountName?, accountNumber? } -> { ok, balance }   the bank details are where players pay
-//          the agent (also editable later in Agent Profile)
+//          the agent (changed later with "bank"); the account must be in fullName
 //   POST { action: "decide", agentId, decision: "approved" | "rejected" } -> { ok }   admins; approving an
 //        application from before the fee takes it then
 //   POST { action: "rates", deposit_rate, withdrawal_rate, deposit_tiers?, withdrawal_tiers? } -> { ok }
 //        the agent's buy and sell rates, plus rates from bigger amounts up (lib/money rateFor)
+//   POST { action: "bank", bankName, accountName, accountNumber, phone? } -> { ok }   an approved agent's bank
+//        account (Agent Profile); refused unless it's in their approved agent name, since an agent whose
+//        account isn't can't trade (lib/agentBank)
 
 const fail = (error, status = 400) => NextResponse.json({ error }, { status });
 const PHOTO = /^https:\/\/res\.cloudinary\.com\/[\w-]+\/image\/upload\/[\w\-./%]+$/;
@@ -36,6 +40,9 @@ async function apply(db, caller, body) {
   if (!PHOTO.test(String(body.passportPhoto || "")) || !PHOTO.test(String(body.identityCard || ""))) return fail("Please upload both photos.");
   const bank = { bankName: text(body.bankName, 60), accountName: text(body.accountName), accountNumber: String(body.accountNumber ?? "").replace(/[\s-]/g, "") };
   if (bank.accountNumber && !/^[0-9A-Za-z]{6,34}$/.test(bank.accountNumber)) return fail("Enter a valid account number.");
+  if (bank.accountNumber && !sameAccountName(form.full_name, bank.accountName)) {
+    return fail(`The bank account must be in the name you're applying with (${form.full_name}). Agents can only trade with an account in their own name.`);
+  }
 
   const userRef = db.collection("users").doc(caller.uid);
   const agentRef = db.collection("agents").doc(caller.uid);
@@ -154,7 +161,24 @@ async function rates(db, caller, body) {
   return NextResponse.json({ ok: true });
 }
 
-const ACTIONS = { apply, decide, rates };
+async function bank(db, caller, body) {
+  const details = { bankName: text(body.bankName, 60), accountName: text(body.accountName), accountNumber: String(body.accountNumber ?? "").replace(/[\s-]/g, "") };
+  const phone = body.phone === undefined ? null : text(body.phone, 30);
+  if (details.bankName.length < 2) return fail("Enter your bank name.");
+  if (!/^[0-9A-Za-z]{6,34}$/.test(details.accountNumber)) return fail("Enter a valid account number.");
+  if (phone && !/^[+\d][\d\s()-]{5,}$/.test(phone)) return fail("Enter a valid phone number.");
+  const agentRef = db.collection("agents").doc(caller.uid);
+  const a = await agentRef.get();
+  if (!a.exists || a.data().application_status !== "approved") return fail("Only approved agents change their bank details here.", 403);
+  const name = a.data().full_name || "";
+  if (!sameAccountName(name, details.accountName)) {
+    return fail(`The account must be in your approved agent name, ${name}. Agents can only trade with a bank account in their own name.`);
+  }
+  await agentRef.update({ ...details, ...(phone !== null ? { phone_number: phone } : {}), profileUpdatedAt: FV().serverTimestamp() });
+  return NextResponse.json({ ok: true });
+}
+
+const ACTIONS = { apply, decide, rates, bank };
 
 export async function POST(req) {
   try {
