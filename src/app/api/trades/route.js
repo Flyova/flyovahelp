@@ -121,6 +121,11 @@ async function create(db, caller, { type, agentId, amount, txPin }) {
       senderBank: { bankName: bank.bankName || "", accountNumber: bank.accountNumber || "", accountName: bank.accountName || "" },
     };
     if (type === "deposit") {
+      // The agent pays this deposit and its fee from their agent wallet when they accept,
+      // so a request it can't cover doesn't go through (the list leaves such agents out too).
+      if (cents(agent.agent_balance) < cents(value) + Math.round(cents(value) * AGENT_FEE_RATE.deposit)) {
+        return { error: "This agent doesn't have enough in their agent wallet for this deposit. Choose another agent or a smaller amount.", status: 409 };
+      }
       tx.set(tradeRef, trade);
       return { me, agent };
     }

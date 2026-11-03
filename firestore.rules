@@ -67,8 +67,8 @@ service cloud.firestore {
     // around the checks in /api/wallet, or touch a balance, bonus or plan (money moves
     // through the server). The account name and username change through the server too:
     // the name from a link emailed to the account, the username for $1; profileChanges
-    // counts those emailed changes for the admins. `role`, `pin`, `phone` and `dob`
-    // have their own checks below.
+    // counts those emailed changes for the admins. `role`, `pin`, `phone`, `dob` and
+    // `country` have their own checks below.
     function lockedAccountFields() {
       return ['isban', 'banned', 'verified', 'otp', 'isAgent', 'chatMuted', 'chatMutedUntil',
         'chatRestricted', 'chatRestrictedUntil', 'chatLocked', 'chatLockReason', 'chatLockedAt', 'chatLockedBy', 'chatUnlockedAt',
@@ -111,7 +111,12 @@ service cloud.firestore {
         // A missing phone number or date of birth can be filled in; after that they
         // change from a link emailed to the account (/api/account).
         && (!changed.hasAny(['phone']) || (resource.data.get('phone', '') in [null, ''] && request.resource.data.phone is string))
-        && (!changed.hasAny(['dob']) || (resource.data.get('dob', '') in [null, ''] && request.resource.data.dob is string));
+        && (!changed.hasAny(['dob']) || (resource.data.get('dob', '') in [null, ''] && request.resource.data.dob is string))
+        // The country picks the player's agents and country perks: chosen once (sign-up, or
+        // later if it was never set), then only an admin changes it.
+        && (!changed.hasAny(['country']) || (resource.data.get('country', '') in [null, '']
+          && request.resource.data.country is string && request.resource.data.country.size() > 0
+          && request.resource.data.country.size() <= 60));
     }
 
     // An account (email, phone, date of birth, PIN, balance) is read only by its
