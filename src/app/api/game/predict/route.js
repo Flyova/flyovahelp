@@ -92,7 +92,7 @@ async function plan(db, caller, { plan: planId }) {
     return { me, expires: now + p.duration, balance: toDollars(cents(me.wallet) - cents(p.price)) };
   });
   if (out.error) return fail(out.error, out.status);
-  await predictPlanEmail({ to: out.me.email, name: out.me.fullName, plan: p.name, price: p.price, expires: out.expires });
+  await predictPlanEmail({ to: out.me.email, uid: caller.uid, name: out.me.fullName, plan: p.name, price: p.price, expires: out.expires });
   return NextResponse.json({ balance: out.balance, expires: out.expires });
 }
 
