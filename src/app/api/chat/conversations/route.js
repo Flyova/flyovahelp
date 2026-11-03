@@ -459,7 +459,7 @@ async function deleteMessage(db, caller, { convoId, as, messageId }) {
     if (!msg.exists) return { error: "Message not found.", status: 404 };
     // Activity lines go without a trace; messages leave "— message deleted —".
     if (msg.data().kind === "system") tx.delete(msgRef);
-    else tx.update(msgRef, { text: DELETED_TEXT, deletedForEveryone: true, removedBy: me.lower });
+    else tx.update(msgRef, { text: DELETED_TEXT, deletedForEveryone: true, removedBy: me.lower, reactions: FV().delete() });
     const pins = convo.pinnedMessages || [];
     return pins.some((p) => p.id === msgRef.id) ? { pinnedMessages: pins.filter((p) => p.id !== msgRef.id) } : null;
   });
