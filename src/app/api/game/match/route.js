@@ -6,6 +6,7 @@ import { FV, bonusOwedError, cents, formatUsd, gameRestricted, isBanned, isGameR
 import { creditInflowSafely } from "@/lib/inflowBonus";
 import { HEAD_TO_HEAD_WIN_CAP, escrowRef, matchCost, settleMatch } from "@/lib/matches";
 import { notifyUser } from "@/lib/notifications";
+import { outsideStakeRange, parseStakeRange, stakeRangeOf, stakeRangeText } from "@/lib/stakeRange";
 
 // "Play with friends" money: a challenge (challenges/{id}, made by the challenger's
 // app with its stake per round) is accepted here, which takes both stakes and opens
@@ -14,6 +15,8 @@ import { notifyUser } from "@/lib/notifications";
 //
 //   POST { action: "accept", challengeId } -> { gameId }
 //   POST { action: "settle", gameId }      -> { p1, p2 } paid (null fields: nothing left to settle)
+//   POST { action: "stakeRange", min, max } -> { min, max }  the caller's stake range (lib/stakeRange):
+//        whole dollars a round, either empty for no bound. Challenges outside it can't be accepted.
 
 const fail = (error, status = 400) => NextResponse.json({ error }, { status });
 
@@ -48,6 +51,13 @@ async function accept(db, caller, { challengeId }) {
       return { error: `You can't accept this challenge — the win gap between you two has reached the ${HEAD_TO_HEAD_WIN_CAP}-match cap (${myWins}-${theirWins}).`, status: 409 };
     }
     if (!me.exists || !challenger.exists) return { error: "Account not found.", status: 404 };
+    // Made outside the stake range this player set (by an app from before the range, or
+    // before the rules checked it): it doesn't go through.
+    const range = stakeRangeOf(me.data());
+    if (outsideStakeRange(range, cost.stakePerRound)) {
+      tx.delete(challengeRef);
+      return { error: `This challenge was ${formatUsd(cost.stakePerRound)} a round, outside your stake range (${stakeRangeText(range)}), so it was declined.`, status: 409 };
+    }
     if (isBanned(me.data())) return { error: "Your account can't play.", status: 403 };
     if (isGameRestricted(me.data(), "friends")) return { error: gameRestricted("friends"), status: 403 };
     if (owesBonus(me.data())) return { error: bonusOwedError("play with friends"), status: 403 };
@@ -121,7 +131,18 @@ async function settle(db, caller, { gameId }) {
   return NextResponse.json({ p1: paid?.p1 ?? null, p2: paid?.p2 ?? null });
 }
 
-const ACTIONS = { accept, settle };
+async function stakeRange(db, caller, { min, max }) {
+  const range = parseStakeRange(min, max);
+  if (range.error) return fail(range.error);
+  const FieldValue = FV();
+  await db.collection("users").doc(caller.uid).update({
+    friendsStakeMin: range.min ?? FieldValue.delete(),
+    friendsStakeMax: range.max ?? FieldValue.delete(),
+  });
+  return NextResponse.json(range);
+}
+
+const ACTIONS = { accept, settle, stakeRange };
 
 export async function POST(req) {
   try {

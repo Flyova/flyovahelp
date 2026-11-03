@@ -13,6 +13,7 @@ import { User, Zap, Wallet, ShieldCheck, Trophy, Ghost, MessageSquare, Send, X a
 import ToastNotification from "@/components/ToastNotification";
 import BonusRepay, { owesWelcomeBonus } from "@/components/BonusRepay";
 import { generateDistinctNumberPool } from "@/lib/gameNumbers";
+import { clampToStakeRange, hasStakeRange, outsideStakeRange, stakeRangeOf, stakeRangeText } from "@/lib/stakeRange";
 
 export default function GamePage() {
   const { id } = useParams();
@@ -23,6 +24,11 @@ export default function GamePage() {
   const [myWallet, setMyWallet] = useState(0);
   const [gamesRestricted, setGamesRestricted] = useState(false);
   const [owesBonus, setOwesBonus] = useState(false);
+  // The stakes a round this player takes challenges at (lib/stakeRange): { min, max }, null = no bound.
+  const [myRange, setMyRange] = useState({ min: null, max: null });
+  const [rangeDraft, setRangeDraft] = useState(null); // { min, max } strings while editing
+  const [rangeError, setRangeError] = useState("");
+  const [savingRange, setSavingRange] = useState(false);
 
   const [activeGame, setActiveGame] = useState(null);
   const [numbers, setNumbers] = useState([]);
@@ -148,6 +154,7 @@ export default function GamePage() {
             setMyWallet(snap.data().wallet || 0);
             setGamesRestricted(!!(snap.data().restrictGames || snap.data().restrictFriends));
             setOwesBonus(owesWelcomeBonus(snap.data()));
+            setMyRange(stakeRangeOf(snap.data()));
           }
         });
         setLoadingAuth(false);
@@ -411,6 +418,31 @@ export default function GamePage() {
     setNewMessage("");
   };
 
+  // A lobby player's stake range, from /api/game/lobby.
+  const rangeOfPlayer = (p) => ({ min: p?.stakeMin ?? null, max: p?.stakeMax ?? null });
+
+  const openStakeModal = (p) => {
+    setStakeAmount((s) => clampToStakeRange(rangeOfPlayer(p), s));
+    setShowStakeModal(p);
+  };
+
+  const saveRange = async (clear = false) => {
+    if (savingRange) return;
+    setSavingRange(true);
+    setRangeError("");
+    try {
+      const body = clear ? { action: "stakeRange", min: null, max: null } : { action: "stakeRange", ...rangeDraft };
+      const res = await authFetch("/api/game/match", { method: "POST", body });
+      if (res.error) return setRangeError(res.error);
+      setMyRange({ min: res.min ?? null, max: res.max ?? null });
+      setRangeDraft(null);
+    } catch {
+      setRangeError("Could not save your stake range. Please try again.");
+    } finally {
+      setSavingRange(false);
+    }
+  };
+
   const initiateChallenge = async () => {
     if (isSendingChallengeRef.current) return;
     isSendingChallengeRef.current = true;
@@ -423,6 +455,10 @@ export default function GamePage() {
 
       if (gamesRestricted) {
         return showNotification("warning", "Game Restricted", "Play with Friends has been restricted on your account. Please contact support.");
+      }
+      const theirRange = rangeOfPlayer(showStakeModal);
+      if (outsideStakeRange(theirRange, stakeAmount)) {
+        return showNotification("warning", "Outside Their Range", `${showStakeModal.username} only takes challenges at ${stakeRangeText(theirRange)} a round.`);
       }
       if (myWallet < totalCost) {
         return showNotification(
@@ -477,6 +513,9 @@ export default function GamePage() {
     setIsAcceptingChallenge(true);
 
     try {
+      if (outsideStakeRange(myRange, Number(chal.stakePerRound))) {
+        return showNotification("warning", "Outside Your Range", `This challenge is $${chal.stakePerRound} a round, outside your stake range (${stakeRangeText(myRange)}). Decline it, or change your range first.`);
+      }
       const totalCost = chal.totalWager + chal.fee;
       if (myWallet < totalCost) {
         return showNotification(
@@ -663,6 +702,41 @@ export default function GamePage() {
           </div>
         </div>
 
+        <div data-testid="my-stake-range" className="bg-[#142036] border border-white/5 rounded-[2rem] p-5 mb-6">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase text-white/40 tracking-widest">My stake range</p>
+              <p className="font-black italic text-sm mt-1">{hasStakeRange(myRange) ? `${stakeRangeText(myRange)} a round` : "Any stake"}</p>
+            </div>
+            {!rangeDraft && (
+              <button onClick={() => { setRangeError(""); setRangeDraft({ min: myRange.min ?? "", max: myRange.max ?? "" }); }}
+                className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-[10px] font-black uppercase shrink-0">{hasStakeRange(myRange) ? "Change" : "Set range"}</button>
+            )}
+          </div>
+          {!rangeDraft && <p className="text-[10px] font-bold text-white/40 mt-2">Challenges below your minimum or above your maximum stake won&apos;t reach you.</p>}
+          {rangeDraft && (
+            <div className="mt-4 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                {[["min", "Minimum"], ["max", "Maximum"]].map(([k, label]) => (
+                  <label key={k} className="block">
+                    <span className="text-[9px] font-black uppercase text-white/40">{label} ($ a round)</span>
+                    <input inputMode="numeric" value={rangeDraft[k]} placeholder={k === "min" ? "No minimum" : "No maximum"}
+                      onChange={(e) => { setRangeError(""); setRangeDraft((d) => ({ ...d, [k]: e.target.value.replace(/[^\d]/g, "") })); }}
+                      aria-label={`${label} stake`}
+                      className="mt-1 w-full bg-black/20 border border-white/10 p-3 rounded-xl outline-none font-bold text-sm focus:border-[#2457D6]" />
+                  </label>
+                ))}
+              </div>
+              {rangeError && <p role="alert" className="text-[11px] font-bold text-rose-300">{rangeError}</p>}
+              <div className="flex gap-2">
+                <button onClick={() => saveRange(false)} disabled={savingRange} className="flex-1 bg-[#8B1E3F] py-3 rounded-xl font-black uppercase text-[10px] disabled:opacity-50">{savingRange ? "Saving..." : "Save range"}</button>
+                {hasStakeRange(myRange) && <button onClick={() => saveRange(true)} disabled={savingRange} className="px-4 bg-white/5 rounded-xl font-black uppercase text-[10px] disabled:opacity-50">Any stake</button>}
+                <button onClick={() => { setRangeDraft(null); setRangeError(""); }} disabled={savingRange} className="px-4 text-gray-400 font-black uppercase text-[10px]">Cancel</button>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="relative mb-8">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
             <input 
@@ -678,10 +752,15 @@ export default function GamePage() {
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] flex items-center justify-center p-6">
             <div className="bg-[#142036] w-full max-w-xs rounded-[2.5rem] p-8 border border-white/10 shadow-2xl">
               <h2 className="text-center font-black italic uppercase mb-6 text-sm">Set Round Stake</h2>
+              {hasStakeRange(rangeOfPlayer(showStakeModal)) && (
+                <p data-testid="their-range" className="text-center text-[10px] font-black uppercase text-amber-300 -mt-3 mb-4">
+                  {showStakeModal.username} plays {stakeRangeText(rangeOfPlayer(showStakeModal))} a round
+                </p>
+              )}
               <div className="flex items-center justify-between mb-8 bg-black/20 p-4 rounded-2xl">
-                <button onClick={() => setStakeAmount(Math.max(1, stakeAmount - 1))} className="w-10 h-10 bg-[#2457D6] rounded-xl font-bold">-</button>
-                <div className="text-center"><span className="text-3xl font-black text-[#8B1E3F] italic">${stakeAmount}</span></div>
-                <button onClick={() => setStakeAmount(stakeAmount + 1)} className="w-10 h-10 bg-[#2457D6] rounded-xl font-bold">+</button>
+                <button aria-label="Lower stake" onClick={() => setStakeAmount(clampToStakeRange(rangeOfPlayer(showStakeModal), stakeAmount - 1))} className="w-10 h-10 bg-[#2457D6] rounded-xl font-bold">-</button>
+                <div className="text-center"><span data-testid="stake-amount" className="text-3xl font-black text-[#8B1E3F] italic">${stakeAmount}</span></div>
+                <button aria-label="Raise stake" onClick={() => setStakeAmount(clampToStakeRange(rangeOfPlayer(showStakeModal), stakeAmount + 1))} className="w-10 h-10 bg-[#2457D6] rounded-xl font-bold">+</button>
               </div>
               <div className="space-y-2 mb-8 px-2">
                 <div className="flex justify-between text-[10px] font-black uppercase"><span className="opacity-40">Entry Wager ({ROUNDS_PER_PLAYER}x)</span><span>${stakeAmount * ROUNDS_PER_PLAYER}</span></div>
@@ -711,11 +790,12 @@ export default function GamePage() {
                 <div className="flex flex-col">
                     <span className="font-bold italic uppercase text-sm">{p.username}</span>
                     {p.isBusy && <span className="text-[8px] font-black text-orange-500 uppercase tracking-tighter">Busy in-game</span>}
+                    {hasStakeRange(rangeOfPlayer(p)) && <span data-testid="player-range" className="text-[9px] font-black text-amber-300 uppercase tracking-tight">Stakes {stakeRangeText(rangeOfPlayer(p))}</span>}
                 </div>
               </div>
               <button 
                 disabled={p.isBusy}
-                onClick={() => setShowStakeModal(p)} 
+                onClick={() => openStakeModal(p)} 
                 className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase ${p.isBusy ? 'bg-gray-700 text-gray-500 opacity-50' : 'bg-[#8B1E3F] text-white'}`}
               >
                 {p.isBusy ? 'Busy' : 'Challenge'}
@@ -740,8 +820,13 @@ export default function GamePage() {
           <div className="fixed bottom-24 left-6 right-6 bg-[#2457D6] p-6 rounded-[2.5rem] shadow-2xl z-50 border-t-4 border-[#8B1E3F] animate-bounce-short">
             <p className="text-white font-black italic mb-2 uppercase text-center text-sm">{incomingChallenge.fromName} Challenges You!</p>
             <p className="text-center text-[10px] font-black opacity-60 mb-4 uppercase tracking-widest">Wager: ${(incomingChallenge.totalWager + incomingChallenge.fee).toFixed(2)}</p>
+            {outsideStakeRange(myRange, Number(incomingChallenge.stakePerRound)) && (
+              <p data-testid="incoming-out-of-range" className="text-center text-[10px] font-black text-amber-200 mb-4 uppercase">
+                ${incomingChallenge.stakePerRound} a round is outside your stake range ({stakeRangeText(myRange)})
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-3">
-              <button onClick={acceptChallenge} disabled={isAcceptingChallenge} className="bg-white text-[#2457D6] py-3 rounded-2xl font-black uppercase text-xs disabled:opacity-50">{isAcceptingChallenge ? "Accepting..." : "Accept"}</button>
+              <button onClick={acceptChallenge} disabled={isAcceptingChallenge || outsideStakeRange(myRange, Number(incomingChallenge.stakePerRound))} className="bg-white text-[#2457D6] py-3 rounded-2xl font-black uppercase text-xs disabled:opacity-50">{isAcceptingChallenge ? "Accepting..." : "Accept"}</button>
               <button onClick={() => deleteDoc(doc(db, "challenges", incomingChallenge.id))} disabled={isAcceptingChallenge} className="bg-black/20 py-3 rounded-2xl font-black uppercase text-xs disabled:opacity-50">Decline</button>
             </div>
           </div>
