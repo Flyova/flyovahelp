@@ -265,10 +265,14 @@ export default function MessageBubble({
               <LockKeyhole size={13} className="shrink-0" /> {m.text}
             </p>
           ) : coinCard ? (
-            <p className="flex items-center gap-1.5 pr-[60px] text-[13.5px] leading-[1.38] whitespace-nowrap">
+            // Wraps rather than cutting a long name to "to @...".
+            <p className="flex items-start gap-1.5 text-[13.5px] leading-[1.38]">
               <span className="w-[18px] h-[18px] shrink-0 rounded-full bg-white/40 flex items-center justify-center"><Coins size={11} /></span>
-              <span className="font-black">{formatCoins(m.coins)} chat coin{m.coins === 1 ? "" : "s"}</span>
-              <span className="min-w-0 truncate font-semibold opacity-80">to @{m.to}</span>
+              <span className="min-w-0 break-words">
+                <span className="font-black">{formatCoins(m.coins)} chat coin{m.coins === 1 ? "" : "s"}</span>{" "}
+                <span className="font-semibold opacity-80">to @{m.to}</span>
+                <span className="inline-block" style={{ width: spacer }} aria-hidden="true" />
+              </span>
             </p>
           ) : (
             <p className="text-[14.5px] leading-[1.38] whitespace-pre-wrap break-words">
