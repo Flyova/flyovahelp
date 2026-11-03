@@ -111,7 +111,7 @@ async function transfer(db, caller, { pin, amount, txPin }) {
   });
   if (out.error) return fail(out.error, out.status);
   await Promise.all([
-    transferReceivedEmail({ to: out.email, name: out.record.receiverName, senderName: out.record.senderName, amount: value, txId: out.record.txId }),
+    transferReceivedEmail({ to: out.email, uid: out.record.receiverId, name: out.record.receiverName, senderName: out.record.senderName, amount: value, txId: out.record.txId }),
     creditInflowSafely(db, { uid: caller.uid, category: "transfer", base: value, sourceId: `transfer_${out.sentId}`, note: `To ${out.record.receiverName || "a player"}` }),
     notifyUser(db, target.id, {
       type: "success", title: "Money received", body: `${out.record.senderName || "A player"} sent you ${formatUsd(value)}.`, url: "/history",
