@@ -5,6 +5,7 @@ import { mentionsIn, norm, usernameUids } from "@/lib/chat";
 import { sendPushToUsers } from "@/lib/push";
 import { chatSettingsFor } from "@/lib/chatSettings";
 import { notifyUser } from "@/lib/notifications";
+import { outsideStakeRange, stakeRangeOf } from "@/lib/stakeRange";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -104,6 +105,9 @@ async function challenge(db, caller, { challengeId }) {
   const c = snap.data();
   if (c.from !== caller.uid) return { error: "Not your challenge", status: 403 };
   if (c.status !== "pending" || !c.to) return { sent: 0 };
+  // Outside the stake range they set: it can't be accepted, so they aren't told about it.
+  const to = (await db.collection("users").doc(String(c.to)).get()).data() || {};
+  if (outsideStakeRange(stakeRangeOf(to), Number(c.stakePerRound))) return { sent: 0 };
   const from = (await db.collection("users").doc(caller.uid).get()).data() || {};
   await notifyUser(db, c.to, {
     type: "game", title: "New challenge",

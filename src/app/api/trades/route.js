@@ -121,6 +121,11 @@ async function create(db, caller, { type, agentId, amount, txPin }) {
       senderBank: { bankName: bank.bankName || "", accountNumber: bank.accountNumber || "", accountName: bank.accountName || "" },
     };
     if (type === "deposit") {
+      // The agent pays this deposit and its fee from their agent wallet when they accept,
+      // so a request it can't cover doesn't go through (the list leaves such agents out too).
+      if (cents(agent.agent_balance) < cents(value) + Math.round(cents(value) * AGENT_FEE_RATE.deposit)) {
+        return { error: "This agent doesn't have enough in their agent wallet for this deposit. Choose another agent or a smaller amount.", status: 409 };
+      }
       tx.set(tradeRef, trade);
       return { me, agent };
     }
@@ -151,7 +156,7 @@ async function create(db, caller, { type, agentId, amount, txPin }) {
   if (out.error) return fail(out.error, out.status);
   const url = `/trade/${tradeRef.id}`;
   await Promise.all([
-    tradeAssignedEmail({ to: out.agent.email, agentName: out.agent.full_name, type, senderName: out.me.fullName, amount: value, tradeId: tradeRef.id }),
+    tradeAssignedEmail({ to: out.agent.email, uid: agentId, agentName: out.agent.full_name, type, senderName: out.me.fullName, amount: value, tradeId: tradeRef.id }),
     notifyUser(db, agentId, { type: "merchant", title: `New ${type} request`, body: `${out.me.fullName || "A player"} wants to ${type === "deposit" ? "deposit" : "withdraw"} ${formatUsd(value)} with you. Accept it within 15 minutes.`, url }),
     alertAdmins(db, { type: "trade", title: `Agent ${type} started`, body: `${out.me.fullName || "A player"} → ${out.agent.full_name || "agent"}: ${formatUsd(value)}.`, uid: caller.uid, url: "/admin/agent-tx" }),
   ]);
@@ -196,7 +201,7 @@ async function accept(db, caller, { id }) {
   if (out.error) return fail(out.error, out.status);
   const sender = (await db.collection("users").doc(out.trade.senderId).get()).data();
   await Promise.all([
-    tradeAcceptedEmail({ to: sender?.email, type: out.trade.type, amount: out.trade.amount, tradeId: id }),
+    tradeAcceptedEmail({ to: sender?.email, uid: out.trade.senderId, type: out.trade.type, amount: out.trade.amount, tradeId: id }),
     notifyUser(db, out.trade.senderId, {
       type: "merchant", title: `${out.trade.agentName || "Your agent"} accepted your ${out.trade.type}`,
       body: out.trade.type === "deposit"
@@ -231,7 +236,7 @@ async function decline(db, caller, { id }) {
   if (out.error) return fail(out.error, out.status);
   const sender = (await db.collection("users").doc(out.trade.senderId).get()).data();
   await Promise.all([
-    tradeDeclinedEmail({ to: sender?.email, type: out.trade.type, amount: out.trade.amount }),
+    tradeDeclinedEmail({ to: sender?.email, uid: out.trade.senderId, type: out.trade.type, amount: out.trade.amount }),
     notifyUser(db, out.trade.senderId, {
       type: "merchant", title: `${out.trade.agentName || "The agent"} declined your ${out.trade.type}`,
       body: out.trade.type === "withdrawal" ? `${formatUsd(out.trade.amount)} is back in your wallet. Try another agent.` : "Try another agent.",
@@ -307,7 +312,7 @@ async function completeTrade(db, id, check, extra = {}) {
   const sourceId = `trade_${id}`;
   const net = toDollars(cents(t.amount) - Math.round(cents(t.amount) * AGENT_FEE_RATE[t.type]));
   await Promise.all([
-    tradeCompletedEmail({ to: senderFirst.email, type: t.type, amount: t.amount }),
+    tradeCompletedEmail({ to: senderFirst.email, uid: t.senderId, type: t.type, amount: t.amount }),
     t.type === "deposit"
       ? notifyUser(db, t.senderId, { type: "success", title: "Deposit completed", body: `${formatUsd(t.amount)} from ${t.agentName || "your agent"} is in your wallet.`, url: `/trade/${id}` })
       : notifyUser(db, t.agentId, { type: "merchant", title: "Withdrawal confirmed", body: `${t.senderName || "The player"} confirmed your payment. ${formatUsd(net)} was added to your agent balance.`, url: `/trade/${id}` }),

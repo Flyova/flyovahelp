@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { auth, db } from "@/lib/firebase";
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -14,7 +15,7 @@ import {
   updateDoc,
   where
 } from "firebase/firestore";
-import { CheckCircle2, Loader2, Search, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, Search, Trash2, XCircle } from "lucide-react";
 
 function statusBadge(item) {
   if (item.approved === true) return { text: "Approved", tone: "bg-emerald-100 text-emerald-700" };
@@ -145,6 +146,20 @@ export default function AdminTestimonialApprovals() {
     }
   };
 
+  // Gone for good: off the homepage and dashboard too (admins only, by the rules).
+  const remove = async (item, summary) => {
+    if (!window.confirm(`Delete this testimonial for good?\n\n${summary}`)) return;
+    setProcessingId(item.id);
+    try {
+      await deleteDoc(doc(db, "withdrawal_testimonials", item.id));
+    } catch (err) {
+      console.error(err);
+      alert(err?.code === "permission-denied" ? "Only admins can delete testimonials." : "Could not delete the testimonial. Please try again.");
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -216,6 +231,14 @@ export default function AdminTestimonialApprovals() {
                     >
                       <XCircle size={14} />
                       Reject
+                    </button>
+                    <button
+                      onClick={() => remove(item, summary)}
+                      disabled={processingId === item.id}
+                      className="px-4 py-2.5 rounded-xl bg-white/10 text-white border border-white/20 text-[10px] font-black uppercase tracking-widest hover:bg-rose-600 hover:border-rose-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      <Trash2 size={14} />
+                      Delete
                     </button>
                   </div>
                 </div>

@@ -78,7 +78,13 @@ export default function SupportChat() {
           setLoading(false);
         });
 
-        return () => unsubChat();
+        // Support's replies also come as a notification (users/{uid}/notifications/support,
+        // lib/notifications notifySupportReply): read while the chat is open.
+        const unsubNotice = onSnapshot(doc(db, "users", currentUser.uid, "notifications", "support"), (snap) => {
+          if (snap.exists() && snap.data().read === false) updateDoc(snap.ref, { read: true }).catch(() => {});
+        }, () => {});
+
+        return () => { unsubChat(); unsubNotice(); };
       }
     });
     return () => unsubscribe();

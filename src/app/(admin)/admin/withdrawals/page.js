@@ -229,6 +229,8 @@ export default function AdminWithdrawalList() {
             method: "POST",
             body: {
               to: userData.email,
+              uid: withdrawal.userId,
+              kind: "funds", // lib/emailPrefs: skipped if the player switched these off
               subject: `Withdrawal Request ${newStatus === "approved" ? "Approved" : "Declined"}`,
               html: `
                 <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; border: 1px solid #ddd; border-radius: 12px;">

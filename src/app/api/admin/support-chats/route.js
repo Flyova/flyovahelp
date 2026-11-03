@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import { SUPPORT_PHOTO_LABEL } from "@/lib/supportPhotos";
+import { notifySupportReply } from "@/lib/notifications";
 
 export const runtime = "nodejs";
 
@@ -169,6 +170,7 @@ export async function POST(request) {
         resolved: false,
         unreadByUser: true,
       });
+      await notifySupportReply(requester.adminDb, chatSnap.data()?.userId || chatId, text);
       return NextResponse.json({ ok: true });
     }
 

@@ -137,7 +137,7 @@ async function decide(db, caller, { agentId, decision }) {
     : `Your application to join the StraWins Agent Network has been declined.${out.refunded ? ` Your ${formatUsd(out.refunded)} fee is back in your wallet.` : ""}`;
   await Promise.all([
     notify(out.app.email, `Agent Application ${approved ? "Approved" : "Declined"}`, `<div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-      <h2>Application Status Update</h2><p>${message}</p><p style="font-size: 12px; color: #777;">StraWins Global Liquidity Control</p></div>`),
+      <h2>Application Status Update</h2><p>${message}</p><p style="font-size: 12px; color: #777;">StraWins Global Liquidity Control</p></div>`, { uid: agentId, kind: "trades" }),
     notifyUser(db, agentId, { type: approved ? "success" : "warning", title: `Agent application ${approved ? "approved" : "declined"}`, body: message, url: approved ? "/agent/dashboard" : "/agent/apply" }),
   ]);
   return NextResponse.json({ ok: true, refunded: out.refunded });

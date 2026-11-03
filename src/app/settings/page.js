@@ -28,6 +28,7 @@ import { authFetch } from "@/lib/authFetch";
 import TxPinCard from "@/components/settings/TxPinCard";
 import BankAccountCard from "@/components/settings/BankAccountCard";
 import NotificationPrefsCard from "@/components/settings/NotificationPrefsCard";
+import EmailPrefsCard from "@/components/settings/EmailPrefsCard";
 import FriendsOnlineCard from "@/components/settings/FriendsOnlineCard";
 import ProfileChangeForm from "@/components/settings/ProfileChangeForm";
 
@@ -369,6 +370,8 @@ export default function Settings() {
         <BankAccountCard bank={userData?.bank?.accountNumber ? userData.bank : null} fullName={userData?.fullName} hasTxPin={!!userData?.hasTxPin} />
 
         <NotificationPrefsCard uid={user.uid} prefs={userData?.notificationPrefs} />
+
+        <EmailPrefsCard uid={user.uid} prefs={userData?.emailPrefs} />
 
         <FriendsOnlineCard uid={user.uid} on={userData?.friendsStayOnline === true} />
 

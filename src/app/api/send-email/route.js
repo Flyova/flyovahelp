@@ -4,12 +4,15 @@ import { getCaller } from "@/lib/apiAuth";
 import { getAdminDb } from "@/lib/firebaseAdmin";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import { ADMIN_NOTIFY_EMAIL } from "@/lib/money";
+import { EMAIL_KIND_KEYS } from "@/lib/emailPrefs";
+import { wantsEmail } from "@/lib/moneyEmails";
 
 // Used to send any HTML to any address for anyone, signed in or not, from our
 // domain. Now portal staff (admin pages) can still email anyone; players can only
 // email themselves (their sign-up code) or the team's notification inboxes, always
 // with links and images taken out. Emails about money (transfers, trades, withdrawals)
-// are sent by the money routes themselves.
+// are sent by the money routes themselves. An admin page's email to a player names the
+// player (`uid`) and its kind (lib/emailPrefs) and isn't sent if they switched it off.
 const TEAM_INBOXES = new Set([ADMIN_NOTIFY_EMAIL, "contact.notifications.surname@gmail.com"]);
 const MAX_HTML = 20000;
 
@@ -25,7 +28,7 @@ export async function POST(req) {
   try {
     const caller = await getCaller(req);
     if (!caller) return NextResponse.json({ error: "Sign in to send email." }, { status: 401 });
-    const { to, subject, html } = await req.json();
+    const { to, subject, html, uid, kind } = await req.json();
     if (!to || !subject || !html) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
@@ -44,6 +47,8 @@ export async function POST(req) {
         return NextResponse.json({ error: "Message too long." }, { status: 400 });
       }
       body = defang(body);
+    } else if (EMAIL_KIND_KEYS.includes(kind) && typeof uid === "string" && !(await wantsEmail(uid, kind))) {
+      return NextResponse.json({ message: "Not sent: the player switched these emails off.", skipped: true }, { status: 200 });
     }
 
     const result = await sendEmail(to, String(subject), body);

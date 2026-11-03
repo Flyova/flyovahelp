@@ -5,6 +5,7 @@ import {
 } from "firebase/firestore";
 import { Ban, ChevronLeft, LockKeyhole, MoreHorizontal, Search, UserX } from "lucide-react";
 import { db } from "@/lib/firebase";
+import { authFetch } from "@/lib/authFetch";
 import { TYPING_PING_MS, canPostInGroup, containsMediaMarker, formatCount, groupOwner, isValidText, presenceOf, typingLabel } from "@/lib/chat";
 import { notifyPush } from "@/lib/pushClient";
 import { playChatSound, playCoinSound } from "@/lib/chatSound";
@@ -171,6 +172,8 @@ export default function ConversationThread({
   // Locked (your account's Chats, or the account that owns `me`): read only until unlocked.
   const { restricted, locked, canUnlock } = useChatSanctions(uid, me);
   const cantSend = !convo || blockedHere || lost || !!blockedByMe || lockedOut || closed || !!restricted || !!locked;
+  // Reacting (/api/chat/react) has the same limits, except a locked group's members still react.
+  const cantReact = !convo || blockedHere || lost || !!blockedByMe || closed || !!restricted || !!locked;
   // Read receipts are a setting of the chat profile you're in this chat as.
   const receipts = settingsFor(me).readReceipts;
 
@@ -356,6 +359,14 @@ export default function ConversationThread({
     }).catch((e) => onError(`Could not delete: ${e.message}`));
   };
 
+  const react = async (m, emoji) => {
+    const r = await authFetch("/api/chat/react", { method: "POST", body: { convoId, messageId: m.id, as: me, emoji } })
+      .catch((e) => ({ error: e.message }));
+    if (!r?.error) return true;
+    onError(`Could not react: ${r.error}`);
+    return false;
+  };
+
   const openMenu = (e) => {
     const r = e.currentTarget.getBoundingClientRect();
     setMenuAt({ x: r.right - MENU_WIDTH, y: r.bottom + 6 });
@@ -458,6 +469,8 @@ export default function ConversationThread({
         unreadFromId={unreadFromId}
         focus={focus}
         notice={lost ? null : <ChatCaution group={isGroup} encrypted={encrypted} />}
+        onReact={cantReact ? undefined : react}
+        reactAs={me}
       />
 
       {closed ? (

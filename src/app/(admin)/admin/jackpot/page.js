@@ -1,12 +1,14 @@
 "use client";
 import { useMemo, useState } from "react";
 import { db } from "@/lib/firebase";
-import { collection, doc, getDocs, limit, query, serverTimestamp, where, writeBatch } from "firebase/firestore";
+import { collection, getDocs, limit, query, where } from "firebase/firestore";
+import { authFetch } from "@/lib/authFetch";
 import { CheckCircle2, Loader2, Plus, Search, Send, Trash2, Trophy, User, X } from "lucide-react";
 
 // Admin → Send Jackpot: one or many players, each with their own amount. Every jackpot
 // is a pending jackpots/{id} the player claims from their dashboard (/api/wallet
-// "jackpot"); one send writes them all in a single batch, tagged with the same batchId.
+// "jackpot"); /api/admin/jackpot writes them all in a single batch, tagged with the same
+// batchId, and notifies each player.
 
 const MAX_RECIPIENTS = 100;
 const MAX_JACKPOT = 1000000; // lib/money MAX_AMOUNT: the claim refuses more
@@ -73,28 +75,22 @@ export default function AdminJackpot() {
     setSending(true);
     setError("");
     try {
-      const batch = writeBatch(db);
-      const batchId = doc(collection(db, "jackpots")).id;
-      for (const { user, amount } of rows) {
-        batch.set(doc(collection(db, "jackpots")), {
-          userId: user.id,
-          userEmail: user.email,
-          amount: amountOf(amount),
-          status: "pending", // pending, claimed
-          createdAt: serverTimestamp(),
-          type: "ADMIN_GIFT",
-          batchId,
-        });
+      const res = await authFetch("/api/admin/jackpot", {
+        method: "POST",
+        body: { recipients: rows.map(({ user, amount }) => ({ uid: user.id, amount: amountOf(amount) })) },
+      });
+      if (res?.error) {
+        setError(`Failed to dispatch the jackpots: ${res.error} Nothing was sent.`);
+      } else {
+        setSent({ count: res.count, total: res.total });
+        setRows([]);
+        setResults(null);
+        setSearchTerm("");
       }
-      await batch.commit();
-      setSent({ count: rows.length, total });
-      setRows([]);
-      setResults(null);
-      setSearchTerm("");
       setReviewing(false);
     } catch (err) {
       console.error(err);
-      setError(`Failed to dispatch the jackpots: ${err?.message || err}. Nothing was sent.`);
+      setError(`Could not reach the server (${err?.message || err}). Check the players' jackpots before sending again.`);
       setReviewing(false);
     } finally {
       setSending(false);
@@ -252,7 +248,7 @@ export default function AdminJackpot() {
               <span>Total</span>
               <span>{usd(total)}</span>
             </div>
-            <p className="text-[11px] font-bold text-slate-400">Each player sees their jackpot on their dashboard and claims it into their wallet.</p>
+            <p className="text-[11px] font-bold text-slate-400">Each player gets a notification, sees their jackpot on their dashboard and claims it into their wallet.</p>
             <div className="flex gap-3">
               <button type="button" onClick={() => setReviewing(false)} disabled={sending} className="flex-1 py-4 rounded-2xl bg-slate-100 text-slate-600 font-black uppercase text-xs">
                 Back

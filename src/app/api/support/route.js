@@ -3,6 +3,7 @@ import { admin, getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import { notify } from "@/lib/moneyEmails";
+import { notifySupportReply } from "@/lib/notifications";
 import { SUPPORT_PHOTO_LABEL, SUPPORT_PHOTO_MAX_CHARS } from "@/lib/supportPhotos";
 
 // Photos in Live Support. A support chat is support_chats/{uid}: the player's app writes
@@ -71,7 +72,9 @@ export async function POST(req) {
     }, { merge: true });
     await batch.commit();
 
-    if (!asStaff) {
+    if (asStaff) {
+      await notifySupportReply(db, chatSnap.data()?.userId || String(chatId), text ? `Sent a photo: ${text}` : "Sent you a photo.");
+    } else {
       await notify(CHAT_NOTIFY_EMAIL, "Support Notification: New User Photo",
         `<p><strong>Sender:</strong> User (${esc(caller.email)})</p><p><strong>Sent a photo</strong>${text ? `: ${esc(text)}` : ""}</p>`
         + "<p>Open Admin → Support in the StraWins admin panel to see it.</p>");
