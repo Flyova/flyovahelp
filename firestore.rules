@@ -67,8 +67,8 @@ service cloud.firestore {
     // around the checks in /api/wallet, or touch a balance, bonus or plan (money moves
     // through the server). The account name and username change through the server too:
     // the name from a link emailed to the account, the username for $1; profileChanges
-    // counts those emailed changes for the admins. `role`, `pin`, `phone` and `dob`
-    // have their own checks below.
+    // counts those emailed changes for the admins. The Play with friends stake range is
+    // set through /api/game/match. `role`, `pin`, `phone` and `dob` have their own checks below.
     function lockedAccountFields() {
       return ['isban', 'banned', 'verified', 'otp', 'isAgent', 'chatMuted', 'chatMutedUntil',
         'chatRestricted', 'chatRestrictedUntil', 'chatLocked', 'chatLockReason', 'chatLockedAt', 'chatLockedBy', 'chatUnlockedAt',
@@ -83,7 +83,8 @@ service cloud.firestore {
         'restrictFriends', 'restrictFlyova', 'restrictPredict',
         'flagged', 'flagReason', 'flaggedAt', 'flagCount', 'deletionRequested', 'deletionRequestDate',
         'hasApplied', 'agentStatus',
-        'fullName', 'username', 'freeWithdrawals', 'usernameChangedAt', 'profileChangedAt', 'profileChanges'];
+        'fullName', 'username', 'freeWithdrawals', 'usernameChangedAt', 'profileChangedAt', 'profileChanges',
+        'friendsStakeMin', 'friendsStakeMax'];
     }
 
     // The kinds a player hides from their Notifications page (lib/notificationFeed):
@@ -133,7 +134,7 @@ service cloud.firestore {
         'signupRewards', 'signupRewardsTotal', 'signupRewardPaidTo', 'referralCode', 'restrictGames',
         'restrictFriends', 'restrictFlyova', 'restrictPredict',
         'flagged', 'flagReason', 'flaggedAt', 'flagCount', 'deletionRequested', 'deletionRequestDate',
-        'hasApplied', 'agentStatus', 'profileChanges'])
+        'hasApplied', 'agentStatus', 'profileChanges', 'friendsStakeMin', 'friendsStakeMax'])
         // Account age unlocks free usernames, the inflow bonus and the 18-month perks, so it's the real sign-up time.
         && request.resource.data.get('createdAt', request.time) == request.time
         && (!('role' in request.resource.data) || isPortalRole(request.resource.data.role))
@@ -222,6 +223,13 @@ service cloud.firestore {
     // --- CHALLENGES & GAMES ---
     // A challenge names its stake per round (whole dollars); accepting it, which takes
     // both stakes and opens the match, and paying out happen in /api/game/match.
+    // A challenge's stake per round must be in the range its player set for Play with
+    // friends (users.friendsStakeMin / friendsStakeMax, lib/stakeRange; either may be unset).
+    function inStakeRange(uid, stake) {
+      let u = get(/databases/$(database)/documents/users/$(uid)).data;
+      return stake >= u.get('friendsStakeMin', 1) && stake <= u.get('friendsStakeMax', 10000);
+    }
+
     match /challenges/{challengeId} {
       allow create: if request.auth != null
         && request.resource.data.from == request.auth.uid
@@ -230,7 +238,8 @@ service cloud.firestore {
         && request.resource.data.to is string && request.resource.data.to != request.auth.uid
         && request.resource.data.status == 'pending'
         && request.resource.data.stakePerRound is int
-        && request.resource.data.stakePerRound >= 1 && request.resource.data.stakePerRound <= 10000;
+        && request.resource.data.stakePerRound >= 1 && request.resource.data.stakePerRound <= 10000
+        && inStakeRange(request.resource.data.to, request.resource.data.stakePerRound);
       allow read, delete: if request.auth != null && (request.auth.uid == resource.data.from || request.auth.uid == resource.data.to);
     }
 

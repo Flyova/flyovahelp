@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebaseAdmin";
 import { getCaller } from "@/lib/apiAuth";
 import { isBanned, isGameRestricted, owesBonus } from "@/lib/money";
+import { stakeRangeOf } from "@/lib/stakeRange";
 
 // Who's in the "play with friends" lobby right now. The apps used to read this
 // straight from other players' accounts; players can only read their own now
@@ -13,11 +14,17 @@ import { isBanned, isGameRestricted, owesBonus } from "@/lib/money";
 // are, with lastSeen = now so the apps' freshness filter keeps them, and a challenge
 // reaches them as a notification.
 //
-//   GET -> { players: [{ id, username, isBusy, lastSeen, stayOnline }] }   lastSeen in ms
+//   GET -> { players: [{ id, username, isBusy, lastSeen, stayOnline, stakeMin, stakeMax }] }
+//   lastSeen in ms; stakeMin/stakeMax: the stake range a challenge to them must be in
+//   (lib/stakeRange, whole dollars a round), null for no bound.
 
 const LOBBY_PAGE = "challenge_friends";
 const PRIVILEGED = ["admin", "staff", "support"];
 const STAY_ONLINE_LIMIT = 300;
+const rangeOf = (u) => {
+  const { min, max } = stakeRangeOf(u);
+  return { stakeMin: min, stakeMax: max };
+};
 
 export async function GET(req) {
   try {
@@ -37,6 +44,7 @@ export async function GET(req) {
         isBusy: !!d.data().isBusy,
         lastSeen: d.data().lastSeen?.toMillis?.() || 0,
         stayOnline: false,
+        ...rangeOf(d.data()),
       });
     }
     for (const d of stay.docs) {
@@ -49,6 +57,7 @@ export async function GET(req) {
         isBusy: !!onPage?.isBusy,
         lastSeen: now,
         stayOnline: true,
+        ...rangeOf(u),
       });
     }
     const list = [...players.values()].filter((p) => p.id !== caller.uid);

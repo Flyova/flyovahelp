@@ -3,10 +3,12 @@
 // the server-only match_escrow/{gameId}, and a match can never pay out more than they
 // add up to, whatever the players' apps wrote into its wagerPool while playing.
 import { FV, cents, toDollars } from "@/lib/money";
+import { MAX_STAKE_PER_ROUND } from "@/lib/stakeRange";
+
+export { MAX_STAKE_PER_ROUND };
 
 export const ROUNDS_PER_PLAYER = 15;
 export const MATCH_ADMIN_FEE_RATE = 0.18;
-export const MAX_STAKE_PER_ROUND = 10000;
 export const HEAD_TO_HEAD_WIN_CAP = 15;
 
 /** What each player pays to play at `stakePerRound` (whole dollars), or null if it isn't a valid stake. */
