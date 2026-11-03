@@ -66,6 +66,20 @@ export const groupCreatePrice = (isAgent) => (isAgent === true ? AGENT_GROUP_CRE
 // from the group (`groupBlocked`: they can't join, be added or accept an invite until unblocked).
 export const MAX_PINNED_MESSAGES = 3;
 export const isBlockedFromGroup = (convo, name) => !!name && (convo?.groupBlocked || []).includes(name);
+// Reactions on messages in groups and private chats (not the Chatroom): a message's
+// reactions[<username>] is one of these, written only by /api/chat/react. One per
+// username: picking another replaces it.
+export const REACTIONS = ["👍", "👎", "❤️", "😂", "😮", "😢"];
+export const isReaction = (e) => REACTIONS.includes(e);
+/** A message's reactions as [{ emoji, names }]: the most picked first, ties in REACTIONS order. */
+export function reactionGroups(reactions) {
+  const by = new Map(REACTIONS.map((e) => [e, []]));
+  for (const [name, e] of Object.entries(reactions || {})) by.get(e)?.push(name);
+  return [...by]
+    .filter(([, names]) => names.length)
+    .map(([emoji, names]) => ({ emoji, names: names.sort() }))
+    .sort((a, b) => b.names.length - a.names.length);
+}
 // Each list (Private, Groups) keeps up to this many chats pinned on top: chat_state.pinned
 // (conversation id -> when it was pinned, ms; 0 or missing = not pinned).
 export const MAX_PINNED_CHATS = 3;

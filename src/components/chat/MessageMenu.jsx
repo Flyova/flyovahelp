@@ -4,14 +4,15 @@ import { createPortal } from "react-dom";
 
 const WIDTH = 228;
 const ROW = 42;
+const HEADER = 50; // the reactions row (Reactions ReactionPicker), when there is one
 
 /**
  * Telegram-style context menu: the chat dims and blurs, and the menu springs open
  * from the point you tapped or right-clicked (kept inside the screen). Arrow keys
  * move between items, Enter picks, Escape or a tap outside closes.
- * `items`: [{ label, icon, run, danger? }]
+ * `items`: [{ label, icon, run, danger? }]; `header` (the reactions row) goes above them.
  */
-export default function MessageMenu({ at, items, onClose }) {
+export default function MessageMenu({ at, items, onClose, header = null }) {
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -36,7 +37,7 @@ export default function MessageMenu({ at, items, onClose }) {
   if (typeof document === "undefined") return null;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const height = items.length * ROW + 12;
+  const height = items.length * ROW + 12 + (header ? HEADER : 0);
   const left = Math.max(8, Math.min(at.x, vw - WIDTH - 8));
   const openUp = at.y + height > vh - 12;
   const top = Math.max(8, openUp ? at.y - height : at.y);
@@ -57,6 +58,7 @@ export default function MessageMenu({ at, items, onClose }) {
         className="chat-pop fixed z-[302] py-1.5 rounded-2xl bg-[#17243C]/95 backdrop-blur-xl border border-white/10 shadow-[0_18px_60px_rgba(0,0,0,0.6)]"
         style={{ left, top, width: WIDTH, transformOrigin: origin }}
       >
+        {header}
         {items.map(({ label, icon: Icon, run, danger }) => (
           <button
             key={label}

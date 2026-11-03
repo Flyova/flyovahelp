@@ -1,9 +1,10 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Ban, ChevronDown, Coins, Copy, CornerUpLeft, Flag, MessageCircle, Pencil, Pin, PinOff, Trash2, UserRound } from "lucide-react";
+import { Ban, ChevronDown, Coins, Copy, CornerUpLeft, Flag, MessageCircle, Pencil, Pin, PinOff, Smile, Trash2, UserRound } from "lucide-react";
 import MessageBubble, { SeenBy, TypingBubble, isCoinCard, isDeleted, messageMillis, startsRun } from "@/components/chat/MessageBubble";
 import MessageMenu from "@/components/chat/MessageMenu";
 import CoinBurst from "@/components/chat/CoinBurst";
+import { ReactionChips, ReactionPicker, ReactionsSheet } from "@/components/chat/Reactions";
 
 const NEAR_BOTTOM = 120; // px from the bottom that still counts as "reading the latest"
 
@@ -52,6 +53,9 @@ function byDay(messages) {
  * activity ("@ade joined the group", kind "system") shows as a small centred line;
  * when `canDelete` allows it (group admins), tapping the line offers to remove it.
  * `notice` (the safety caution) sits above the first message.
+ * `onReact(message, emoji | null)` (groups and private chats, resolving false when it
+ * failed) puts a reactions row on top of the menu; `reactAs` is the username you react
+ * as. Messages' reactions show as chips under them either way.
  */
 export default function ChatMessages({
   messages,
@@ -82,6 +86,8 @@ export default function ChatMessages({
   unreadFromId = null,
   focus = null,
   notice = null,
+  onReact,
+  reactAs = "",
 }) {
   const listRef = useRef(null);
   const atBottomRef = useRef(true);
@@ -89,6 +95,10 @@ export default function ChatMessages({
   const [seenCount, setSeenCount] = useState(0);
   const [menu, setMenu] = useState(null); // { message, at: { x, y } }
   const [flashId, setFlashId] = useState(null);
+  // message id -> { emoji, base }: a reaction just picked here (null: taken off), shown
+  // until the server's copy changes from `base` (what it said when it was picked).
+  const [picked, setPicked] = useState({});
+  const [whoFor, setWhoFor] = useState(null); // message id whose reactions are listed
 
   const scrollToBottom = useCallback((smooth) => {
     const el = listRef.current;
@@ -157,11 +167,33 @@ export default function ChatMessages({
     return () => clearTimeout(t);
   }, [focus]);
 
+  const reactionsOf = (m) => {
+    const p = picked[m.id];
+    if (!p || (m.reactions?.[reactAs] ?? null) !== p.base) return m.reactions;
+    const r = { ...(m.reactions || {}) };
+    if (p.emoji) r[reactAs] = p.emoji;
+    else delete r[reactAs];
+    return r;
+  };
+  const react = (m, emoji) => {
+    setPicked((p) => ({ ...p, [m.id]: { emoji, base: m.reactions?.[reactAs] ?? null } }));
+    Promise.resolve(onReact(m, emoji)).then((ok) => {
+      if (ok !== false) return;
+      setPicked((p) => {
+        const rest = { ...p };
+        delete rest[m.id];
+        return rest;
+      });
+    });
+  };
+  const reactionCount = (m) => Object.keys(reactionsOf(m) || {}).length;
+
   const menuItems = (m) => {
     if (m.kind === "system") return [{ label: deleteLabel(m), icon: Trash2, danger: true, run: () => onDelete(m) }];
     const mine = isMine(m);
     return [
       onReply && { label: "Reply", icon: CornerUpLeft, run: () => onReply(m) },
+      reactionCount(m) > 0 && { label: `Reactions (${reactionCount(m)})`, icon: Smile, run: () => setWhoFor(m.id) },
       onPin && !isCoinCard(m) && (isPinned(m) ? { label: "Unpin", icon: PinOff, run: () => onPin(m) } : { label: "Pin", icon: Pin, run: () => onPin(m) }),
       ...(extraMenuItems?.(m) || []),
       { label: "Copy text", icon: Copy, run: () => navigator.clipboard?.writeText(m.text).catch(() => {}) },
@@ -244,6 +276,16 @@ export default function ChatMessages({
                     onJumpTo={jumpTo}
                     onOpenProfile={onOpenProfile}
                   />
+                  {!isDeleted(m) && (
+                    <ReactionChips
+                      reactions={reactionsOf(m)}
+                      me={reactAs}
+                      mine={mine}
+                      indent={!mine && showAvatars}
+                      onToggle={onReact && !m.pending ? (emoji) => react(m, emoji) : undefined}
+                      onShowWho={() => setWhoFor(m.id)}
+                    />
+                  )}
                   {(seenBy[m.id]?.length > 0 || sentId === m.id) && <SeenBy names={seenBy[m.id]} sent={sentId === m.id} />}
                 </div>
               );
@@ -269,7 +311,30 @@ export default function ChatMessages({
       )}
 
       {burst && <CoinBurst key={burst.id} coins={burst.coins} to={burst.to} forYou={burst.forYou} onDone={onBurstDone} />}
-      {menu && <MessageMenu at={menu.at} items={menuItems(menu.message)} onClose={() => setMenu(null)} />}
+      {menu && (
+        <MessageMenu
+          at={menu.at}
+          items={menuItems(menu.message)}
+          onClose={() => setMenu(null)}
+          header={onReact && menu.message.kind !== "system" && !menu.message.pending ? (
+            <ReactionPicker
+              current={reactionsOf(menu.message)?.[reactAs] ?? null}
+              onPick={(emoji) => {
+                setMenu(null);
+                react(menu.message, emoji);
+              }}
+            />
+          ) : null}
+        />
+      )}
+      {whoFor && messages.some((m) => m.id === whoFor) && (
+        <ReactionsSheet
+          reactions={reactionsOf(messages.find((m) => m.id === whoFor))}
+          me={reactAs}
+          onOpenProfile={onOpenProfile}
+          onClose={() => setWhoFor(null)}
+        />
+      )}
     </div>
   );
 }
