@@ -5,7 +5,7 @@ import { db, auth } from "@/lib/firebase";
 import { doc, onSnapshot } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { authFetch } from "@/lib/authFetch";
-import { freeWithdrawalPerk, freeWithdrawalPerksFor, perkDays, usedFreeWithdrawals } from "@/lib/accountPerks";
+import { freeWithdrawalPerk, freeWithdrawalPerksFor, perkSchedule, usedFreeWithdrawals } from "@/lib/accountPerks";
 import { formatLocal } from "@/lib/currency";
 import { AgentPresence, AgentRating, OnlineDot } from "@/components/AgentStatus";
 import PinPrompt from "@/components/PinPrompt";
@@ -319,8 +319,8 @@ const handleWithdraw = async () => {
           <div className="bg-emerald-500/5 border border-emerald-500/20 p-4 rounded-3xl space-y-1">
             <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Your free withdrawals</p>
             {myPerks.map((p) => (
-              <p key={p.id} className={`text-[11px] font-bold ${p.usedThisMonth ? "text-white/30 line-through" : "text-white/70"}`}>
-                {p.min === p.max ? `$${p.min}` : `$${p.min}–$${p.max}`} on {perkDays(p)} of each month, no fee{p.usedThisMonth ? " (used this month)" : ""}
+              <p key={p.id} className={`text-[11px] font-bold ${p.usedRecently ? "text-white/30 line-through" : "text-white/70"}`}>
+                {p.min === p.max ? `$${p.min}` : `$${p.min}–$${p.max}`} {perkSchedule(p)}, no fee{p.usedRecently ? ` (used, next one in ${p.nextMonth})` : ""}
               </p>
             ))}
           </div>

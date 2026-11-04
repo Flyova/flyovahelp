@@ -70,7 +70,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Are there free withdrawals?",
-    a: "Yes, one a month on each of these (USDT withdrawals, no fee): agents, $50–$100 on the 15th; accounts 18+ months old, $100–$200 on the 15th; accounts 11+ months old in the US, UK, Canada, Australia, Finland, China, Japan, Singapore, Russia and South Africa, $100 between the 5th and 10th; accounts 12+ months old in New Zealand, Switzerland and the Netherlands, $250–$500 between the 5th and 8th.",
+    a: "Yes, one USDT withdrawal with no fee on each of these: agents, $50–$100 on the 15th of each month; accounts 18+ months old (all countries), $150 on the 15th of each month; accounts 23+ months old in the US, UK, Canada, Australia, Finland, China, Japan, Singapore, Russia and South Africa, $100 on the 12th or 13th of each month; accounts 25+ months old in New Zealand, Switzerland and the Netherlands, $500 on the 13th every two months.",
   },
   {
     q: "What happens in StraWins to Dollars if only one of my numbers comes up?",
