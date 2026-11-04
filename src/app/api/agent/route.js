@@ -5,7 +5,7 @@ import { resolvePrivilegedRole } from "@/lib/adminAccess";
 import { AGENT_APPLICATION_FEE, FV, cents, cleanRateTiers, formatUsd, isBanned, toDollars } from "@/lib/money";
 import { notify } from "@/lib/moneyEmails";
 import { alertAdmins, notifyUser } from "@/lib/notifications";
-import { sameAccountName } from "@/lib/agentBank";
+import { agentBankMatches, sameAccountName } from "@/lib/agentBank";
 
 // Becoming an agent, and an agent's rates and bank account. agents/{uid} is written only here (and by
 // admins): an application costs AGENT_APPLICATION_FEE from the main wallet, which is
@@ -21,11 +21,24 @@ import { sameAccountName } from "@/lib/agentBank";
 //   POST { action: "bank", bankName, accountName, accountNumber, phone? } -> { ok }   an approved agent's bank
 //        account (Agent Profile); refused unless it's in their approved agent name, since an agent whose
 //        account isn't can't trade (lib/agentBank)
+//   POST { action: "adminEdit", agentId, fullName, email, phone, country, age, bankName, accountName, accountNumber,
+//          deposit_rate, withdrawal_rate } -> { ok, bankMatches }   admins correcting an agent's details; the
+//        account may be left out of the agent's name, and bankMatches says whether they can still take trades
+//   POST { action: "adminDelete", agentId } -> { ok, returned, refunded }   admins removing an agent: refused while
+//        a trade with them is open; their agent balance goes to their main wallet (returned), an unrefunded
+//        application fee back too (refunded), and they can apply again
 
 const fail = (error, status = 400) => NextResponse.json({ error }, { status });
 const PHOTO = /^https:\/\/res\.cloudinary\.com\/[\w-]+\/image\/upload\/[\w\-./%]+$/;
 const REAPPLY_MS = 24 * 60 * 60 * 1000;
+// Trades that still hold money or wait on the agent (/api/trades).
+const OPEN_TRADE_STATUSES = ["pending", "acknowledged", "disputed"];
 const text = (v, max = 80) => String(v ?? "").trim().replace(/\s+/g, " ").slice(0, max);
+
+async function isAdminCaller(db, caller) {
+  const me = (await db.collection("users").doc(caller.uid).get()).data();
+  return resolvePrivilegedRole(me?.role, caller.email) === "admin";
+}
 
 async function apply(db, caller, body) {
   const form = {
@@ -86,8 +99,7 @@ async function apply(db, caller, body) {
 }
 
 async function decide(db, caller, { agentId, decision }) {
-  const me = (await db.collection("users").doc(caller.uid).get()).data();
-  if (resolvePrivilegedRole(me?.role, caller.email) !== "admin") return fail("Administrative access required.", 403);
+  if (!(await isAdminCaller(db, caller))) return fail("Administrative access required.", 403);
   if (!["approved", "rejected"].includes(decision)) return fail("Approve or reject.");
   if (!agentId || typeof agentId !== "string") return fail("Agent not found.", 404);
   const userRef = db.collection("users").doc(agentId);
@@ -178,7 +190,79 @@ async function bank(db, caller, body) {
   return NextResponse.json({ ok: true });
 }
 
-const ACTIONS = { apply, decide, rates, bank };
+async function adminEdit(db, caller, body) {
+  if (!(await isAdminCaller(db, caller))) return fail("Administrative access required.", 403);
+  const { agentId } = body;
+  if (!agentId || typeof agentId !== "string") return fail("Agent not found.", 404);
+  const details = {
+    full_name: text(body.fullName), email: text(body.email, 120).toLowerCase(), phone_number: text(body.phone, 30),
+    country: text(body.country, 60), age: text(body.age, 3),
+    bankName: text(body.bankName, 60), accountName: text(body.accountName), accountNumber: String(body.accountNumber ?? "").replace(/[\s-]/g, ""),
+    deposit_rate: Number(body.deposit_rate), withdrawal_rate: Number(body.withdrawal_rate),
+  };
+  if (details.full_name.split(" ").length < 2) return fail("Enter the agent's full name.");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(details.email)) return fail("Enter a valid email.");
+  if (details.phone_number && !/^[+\d][\d\s()-]{5,}$/.test(details.phone_number)) return fail("Enter a valid phone number.");
+  if (!details.country) return fail("Enter the agent's country.");
+  if (details.age && !(Number(details.age) >= 18 && Number(details.age) <= 120)) return fail("Agents must be 18 or older.");
+  if (details.accountNumber && !/^[0-9A-Za-z]{6,34}$/.test(details.accountNumber)) return fail("Enter a valid account number.");
+  const badRate = (r) => !(r >= 0) || r > 1e9;
+  if (badRate(details.deposit_rate) || badRate(details.withdrawal_rate)) return fail("Enter valid rates.");
+  const agentRef = db.collection("agents").doc(agentId);
+  const a = await agentRef.get();
+  if (!a.exists) return fail("Agent not found.", 404);
+  await agentRef.update({ ...details, editedAt: FV().serverTimestamp(), editedBy: caller.uid });
+  return NextResponse.json({ ok: true, bankMatches: agentBankMatches(details) });
+}
+
+async function adminDelete(db, caller, { agentId }) {
+  if (!(await isAdminCaller(db, caller))) return fail("Administrative access required.", 403);
+  if (!agentId || typeof agentId !== "string") return fail("Agent not found.", 404);
+  const userRef = db.collection("users").doc(agentId);
+  const agentRef = db.collection("agents").doc(agentId);
+  const trades = db.collection("trades").where("agentId", "==", agentId);
+  const out = await db.runTransaction(async (tx) => {
+    const open = await Promise.all(OPEN_TRADE_STATUSES.map((s) => tx.get(trades.where("status", "==", s).limit(1))));
+    const [u, a] = await tx.getAll(userRef, agentRef);
+    if (!a.exists) return { error: "Agent not found.", status: 404 };
+    if (open.some((snap) => !snap.empty)) {
+      return { error: "This agent has a trade that's still open. Let it finish, or cancel it on Agent TX, then delete the agent.", status: 409 };
+    }
+    const app = a.data();
+    const returnedC = Math.max(0, cents(app.agent_balance));
+    const refund = app.applicationFeePaidAt && !app.applicationFeeRefunded && app.application_status !== "approved" ? Number(app.applicationFee) || 0 : 0;
+    tx.delete(agentRef);
+    if (!u.exists) return { app, returned: 0, refunded: 0 };
+    const now = FV().serverTimestamp();
+    const ledger = (title, amount) => tx.set(userRef.collection("transactions").doc(), {
+      title, amount, type: "adjustment", status: "completed", timestamp: now, description: "Agent account closed by an admin",
+    });
+    if (returnedC > 0) ledger("Agent Balance Returned", toDollars(returnedC));
+    if (refund > 0) ledger("Agent Application Fee Refund", refund);
+    tx.update(userRef, {
+      isAgent: false, agentStatus: FV().delete(), hasApplied: false,
+      ...(returnedC + cents(refund) > 0 ? { wallet: FV().increment(toDollars(returnedC + cents(refund))) } : {}),
+    });
+    return { app, returned: toDollars(returnedC), refunded: refund };
+  });
+  if (out.error) return fail(out.error, out.status);
+  // Their ratings go too, so a new agent account starts its tally (agents/{id}.ratingCount) from nothing.
+  const ratings = await db.collection("agent_ratings").where("agentId", "==", agentId).get();
+  for (let i = 0; i < ratings.docs.length; i += 400) {
+    const batch = db.batch();
+    ratings.docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  }
+  const back = [out.returned > 0 && `${formatUsd(out.returned)} from your agent balance`, out.refunded > 0 && `your ${formatUsd(out.refunded)} application fee`].filter(Boolean);
+  await notifyUser(db, agentId, {
+    type: "warning", title: "Agent account closed",
+    body: `An admin closed your StraWins agent account.${back.length ? ` ${back.join(" and ")} ${back.length > 1 ? "are" : "is"} back in your main wallet.` : ""} Contact support if you have questions.`,
+    url: "/support",
+  });
+  return NextResponse.json({ ok: true, returned: out.returned, refunded: out.refunded });
+}
+
+const ACTIONS = { apply, decide, rates, bank, adminEdit, adminDelete };
 
 export async function POST(req) {
   try {

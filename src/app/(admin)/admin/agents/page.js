@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
-import { agentBankMatches } from "@/lib/agentBank";
+import { agentBankMatches, sameAccountName } from "@/lib/agentBank";
 import { 
   collection, 
   query, 
@@ -26,7 +26,9 @@ import {
   Wallet,
   ArrowRight,
   Cake,
-  Landmark
+  Landmark,
+  Pencil,
+  Trash2
 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 
@@ -38,6 +40,10 @@ export default function AdminAgentManagement() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [deciding, setDeciding] = useState(false);
+  // The edit form's fields while editing the selected agent (null when not editing).
+  const [draft, setDraft] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const formatJoinedDate = (agent) => {
     const candidates = [agent?.createdAt, agent?.joinedAt, agent?.approvedAt, agent?.reviewed_at];
@@ -62,6 +68,8 @@ export default function AdminAgentManagement() {
       const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setAgents(docs);
       setFilteredAgents(docs);
+      // The open agent shows its saved changes, and closes once it's deleted.
+      setSelectedAgent((cur) => (cur ? docs.find((d) => d.id === cur.id) || null : null));
       setLoading(false);
     });
 
@@ -95,6 +103,53 @@ export default function AdminAgentManagement() {
     }
   };
 
+  const selectAgent = (agent) => {
+    setSelectedAgent(agent);
+    setDraft(null);
+  };
+
+  const startEdit = (a) => setDraft({
+    fullName: a.full_name || "", email: a.email || "", phone: a.phone_number || "", country: a.country || "", age: a.age || "",
+    deposit_rate: String(a.deposit_rate ?? 0), withdrawal_rate: String(a.withdrawal_rate ?? 0),
+    bankName: a.bankName || "", accountName: a.accountName || "", accountNumber: a.accountNumber || "",
+  });
+
+  // /api/agent adminEdit. The bank account may be left out of the agent's name; they then can't take new trades.
+  const saveEdit = async () => {
+    if (saving) return;
+    if (draft.accountName && !sameAccountName(draft.fullName, draft.accountName)
+      && !confirm(`The account name (${draft.accountName}) isn't the agent's name (${draft.fullName}), so they won't be able to take new trades. Save anyway?`)) return;
+    setSaving(true);
+    try {
+      const res = await authFetch("/api/agent", { method: "POST", body: { action: "adminEdit", agentId: selectedAgent.id, ...draft } });
+      if (res?.error) throw new Error(res.error);
+      setDraft(null);
+    } catch (error) {
+      alert("Error: " + error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // /api/agent adminDelete: refused while a trade with them is open; their agent balance goes to their main wallet.
+  const deleteAgent = async (a) => {
+    const balance = Number(a.agent_balance) || 0;
+    if (!confirm(`Delete ${a.full_name || "this agent"}? They stop being an agent and can apply again.${balance > 0 ? ` Their $${balance.toFixed(2)} agent balance goes to their main wallet.` : ""}`)) return;
+    setDeleting(true);
+    try {
+      const res = await authFetch("/api/agent", { method: "POST", body: { action: "adminDelete", agentId: a.id } });
+      if (res?.error) throw new Error(res.error);
+      setSelectedAgent(null);
+      setDraft(null);
+      const back = [res.returned > 0 && `$${Number(res.returned).toFixed(2)} agent balance`, res.refunded > 0 && `$${Number(res.refunded).toFixed(2)} application fee`].filter(Boolean);
+      alert(`Agent deleted.${back.length ? ` ${back.join(" and ")} moved to their main wallet.` : ""}`);
+    } catch (error) {
+      alert("Error: " + error.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   // UPDATED: Now toggles 'active' status between true/false when banning
   const toggleBan = async (agentId, currentBanStatus) => {
     const action = currentBanStatus ? "Unban" : "Ban";
@@ -125,8 +180,8 @@ export default function AdminAgentManagement() {
         </div>
 
         <div className="flex bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm w-full md:w-auto">
-          <TabButton active={activeTab === "pending"} onClick={() => { setActiveTab("pending"); setSelectedAgent(null); }} icon={Clock} label="Applications" count={activeTab === "pending" ? agents.length : null} />
-          <TabButton active={activeTab === "approved"} onClick={() => { setActiveTab("approved"); setSelectedAgent(null); }} icon={ShieldCheck} label="Verified Agents" count={activeTab === "approved" ? agents.length : null} />
+          <TabButton active={activeTab === "pending"} onClick={() => { setActiveTab("pending"); selectAgent(null); }} icon={Clock} label="Applications" count={activeTab === "pending" ? agents.length : null} />
+          <TabButton active={activeTab === "approved"} onClick={() => { setActiveTab("approved"); selectAgent(null); }} icon={ShieldCheck} label="Verified Agents" count={activeTab === "approved" ? agents.length : null} />
         </div>
       </div>
 
@@ -139,7 +194,7 @@ export default function AdminAgentManagement() {
 
           <div className="space-y-2 overflow-y-auto max-h-[600px] pr-2 custom-scrollbar">
             {loading ? [1,2,3].map(i => <div key={i} className="h-24 bg-white rounded-[2rem] border border-slate-100 animate-pulse" />) : filteredAgents.map((agent) => (
-                <div key={agent.id} onClick={() => setSelectedAgent(agent)} className={`p-5 rounded-[2rem] border-2 cursor-pointer transition-all flex items-center justify-between group ${selectedAgent?.id === agent.id ? "border-[#2457D6] bg-[#2457D6]/5 shadow-lg" : "border-slate-100 bg-white hover:border-slate-200"}`}>
+                <div key={agent.id} onClick={() => selectAgent(agent)} className={`p-5 rounded-[2rem] border-2 cursor-pointer transition-all flex items-center justify-between group ${selectedAgent?.id === agent.id ? "border-[#2457D6] bg-[#2457D6]/5 shadow-lg" : "border-slate-100 bg-white hover:border-slate-200"}`}>
                     <div className="flex items-center gap-4">
                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black italic text-sm ${agent.banned ? 'bg-rose-100 text-rose-500' : 'bg-slate-100 text-[#2457D6]'}`}>
                             {agent.full_name?.charAt(0).toUpperCase()}
@@ -186,8 +241,23 @@ export default function AdminAgentManagement() {
                             )}
                         </div>
                     </div>
+                    {!draft && (
+                      <div className="flex flex-wrap gap-3 mt-6">
+                        <button onClick={() => startEdit(selectedAgent)} className="px-5 py-3 rounded-2xl bg-white border border-slate-200 font-black uppercase text-[10px] text-slate-700 flex items-center gap-2 hover:border-[#2457D6]">
+                          <Pencil size={13} /> Edit details
+                        </button>
+                        {activeTab === "approved" && (
+                          <button disabled={deleting} onClick={() => deleteAgent(selectedAgent)} className="px-5 py-3 rounded-2xl bg-white border border-rose-200 font-black uppercase text-[10px] text-rose-600 flex items-center gap-2 hover:bg-rose-50 disabled:opacity-50">
+                            <Trash2 size={13} /> {deleting ? "Deleting..." : "Delete agent"}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
 
+                  {draft ? (
+                    <EditForm draft={draft} setDraft={setDraft} saving={saving} onSave={saveEdit} onCancel={() => setDraft(null)} />
+                  ) : (
                   <div className="p-10 space-y-10">
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                           <StatBox label="Business Balance" value={`$${selectedAgent.agent_balance || 0}`} color="text-[#2457D6]" />
@@ -222,6 +292,7 @@ export default function AdminAgentManagement() {
                           <DocumentCard label="Identity Card" url={selectedAgent.identity_card} />
                       </div>
                   </div>
+                  )}
               </div>
           ) : (
               <div className="h-full min-h-[600px] bg-slate-50/50 border-2 border-dashed border-slate-100 rounded-[3.5rem] flex flex-col items-center justify-center p-12 text-center text-slate-300">
@@ -233,6 +304,42 @@ export default function AdminAgentManagement() {
       </div>
     </div>
   );
+}
+
+const EDIT_FIELDS = [
+  ["fullName", "Full name (approved agent name)"], ["email", "Email"], ["phone", "Phone number"], ["country", "Country"], ["age", "Age"],
+  ["deposit_rate", "Deposit rate (per 1 USD)"], ["withdrawal_rate", "Withdraw rate (per 1 USD)"],
+  ["bankName", "Bank name"], ["accountName", "Account name"], ["accountNumber", "Account number"],
+];
+
+/** Admin edit of an agent's details (/api/agent adminEdit). Balances and rates by amount aren't edited here. */
+function EditForm({ draft, setDraft, saving, onSave, onCancel }) {
+    const mismatch = draft.accountName && !sameAccountName(draft.fullName, draft.accountName);
+    return (
+        <div className="p-10 space-y-6">
+            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Pencil size={14} className="text-[#2457D6]" /> Edit agent details</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {EDIT_FIELDS.map(([key, label]) => (
+                    <label key={key} className="block">
+                        <span className="text-[9px] font-black uppercase text-slate-400 ml-1">{label}</span>
+                        <input
+                            value={draft[key]}
+                            inputMode={["deposit_rate", "withdrawal_rate", "age"].includes(key) ? "decimal" : undefined}
+                            onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
+                            className="mt-1 w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-sm font-bold text-slate-800 outline-none focus:border-[#2457D6]"
+                        />
+                    </label>
+                ))}
+            </div>
+            {mismatch && (
+                <p className="text-xs font-bold text-rose-600">The account name isn&apos;t the agent&apos;s full name, so they won&apos;t be able to take new trades.</p>
+            )}
+            <div className="flex gap-3">
+                <button onClick={onSave} disabled={saving} className="bg-[#2457D6] text-white px-8 py-4 rounded-2xl font-black uppercase text-[11px] shadow-lg disabled:opacity-50">{saving ? "Saving..." : "Save changes"}</button>
+                <button onClick={onCancel} disabled={saving} className="bg-slate-100 px-6 py-4 rounded-2xl font-black uppercase text-[11px] disabled:opacity-50">Cancel</button>
+            </div>
+        </div>
+    );
 }
 
 const tiersText = (tiers) =>
