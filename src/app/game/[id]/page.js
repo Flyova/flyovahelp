@@ -13,7 +13,7 @@ import { User, Zap, Wallet, ShieldCheck, Trophy, Ghost, MessageSquare, Send, X a
 import ToastNotification from "@/components/ToastNotification";
 import BonusRepay, { owesWelcomeBonus } from "@/components/BonusRepay";
 import { generateDistinctNumberPool } from "@/lib/gameNumbers";
-import { clampToStakeRange, hasStakeRange, outsideStakeRange, stakeRangeOf, stakeRangeText } from "@/lib/stakeRange";
+import { MAX_STAKE_PER_ROUND, MIN_STAKE_PER_ROUND, clampToStakeRange, hasStakeRange, outsideStakeRange, stakeRangeOf, stakeRangeText } from "@/lib/stakeRange";
 
 export default function GamePage() {
   const { id } = useParams();
@@ -35,6 +35,7 @@ export default function GamePage() {
   const [selectedNumber, setSelectedNumber] = useState(null);
   const [onlinePlayers, setOnlinePlayers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [stakeQuery, setStakeQuery] = useState(""); // a stake a round to find players for (whole dollars)
   const [incomingChallenge, setIncomingChallenge] = useState(null);
   const [outgoingChallenge, setOutgoingChallenge] = useState(null);
   const [outgoingTimer, setOutgoingTimer] = useState(180);
@@ -420,9 +421,11 @@ export default function GamePage() {
 
   // A lobby player's stake range, from /api/game/lobby.
   const rangeOfPlayer = (p) => ({ min: p?.stakeMin ?? null, max: p?.stakeMax ?? null });
+  // The stake searched for, if it's one a round can have: the lobby shows only players who take it.
+  const searchedStake = Number(stakeQuery) >= MIN_STAKE_PER_ROUND && Number(stakeQuery) <= MAX_STAKE_PER_ROUND ? Number(stakeQuery) : null;
 
   const openStakeModal = (p) => {
-    setStakeAmount((s) => clampToStakeRange(rangeOfPlayer(p), s));
+    setStakeAmount((s) => clampToStakeRange(rangeOfPlayer(p), searchedStake ?? s));
     setShowStakeModal(p);
   };
 
@@ -644,6 +647,7 @@ export default function GamePage() {
 
   const filteredPlayers = activePlayers.filter(p =>
     p.username?.toLowerCase().includes(searchQuery.toLowerCase())
+    && (searchedStake === null || !outsideStakeRange(rangeOfPlayer(p), searchedStake))
   );
 
   if (loadingAuth) return <div className="min-h-screen bg-[#0B1220] flex items-center justify-center text-white italic font-black">SYNCING...</div>;
@@ -737,16 +741,35 @@ export default function GamePage() {
           )}
         </div>
 
-        <div className="relative mb-8">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
-            <input 
-                type="text" 
-                placeholder="Search players by name..."
-                className="w-full bg-[#142036] border border-white/5 p-4 pl-12 rounded-2xl outline-none font-bold text-sm focus:border-[#2457D6] transition-all"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-            />
+        <div className={`flex gap-3 ${searchedStake !== null ? "mb-3" : "mb-8"}`}>
+          <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
+              <input 
+                  type="text" 
+                  placeholder="Search by name..."
+                  className="w-full bg-[#142036] border border-white/5 p-4 pl-12 rounded-2xl outline-none font-bold text-sm focus:border-[#2457D6] transition-all"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+              />
+          </div>
+          <div className="relative w-32 shrink-0">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 font-black text-sm">$</span>
+              <input
+                  inputMode="numeric"
+                  placeholder="Stake"
+                  aria-label="Search players by stake a round"
+                  data-testid="stake-search"
+                  className="w-full bg-[#142036] border border-white/5 p-4 pl-8 rounded-2xl outline-none font-bold text-sm focus:border-[#2457D6] transition-all"
+                  value={stakeQuery}
+                  onChange={(e) => setStakeQuery(e.target.value.replace(/[^\d]/g, "").slice(0, 5))}
+              />
+          </div>
         </div>
+        {searchedStake !== null && (
+          <p data-testid="stake-search-note" className="text-[10px] font-bold text-white/40 mb-8 px-1">
+            Players who take ${searchedStake} a round. Challenge one and the stake starts at ${searchedStake}.
+          </p>
+        )}
 
         {showStakeModal && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] flex items-center justify-center p-6">
@@ -776,7 +799,7 @@ export default function GamePage() {
           <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">Choose Player</h3>
           {filteredPlayers.length === 0 ? (
             <div className="text-center py-20 bg-[#142036]/50 rounded-[2.5rem] border border-dashed border-white/10">
-              <Ghost size={40} className="mx-auto mb-4 opacity-20" /><p className="text-[10px] font-black uppercase text-gray-500 italic">No users found</p>
+              <Ghost size={40} className="mx-auto mb-4 opacity-20" /><p className="text-[10px] font-black uppercase text-gray-500 italic">{searchedStake !== null ? `Nobody here takes $${searchedStake} a round` : "No users found"}</p>
             </div>
           ) : filteredPlayers.map(p => (
             <div key={p.id} className="bg-[#142036] p-5 rounded-[2rem] flex justify-between items-center border border-white/5">
