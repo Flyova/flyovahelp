@@ -2,7 +2,7 @@ import { Resend } from 'resend';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const RESEND_FROM_EMAIL =
-  process.env.RESEND_FROM_EMAIL || 'StraWins <noreply@notify.strawins.com>';
+  process.env.RESEND_FROM_EMAIL || 'StraWins <noreply@strawins.com>';
 
 export const sendEmail = async (to, subject, html) => {
   try {
@@ -14,12 +14,17 @@ export const sendEmail = async (to, subject, html) => {
     }
 
     const resend = new Resend(RESEND_API_KEY);
-    const data = await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from: RESEND_FROM_EMAIL,
       to: [to],
       subject: subject,
       html: html,
     });
+    // Resend's refusals (an unverified sending domain, a bad address…) come back here, not as a throw.
+    if (error) {
+      console.error("Resend Error:", error);
+      return { success: false, error };
+    }
     return { success: true, data };
   } catch (error) {
     console.error("Resend Error:", error);
